@@ -36,7 +36,7 @@ Implemented today:
   jars of an open kind comes `ORDER_GAP_MS` (20s) after the last one ended and lapses after
   `ORDER_MS` (2 min), or sooner when its meadow shuts (`openLeft`; a kind is only ordered while its
   meadow stays open at least `ORDER_MIN_MS`, 60s, so no lavender order comes late in summer). `sell` counts that kind's jars toward it and pays `premium` (8 a jar) once it
-  is complete. The order card sits in the shop's sixth spot (`ORDER`). Not saved.
+  is complete. The order card sits in the shop's seventh spot (`ORDER`). Not saved.
 - Wasp raids (`src/game/wasps.ts`): from `WASPS_FROM` (8) jars sold, while a cell is capped and no
   wasp is raiding, `waspIn` counts down (40s, then 40 to 80s at random) and a wasp flies in to a
   random capped cell (`WASP_IN_MS`), sits on it for `WASP_STEAL_MS` (an orange bar over the cell)
@@ -44,7 +44,7 @@ Implemented today:
   `swat`; a harvest of its cell sends it off empty-handed; Guard Bees (`ranks.guards`) drive it off
   as it lands. Not saved.
 - Brood cells: `BroodCell` (`type: 'brood'`, `hatchMs`) holds no nectar, hatches a bee every
-  `BROOD_MS` (45s) while there are fewer than `MAX_BEES` and it is not winter, and counts for the comb bonus. The Brood
+  `BROOD_MS` (45s) while there are fewer than `maxBees` (`MAX_BEES` per hive) and it is not winter, and counts for the comb bonus. The Brood
   cell shop button arms `placing` in the scene; the next tap on an empty spot calls `buildBrood`
   (price `broodPrice`: `cellPrice` plus `BROOD_EXTRA`, 30). Bees are no longer bought.
 - Wax: `harvest` adds one to `wax`; `withWax` lets wax pay `WAX_COINS` (3) each for up to half of
@@ -65,8 +65,9 @@ Implemented today:
   cells. A chip under the hive says "While you were away: +N nectar" with "cap 20" and a bar; it
   fades after 12s of game time or when tapped.
 - Purchases: comb cells (price rises per cell built), brood cells, Guard Bees, Pollen Baskets
-  (more nectar a trip), Clover Patch (shorter trips) and Waggle Dance (bees set off on their own
-  whenever there is room, the idle upgrade).
+  (more nectar a trip), Clover Patch (shorter trips) and Waggle Dance (the idle upgrade: `dance` sends bees at
+  home out on their own, only as many as the comb has room for beyond what the foragers out already
+  carry, and while an orchard offer stands it leaves that many bees at home to take it).
 - Seasons (`src/game/seasons.ts`): `seasonMs` runs through the year (`YEAR_MS`, four seasons of
   `SEASON_MS`, 2 min each); `season(s)` names the one now and `seasonLeft` its time left. Summer
   adds `SUMMER_NECTAR` to `carry`; in autumn `isOpen` shuts lavender (the market, orders and
@@ -74,7 +75,8 @@ Implemented today:
   (`isWinter`) `send` refuses, the Waggle Dance does nothing, `gatherAway` adds nothing, no
   contracts come, brood rests, and every `WINTER_EAT_MS` (20s, `eatIn`) the bees have one meal per
   `BEES_PER_MEAL` (4) bees, at least one: each `eat` takes a jar (`EAT_ORDER`, cheapest first),
-  else empties a capped cell, else removes a bee (never the last; bees at home first).
+  else empties a capped cell, else removes a bee (never the last; bees at home first, lent bees last, and `recountLent` lowers
+  the contract's `bees` to match).
   `years` counts the years come through; a `year` event marks each. The HUD stats show "Year N ·
   Season m:ss"; `SEASON_TINT` in `src/art/palette.ts` tints the scenery (a rectangle over it at
   depth 0.5). A new hive starts at `seasonMs` 0.
@@ -95,7 +97,8 @@ Implemented today:
 - Swarming (`src/game/swarm.ts`): `crowded` is one hive, every spot built and `maxBees` bees.
   While it holds, `swarmIn` counts down from `SWARM_MS` (45s; a `swarm-ready` event when it
   starts) and the swarm chip (`SWARM`, in the away chip's place) shows it; at 0 half the bees leave
-  (`swarmed`, bees at home first) and it restarts. A tap on the chip calls `catchSwarm`
+  (`swarmed`, bees at home first; lent bees stay first, and `recountLent` keeps the contract's
+  `bees` right) and it restarts. A tap on the chip calls `catchSwarm`
   (`CATCH_PRICE`, 180 coins): `hives` becomes 2 (`MAX_HIVES`), `cells` grows by `SLOTS` nulls, and
   `maxBees` is `MAX_BEES` per hive. The chip opens the queen card (`createQueenCard`, the
   `queen-card` texture), whose three buttons call `catchSwarm(state, queen)`: `queen` (`Queen`,
@@ -122,7 +125,8 @@ Implemented today:
   again, so a reload can't bring paid-for bees home early; offers are not saved.
 - The county fair (`src/game/fair.ts`): once `fairOpen` (every meadow open) the goal card is the
   fair's. It is on (`fairOn`) for the last `FAIR_MS` (60s) of every summer; `fairIn` counts down to
-  it, and `turn` pushes `fair-open` as it opens and calls `closeFair` as autumn comes (a
+  it, and `turn` pushes `fair-open` as it opens (or `sell`, when the jar that opens the last meadow
+  is sold during the fair's minute) and calls `closeFair` as autumn comes (a
   `fair-closed` event, `fairs` + 1, entries cleared). The classes are `classesFor(fairs)`: the
   three kinds, plus `mead` from the second fair and `fresh` from the third; gold needs
   `fairGold(fairs)` (`FAIR_GOLD` 14, plus `FAIR_STEP` 3 a fair, at most `FAIR_MAX` 28). While it is
@@ -132,7 +136,7 @@ Implemented today:
   `seasonNo`, the fresh class too; a tap on a ready cask calls `enterMead` (`MEAD_POINTS` by kind).
   With every class entered `enter` judges: `fairGold` or more (`fairWon`) adds to `golds` and
   pushes `gold`, and the first gold sets `baron` and pushes `baron`, which shows the end card
-  (`END_CARD`, tap to keep playing); less pushes `judged`. A won fair takes no more entries. While
+  (`END_CARD`, a tap on it or its shade keeps playing); less pushes `judged`. A won fair takes no more entries. While
   `entering`, capped cells and ready casks show their points. `fair` (`FairEntries`, per
   `FairClass`), `fairs`, `golds` and `baron` are saved; entries are cleared on load outside the fair.
 - One screen (`GameScene`) with a scalloped HUD strip, the goal card, a hint line for the first
@@ -196,7 +200,7 @@ File map (`src/`):
   unlocks meadows), `buy`, `swat`, `gatherAway`, `tripMs` (trip length with clover and
   difficulty), `caskKind`, `cask`, `catchSwarm`, `acceptContract`, `enterFair`, `enterMead`, plus
   the private `turn`, `tire`, `eat`, `deliver`, `place`, `hatch`, `raid`, `orders`, `contracts`,
-  `swarm`, `enter` and `closeFair`.
+  `swarm`, `dance`, `fly`, `recountLent`, `enter` and `closeFair`.
 - `game/honey.ts`: the `HONEY` table (name key, meadows needed, price), `KINDS`, `MARKET_MS`,
   `DEMAND`, `noJars`. `game/wasps.ts`: the `Wasp` type and raid timings. `game/orders.ts`: the
   `Order` type and order numbers. `game/seasons.ts`: `Season`, `SEASONS`, the
@@ -264,7 +268,7 @@ How it runs:
   (delivering nectar when a trip ends), ripens full cells, hatches brood, ages casks, moves the
   market on, runs wasp raids, village orders, orchard contracts and the swarm, opens and closes the
   fair, tires and rests the meadows, feeds the bees in winter, and with the Waggle Dance calls
-  `send`. The scene saves if that pushed a `nectar`, `capped`, `hatched`, `stolen`, `season`,
+  `dance`. The scene saves if that pushed a `nectar`, `capped`, `hatched`, `stolen`, `season`,
   `ate`, `mead`, `swarmed`, `returned`, `wilted` or `fair-closed` event, and at
   least every `SAVE_EVERY_MS` (5s) so `seen` stays fresh; it also saves on `pagehide` and when
   the tab is hidden. Then it draws.
@@ -279,7 +283,7 @@ How it runs:
   paid); the Mead cask button calls `cask`; a market entry calls `forage`; the contract card calls
   `acceptContract`; the swarm chip opens the queen card, whose buttons call `catchSwarm` (a tap on
   its shade closes it); a ready cask calls `enterMead` while `entering`; the goal card toggles
-  `entering` while the fair is on; the roof tabs set `hive`; the end card hides itself. Each successful action
+  `entering` while the fair is on; the roof tabs set `hive`; the end card hides itself (its shade takes the taps around it too). Each successful action
   saves.
 - Rendering: one image per comb spot takes its state's cell texture each frame; the `comb`
   graphics draws the gold shared edges, the green preview edges, the ripening arcs and the capped

@@ -1,4 +1,5 @@
 import { playMusic, playSting, ui } from '../../../../shared/audio';
+import { formatNumber } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { BEE_TEX, WASP_TEX } from '../art/bees';
@@ -505,7 +506,8 @@ export class GameScene extends Phaser.Scene {
       else if (cell.phase === 'ripening') {
         image.setTexture(`cell-ripe-${kind}`);
         // A cream arc goes round as the nectar ripens into honey.
-        const done = 1 - cell.ripenMs / ripenTime(s);
+        // Clamped: a cell that started ripening before the Heather Moor sped it up has more time left than `ripenTime` now.
+        const done = Phaser.Math.Clamp(1 - cell.ripenMs / ripenTime(s), 0, 1);
         g.lineStyle(3.5, LIVE.ripenArc, 0.95).beginPath().arc(c.x, c.y, 12, -Math.PI / 2, -Math.PI / 2 + done * Math.PI * 2).strokePath();
       } else {
         image.setTexture(`cell-capped-${kind}`);
@@ -615,7 +617,7 @@ export class GameScene extends Phaser.Scene {
       if (i < kinds.length && jar.texture.key !== `jar-${kinds[i]}`) jar.setTexture(`jar-${kinds[i]}`);
     });
     const jars = jarCount(this.state);
-    this.moreJars.setText(jars > SHELF.jars ? `+${jars - SHELF.jars}` : '');
+    this.moreJars.setText(jars > SHELF.jars ? `+${formatNumber(jars - SHELF.jars)}` : '');
   }
 
   /** Where a wasp is: flying in from the right edge, sitting on its cell, or flying off again. */
@@ -1025,7 +1027,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** The village order card in the shop's last spot: what the village wants, how many are sold and the time left. */
+  /** The village order card in the shop's seventh spot: what the village wants, how many are sold and the time left. */
   private createOrder() {
     this.order = {
       card: this.add.image(ORDER.x, ORDER.y, 'order-card').setDepth(30),
@@ -1117,7 +1119,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       g.title.setText(t('goalSold', { n: next.need }));
       g.unlocks.setText(t('unlocks', { meadow: t(next.name) })).setX(g.title.x + g.title.width + 10);
-      g.count.setText(`${Math.min(s.sold, next.need)} / ${next.need}`).setX(GOAL.x + 216);
+      g.count.setText(`${formatNumber(Math.min(s.sold, next.need))} / ${formatNumber(next.need)}`).setX(GOAL.x + 216);
       g.blurb.setText(t(next.blurb)).setX(GOAL.x + 270);
       const from = s.meadows === 0 ? 0 : MEADOWS[s.meadows - 1].need;
       const share = Phaser.Math.Clamp((s.sold - from) / (next.need - from), 0, 1);
@@ -1189,15 +1191,15 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const h = this.hud;
-    h.coins.setText(`${s.coins}`);
+    h.coins.setText(formatNumber(s.coins));
     h.coinsLabel.setX(h.coins.x + h.coins.width + 3);
     const honeyX = Math.max(this.edges.x + 335, h.coinsLabel.x + h.coinsLabel.width + 26);
     h.honeyIcon.setX(honeyX);
-    h.honey.setText(`${jarCount(s)}`).setX(honeyX + 12);
+    h.honey.setText(formatNumber(jarCount(s))).setX(honeyX + 12);
     h.honeyLabel.setX(h.honey.x + h.honey.width + 3);
     const waxX = h.honeyLabel.x + h.honeyLabel.width + 26;
     h.waxIcon.setX(waxX);
-    h.wax.setText(`${s.wax}`).setX(waxX + 13);
+    h.wax.setText(formatNumber(s.wax)).setX(waxX + 13);
     h.waxLabel.setX(h.wax.x + h.wax.width + 3);
     const out = s.bees.filter((b) => b.tripMs > 0).length;
     const lent = s.bees.filter((b) => b.lent).length;
@@ -1242,7 +1244,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** The season's tint over the scenery, and a few paper snowflakes drifting in winter. */
+  /** The season's tint over the scenery. */
   private drawSeason() {
     const t = SEASON_TINT[season(this.state)];
     this.seasonTint.setFillStyle(t.colour, t.alpha);
@@ -1322,7 +1324,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** The orchard contract card in the shop's last spot: the farmer's offer (tap to take it), or the bees away. */
+  /** The orchard contract card in the shop's eighth spot: the farmer's offer (tap to take it), or the bees away. */
   private createContract() {
     this.contract = {
       card: this.add.image(CONTRACT.x, CONTRACT.y, 'contract-card').setDepth(30).setInteractive({ useHandCursor: true }),
@@ -1383,19 +1385,21 @@ export class GameScene extends Phaser.Scene {
     this.swarm.bar.fillStyle(LIVE.swarmBar).fillRoundedRect(bx, by, Math.max(bh, (bw * s.swarmIn) / SWARM_MS), bh, 4);
   }
 
-  /** The end card: gold at the fair makes the player the Beehive Baron. A tap on it carries on playing. */
+  /** The end card: gold at the fair makes the player the Beehive Baron. A tap on it, or on the shade around it, carries on playing. */
   private createEnd() {
     const card = this.add.image(0, 0, 'end-card').setInteractive({ useHandCursor: true });
     const title = this.add.text(0, -16, t('goldTitle'), textStyle(22, '#4a2c10', '900')).setOrigin(0.5);
     const sub = this.add.text(0, 12, t('baron'), textStyle(15, '#6a4aa8', '800')).setOrigin(0.5);
     const detail = this.add.text(0, 40, '', textStyle(11.5, '#6a4a28', '700')).setOrigin(0.5);
     const more = this.add.text(0, END_CARD.h / 2 - 22, t('keepPlaying'), textStyle(10.5, '#8a6a40', '600')).setOrigin(0.5);
-    const shade = this.add.rectangle(0, 0, VIEW.w * 2, VIEW.h * 2, 0x2a1808, 0.45);
+    // The shade takes the taps around the card too, so none reaches the comb or the shop under it.
+    const shade = this.add.rectangle(0, 0, VIEW.w * 2, VIEW.h * 2, 0x2a1808, 0.45).setInteractive();
     const root = this.add.container(END_CARD.x, END_CARD.y, [shade, card, title, sub, detail, more]).setDepth(UI_DEPTH + 5).setVisible(false);
-    card.on('pointerdown', () => {
-      ui('click');
-      root.setVisible(false);
-    });
+    for (const target of [shade, card])
+      target.on('pointerdown', () => {
+        ui('click');
+        root.setVisible(false);
+      });
     this.endCard = { root, detail };
   }
 
