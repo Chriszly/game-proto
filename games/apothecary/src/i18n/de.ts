@@ -276,6 +276,21 @@ const de: Translation<typeof en> = {
   cloak: 'Umhang',
   dyer: 'Färber',
   mansionCount: { one: '{n} Herrenhaus', other: '{n} Herrenhäuser' },
+  smithy: 'Schmiede',
+  smithyMakes: 'Hufeisen und Eisentöpfe',
+  coppice: 'Niederwald',
+  orePit: 'Erzgrube',
+  kiln: 'Kohlenmeiler',
+  bloomery: 'Rennofen',
+  anvil: 'Amboss',
+  ore: 'Eisenerz',
+  timber: 'Holz',
+  charcoal: 'Holzkohle',
+  iron: 'Eisen',
+  horseshoe: 'Hufeisen',
+  pot: 'Eisentopf',
+  smith: 'Schmied',
+  palaceCount: { one: '{n} Palast', other: '{n} Paläste' },
 };
 
 /** Texts that read the same in German. */

@@ -375,7 +375,7 @@ apothecary's shelves), paying the shelf price into that shop's till. Happiness m
 the share it got. Four rounds in a row at 80% or more add a home, up to eight; once full, its
 cottages grow into houses, which want honey cake and Sleeping Tonics as well as bread and Healing
 Draughts. A full district of houses grows into manors, which also want candles and tapers from the
-chandlery, and manors grow into mansions (see the dye house). Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
+chandlery, manors grow into mansions (see the dye house) and mansions into palaces (see the smithy). Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
 the town; Riverside opens once Market Row has houses, and Hilltop once Riverside has.
 
 The second shop is the **chandlery** (10,000 coins). Its beehives give honeycomb, pressed into
@@ -403,6 +403,19 @@ which also want blue cloth and cloaks.
 | Pixies: flax to loom, woad to mill, loom to vat, mill to vat, vat to the shelves | 1,620, 1,620, 2,700, 2,700, 4,050 |
 
 ![The dye house's vat and shop](docs/screenshots/dye-house.webp)
+
+The fourth shop is the **smithy** (1,000,000 coins). Its coppice grows timber, burned into charcoal
+at the charcoal kiln, and its ore pit gives iron ore, which the bloomery smelts with charcoal into
+iron. The anvil makes a horseshoe from an iron (648 coins) or an iron pot from two (1,053). A full
+district of mansions grows into palaces, which also want horseshoes and iron pots.
+
+| Smithy | Cost |
+| --- | --- |
+| Station or counter level | 1,620, 3,240, 6,480, 12,960 |
+| Smith (2 per station) or shopkeeper (1) | 2,430, then 4,860 |
+| Pixies: coppice to kiln, ore to bloomery, kiln to bloomery, bloomery to anvil, anvil to the shelves | 4,860, 4,860, 8,100, 8,100, 12,150 |
+
+![The smithy's anvil and shop](docs/screenshots/smithy.webp)
 
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 
