@@ -37,6 +37,10 @@ export function loadState(): GameState {
     // A save from before the study brewed Shadow Elixirs once a shade garden grew; it keeps them, and
     // the Vigour Tonic before it in the study's order.
     if (!saved.upgrades?.research && state.shade.some((g) => g.built)) state.upgrades.research = { level: 2, paid: 0 };
+    // A save from before the study taught the crafting order and the price signs keeps whichever it
+    // was already using.
+    if (!saved.upgrades?.craftOrder && Object.values(state.priority).some((p) => p)) state.upgrades.craftOrder = { level: 1, paid: 0 };
+    if (!saved.upgrades?.priceSigns && Object.values(state.signs ?? {}).some((s) => s && s !== 'fair')) state.upgrades.priceSigns = { level: 1, paid: 0 };
     // Rescale first: the joins `ontoOwnRuns` moves goods up to are on today's shorter belts.
     if ((saved.layout ?? 0) < COLUMNS_LAYOUT) ontoColumns(state);
     if ((saved.layout ?? 0) < HEART_LAYOUT) ontoHeart(state);

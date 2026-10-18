@@ -69,6 +69,7 @@ import {
   UPGRADES,
   RESEARCH_ORDER,
   researched,
+  studied,
   shadeGrown,
   carryCapacity,
   craftsmanCost,
@@ -309,9 +310,9 @@ interface Marker {
 /** A whole percentage or price change with its sign, such as +20 or -15, in the player's language. */
 const signed = (n: number) => `${n > 0 ? '+' : ''}${formatNumber(n)}`;
 
-/** A purple level marker's icon: the station for a station's level, otherwise the upgrade's own. */
+/** A purple level marker's icon: the station for a station's level, the study's book for its lessons, otherwise the upgrade's own. */
 const upgradeIcon = (id: UpgradeId): UpgradeIcon =>
-  id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id;
+  id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id === 'craftOrder' || id === 'priceSigns' ? 'research' : id;
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
@@ -609,10 +610,14 @@ export class GameScene extends Phaser.Scene {
       ui('click');
       cyclePriority(this.state, id);
     });
+    // It stands once the study has taught the crafting order.
     this.views.push(() => {
+      const shown = studied(this.state, 'craftOrder');
+      sign.setVisible(shown);
+      caption.setVisible(shown);
       const first = this.state.priority[id];
-      any.setVisible(!first);
-      icon.setVisible(!!first);
+      any.setVisible(shown && !first);
+      icon.setVisible(shown && !!first);
       if (first) icon.setTexture(itemTexture(first));
     });
   }
@@ -1149,6 +1154,19 @@ export class GameScene extends Phaser.Scene {
       (level, left) => t('learnCost', { potion: itemName(RESEARCH_ORDER[level]), coins: left }),
       () => unlocked(this.state, 'level-research'),
     );
+    for (const id of ['craftOrder', 'priceSigns'] as const) {
+      this.addLevelMarker(
+        STUDY[id],
+        'research',
+        () => this.state.upgrades[id],
+        UPGRADES[id].max,
+        (level) => upgradeCost(id, level),
+        () => payUpgrade(this.state, id),
+        (_level, left) => t('learnCost', { potion: t(UPGRADES[id].name), coins: left }),
+        () => unlocked(this.state, `level-${id}`),
+        MARKET_CAPTION,
+      );
+    }
   }
 
   private createShopfront() {
@@ -1169,10 +1187,12 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       const { shelf } = this.state.counter;
       const known = POTIONS.filter((p) => researched(this.state, p));
-      if (known.join() !== row) {
-        row = known.join();
+      // The price signs stand once the study has taught them.
+      const priced = studied(this.state, 'priceSigns');
+      if (`${known.join()}${priced}` !== row) {
+        row = `${known.join()}${priced}`;
         shelves.forEach((s, i) => s.setVisible(known.includes(POTIONS[i])));
-        signs.forEach((show, i) => show(known.includes(POTIONS[i])));
+        signs.forEach((show, i) => show(priced && known.includes(POTIONS[i])));
         // The test reads the shelves standing, in POTIONS order.
         this.pallets.counter!.in = shelves.filter((_, i) => known.includes(POTIONS[i]));
       }
@@ -1253,7 +1273,8 @@ export class GameScene extends Phaser.Scene {
       if (this.pinching()) return;
       if (this.closePanels()) return;
       ui('click');
-      this.showFeedback(cycleSign(this.state, potion));
+      const feedback = cycleSign(this.state, potion);
+      if (feedback) this.showFeedback(feedback);
     });
     const COLOURS = { cheap: '#2f6a1a', fair: INK, dear: '#8a3a10' };
     this.views.push(() => {

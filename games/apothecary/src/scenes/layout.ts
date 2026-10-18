@@ -87,10 +87,17 @@ export const GUILD = {
   herbalist: { x: 1379, y: 796 },
 };
 /**
- * The study in the left market, beside the outfitter: a writing desk under its sign, and the marker
- * below it where the doctor pays to learn the next recipe.
+ * The study in the left market, beside the outfitter: a writing desk under its sign, the marker
+ * below it where the doctor pays to learn the next recipe, and either side of the desk the markers
+ * to learn the crafting order and the price signs.
  */
-export const STUDY = { sign: { x: 560, y: 664 }, desk: { x: 560, y: 706 }, learn: { x: 560, y: 780 } };
+export const STUDY = {
+  sign: { x: 560, y: 664 },
+  desk: { x: 560, y: 706 },
+  learn: { x: 560, y: 780 },
+  craftOrder: { x: 500, y: 716 },
+  priceSigns: { x: 620, y: 716 },
+};
 /** Where the doctor stands to buy the expansion's land: at the corner of the second line's yard by the shop. */
 export const EXPANSION_LAND = { x: 1030, y: 584 };
 
