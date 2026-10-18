@@ -231,9 +231,9 @@ export function chooseEvent(s: GameState, index: number) {
       if (gear) {
         raise(s, gear);
         pop(s, t('upgradeTier', { name: t(UPGRADES[gear].name), n: s.ranks[gear] }), '#b48cff');
+        s.maxHpMod *= 0.85;
+        refreshHealth(s);
       } else s.credits += 40;
-      s.maxHpMod *= 0.85;
-      refreshHealth(s);
     }
   } else if (ev.id === 'well') {
     if (first) s.pendingLevels += 1;
