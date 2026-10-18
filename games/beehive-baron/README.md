@@ -232,7 +232,7 @@ Every fair after the first asks for more and adds a class, a ladder after the en
 | Brood cell | one per spot: a comb cell's price plus 30 coins (wax pays up to half) | A new bee every 45 seconds (not in winter), up to 12 bees, and comb bonus like any cell |
 | Pollen Baskets | 3 (40, 120, 320 coins) | Every forager brings one more drop a trip |
 | Clover Patch | 3 (60, 180, 480 coins) | Trips take 20% less time per rank |
-| Waggle Dance | 1 (250 coins) | Bees at home fly out by themselves whenever the comb has room |
+| Waggle Dance | 1 (250 coins) | Bees at home fly out by themselves, as many as the comb has room for |
 | Guard Bees | 1 (150 coins) | Every wasp is driven off as it lands, before it steals anything |
 | Mead cask | up to 3 at a time, 3 jars of one kind each | Mead worth 1.5 to 1.8 times the jars, 90 seconds later |
 | Catch the swarm | once (180 coins), when the hive is crowded | A second hive with its own comb, room for 12 more bees and a queen of your pick |
