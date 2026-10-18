@@ -175,7 +175,7 @@ const en = {
   seasonPlagueStage: 'Season {season} plague {stage}/{stages}: {need}',
   daysLeft: { one: '{n} day left', other: '{n} days left' },
   lastDay: 'last day!',
-  winText: 'Your Panacea ended the plague on day {day}.\nThe apothecary stays open: keep trading.',
+  winText: 'Your Panacea ended the plague on day {day}.\nThe apothecary stays open: keep trading.\nThe town grants you a charter: see the Town map.',
   keepTrading: 'Keep trading',
 
   // Rival and wagon
@@ -211,6 +211,28 @@ const en = {
   rivalCut: 'rival {n}%',
   coinPrice: '{n}{coin}',
   learnAtStudy: 'Study',
+  // The town: its map, its shops and their goods
+  town: 'Town',
+  townMap: 'Town map',
+  apothecary: 'Apothecary',
+  apothecaryMakes: 'Potions for the sick',
+  bakery: 'Bakery',
+  bakeryMakes: 'Bread and honey cake',
+  walkIn: 'Tap to walk in',
+  walkInTill: 'Tap to walk in, till {n}{coin}',
+  buyShop: 'Buy: {coins}{coin}',
+  shopBought: '{shop} bought!',
+  beehives: 'Beehives',
+  mill: 'Mill',
+  oven: 'Oven',
+  honeycomb: 'Honeycomb',
+  bread: 'Bread',
+  honeyCake: 'Honey Cake',
+  baker: 'Baker',
+  workerHired: '{worker} hired!',
+  shopkeeperHired: 'Shopkeeper hired!',
+  pixiesFly: 'Pixies hired!',
+  coinsPaid: '-{n}{coin}',
 };
 
 export default en;

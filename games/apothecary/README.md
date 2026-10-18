@@ -344,6 +344,34 @@ until every cauldron has its pixies, and comes back whenever the doctor carries 
 
 ![Both lines with all their pixies](docs/screenshots/expansion-map.webp)
 
+**The town** opens once the plague is cured: the cure's panel says the town grants a charter, and a
+**Town** button left of Recipes leads to the town map. It shows the apothecary and a lot for every
+other shop in town, and each shop costs ten times the one before, as the biggest thing to spend coins
+on. The first is the **bakery** (1,000 coins). Tap a lot to buy it with the coins in the purse, and
+tap it again to walk in; the top bar's button goes back to the map, and the map's goes back to the
+apothecary. Every shop and the apothecary keep working while you are elsewhere, and while the game
+is closed.
+
+A shop's yard works like the apothecary's: gardens at the left, harvested by walking past them,
+stations in a row with drop, work and pick-up markers, and the shop at the right, where goods
+dropped at the counter go on its shelves and the doctor behind it serves the customers who come
+in from the street. The bakery grows wheat and honeycomb, mills wheat into flour and bakes two flour
+into bread (24 coins) or flour and honeycomb into honey cake (39). Every station and the counter
+have their own purple markers for a level, workers and pixies, dearer in each shop than in the one
+before (three times as much a shop) but nothing like the shop itself:
+
+| Bakery | Cost |
+| --- | --- |
+| Station or counter level (4 levels: a station works half again as fast a level, the counter sells 15% dearer) | 60, 120, 240, 480 |
+| Baker (2 per station) or shopkeeper (1) | 90, then 180 |
+| Pixies: field to mill, hives to oven, mill to oven, oven to the shelves | 180, 180, 300, 450 |
+
+The till's coins are picked up at the counter, and the map shows what waits in each shop's till.
+
+![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
+
+![The bakery's yard](docs/screenshots/bakery.webp)
+
 You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back and show in the hands bar at the bottom of the screen. Progress is saved in the browser automatically.
 
 The cogwheel at the right of the top bar shows the difficulty and frame rate the game runs with, which are set on

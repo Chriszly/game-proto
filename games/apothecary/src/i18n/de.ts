@@ -178,7 +178,7 @@ const de: Translation<typeof en> = {
   seasonPlagueStage: 'Seuche der Saison {season}, {stage}/{stages}: {need}',
   daysLeft: { one: 'noch {n} Tag', other: 'noch {n} Tage' },
   lastDay: 'letzter Tag!',
-  winText: 'Dein Allheilmittel beendete die Seuche an Tag {day}.\nDie Apotheke bleibt offen: handle weiter.',
+  winText: 'Dein Allheilmittel beendete die Seuche an Tag {day}.\nDie Apotheke bleibt offen: handle weiter.\nDie Stadt verleiht dir einen Freibrief: sieh auf den Stadtplan.',
   keepTrading: 'Weiter handeln',
 
   // Rival and wagon
@@ -214,9 +214,32 @@ const de: Translation<typeof en> = {
   rivalCut: 'Konkurrenz {n}%',
   coinPrice: '{n}{coin}',
   learnAtStudy: 'Studieren',
+
+  // The town: its map, its shops and their goods
+  town: 'Stadt',
+  townMap: 'Stadtplan',
+  apothecary: 'Apotheke',
+  apothecaryMakes: 'Tränke für die Kranken',
+  bakery: 'Bäckerei',
+  bakeryMakes: 'Brot und Honigkuchen',
+  walkIn: 'Tippen zum Eintreten',
+  walkInTill: 'Tippen zum Eintreten, Kasse {n}{coin}',
+  buyShop: 'Kaufen: {coins}{coin}',
+  shopBought: '{shop} gekauft!',
+  beehives: 'Bienenstöcke',
+  mill: 'Mühle',
+  oven: 'Ofen',
+  honeycomb: 'Honigwabe',
+  bread: 'Brot',
+  honeyCake: 'Honigkuchen',
+  baker: 'Bäcker',
+  workerHired: '{worker} angeheuert!',
+  shopkeeperHired: 'Ladenhilfe angeheuert!',
+  pixiesFly: 'Feen angeheuert!',
+  coinsPaid: '-{n}{coin}',
 };
 
 /** Texts that read the same in German. */
-export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver', 'coinsGained', 'coinPrice', 'bought', 'sold', 'buildCost', 'learnCost'];
+export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver', 'coinsGained', 'coinPrice', 'bought', 'sold', 'buildCost', 'learnCost', 'coinsPaid'];
 
 export default de;

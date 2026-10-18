@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
+import { ShopScene } from './scenes/ShopScene';
+import { TownScene } from './scenes/TownScene';
 import { setupGame } from '../../../shared/setupGame';
 import { howToPlay } from './howToPlay';
 import { setupScaling } from '../../../shared/scaling';
@@ -25,7 +27,7 @@ const game = new Phaser.Game({
     // frame rate rather than stepping at a fixed 60Hz.
     arcade: { debug: false, fixedStep: false },
   },
-  scene: [BootScene, GameScene],
+  scene: [BootScene, GameScene, TownScene, ShopScene],
 });
 setupGame(game, { howToPlay });
 setupScaling(game, { fill: true });

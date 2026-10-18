@@ -1,5 +1,6 @@
 import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type BrewOut, type ItemId, type PlantId, type PotionId, type RefinedId, type SellableId } from './items';
 import type { TextKey } from '../i18n';
+import { createTown, type TownState } from './town';
 
 export interface Plot {
   plant: PlantId;
@@ -277,6 +278,8 @@ export interface GameState {
   wagon: Wagon | null;
   /** What the herb market's buy marker sells. */
   marketPick: HerbId;
+  /** The town's shops bought after the charter, and the doctor's hands in them (see `town.ts`). */
+  town: TownState;
 }
 
 /**
@@ -862,6 +865,7 @@ export function createInitialState(): GameState {
     seals: 0,
     wagon: null,
     marketPick: 'flour',
+    town: createTown(),
   };
   state.contract = contractFor(state, 1, 0);
   return state;

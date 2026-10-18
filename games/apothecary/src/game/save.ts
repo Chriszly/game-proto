@@ -1,6 +1,7 @@
 import type { ItemId } from './items';
 import { BELT_GAP_MS, BELT_MS, BELTS, COLUMNS_BELT_MS, COLUMNS_LAYOUT, FEEDERS_LAYOUT, GUILD_UPGRADES, HEART_LAYOUT, PLOTS_PER_GARDEN, U_BELT_MS, createInitialState, gardenOf, type GameState, type Plot } from './state';
 import { beltSpan } from '../scenes/layout';
+import { normalizeTown } from './town';
 
 const KEY = 'apothecary-save';
 
@@ -27,6 +28,7 @@ export function loadState(): GameState {
       priority: { ...fresh.priority, ...saved.priority },
       // Customers from before they paid per potion go home; new ones come along soon.
       orders: (saved.orders ?? []).filter((o) => o.pay),
+      town: normalizeTown(saved.town),
     };
     // A save from before the guild took members has already joined if it bought any guild upgrade.
     if (!saved.guild && GUILD_UPGRADES.some((id) => state.upgrades[id].level > 0 || state.upgrades[id].paid > 0)) {

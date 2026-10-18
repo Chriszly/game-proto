@@ -47,6 +47,9 @@ import {
   type Feedback,
 } from '../game/sim';
 import { clearSave, loadState, saveState } from '../game/save';
+import { townOpen } from '../game/town';
+import { tickTown } from '../game/townSim';
+import { leaveFor } from './townKit';
 import {
   BELTS,
   BELT_COST,
@@ -1549,7 +1552,7 @@ export class GameScene extends Phaser.Scene {
   private showWin() {
     if (this.winPanel) return;
     const { width, height } = viewSize(this);
-    const w = 360, h = 150;
+    const w = 380, h = 176;
     const bg = fit(this.add.image(0, 0, cardTexture(this, 'panel', w, h)))
       .setInteractive()
       .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
@@ -1558,13 +1561,13 @@ export class GameScene extends Phaser.Scene {
       });
     const parts: Phaser.GameObjects.GameObject[] = [
       bg,
-      fit(this.add.image(0, -46, 'bell')),
-      this.add.text(0, -18, t('townCured'), { ...HUD_TEXT, fontSize: '20px', color: '#7a4a10' }).setOrigin(0.5),
+      fit(this.add.image(0, -59, 'bell')),
+      this.add.text(0, -31, t('townCured'), { ...HUD_TEXT, fontSize: '20px', color: '#7a4a10' }).setOrigin(0.5),
       this.add
-        .text(0, 12, t('winText', { day: this.state.contract.day }), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal', align: 'center' })
+        .text(0, 10, t('winText', { day: this.state.contract.day }), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal', align: 'center' })
         .setOrigin(0.5),
-      this.card(0, 52, 'button', cardTexture(this, 'button', 120, 28)),
-      this.add.text(0, 52, t('keepTrading'), { ...HUD_TEXT, fontSize: '14px' }).setOrigin(0.5),
+      this.card(0, 65, 'button', cardTexture(this, 'button', 120, 28)),
+      this.add.text(0, 65, t('keepTrading'), { ...HUD_TEXT, fontSize: '14px' }).setOrigin(0.5),
     ];
     this.winPanel = this.add
       .container(width / 2, height / 2, parts)
@@ -1920,11 +1923,14 @@ export class GameScene extends Phaser.Scene {
       });
     fit(this.add.image(cog.x, HUD_HEIGHT / 2, 'cog')).setDepth(UI_DEPTH + 0.5);
     // What each station makes from what, in a panel over the map.
-    this.hudButton(width / 2 - 230, t('recipes'), () => {
+    const [recipesButton, recipesText] = this.hudButton(width / 2 - 230, t('recipes'), () => {
       const open = this.recipes.visible;
       this.closePanels();
       this.recipes.toggle(!open);
     });
+    // The town map, once the town has granted its charter (the plague's first cure), left of Recipes.
+    const town = this.hudButton(recipesButton.x - (recipesText.width + 22) / 2 - 8, t('town'), () => leaveFor(this, this.state, 'Town'));
+    this.views.push(() => town.forEach((part) => part.setVisible(townOpen(this.state.seals))));
     this.createDayBar(width);
 
     // The doctor's hands on a card at the bottom of the screen: a slot for everything the biggest
@@ -2296,6 +2302,8 @@ export class GameScene extends Phaser.Scene {
     const feetY = this.feetY();
     const workingAt = this.workSpots.find((w) => w.zone.contains(this.feetX(), feetY))?.station ?? null;
     tick(this.state, this.frameMs, workingAt, (order) => this.atCounter.has(order.id));
+    // The town's shops keep working while the doctor is in the apothecary.
+    tickTown(this.state, this.frameMs, null);
     this.movePlayer();
 
     this.standOnMarkers();

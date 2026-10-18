@@ -42,6 +42,7 @@ const en: HowToPlay = {
     'Keep 5 or fewer of a potion on its shelf: past that an overstocked shop sells it cheaper, down to half price when full.',
     'Some days a merchant wagon across the street buys a whole crate of one potion at a premium: tap it to sell.',
     'The herb market below the outfitter buys and sells plants and refined goods at prices that change with the weather.',
+    'Once the town is cured its Town map opens: buy a bakery and more shops, each ten times dearer than the last, and supply the whole town.',
   ],
 };
 
@@ -85,6 +86,7 @@ const de: HowToPlay = {
     'Halte 5 oder weniger von einem Trank im Regal: darüber verkauft ein überfüllter Laden ihn billiger, bis zum halben Preis, wenn es voll ist.',
     'An manchen Tagen kauft ein Händlerwagen gegenüber eine ganze Kiste eines Tranks zu einem Aufpreis: tipp ihn an, um zu verkaufen.',
     'Der Kräutermarkt unter dem Ausstatter kauft und verkauft Pflanzen und verarbeitete Waren zu Preisen, die sich mit dem Wetter ändern.',
+    'Ist die Stadt geheilt, öffnet sich ihr Stadtplan: kauf eine Bäckerei und weitere Läden, jeder zehnmal teurer als der letzte, und beliefere die ganze Stadt.',
   ],
 };
 
