@@ -75,7 +75,7 @@ study, shade gardens and a mirrored second production line.
   gets its German entry (and a US one if its spelling differs) in the same PR.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, arcade physics with
   `fixedStep: false`, `pixelArt: false`, aged-paper background `PAPER`), registers `BootScene` and `GameScene`, calls `setupGame(game)`
-  from `shared/setupGame.ts` and `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
+  from `shared/setupGame.ts` and `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/audio.ts`: the game's sound (`shared/audio.ts`): `SONG`, `RUSH_SONG` and the `sfx` table
   (see Sound).
 - `src/game/items.ts`: item ids and defs (`ITEMS`: kind and colour; names are in `i18n/`), `GROW_MS`, `REFINE`, `RECIPES`,
@@ -214,7 +214,8 @@ study, shade gardens and a mirrored second production line.
   `followPlayer` gives it back Phaser's middle origin with `scrollingCamera`. `uiCamera`
   never moves or zooms beyond `renderScale` and draws everything from `UI_DEPTH` up: `splitCameras` sets each object's
   `cameraFilter` by its depth every frame, so later objects sort themselves. `setZoom` clamps,
-  never zooming out past the world's width (so no paper shows at the sides), and stores the zoom
+  never zooming out past the world's width or height (so no paper shows at the sides, nor below
+  the world on a 4:3 view), and stores the zoom
   under `apothecary-zoom`.
 - Map (`WORLD` 1680x900): two rows of production either side of the shop (line one on the left,
   line two mirrored on the right with `mirror`), each running east along `LINE_Y` from its gardens
@@ -486,9 +487,14 @@ brew's `out` may be `PANACEA`.
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
   which applies the hub's frame cap, the FPS readout, reduced motion and full screen, and then
-  `setupScaling(game)` from `shared/scaling.ts`, which draws the canvas at the screen's resolution
+  `setupScaling(game, { fill: true })` from `shared/scaling.ts`, which draws the canvas at the screen's resolution
   (`renderScale` canvas pixels per game pixel, zooming every camera to match) and asks to turn a
-  phone held upright. `paint` multiplies each texture's `res` through `sharpRes`, so art stays
+  phone held upright. With `fill` the view takes the screen's shape (960 to 1296 wide, 540 to 720
+  tall, picked at start) with no bars: the scrolling world just shows more of itself, the top bar
+  centres Recipes, the day bar and hint on the view and pins the purse and cog to its edges, the
+  order strip stays at the left edge, the hands bar at the bottom middle, and the contract, town,
+  plague cards and away chip keep their designed spots shifted by `viewFrame(this).x`, so they stay
+  under the day bar. At exactly 960x540 nothing moves. `paint` multiplies each texture's `res` through `sharpRes`, so art stays
   crisp on big screens. The top bar and panels lay out with `viewSize(scene)`, not `scene.scale`,
   which is in canvas pixels. `e2e/screens.spec.ts` at the root checks the game on five screens.
 - Difficulty scales one number, customer patience: `newOrder` in `src/game/sim.ts` multiplies
@@ -659,9 +665,9 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
   own. Anything that counts potions on the shelf or in hands goes through `plainOf` (`hasRoom`,
   `startBrew`, `canFill`, stock cuts, the shelves).
 - Belt lanes each run at half the belt's speed (`LANE_SHARE` in `runBelt`), however many there are.
-- Lay out the top bar, panels and anything else on screen with `viewSize(this)` or `GAME_WIDTH`,
-  never `this.scale.width`: with `renderScale` above 1 that is the canvas size, and the button
-  lands off screen. `pointer.x/y` are canvas pixels too; go through `getWorldPoint`.
+- Lay out the top bar, panels and anything else on screen with `viewSize(this)` (and `viewFrame(this)` for
+  designed-size spots), never `GAME_WIDTH` or `this.scale.width`: the view can be wider or taller than 960x540, and with
+  `renderScale` above 1 `scale.width` is the canvas size, so the button lands off screen. `pointer.x/y` are canvas pixels too; go through `getWorldPoint`.
 - Textures are painted at `res` times their logical size, `res` raised by `sharpRes` on big screens (the `RES` map in `paint.ts`, per key), so
   show them with `fit(image, scale)` rather than `setScale`, and give arcade bodies on them
   (`setSize`/`setOffset`, in texture pixels) sizes multiplied by `resOf(key)`.

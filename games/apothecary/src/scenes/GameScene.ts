@@ -4,7 +4,7 @@ import { settings as hubSettings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { RUSH_SONG, SONG, sfx, type SfxName } from '../audio';
-import { renderScale, scrollingCamera, viewPoint, viewSize } from '../../../../shared/scaling';
+import { renderScale, scrollingCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
 import { PIXIE_FRAMES, drawFairyPaths, laneOffset, pointAlong } from '../art/pixies';
 import { plantTexture } from '../art/garden';
 import { EXPANSION_IMAGE, WALLS_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
@@ -505,10 +505,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setZoom(zoom: number) {
-    // Never out past the world's width, so the map always fills the view from side to side.
-    const clamped = Phaser.Math.Clamp(zoom, Math.max(MIN_ZOOM, viewSize(this).width / WORLD.w), MAX_ZOOM);
+    // Never out past the world's width or height, so the map always fills the view (a 4:3 view is taller than 540).
+    const view = viewSize(this);
+    const clamped = Phaser.Math.Clamp(zoom, Math.max(MIN_ZOOM, view.width / WORLD.w, view.height / WORLD.h), MAX_ZOOM);
     // A view wider than the world even at the closest zoom (never at 960x540) widens the bounds evenly on both sides.
-    const w = Math.max(WORLD.w, viewSize(this).width / clamped);
+    const w = Math.max(WORLD.w, view.width / clamped);
     this.cameras.main.setZoom(clamped * renderScale).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
     writeZoom(clamped);
   }
@@ -1347,7 +1348,9 @@ export class GameScene extends Phaser.Scene {
    * passes. A kept or missed contract says so under the card as the next one comes in.
    */
   private createContract() {
-    const { x, y, w, h } = CONTRACT_CARD;
+    // Centred under the top bar with the frame, so a wider view keeps the cards beside the day bar.
+    const { y, w, h } = CONTRACT_CARD;
+    const x = CONTRACT_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
     this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d);
@@ -1438,7 +1441,8 @@ export class GameScene extends Phaser.Scene {
    * the card says when a stage is beaten or missed, and the cure opens a panel over the map.
    */
   private createPlague() {
-    const { x, y, w, h } = PLAGUE_CARD;
+    const { y, w, h } = PLAGUE_CARD;
+    const x = PLAGUE_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
     const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d);
@@ -1707,7 +1711,8 @@ export class GameScene extends Phaser.Scene {
    * crowd is going. When a market day's rush pays its bonus or loses it, a note under the card says so.
    */
   private createTown() {
-    const { x, y, w, h } = TOWN_CARD;
+    const { y, w, h } = TOWN_CARD;
+    const x = TOWN_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
     this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d);
@@ -1866,7 +1871,7 @@ export class GameScene extends Phaser.Scene {
         const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const sum = coined(this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1));
     const w = Math.max(AWAY_CHIP.w, Math.ceil(lead.width + sum.width + 46));
-    const x = AWAY_CHIP.x + AWAY_CHIP.w - w;
+    const x = viewFrame(this).x + AWAY_CHIP.x + AWAY_CHIP.w - w;
     lead.setX(x + 28);
     sum.setX(lead.x + lead.width + 6);
     const chip = this.card(x + w / 2, y + h / 2, 'chip', cardTexture(this, 'chip', w, h)).setDepth(d);
