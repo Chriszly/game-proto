@@ -70,6 +70,7 @@ import {
   RESEARCH_ORDER,
   researched,
   studied,
+  LESSONS,
   shadeGrown,
   carryCapacity,
   craftsmanCost,
@@ -216,6 +217,8 @@ const GARDEN_SIGN_W = 128;
 const PLAGUE_CARD = { x: 626, y: 150, w: 316, h: 44 };
 /** A blighted plant is drawn in a sickly violet-grey. */
 const BLIGHT_TINT = 0x8a7aa0;
+/** How opaque the cards over the world are (the contract, town, plague and order cards and the hands), so the yard shows through. */
+const HUD_CARD_ALPHA = 0.72;
 /** How long the doctor stands still on a purple marker before it starts taking coins, so walking over one buys nothing. */
 const STILL_MS = 400;
 /**
@@ -240,6 +243,8 @@ const CAPTION = {
 const ROW_CAPTION = 62;
 const BELT_CAPTION = 68;
 const MARKET_CAPTION = 84;
+/** The study's lessons' captions get a little more, so "Crafting order" and its cost stay on one line. */
+const LESSON_CAPTION = 110;
 /** Caption colours: ink for the doctor's markers, violet for the ones that take coins. */
 const CAPTION_INK = INK;
 const CAPTION_PAY = '#5a2c80';
@@ -314,7 +319,7 @@ const signed = (n: number) => `${n > 0 ? '+' : ''}${formatNumber(n)}`;
 
 /** A purple level marker's icon: the station for a station's level, the study's book for its lessons, otherwise the upgrade's own. */
 const upgradeIcon = (id: UpgradeId): UpgradeIcon =>
-  id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id === 'craftOrder' || id === 'priceSigns' ? 'research' : id;
+  id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id === 'craftOrder' || id === 'priceSigns' || id === 'replant' ? 'research' : id;
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
@@ -550,6 +555,7 @@ export class GameScene extends Phaser.Scene {
       e.stopPropagation();
       if (this.pinching()) return;
       if (this.closePanels()) return;
+      // Until the study teaches replanting, a tap says where to learn it.
       const before = gardenPlant(this.state, garden);
       const feedback = replantGarden(this.state, garden);
       if (gardenPlant(this.state, garden) === before) ui('refuse');
@@ -655,7 +661,7 @@ export class GameScene extends Phaser.Scene {
 
     // Trees and bushes in the grass, in front of or behind the doctor by their feet.
     for (const { key, x, y } of sceneryLayout()) {
-      fit(this.add.image(x, y, key)).setOrigin(0.5, key.startsWith('tree') ? 84 / 88 : 28 / 32).setDepth(y);
+      fit(this.add.image(x, y, key)).setOrigin(0.5, key.startsWith('tree') ? 84 / 88 : key === 'hedge' ? 26 / 30 : 28 / 32).setDepth(y);
     }
 
     for (const block of SHOP_BLOCKS) this.obstacles.add(this.add.zone(block.x + block.w / 2, block.y + block.h / 2, block.w, block.h));
@@ -1159,7 +1165,7 @@ export class GameScene extends Phaser.Scene {
       (level, left) => t('learnCost', { potion: itemName(RESEARCH_ORDER[level]), coins: left }),
       () => unlocked(this.state, 'level-research'),
     );
-    for (const id of ['craftOrder', 'priceSigns'] as const) {
+    for (const id of LESSONS) {
       this.addLevelMarker(
         STUDY[id],
         'research',
@@ -1169,7 +1175,7 @@ export class GameScene extends Phaser.Scene {
         () => payUpgrade(this.state, id),
         (_level, left) => t('learnCost', { potion: t(UPGRADES[id].name), coins: left }),
         () => unlocked(this.state, `level-${id}`),
-        MARKET_CAPTION,
+        LESSON_CAPTION,
       );
     }
   }
@@ -1382,7 +1388,7 @@ export class GameScene extends Phaser.Scene {
     const x = CONTRACT_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d);
+    this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
     const icon = fit(this.add.image(x + 22, y + h / 2 + 1, itemTexture('sleepingTonic')), 1.8).setDepth(d + 0.1);
     const title = this.add.text(x + 42, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const pips = this.add.graphics().setDepth(d + 0.1);
@@ -1474,7 +1480,7 @@ export class GameScene extends Phaser.Scene {
     const x = PLAGUE_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d);
+    const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
     const bell = fit(this.add.image(x + 19, y + h / 2, 'bell')).setDepth(d + 0.1);
     const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const pips = this.add.graphics().setDepth(d + 0.1);
@@ -1744,7 +1750,7 @@ export class GameScene extends Phaser.Scene {
     const x = TOWN_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d);
+    this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
     const icon = fit(this.add.image(x + 19, y + h / 2, 'weather-mild')).setDepth(d + 0.1);
     const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const label = this.add.text(x + 36, y + 31, t('reputation'), { ...HUD_TEXT, fontSize: '12px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
@@ -1870,7 +1876,7 @@ export class GameScene extends Phaser.Scene {
     const key = cardTexture(this, 'chip', w, h);
     const chips = Array.from({ length: MAX_ORDER_SLOTS }, (_, i) => {
       const cx = x + i * (w + gap) + w / 2;
-      const card = this.card(cx, y + h / 2, 'chip', key).setDepth(d);
+      const card = this.card(cx, y + h / 2, 'chip', key).setDepth(d).setAlpha(HUD_CARD_ALPHA);
       const icons = [0, 1].map(() => fit(this.add.image(0, y + 12, itemTexture('healingDraught'))).setDepth(d + 0.1));
       const patience = new ProgressBar(this, cx, y + h - 10, w - 10, 0x58a35a, d + 0.1);
       return { cx, card, icons, patience };
@@ -1968,6 +1974,7 @@ export class GameScene extends Phaser.Scene {
     const barY = height - HANDS_BAR.h / 2 - 4;
     this.card(width / 2, barY, 'contract', cardTexture(this, 'contract', barW, HANDS_BAR.h))
       .setDepth(UI_DEPTH)
+      .setAlpha(HUD_CARD_ALPHA)
       .setInteractive()
       .on('pointerdown', stopTaps);
     label.setX(barX + 12);

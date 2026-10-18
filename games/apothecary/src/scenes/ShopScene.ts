@@ -681,6 +681,7 @@ export class ShopScene extends Phaser.Scene {
     const parts: Phaser.GameObjects.GameObject[] = [];
     parts.push(
       townCard(this, width / 2, barY, 'contract', barW, HANDS_BAR.h)
+        .setAlpha(0.72)
         .setInteractive()
         .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => e.stopPropagation()),
     );

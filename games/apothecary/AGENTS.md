@@ -206,7 +206,8 @@ study, shade gardens and a mirrored second production line.
   paints the whole world as one `ground-world` texture (grass, with each of `YARDS` as compressed
   earth, `WASH.dirt`), plus the expansion yard, the shop's walls
   (`ground-walls`, laid above the expansion yard so its edge doesn't cover the right wall), each garden and
-  the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
+  the scattered trees and bushes and the clumps of the `HEDGES` either side of the ground below the
+  shop, which the doctor can't walk (`sceneryLayout`, the `hedge` texture). `ui.ts` paints parchment cards on demand
   (`cardTexture(scene, kind, w, h)`: bar, button, contract, town, chip, bubble, sign, small, panel) and
   `signTexture`, plus the `weather-<kind>` icons, the Settings button's `cog`, the hand slots' `bin`, the day bar's `moon`, the regular's `regular` star (`sparkle` in
   `paint.ts`, also on fine potions' icons), the plague card's `bell` and the `rival-stall`. `pixies.ts` paints the pixie (`PIXIE_FRAMES`, two wing
@@ -255,6 +256,9 @@ study, shade gardens and a mirrored second production line.
   -400, till -300; standing things sort by y (the doctor by his feet); `WORLD_UI_DEPTH` (9999) for
   bars, order bubbles and feedback, `UI_DEPTH` (10000) for the top bar, the contract card, the town
   card (`TOWN_CARD`, `createTown`) and the away chip (below the town card), `UI_DEPTH + 1` for panels.
+  The cards over the world (contract, town, plague, the order strip's and the hands bar, and the
+  town shops' hands bar) are drawn at `HUD_CARD_ALPHA` (0.72), so the yard shows through; their
+  text and icons stay opaque.
 - Walking: arcade physics steps once per drawn frame; WASD/arrows set velocity directly, and
   `limitWalkStep` (on `PRE_UPDATE`) caps a step at `MAX_WALK_STEP_PX` (20) so a long frame can't
   carry the feet through a station or wall (static obstacles from `addObstacle` and `SHOP_BLOCKS`).
@@ -354,10 +358,12 @@ study, shade gardens and a mirrored second production line.
   what the test reads.
 - Study: `createStudy` puts the desk (an obstacle) under its sign at `STUDY` and a level marker for
   the `research` upgrade, captioned with the next recipe in `RESEARCH_ORDER`; it unlocks with the
-  garden belt. Either side of the desk, `STUDY.craftOrder` and `STUDY.priceSigns` sell the
-  `craftOrder` (40) and `priceSigns` (60) lessons, also unlocked by the garden belt, which show the
-  priority signs and the price signs; until learned, `cyclePriority` and `cycleSign` do nothing and
-  `signOf` reads Fair. `loadState` grants either lesson to an older save already using it.
+  garden belt. Around the desk, `STUDY.replant`, `STUDY.priceSigns` and `STUDY.craftOrder` sell the
+  study's `LESSONS` (`Lesson`, `studied`): `replant` (30), `craftOrder` (40) and `priceSigns` (60),
+  also unlocked by the garden belt, which let the garden signs replant and show the priority signs
+  and the price signs; until learned, `replantGarden` only says where to learn it, `cyclePriority`
+  and `cycleSign` do nothing and `signOf` reads Fair. `loadState` grants each lesson to an older save
+  already using it (a garden replanted, a priority or a sign set).
   `payUpgrade` says "Learned <potion>!". `startBrew` skips recipes not `researched`,
   `orderable` leaves them out of orders, and `RecipeBook` fades them with "Study" for a price.
 - Orders: `createOrderStrip` shows a `chip` card per order (`ORDER_STRIP`, up to

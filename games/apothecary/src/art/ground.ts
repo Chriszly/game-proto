@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { EXPANSION_YARDS, GARDEN_AREAS, SHOP, SHOP_WALLS, STREET_PATH, WORLD, YARDS } from '../scenes/layout';
+import { EXPANSION_YARDS, GARDEN_AREAS, HEDGES, SHOP, SHOP_WALLS, STREET_PATH, WORLD, YARDS } from '../scenes/layout';
 import { INK, WASH, both, chance, ellPts, hatch, ink, paint, paper, pathOf, rectPts, reseed, rr, seeded, wash, type Ctx, type Pt } from './paint';
 
 // The ground as one painted page: cream paper under a broad grass wash, the compressed-earth yard,
@@ -216,6 +216,21 @@ function drawBush(c: Ctx) {
   }
 }
 
+/** A clump of clipped hedge, a line of them making a hedge. 28x30 as shown, foot at (14, 26). */
+function drawHedge(c: Ctx) {
+  const x = 14, y = 26;
+  c.save();
+  c.fillStyle = 'rgba(30,45,22,0.25)';
+  pathOf(c, ellPts(x + 3, y, 13, 4, 14));
+  c.fill();
+  c.restore();
+  const blob = ellPts(x, y - 11, 13, 14, 24).map(([a, b], i) => [a + Math.sin(i * 2.1) * 1.5, b + Math.cos(i * 1.9) * 1.5] as Pt);
+  both(c, blob, '#3e6a2e', { layers: 3 }, { w: 1.1 });
+  hatch(c, ellPts(x + 5, y - 9, 8, 9, 14), { gap: 2.2, alpha: 0.32, w: 0.5 });
+}
+/** How far apart a hedge's clumps stand, so they overlap into one line. */
+const HEDGE_STEP = 18;
+
 /** Where the scenery stands: its texture and its foot, in the grass clear of everything the doctor uses. */
 export interface Scenery {
   key: string;
@@ -234,10 +249,11 @@ export function sceneryLayout(): Scenery[] {
   const zones = [
     { x0: 30, x1: 210, y0: 700, y1: 895, trees: 3, bushes: 2 },
     { x0: 1470, x1: 1650, y0: 700, y1: 895, trees: 3, bushes: 2 },
-    // The rival's stall stands on the street's left (see `RIVAL` in the layout); only bushes below it.
-    { x0: 660, x1: 800, y0: 840, y1: 895, trees: 0, bushes: 2 },
+    // The rival's stall stands on the street's left (see `RIVAL` in the layout); only bushes below it,
+    // inside the hedges.
+    { x0: 690, x1: 800, y0: 840, y1: 895, trees: 0, bushes: 2 },
     // The merchant wagon stops on the street's right (see `WAGON`); only bushes below it too.
-    { x0: 880, x1: 1020, y0: 840, y1: 895, trees: 0, bushes: 2 },
+    { x0: 880, x1: 990, y0: 840, y1: 895, trees: 0, bushes: 2 },
     { x0: 700, x1: 980, y0: 60, y1: 140, trees: 2, bushes: 3 },
   ];
   for (const z of zones) {
@@ -248,6 +264,9 @@ export function sceneryLayout(): Scenery[] {
       spots.push({ key: tree ? `tree-${n % 3}` : `bush-${n % 2}`, x: Math.round(x), y: Math.round(y) });
       n++;
     }
+  }
+  for (const hedge of HEDGES) {
+    for (let y = hedge.from; y <= hedge.to; y += HEDGE_STEP) spots.push({ key: 'hedge', x: hedge.x, y });
   }
   return spots;
 }
@@ -262,6 +281,7 @@ export function bakeGround(scene: Phaser.Scene) {
   );
   ['#527a36', '#5e8a3e', '#466e30'].forEach((tint, i) => paint(scene, `tree-${i}`, 80, 88, (c) => drawTree(c, tint), 2, 500 + i));
   [0, 1].forEach((i) => paint(scene, `bush-${i}`, 48, 32, drawBush, 2, 600 + i));
+  paint(scene, 'hedge', 28, 30, drawHedge, 2, 700);
   reseed(1);
 }
 

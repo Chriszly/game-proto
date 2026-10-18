@@ -58,6 +58,8 @@ const en = {
   study: 'Study',
   craftOrder: 'Crafting order',
   priceSigns: 'Price signs',
+  replanting: 'Replanting',
+  learnLesson: '{lesson}: learn it at the study',
 
   // Pixie routes
   gardenPixies: 'Garden pixies',

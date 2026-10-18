@@ -820,7 +820,7 @@ export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
   const done = () =>
     id === 'research'
       ? t('learned', { potion: itemName(RESEARCH_ORDER[upgrade.level - 1]) })
-      : id === 'craftOrder' || id === 'priceSigns'
+      : id === 'craftOrder' || id === 'priceSigns' || id === 'replant'
         ? t('learned', { potion: t(UPGRADES[id].name) })
         : t('levelUp', { name: t(UPGRADES[id].name), level: upgrade.level + 1 });
   return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), done);
@@ -853,6 +853,7 @@ export function cycleSign(state: GameState, potion: PotionId): Feedback | null {
  * again from seed, clear of blight, so the switch costs a crop.
  */
 export function replantGarden(state: GameState, garden: number): Feedback | null {
+  if (!studied(state, 'replant')) return [t('learnLesson', { lesson: t('replanting') })];
   const choices = plantChoices(state, garden);
   const now = gardenPlant(state, garden);
   const next = choices[(choices.indexOf(now) + 1) % choices.length];
