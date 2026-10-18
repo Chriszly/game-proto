@@ -93,8 +93,8 @@ in.
 - `src/audio/sound.ts`: the sound table `sfx` (`sounds` from `shared/audio.ts`) and the `SONG`
   with its parts (see Sound). `src/audio/cues.ts`: `SoundCues`, which plays them from what changed
   in the run each frame.
-- `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
-  then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` (see Screen scaling), and puts
+- `src/main.ts`: creates the `Phaser.Game` (designed at 960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
+  then `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })` (see Screen scaling), and puts
   `game` on `window` in dev builds.
 - `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Shrine`, `Boss` with its
   `BossKind`, `Rockfall`, `Dare`, `Coin`, `Effect`, `Runner`), the terrains (`Terrain`, `TERRAIN`
@@ -141,9 +141,11 @@ in.
   `forSale` and `CURSE` (from which stage, how often).
 - `src/game/save.ts`: `loadProgress` and `saveProgress` (best distance, banked coins, the bought
   boon, the armoury, the daily best, the crown).
-- `src/scenes/BootScene.ts`: bakes every texture, then starts `Game`.
+- `src/scenes/BootScene.ts`: fits the layout to the view (`fitLayout(viewSize)`), bakes every texture, then starts `Game`.
 - `src/scenes/GameScene.ts`: owns the `GameState`, wires input, ticks the sim and draws everything.
-- `src/scenes/layout.ts`: screen constants (`VIEW`, `GROUND_Y`, `RUNNER_X`, `TAP_SPLIT_Y`,
+- `src/scenes/layout.ts`: screen constants, laid out for the designed view (`DESIGN`, `DESIGN_GROUND_Y`) and
+  moved to the view the game runs in by `fitLayout` (see Screen scaling): `VIEW`, `GROUND_Y`, `RUNNER_X`, `TAP_SPLIT_Y`,
+  `HUD_SHIFT` (how far the HUD's middle and right-hand items moved),
   `FRAME` (the miniature's gold frame), `TRACK` (the run track), `TAG` (the stage's tag),
   `DARE_TAG` (the dare's strip under it), `STAGE_TITLE`, `ARMOURY_PANEL`, `STREAK_CHIP`, `MARGIN`
   (the scrollwork and caption), `CARDS` (card size and the centres for two or three cards),
@@ -396,9 +398,22 @@ key (see Hub settings).
 
 ### Screen scaling
 
-- `setupScaling(game)` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
+- `setupScaling(game, { fill: true })` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
   4K screen, 2 with the canvas renderer) and zooms the one camera to match, so all layout stays in
-  the 960x540 game pixels of `layout.ts`. The camera never scrolls: the course scrolls by moving
+  the game pixels of `layout.ts`.
+- The game fills every screen shape: the view is 960x540 grown to the screen, 960 to 1296 wide and
+  540 to 720 tall, picked once at start. `BootScene` calls `fitLayout(width, height)` with
+  `viewSize` before painting, which moves `layout.ts`'s values in place (`GROUND_Y`, `RUNNER_X` and
+  `TAP_SPLIT_Y` are live `let` exports): with `dx` more width the knight, the run track, streak
+  chip, stage name, stage title, caption and cards move `dx / 2` right and the distance, coins, best,
+  tag, dare strip and touch buttons `dx` right (`HUD_SHIFT` for the HUD's literal positions), so the
+  hearts keep to the left edge and the rest to the middle and right; with `dy` more height the road
+  and everything under it (the frame's bottom, the margin, caption and touch buttons) go `dy` lower
+  and the sky grows (cards and the stage title go `dy / 2` lower). The page, sky, frame and HUD band
+  are painted as big as the view (`scenery.ts` shifts the sky's clouds, moon and stars and the
+  blade's log down by the lift and carries the diaper and chain up); the `far` and `near` layers
+  still wrap every 960 px and are just wider tile sprites. Overlays use `VIEW` and centre in it. At
+  960x540 `fitLayout` changes nothing, so the playthrough's tap points hold. The camera never scrolls: the course scrolls by moving
   objects and tile positions, so no `scrollingCamera` or `splitHudCamera` is needed.
 - `paint` in `ink.ts` paints each texture at `sharpRes(w, h)` canvas pixels per shown pixel, sets
   the texture source's `resolution` to that, and sets the base frame's source size back to `w` x
@@ -512,7 +527,9 @@ the stage), at most one sound of each kind a frame, so a row of coins or a volle
   the hub's Difficulty setting scales, edit the `byDifficulty` call (see Hub settings) and the
   README's difficulty line.
 - Move the screen layout: edit `src/scenes/layout.ts`; then check the test's tap points and the art
-  that reads `GROUND_Y` and `VIEW` (pit depth and blade length in `scenery.ts`).
+  that reads `GROUND_Y` and `VIEW` (pit depth and blade length in `scenery.ts`). A new position
+  that is not centred or left-pinned also gets its move in `fitLayout` (or `HUD_SHIFT`), so it
+  follows a wider or taller view.
 - Save more between runs: extend `src/game/save.ts`, keep keys prefixed `hotfoot-`, and carry the
   new field through `newRun`, `persist` and the game-over panel.
 - Change the shop: `buyMissed` in `src/game/sim.ts` (price, what can be bought) and `drawGameOver`
