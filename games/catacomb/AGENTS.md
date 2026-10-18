@@ -78,7 +78,7 @@ File map (all under `src/` unless it starts with `shared/`):
   same PR.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`, so
   the painted textures are smoothed) with
-  `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
+  `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })` from
   `shared/scaling.ts`; in dev builds puts `game` on `window`.
 - `game/cards.ts`: the `Card` type (with `up`, what tempering changes, and the optional `power`
   and `curse` kinds), `PowerKind`, `CurseKind`, the `CARDS` table, `BaseId` (a key of `CARDS`) and
@@ -126,7 +126,7 @@ File map (all under `src/` unless it starts with `shared/`):
   `grantFlask`, `curse` (a curse card into the deck and the discard pile), `applyPoison` (Venom
   Gland and Venom Veil), `makeShop` and `nextIntent`. No Phaser import.
 - `scenes/BootScene.ts`: reads the screen's resolution (`setArtRes`), bakes every texture
-  (`bakeScenery`, `bakeCharacters`, `bakeIcons`, `bakeCardFrames`), then starts `Game`.
+  (`bakeScenery`, at the view's size, `bakeCharacters`, `bakeIcons`, `bakeCardFrames`), then starts `Game`.
 - `scenes/GameScene.ts`: builds and draws the map (room icons rebuilt by `buildRooms` when a new
   act brings a new map), fight (with a `StatusRow` over each fighter, the flask slots in
   `flaskLayer` and the powers in play in `powerLayer`), reward overlay, the merchant (`shopLayer`,
@@ -262,10 +262,21 @@ Data tables (where to tune):
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts`, which applies the frame cap, the FPS readout, reduced motion (camera shake and flash) and full screen.
-- It then calls `setupScaling(game)` from `shared/scaling.ts`, which draws the canvas at the
-  screen's resolution (`renderScale` canvas pixels per game pixel, every camera zoomed to match)
-  and asks to turn a phone held upright. No camera scrolls, so nothing else changes: layout stays
-  in the 960x540 `VIEW`, and taps go through Phaser's own hit tests. The art is painted at
+- It then calls `setupScaling(game, { fill: true })` from `shared/scaling.ts`, which draws the
+  canvas at the screen's resolution (`renderScale` canvas pixels per game pixel, every camera
+  zoomed to match), asks to turn a phone held upright, and grows the view from 960x540 to the
+  screen's shape (up to 1296x540 or 960x720), picked once at start. No camera scrolls. `create` in
+  `GameScene` reads `viewSize` and `viewFrame` into `W`, `H`, `fx` and `fy`: the map, fight,
+  reward, merchant, panel and picker containers sit at the frame (`fx`, `fy`) and keep their
+  960x540 `layout.ts` positions inside it; their backdrops sit at `-fx, -fy` and the overlays'
+  dimmers (`dimmer`) cover the whole view. The top bar spans the view (room text on its right
+  edge), the fight's orb and draw pile are pinned to the bottom-left corner, End turn and the
+  discard pile to the bottom-right, the hand to the bottom edge (`handLayer` at `fy` inside the
+  fight), the flasks and powers to the left edge and the picker's Back to the right. On a grown
+  view the draw pile's count sits over the orb instead of under it, clear of the corner buttons.
+  `hand` and `rewards` hold view coordinates (the frame offset added). `bakeScenery` paints both
+  backdrops at the view's size, the designed picture in the frame with more wall, floor or
+  flagstones around it. At 960x540 nothing moves. Taps go through Phaser's own hit tests. The art is painted at
   `renderScale` (see `art/paint.ts`). `e2e/screens.spec.ts` at the root checks the game on five
   screens.
 - Difficulty scales one number: foe health. `startFight` in `src/game/sim.ts` sets each foe's `hp`
@@ -465,7 +476,8 @@ for the hero's own action, or from `Cues.hear` for something the run does on its
 - The tip under the top bar is shared by relics, flasks and powers (`showTip(text)`).
 - `scene.restart()` reruns `create`, which resets the run, but `clock` and `lastFrame` carry over.
 - `this.scale.width/height` and `pointer.x/y` are canvas pixels, `renderScale` times the view;
-  lay out with `VIEW` (or `viewSize(this)`), and read pointers through `viewPoint` or
+  lay out inside the frame containers with `VIEW` positions, pin edge items with `W`, `H`, `fx` and
+  `fy` (see Hub settings), and read pointers through `viewPoint` or
   `pointer.worldX/Y`. A camera that scrolls or zooms needs `scrollingCamera` and `renderScale`
   (see the root `AGENTS.md`).
 - Never use a red cross in any art (root `AGENTS.md`); healing pops are already green.
