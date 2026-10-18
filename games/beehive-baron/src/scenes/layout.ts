@@ -2,11 +2,25 @@ import Phaser from 'phaser';
 import { smooth } from '../art/paper';
 import type { Kind } from '../game/honey';
 import { FLOWERS, GRID, localSlot } from '../game/state';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 
 // Where things are drawn in the 960x540 view: the hive with its comb on the left, the meadow the
 // bees fly to on the top right, and the buttons on a board below the meadow.
 
 export const VIEW = { w: 960, h: 540 };
+
+/**
+ * The whole view in layout coordinates. The game fills the screen's shape, so the view can be
+ * wider or taller than `VIEW`; the camera scrolls so `VIEW` sits in its middle (`viewFrame`), and
+ * the scenery and the HUD stretch out to these edges. At 960x540 it is exactly `VIEW`.
+ */
+export function viewEdges(scene: Phaser.Scene) {
+  const frame = viewFrame(scene);
+  const { width, height } = viewSize(scene);
+  const x = -frame.x;
+  const y = -frame.y;
+  return { x, y, w: width, h: height, right: x + width, bottom: y + height };
+}
 export const HUD_HEIGHT = 40;
 
 /** The comb: the centre of the top left cell and each hexagon's radius (pointy side up). Both hives' combs draw in the same place. */

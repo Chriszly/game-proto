@@ -179,7 +179,7 @@ File map (`src/`):
   `game/` hold keys, not text. Prices show as `price` ("15c", "15 T" for Taler in German).
 - `audio.ts`: the sound table (`sfx`, `SoundName`) and the song (`SONG`); see "Sound" below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false` since the art is
-  smooth) with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and
+  smooth) with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })`, and
   exposes `game` on window in dev builds.
 - `game/state.ts`: types (`GameState`, `Cell` = `HoneyCell | BroodCell`, `Bee`, `GameEvent`,
   `Progress`), the grid and balance constants, `hiveOf`, `localSlot`, `hiveSlots`, `freshProgress`,
@@ -217,7 +217,8 @@ File map (`src/`):
   season tint, the casks, the market (with the meadows' strain), the order and contract cards, the
   swarm chip and queen card, the fair on the goal card and the end card, turns taps and hovers into sim calls and the build preview,
   animates events, saves, shows the away chip, and offers `spots()` for the test.
-- `scenes/layout.ts`: every screen position (`VIEW`, `COMB`, `HIVE`, `PLAQUE`, `HIVE_TAB` and
+- `scenes/layout.ts`: every screen position (`VIEW`, `viewEdges` (the whole view in layout
+  coordinates), `COMB`, `HIVE`, `PLAQUE`, `HIVE_TAB` and
   `hiveTab`, `ENTRANCE`, `FLOWER_GROUND`, `FAR_RIDGE` and `farY`, `GOAL`, `MEADOW_SPOTS`,
   `MEADOW_TAG`, `AWAY`, `SWARM`, `HINT`, `MARKET` and `marketEntry`, `SHELF`, `CASK` and
   `caskSpot`, `BOARD`, `SEND_BUTTON`, `SELL_BUTTON`, `SHOP_BUTTONS` and `shopSpot`, `ORDER`,
@@ -379,8 +380,20 @@ only `GameScene` (and the refusal buzz in `ui/Button.ts`) plays them, so the sim
 ### Screens
 
 - `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels per game
-  pixel, up to 4 on a 4K screen, 2 with the canvas renderer) and zooms the one camera to match. The
-  camera never scrolls, so layout stays in the 960x540 coordinates of `layout.ts`.
+  pixel, up to 4 on a 4K screen, 2 with the canvas renderer) and zooms the one camera to match.
+- The game fills every screen shape (`setupScaling(game, { fill: true })`): the view is 960x540 at
+  its smallest and grows wider (up to 1296x540) or taller (up to 960x720) to the screen's shape,
+  picked once at start. Layout stays in the 960x540 coordinates of `layout.ts`: `GameScene.create`
+  scrolls the camera once by `viewEdges(this)` so that rectangle sits in the middle of the view
+  (`viewFrame`), and `this.edges` holds the whole view in those coordinates (`x`/`y` are negative
+  when the view is bigger). Reaching out to the edges: `bg-back` and `bg-front` are baked at the
+  view's size (the sky over all of it, the hills' ridges run on level past their ends via `widen`
+  and down past the bottom), the season tint covers the view, the HUD strip is baked as wide as the
+  view and pinned to its top (title and counts at the left edge, stats at the right), New hive sits
+  in the bottom-right corner, and wasps fly in from and off past the view's right edge. The cards,
+  shades and floats stay centred on `VIEW`, which is the view's centre. At 960x540 the edges are
+  `VIEW` and nothing moves. `cut`'s paper grain reaches back to the canvas's corner when the
+  context is shifted, so the bigger backgrounds are grained all over.
 - Pointer handlers read `pointer.worldX/Y`, not `pointer.x/y`, which are canvas pixels.
 - Textures are painted at `sharpRes` through `sketch`, so the cut-paper art is as sharp as text.
   Read a texture's size from its frame's `realWidth`/`realHeight` (game pixels), never from
@@ -505,7 +518,8 @@ only `GameScene` (and the refusal buzz in `ui/Button.ts`) plays them, so the sim
 - `cellAt` hits the nearest centre within half a hex width, so taps right on a corner between
   cells may miss.
 - The button board and jar shelf are baked into `bg-front`; moving `BOARD` or `SHELF` in
-  `layout.ts` also needs `bakeFrontBackground` in `src/art/scenery.ts` changed. The hive texture
+  `layout.ts` also needs `bakeFrontBackground` in `src/art/scenery.ts` changed. Anything new pinned
+  to the screen's edge goes at `this.edges`, not at `VIEW`'s edge. The hive texture
   is drawn in screen coordinates inside `HIVE`.
 - The scene saves on `pagehide`, so a script that writes `beehive-baron-progress` and then reloads
   the page sees its write overwritten; set the save from an init script on a fresh page instead.
