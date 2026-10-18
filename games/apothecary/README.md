@@ -383,6 +383,7 @@ before (three times as much a shop) but nothing like the shop itself:
 | Guild: join | 450 |
 | Guild: growth, pixies, prices (2 levels each) | 180, 360; 270, 540; 180, 360 |
 | Guild: storage (3 levels), slots (1), customers (2) | 225, 450, 900; 270; 225, 450 |
+| Second line | 1,500 |
 
 Between its gardens and its first station, every shop has a little market of its own, like the
 apothecary's. Its **outfitter** sells one more level of the doctor's pack, boots and sickle, which
@@ -426,6 +427,14 @@ top bar: sell so many of one of its goods today (4 at first, one more for every 
 to 12) and its reward goes into the till. A new one comes with every day, for another good.
 
 ![The bakery's contract card under the top bar, with two Fine loaves in hand](docs/screenshots/shop-contract.webp)
+
+Below the guild, every shop has room for a **second line**, like the apothecary's expansion. Bought
+once at its marker (1,500 coins at the bakery, three times as much in each shop after), it builds a
+copy of each station in a row under the first, which levels and hires on its own, and a second set
+of pixie routes from the same gardens (their markers stand under the first line's) to the same
+shelves.
+
+![The bakery's second line, with its pixies flying and a baker at the second oven](docs/screenshots/shop-line2.webp)
 
 ![A shop's market: the outfitter's three markers and the study's two lessons](docs/screenshots/town-market.webp)
 

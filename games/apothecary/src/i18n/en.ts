@@ -125,6 +125,8 @@ const en = {
   notOnShelf: 'Not on the shelf yet',
   serveInShop: 'Step into the shop to serve',
   landBought: 'New land bought!',
+  secondLine: 'Second line',
+  line2Built: 'Second line built!',
   tableBuilt: 'Refining table built!',
   cauldronBuilt: 'Cauldron built!',
   fieldPlanted: 'Field planted!',

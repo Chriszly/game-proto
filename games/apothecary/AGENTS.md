@@ -51,7 +51,8 @@ study, shade gardens and a mirrored second production line.
   fruit cake, lavender soap and scented candle, red cloth and gown with madder and red dye, copper
   pot and lantern, cider and apple ale). Each shop has a guild of its own too: growth, pixies, storage, prices, slots and customers. Every
   good a shop sells can come out Fine in the last quarter of its station's work, and from day 4
-  each shop has a daily contract for one of its goods. With more than three lots the map lays them in two rows of shorter cards (`lot`), and
+  each shop has a daily contract for one of its goods. A second line, bought once per shop, adds
+  a copy of each station in a row below the guild, with its own pixie routes. With more than three lots the map lays them in two rows of shorter cards (`lot`), and
   keeps `CORNER_H` free at the bottom for the corner buttons. Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
   households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
   then houses, manors, which want candles and tapers, mansions, which want blue cloth and cloaks, palaces, which want horseshoes and iron pots, and castles, drawn as battlemented towers, which want ale and stout) and buys it off a shop's shelf (potions
@@ -174,6 +175,10 @@ study, shade gardens and a mirrored second production line.
   contract (`ShopState.contract`, a `ShopContract`: `day`, `good`, `need`, `made`, `reward`) starts
   on `SHOP_CONTRACT_START`; `ShopState.kept` counts the ones kept (it picks the next good and need,
   up to `MAX_SHOP_CONTRACT`; the reward is `SHOP_CONTRACT_SHARE` of the goods' base price).
+  The second line (`ShopState.line2`, bought for `LINE2_COST`, `line2Cost`) copies every station
+  and route under the id `<id>2` (`line2Id`, `isLine2`, `line1Id`): `shopStations(def)` and
+  `shopRoutes(def)` list both lines' (`stationDef`, `routeDef` look one up), and `ShopState.stations`,
+  `routes` and `priority` hold both from the start; `lineOpen(shop, id)` says whether one stands yet.
 - `src/game/districts.ts`: the households' data, free of Phaser: `Need` (a good or a potion),
   `DISTRICTS`, `HOME_TIERS` (each tier's name and needs), the growth numbers (`START_HOMES`,
   `MAX_HOMES`, `SUPPLY_MS`, `HAPPY_PULL`, `HAPPY`, `UNHAPPY`, `GROW_ROUNDS`), `DistrictState`
@@ -187,7 +192,7 @@ study, shade gardens and a mirrored second production line.
   takes a good off a bought shop's shelf or a potion, plain first, off `state.counter.shelf`, and
   pays the price into that till). Districts use no randomness. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
   `pickUpFromStation`, `stockShopShelf`, `collectShopTill`, `tossGood`, `payStationLevel`,
-  `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`, `payGear`, `payLesson`, `payRecipe`, `payGuildJoin`, `payGuildUpgrade`,
+  `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`, `payGear`, `payLesson`, `payRecipe`, `payLine2`, `payGuildJoin`, `payGuildUpgrade`,
   `cycleShopPriority`, `cycleShopSign`) return `Feedback` like the sim's. `nextRecipe` skips recipes
   not learned yet and takes the station's priority first when it is ready; `runOrders` draws wants by `SIGN_DEMAND`, pays
   `shopPrice` (counter level, guild prices and sign) and runs patience down by `SIGN_PATIENCE`.
@@ -197,10 +202,12 @@ study, shade gardens and a mirrored second production line.
   (`shopContractFor`) when the apothecary's contract day changes. `inShopFineWindow(def, station)`
   is true from `1 - FINE_SHARE` of a sold good's work to its end, and `pickUpFromStation` then takes
   the work out by hand as its fine good. Drops skip fine goods; `stockShopShelf` stocks both kinds.
+  `dropAtStation` and `payRoute` refuse a second-line station or route until the line is bought.
 - `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
   `ShopDef` (`gardenLayout`, `bedPosition`, `MARKET` for the outfitter and study, with its recipe marker, between the
-  gardens and the first station, `stationLayout` with its `priority` sign, `guildLayout` under the first two stations, `counterLayout` with each
-  shelf's `priceSign`, `routePath`, `routeMs`); Phaser-free, since the sim reads route lengths from it.
+  gardens and the first station, `stationLayout` with its `priority` sign (a second-line station under its twin, along `LINE2_Y`), `guildLayout` under the first two stations,
+  `line2Layout` for the second line's sign and buy marker, `gardenLayout`'s `route2` for its garden routes, `counterLayout` with each
+  shelf's `priceSign`, its drop under the shelves and its work spot and till at the counter, `routePath`, `routeMs`); Phaser-free, since the sim reads route lengths from it.
 - `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
   (saves, then starts another scene, which loads the save again) and `keepSaving`.
 - `TownScene` lays the lots out in rows of three (`LOT`) with the districts' cards in a row below

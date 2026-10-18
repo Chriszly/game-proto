@@ -20,6 +20,12 @@ import {
   SHOP_SERVE_MS,
   WALK_IN_MS,
   createShop,
+  line2Cost,
+  lineOpen,
+  routeDef,
+  shopRoutes,
+  shopStations,
+  stationDef,
   gardenOpen,
   gearCost,
   recipeCost,
@@ -85,7 +91,7 @@ const countBoth = (list: Held[], good: GoodId) => list.reduce((n, h) => n + (pla
 /** Goods of one kind on their way to a station's queue or the shelf, so a route doesn't overfill it. */
 function inFlight(shop: ShopState, def: ShopDef, to: RouteDef['to'], good: GoodId) {
   let n = 0;
-  for (const r of def.routes) {
+  for (const r of shopRoutes(def)) {
     const same = r.to === 'shelf' ? to === 'shelf' : to !== 'shelf' && r.to.station === to.station;
     if (same) n += shop.routes[r.id].items.filter((i) => i.good === good).length;
   }
@@ -145,7 +151,7 @@ function runStation(shop: ShopState, shopDef: ShopDef, def: StationDef, dt: numb
 function takeForRoute(shop: ShopState, def: ShopDef, route: RouteDef): GoodId | null {
   const accepts = (good: GoodId) => {
     if (route.to === 'shelf') return sellsGood(def, good) && countBoth(shop.shelf, good) + inFlight(shop, def, 'shelf', good) < shopStorage(shop);
-    const station = def.stations.find((s) => s.id === (route.to as { station: string }).station)!;
+    const station = stationDef(def, (route.to as { station: string }).station);
     return takes(station, good) && count(shop.stations[station.id].queue, good) + inFlight(shop, def, route.to, good) < shopStorage(shop);
   };
   if ('garden' in route.from) {
@@ -298,8 +304,8 @@ export function tickTown(state: GameState, dt: number, working: Working | null, 
     const here = working?.shop === id ? working.at : null;
     if (shop.contract?.day !== state.contract.day) shop.contract = shopContractFor(shop, def, state.contract.day);
     shop.beds.forEach((grown, b) => gardenOpen(shop, gardenOfBed(b)) && (shop.beds[b] = Math.min(grown + dt * shopGrowth(shop), def.gardens[gardenOfBed(b)].grow)));
-    for (const station of def.stations) runStation(shop, def, station, dt, here === station.id);
-    for (const route of def.routes) runRoute(id, shop, def, route, dt);
+    for (const station of shopStations(def)) runStation(shop, def, station, dt, here === station.id);
+    for (const route of shopRoutes(def)) runRoute(id, shop, def, route, dt);
     runCounter(shop, dt, here === 'counter');
     runOrders(shop, def, dt, rand);
   }
@@ -408,7 +414,8 @@ export function harvestBed(state: GameState, id: ShopId, bed: number): Feedback 
 /** Drops one good from the hands that the station takes, the top one first. */
 export function dropAtStation(state: GameState, id: ShopId, station: string): Feedback | null {
   const shop = state.town.shops[id]!;
-  const def = SHOPS[id].stations.find((s) => s.id === station)!;
+  if (!lineOpen(shop, station)) return null;
+  const def = stationDef(SHOPS[id], station);
   const hands = state.town.hands;
   for (let i = hands.length - 1; i >= 0; i--) {
     const good = hands[i];
@@ -503,7 +510,7 @@ function payLevel(state: GameState, upgrade: Upgrade, cost: number, max: number,
 
 export function payStationLevel(state: GameState, id: ShopId, station: string): Feedback | null {
   const s = state.town.shops[id]!.stations[station];
-  const name = t(SHOPS[id].stations.find((d) => d.id === station)!.name);
+  const name = t(stationDef(SHOPS[id], station).name);
   return payLevel(state, s.level, levelCost(id, s.level.level), MAX_LEVEL, () => t('levelUp', { name, level: s.level.level + 1 }));
 }
 
@@ -524,8 +531,8 @@ export function payShopkeeper(state: GameState, id: ShopId): Feedback | null {
 
 export function payRoute(state: GameState, id: ShopId, route: string): Feedback | null {
   const r = state.town.shops[id]!.routes[route];
-  if (r.built) return null;
-  const cost = routeCost(id, SHOPS[id].routes.find((d) => d.id === route)!);
+  if (r.built || !lineOpen(state.town.shops[id]!, route)) return null;
+  const cost = routeCost(id, routeDef(SHOPS[id], route));
   const coins = payTowards(state, r, cost);
   if (!coins) return null;
   if (r.paid < cost) return [t('coinsPaid', { n: coins })];
@@ -552,6 +559,11 @@ export function payRecipe(state: GameState, id: ShopId): Feedback | null {
   return payLevel(state, recipes, recipeCost(id, recipes.level), research.length, () => t('learned', { potion: goodName(research[recipes.level - 1]) }));
 }
 
+/** Pays towards a shop's second line. */
+export function payLine2(state: GameState, id: ShopId): Feedback | null {
+  return payLevel(state, state.town.shops[id]!.line2, line2Cost(id), 1, () => t('line2Built'));
+}
+
 /** Pays towards joining a shop's guild. */
 export function payGuildJoin(state: GameState, id: ShopId): Feedback | null {
   return payLevel(state, state.town.shops[id]!.guild.join, guildJoinCost(id), 1, () => t('welcomeGuild'));
@@ -568,7 +580,7 @@ export function payGuildUpgrade(state: GameState, id: ShopId, upgrade: ShopGuild
 /** Moves a shop station's priority on: none, then each product it makes, and back to none. */
 export function cycleShopPriority(state: GameState, id: ShopId, station: string): Feedback | null {
   const shop = state.town.shops[id]!;
-  const def = SHOPS[id].stations.find((s) => s.id === station)!;
+  const def = stationDef(SHOPS[id], station);
   const choices: (GoodId | null)[] = [null, ...priorityChoices(def, (g) => shopMakes(shop, SHOPS[id], g))];
   if (!shopStudied(shop, 'craftOrder') || choices.length === 1) return null;
   const next = choices[(choices.indexOf(shop.priority[station] ?? null) + 1) % choices.length];
