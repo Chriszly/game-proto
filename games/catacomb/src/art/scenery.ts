@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import { ART, BACKDROP_RES, addTexture, blank, paint, sketch } from './paint';
 import { seeded } from './pixelArt';
 
 // The two backdrops in the painterly style, drawn plainly at twice the screen's size, shrunk to
 // it and repainted with brush strokes: a crypt for the fights (a stone wall with two torches
 // and an arch over a flagstone floor in perspective), and the dark flagstones the map is laid
-// out on.
+// out on. Each is painted over the whole view: the designed 960x540 picture in the view's frame
+// (`viewFrame`), with more wall, floor or flagstones around it when the view is wider or taller.
 
 const W = 1920;
 const H = 1080;
@@ -17,10 +19,21 @@ const TORCHES = [
   [1570, 205],
 ];
 
+/** The part of the picture to paint, at twice the screen's size: the designed picture is 0,0 to W,H. */
+interface Bounds {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
 export function bakeScenery(scene: Phaser.Scene) {
   const res = Math.min(ART, BACKDROP_RES);
-  const crypt = painted(drawCrypt, 11, res);
-  const flagstones = painted(drawFlagstones, 5, res);
+  const view = viewSize(scene);
+  const frame = viewFrame(scene);
+  const b = { x0: -2 * frame.x, y0: -2 * frame.y, x1: 2 * (view.width - frame.x), y1: 2 * (view.height - frame.y) };
+  const crypt = painted(drawCrypt, 11, res, b);
+  const flagstones = painted(drawFlagstones, 5, res, b);
   addTexture(scene, 'room-bg', crypt, res);
   addTexture(scene, 'map-bg', flagstones, res);
   // The second act, the Sunken Tombs, is the same stone washed in a cold, drowned green.
@@ -42,12 +55,13 @@ function washed(src: HTMLCanvasElement, color: string) {
   return canvas;
 }
 
-type Draw = (ctx: CanvasRenderingContext2D, rnd: () => number) => void;
+type Draw = (ctx: CanvasRenderingContext2D, rnd: () => number, b: Bounds) => void;
 
-function painted(draw: Draw, seed: number, res: number) {
-  const { canvas, ctx } = sketch(W / 2, H / 2, res);
+function painted(draw: Draw, seed: number, res: number, b: Bounds) {
+  const { canvas, ctx } = sketch((b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, res);
   ctx.scale(0.5, 0.5);
-  draw(ctx, seeded(seed));
+  ctx.translate(-b.x0, -b.y0);
+  draw(ctx, seeded(seed), b);
   return paint(canvas, { sizes: [10, 5, 2.5, 1.3], seed, grain: 0.13, vignette: 0.5, res });
 }
 
@@ -94,17 +108,18 @@ function tools(ctx: CanvasRenderingContext2D) {
   };
 }
 
-const drawCrypt: Draw = (ctx, rnd) => {
+const drawCrypt: Draw = (ctx, rnd, b) => {
   const { poly, ell, rrect, glow } = tools(ctx);
   const jit = (hex: string, amt: number) => jitter(rnd, hex, amt);
   const wg = ctx.createLinearGradient(0, WALL_TOP, 0, FLOOR_Y);
   wg.addColorStop(0, '#231d2b');
   wg.addColorStop(1, '#2c2533');
   ctx.fillStyle = wg;
-  ctx.fillRect(0, WALL_TOP, W, FLOOR_Y - WALL_TOP);
+  ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, FLOOR_Y - b.y0);
   // Stone blocks, a little irregular, with lit tops and shadowed bottoms, a crack or moss now and then.
-  for (let row = 0, y = WALL_TOP - 30; y < FLOOR_Y; row++, y += 92) {
-    for (let x = row % 2 ? -90 : -10; x < W; ) {
+  const above = Math.max(0, Math.ceil((WALL_TOP - 30 - b.y0) / 92));
+  for (let row = -above, y = WALL_TOP - 30 - 92 * above; y < FLOOR_Y; row++, y += 92) {
+    for (let x = b.x0 + (row % 2 ? -90 : -10); x < b.x1; ) {
       const w = 150 + rnd() * 90;
       const h = Math.min(86, FLOOR_Y - y - 4);
       const j = () => (rnd() - 0.5) * 8;
@@ -194,37 +209,39 @@ const drawCrypt: Draw = (ctx, rnd) => {
   fg.addColorStop(0, '#2c2632');
   fg.addColorStop(1, '#1b1720');
   ctx.fillStyle = fg;
-  ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
+  ctx.fillRect(b.x0, FLOOR_Y, b.x1 - b.x0, b.y1 - FLOOR_Y);
   const VX = 960;
   const VY = 330;
   const rows: number[] = [];
-  for (let k = 0, y = FLOOR_Y; y < H + 80; k++) {
+  for (let k = 0, y = FLOOR_Y; y < b.y1 + 80; k++) {
     rows.push(y);
     y += 26 + k * 16;
   }
   const toward = (xb: number, y: number) => VX + (xb - VX) * ((y - VY) / (H - VY));
+  const wider = Math.ceil(Math.max(-b.x0, b.x1 - W) / 230);
   for (let i = 0; i + 1 < rows.length; i++) {
     const [y0, y1] = [rows[i], rows[i + 1]];
-    for (let c = -9; c <= 9; c++) {
+    for (let c = -9 - wider; c <= 9 + wider; c++) {
       const xb0 = VX + (c - 0.5) * 230 + (i % 2) * 115;
       const xb1 = xb0 + 230;
       poly([[toward(xb0, y0) + 3, y0 + 3], [toward(xb1, y0) - 3, y0 + 3], [toward(xb1, y1) - 3, y1 - 3], [toward(xb0, y1) + 3, y1 - 3]], jit('#3b3442', 0.25));
     }
   }
   ctx.fillStyle = '#17131b';
-  ctx.fillRect(0, FLOOR_Y - 6, W, 12);
+  ctx.fillRect(b.x0, FLOOR_Y - 6, b.x1 - b.x0, 12);
   glow(460, 650, 360, 'rgba(255,160,80,A)', 0.3);
   glow(1450, 650, 360, 'rgba(255,160,80,A)', 0.26);
   glow(960, 600, 260, 'rgba(120,140,220,A)', 0.08);
 };
 
-const drawFlagstones: Draw = (ctx, rnd) => {
+const drawFlagstones: Draw = (ctx, rnd, b) => {
   const { poly, ell, glow } = tools(ctx);
   ctx.fillStyle = '#16121a';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
   // Big rough flagstones in staggered rows, each a slightly different shade.
-  for (let row = 0, y = -20; y < H; row++, y += 110) {
-    for (let x = row % 2 ? -100 : -20; x < W; ) {
+  const above = Math.max(0, Math.ceil((-20 - b.y0) / 110));
+  for (let row = -above, y = -20 - 110 * above; y < b.y1; row++, y += 110) {
+    for (let x = b.x0 + (row % 2 ? -100 : -20); x < b.x1; ) {
       const w = 160 + rnd() * 80;
       const j = () => (rnd() - 0.5) * 10;
       poly([[x + 5 + j(), y + 5 + j()], [x + w - 5 + j(), y + 5 + j()], [x + w - 5 + j(), y + 104 + j()], [x + 5 + j(), y + 104 + j()]], jitter(rnd, '#272029', 0.25));

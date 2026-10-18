@@ -1,4 +1,5 @@
 import { settings } from '../../../../shared/settings';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import Phaser from 'phaser';
 import { ui } from '../../../../shared/audio';
 import { Cues } from '../audio/cues';
@@ -241,12 +242,26 @@ export class GameScene extends Phaser.Scene {
   private pops = new Map<number, Phaser.GameObjects.Text>();
   private lastFrame: number | null = null;
   private clock = 0;
+  /** The view's size, and where the designed 960x540 frame sits in it; picked once in `create`. */
+  private W: number = VIEW.w;
+  private H: number = VIEW.h;
+  private fx = 0;
+  private fy = 0;
 
   constructor() {
     super('Game');
   }
 
   create() {
+    // The map, the fight and the panels are laid out for 960x540 in containers placed at the
+    // view's frame; backdrops and dimmers stretch over the whole view, and the top bar, the
+    // fight's orb, End turn, hand and flasks are pinned to the view's edges.
+    const view = viewSize(this);
+    const frame = viewFrame(this);
+    this.W = view.width;
+    this.H = view.height;
+    this.fx = frame.x;
+    this.fy = frame.y;
     this.state = newRun();
     this.cues = new Cues(this.state);
     this.foes.clear();
@@ -307,15 +322,15 @@ export class GameScene extends Phaser.Scene {
   // The map
 
   private createMap() {
-    this.mapBg = artImage(this, 0, 0, 'map-bg').setOrigin(0);
+    this.mapBg = artImage(this, -this.fx, -this.fy, 'map-bg').setOrigin(0);
     this.paths = this.add.graphics();
     this.roomRings = this.add.graphics();
     this.roomLayer = this.add.container(0, 0);
     this.token = artImage(this, ENTRANCE.x, ENTRANCE.y, heroTexture('knight', true)).setOrigin(0.5, 1);
     this.mapHint = this.add
-      .text(VIEW.w / 2, VIEW.h - 34, '', { ...textStyle(18, '#e6c766'), align: 'center', wordWrap: { width: VIEW.w - 80 } })
+      .text(VIEW.w / 2, VIEW.h - 34 + this.fy, '', { ...textStyle(18, '#e6c766'), align: 'center', wordWrap: { width: VIEW.w - 80 } })
       .setOrigin(0.5);
-    this.mapLayer = this.add.container(0, 0, [this.mapBg, this.paths, this.roomRings, this.roomLayer, this.token, this.mapHint]);
+    this.mapLayer = this.add.container(this.fx, this.fy, [this.mapBg, this.paths, this.roomRings, this.roomLayer, this.token, this.mapHint]);
   }
 
   /** The room icons and their tap circles, made again whenever a new act brings a new map. */
@@ -385,24 +400,34 @@ export class GameScene extends Phaser.Scene {
   // The fight
 
   private createFight() {
-    this.roomBg = artImage(this, 0, 0, 'room-bg').setOrigin(0);
+    this.roomBg = artImage(this, -this.fx, -this.fy, 'room-bg').setOrigin(0);
     this.hero = artImage(this, HERO_FEET.x, HERO_FEET.y, heroTexture('knight')).setOrigin(0.5, 1);
     this.bars = this.add.graphics();
     this.heroHp = this.add.text(HERO_FEET.x, FOE_FEET_Y + HP_BAR.dy + HP_BAR.h / 2, '', textStyle(13)).setOrigin(0.5);
-    this.handLayer = this.add.container(0, 0);
+    // The hand sits on the view's bottom edge, the orb and draw pile in its bottom left corner,
+    // End turn and the discard pile in its bottom right (positions inside the fight's frame).
+    this.handLayer = this.add.container(0, this.fy);
+    const left = -this.fx;
+    const right = this.W - VIEW.w - this.fx;
+    const bottom = this.H - VIEW.h - this.fy;
+    const orbX = ENERGY_ORB.x + left;
+    const orbY = ENERGY_ORB.y + bottom;
     const orb = this.add.graphics();
-    orb.fillStyle(INK).fillCircle(ENERGY_ORB.x, ENERGY_ORB.y, ENERGY_ORB.r + 4);
-    orb.fillStyle(GOLD.dark).fillCircle(ENERGY_ORB.x, ENERGY_ORB.y, ENERGY_ORB.r);
-    orb.fillStyle(GOLD.mid).fillCircle(ENERGY_ORB.x - 3, ENERGY_ORB.y - 3, ENERGY_ORB.r - 6);
-    orb.fillStyle(0xffffff, 0.35).fillCircle(ENERGY_ORB.x - 12, ENERGY_ORB.y - 14, 7);
-    this.energyText = this.add.text(ENERGY_ORB.x, ENERGY_ORB.y, '', textStyle(24)).setOrigin(0.5);
-    this.drawText = this.add.text(ENERGY_ORB.x, PILES_Y, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
-    this.discardText = this.add.text(END_TURN.x, PILES_Y, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
-    this.endTurnButton = makeButton(this, END_TURN.x, END_TURN.y, t('endTurn'), () => this.act(endTurn(this.state), 'endTurn'), END_TURN.w);
+    orb.fillStyle(INK).fillCircle(orbX, orbY, ENERGY_ORB.r + 4);
+    orb.fillStyle(GOLD.dark).fillCircle(orbX, orbY, ENERGY_ORB.r);
+    orb.fillStyle(GOLD.mid).fillCircle(orbX - 3, orbY - 3, ENERGY_ORB.r - 6);
+    orb.fillStyle(0xffffff, 0.35).fillCircle(orbX - 12, orbY - 14, 7);
+    this.energyText = this.add.text(orbX, orbY, '', textStyle(24)).setOrigin(0.5);
+    // A view grown from 960x540 puts the draw pile over the orb, clear of the corner buttons.
+    const grown = this.W !== VIEW.w || this.H !== VIEW.h;
+    const drawY = grown ? orbY - ENERGY_ORB.r - 18 : PILES_Y + bottom;
+    this.drawText = this.add.text(orbX, drawY, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
+    this.discardText = this.add.text(END_TURN.x + right, PILES_Y + bottom, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
+    this.endTurnButton = makeButton(this, END_TURN.x + right, END_TURN.y + bottom, t('endTurn'), () => this.act(endTurn(this.state), 'endTurn'), END_TURN.w);
     this.turnBanner = this.add.text(VIEW.w / 2, 150, '', textStyle(30, '#e6c766')).setOrigin(0.5);
-    this.flaskLayer = this.add.container(0, 0);
-    this.powerLayer = this.add.container(0, 0);
-    this.fightLayer = this.add.container(0, 0, [this.roomBg, this.hero, this.bars, this.heroHp, orb, this.energyText, this.endTurnButton, this.handLayer, this.drawText, this.discardText, this.turnBanner, this.flaskLayer, this.powerLayer]);
+    this.flaskLayer = this.add.container(left, 0);
+    this.powerLayer = this.add.container(left, 0);
+    this.fightLayer = this.add.container(this.fx, this.fy, [this.roomBg, this.hero, this.bars, this.heroHp, orb, this.energyText, this.endTurnButton, this.handLayer, this.drawText, this.discardText, this.turnBanner, this.flaskLayer, this.powerLayer]);
     this.heroStatuses = new StatusRow(this, this.fightLayer);
   }
 
@@ -530,7 +555,7 @@ export class GameScene extends Phaser.Scene {
         .on('pointerout', () => view.setY(HAND.y))
         .on('pointerdown', () => this.act(playCard(this.state, i), kindOf(id) === 'power' ? 'power' : kindOf(id) === 'attack' ? 'attack' : 'skill'));
       this.handLayer.add(view);
-      return { id, x, y: HAND.y, w: HAND.w, h: HAND.h };
+      return { id, x: x + this.fx, y: HAND.y + 2 * this.fy, w: HAND.w, h: HAND.h };
     });
   }
 
@@ -582,10 +607,10 @@ export class GameScene extends Phaser.Scene {
   // Rewards, the merchant, rests, events and the end of an act or a run
 
   private createReward() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.7).setInteractive();
+    const dim = this.dimmer(0.7);
     this.rewardTitle = this.add.text(VIEW.w / 2, 100, '', textStyle(28, '#e6c766')).setOrigin(0.5);
     const skip = makeButton(this, SKIP.x, SKIP.y, t('skip'), () => this.act(takeReward(this.state, null), 'click'));
-    this.rewardLayer = this.add.container(0, 0, [dim, this.rewardTitle, skip]).setDepth(UI_DEPTH + 10).setVisible(false);
+    this.rewardLayer = this.add.container(this.fx, this.fy, [dim, this.rewardTitle, skip]).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
   private drawReward() {
@@ -614,15 +639,20 @@ export class GameScene extends Phaser.Scene {
         .on('pointerout', () => bg.setStrokeStyle(3, INK))
         .on('pointerdown', () => this.act(takeReward(this.state, i), 'pick'));
       this.rewardLayer.add(view);
-      this.rewards.push({ id, x, y: REWARD.y, w: HAND.w * REWARD.scale, h: HAND.h * REWARD.scale });
+      this.rewards.push({ id, x: x + this.fx, y: REWARD.y + this.fy, w: HAND.w * REWARD.scale, h: HAND.h * REWARD.scale });
     });
   }
 
+  /** A dark veil over the whole view that takes the taps, for an overlay placed at the view's frame. */
+  private dimmer(alpha: number) {
+    return this.add.rectangle(-this.fx, -this.fy, this.W, this.H, 0x0e0a08, alpha).setOrigin(0).setInteractive();
+  }
+
   private createShop() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.78).setInteractive();
+    const dim = this.dimmer(0.78);
     const title = this.add.text(VIEW.w / 2, 72, t('merchant'), textStyle(28, '#e6c766')).setOrigin(0.5);
     const leave = makeButton(this, SHOP.leave.x, SHOP.leave.y, t('leave'), () => this.act(leaveShop(this.state), 'click'));
-    this.shopLayer = this.add.container(0, 0, [dim, title, leave]).setDepth(UI_DEPTH + 10).setVisible(false);
+    this.shopLayer = this.add.container(this.fx, this.fy, [dim, title, leave]).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
   /** The merchant's cards with their prices, and boxes for the relics and the removal; rebuilt when a ware sells or the gold changes. */
@@ -702,7 +732,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPanel() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.7).setInteractive();
+    const dim = this.dimmer(0.7);
     const box = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, 580, 290, 0x2a2632).setStrokeStyle(4, 0x7a7288);
     this.panelTitle = this.add.text(VIEW.w / 2, VIEW.h / 2 - 100, '', textStyle(30)).setOrigin(0.5);
     this.panelText = this.add
@@ -722,7 +752,7 @@ export class GameScene extends Phaser.Scene {
     this.depthButtons = [-1, 1].map((d) => makeButton(this, VIEW.w / 2 + d * HERO_PANEL.depthDx, HERO_PANEL.depthY, d < 0 ? '<' : '>', () => this.act(setDepth(this.state, this.state.depth + d), 'ratchet'), 44));
     this.depthText = this.add.text(VIEW.w / 2, HERO_PANEL.depthY, '', textStyle(20, '#e6c766')).setOrigin(0.5);
     this.panel = this.add
-      .container(0, 0, [dim, box, this.panelTitle, this.panelText, this.panelButton, this.temperButton, this.removeButton, ...this.choiceButtons, ...this.heroPics, ...this.depthButtons, this.depthText])
+      .container(this.fx, this.fy, [dim, box, this.panelTitle, this.panelText, this.panelButton, this.temperButton, this.removeButton, ...this.choiceButtons, ...this.heroPics, ...this.depthButtons, this.depthText])
       .setDepth(UI_DEPTH + 20)
       .setVisible(false);
   }
@@ -796,13 +826,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPicker() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.85).setInteractive();
+    const dim = this.dimmer(0.85);
     this.pickTitle = this.add.text(VIEW.w / 2, 80, '', textStyle(24, '#f09a3a')).setOrigin(0.5);
-    const back = makeButton(this, PICKER.back.x, PICKER.back.y, t('back'), () => {
+    const back = makeButton(this, PICKER.back.x + this.W - VIEW.w - this.fx, PICKER.back.y, t('back'), () => {
       ui('click');
       this.picking = null;
     });
-    this.pickLayer = this.add.container(0, 0, [dim, this.pickTitle, back]).setDepth(UI_DEPTH + 21).setVisible(false);
+    this.pickLayer = this.add.container(this.fx, this.fy, [dim, this.pickTitle, back]).setDepth(UI_DEPTH + 21).setVisible(false);
   }
 
   /**
@@ -856,12 +886,12 @@ export class GameScene extends Phaser.Scene {
       if (!text) {
         // Several numbers on the same target at once fan out a little.
         const spread = (s.pops.filter((q) => q.on === p.on && q.id < p.id).length % 3) * 22;
-        text = this.add.text(x + spread - 22, 0, p.text, textStyle(22, POP_COLORS[p.kind])).setOrigin(0.5).setDepth(UI_DEPTH + 5);
+        text = this.add.text(this.fx + x + spread - 22, 0, p.text, textStyle(22, POP_COLORS[p.kind])).setOrigin(0.5).setDepth(UI_DEPTH + 5);
         this.pops.set(p.id, text);
       }
       text.setData('top', top);
       const t = 1 - p.ms / POP_MS;
-      text.setY(top - 44 - t * 40).setAlpha(Math.min(1, (1 - t) * 3));
+      text.setY(this.fy + top - 44 - t * 40).setAlpha(Math.min(1, (1 - t) * 3));
     }
     for (const [id, text] of this.pops) {
       if (seen.has(id)) continue;
@@ -878,9 +908,9 @@ export class GameScene extends Phaser.Scene {
     artImage(this, HUD.coinX, HUD_HEIGHT / 2, 'coin').setDepth(UI_DEPTH + 1);
     this.goldText = this.add.text(HUD.goldX, 10, '', textStyle(18, '#e6c766')).setDepth(UI_DEPTH + 1);
     this.relicLayer = this.add.container(0, 0).setDepth(UI_DEPTH + 1);
-    this.roomText = this.add.text(VIEW.w - 16, 12, '', textStyle(15, '#e6c766')).setOrigin(1, 0).setDepth(UI_DEPTH + 1);
+    this.roomText = this.add.text(this.W - 16, 12, '', textStyle(15, '#e6c766')).setOrigin(1, 0).setDepth(UI_DEPTH + 1);
     this.tip = this.add
-      .text(VIEW.w / 2, HUD_HEIGHT + 22, '', { ...textStyle(16, '#f3e9d2'), backgroundColor: '#2a2632', padding: { x: 10, y: 6 } })
+      .text(this.W / 2, HUD_HEIGHT + 22, '', { ...textStyle(16, '#f3e9d2'), backgroundColor: '#2a2632', padding: { x: 10, y: 6 } })
       .setOrigin(0.5)
       .setDepth(UI_DEPTH + 30)
       .setVisible(false);
@@ -899,8 +929,8 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const g = this.hud.clear();
-    g.fillStyle(0x1e1a24, 0.92).fillRect(0, 0, VIEW.w, HUD_HEIGHT);
-    g.fillStyle(0x5a5366).fillRect(0, HUD_HEIGHT - 3, VIEW.w, 3);
+    g.fillStyle(0x1e1a24, 0.92).fillRect(0, 0, this.W, HUD_HEIGHT);
+    g.fillStyle(0x5a5366).fillRect(0, HUD_HEIGHT - 3, this.W, 3);
     this.hpText.setText(`${s.hp}/${s.maxHp}`);
     this.deckText.setText(t('deck', { n: s.deck.length }));
     this.goldText.setText(String(s.gold));
