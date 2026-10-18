@@ -195,9 +195,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - `src/scenes/sound.ts`: `SoundCues`, which compares the sim with the last frame and plays what
   changed (new units, finished buildings, techs, ages, the bell, raids, camps, falls) and keeps
   the music on the right part.
-- `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`, linen
+- `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling filling the screen shape, `pixelArt: false`, linen
   background), registers the three scenes, calls `setupGame(game)` from `shared/setupGame.ts` and
-  `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
+  `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/game/data.ts`: every balance number and roster (names and texts are `TextKey`s, shown with `t`): `FACTIONS`, `UNITS` (cost, time, stats,
   trainer, `age`, `limit`, `gift`), `unitFor(faction, role)`, `isCivil`/`isSoldier`/`earnsRanks`,
   `BUILDINGS`, `BUILD_ORDER`, `TECHS` (with `advance: 2 | 3` on
@@ -246,9 +246,10 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   (`paintChunk`, one `CHUNK`x`CHUNK` tile chunk at full size), `bakeFogPattern`, `bakeNeedle`,
   `bakeRallyFlag`, and the camps (`bakeCache`, `bakeRelic`, with `CAMP_TOP` px above the footprint).
 - `src/art/ui.ts`: wool `icon`s, the top bar, the panel band, buttons, cards and the menu backdrop.
-- `src/scenes/layout.ts`: where every HUD piece sits in game space (`TOP_H`, `PANEL_Y`, the top
-  bar's slots and bars, `AGE_PIPS`, `DEED_CARD`, `STATUS_CARD`, `TOAST`, `SEL`, `BUTTONS`, `BOON`,
-  `MINI`).
+- `src/scenes/layout.ts`: where every HUD piece sits in game space (`W`, `H`, `TOP_H`, `PANEL_Y`, the top
+  bar's slots and bars, `TOP_RIGHT`, `AGE_PIPS`, `DEED_CARD`, `STATUS_CARD`, `TOAST`, `SEL`, `BUTTONS`, `BOON`,
+  `MINI`). The values are for 960x540; `fitLayout(w, h)`, called once by the BootScene with
+  `viewSize`, fits them to the view the game filled (see Screens).
 - `src/scenes/BootScene.ts`: bakes every texture once, then starts `Menu`. Keys: `fig-<unit type>`
   for a faction's soldiers and `fig-<unit type>-<faction>` for the shared neutral units (villager,
   cart, ram), with frames `<pose>-<n>` (e.g. `chop-2`),
@@ -309,6 +310,14 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   main camera keeps Phaser's middle origin for `setBounds`, `centerOn` and `setScroll`. Handlers
   turn the pointer into game-space screen points with `viewPoint(pointer)`; `toWorld` and
   `toScreen` go through the main camera and its `worldView`.
+- Fill: the game fills every screen shape (`setupScaling(game, { fill: true })`), so the view is
+  960x540 or wider (up to 1296x540) or taller (up to 960x720), picked once at start. The BootScene
+  calls `fitLayout(viewSize)` before baking, so the top bar, panel and menu backdrop are painted at the
+  view's size; the boon and edge icons, the last two top-bar bars and beasts, the deeds and status
+  cards, the panel's right bar and the minimap follow the right edge, the toast stays centred, and the
+  panel sits on the bottom edge (`PANEL_Y = H - 110`). The world simply shows more of itself; edge
+  scrolling, the alert arrows and the end screens use `W` and `H`. The menu is laid out for 960x540
+  and offset by `viewFrame(scene)`. At exactly 960x540 nothing moves.
 - Input: `pointerdown` and `pointerup` on the scene. Clicks on the minimap move the camera, on the
   toast jump to the raid or alert it shows (`toastAt`), on an edge marker to its alert, and in the top bar, the deeds card or the panel are left to the HUD. A
   click under 5 px is a click; otherwise it is a box select. Right click calls `commandAt`.

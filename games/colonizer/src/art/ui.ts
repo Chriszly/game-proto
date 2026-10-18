@@ -1,6 +1,6 @@
 // The HUD as the tapestry's borders: linen bands edged in ink thread, slanted bars between the
 // compartments, border beasts, stitched cards and buttons, and small wool icons.
-import { AGE_PIPS, BUTTONS, MINI, PANEL_BARS, PANEL_Y, TOP_BARS, TOP_H, W, H } from '../scenes/layout';
+import { AGE_PIPS, BUTTONS, MINI, PANEL_BARS, PANEL_Y, TOP_BARS, TOP_H, TOP_RIGHT, W, H } from '../scenes/layout';
 import { bar, band, canvas, card, knot, linen, mix, PI, reseed, rrect, se, sew, sp, T, thread, type Ctx } from './stitch';
 
 export type IconKind = 'wood' | 'food' | 'ore' | 'pop' | 'clock' | 'horn' | 'shield' | 'wheat' | 'banner' | 'sword' | 'feather' | 'stone' | 'drum';
@@ -84,8 +84,8 @@ export function bakeTopBar() {
   const { cv, c } = canvas(W, TOP_H);
   band(c, 0, 0, W, TOP_H, 2);
   for (const [x, col] of TOP_BARS) bar(c, x, 0, TOP_H, T[col]);
-  beast(c, 790, 14, T.sage, 1);
-  beast(c, 906, 14, T.ochre, -1);
+  beast(c, TOP_RIGHT.beasts[0], 14, T.sage, 1);
+  beast(c, TOP_RIGHT.beasts[1], 14, T.ochre, -1);
   thread(c, [[AGE_PIPS.x - 8, TOP_H - 6], [AGE_PIPS.x + AGE_PIPS.gap * 2 + 8, TOP_H - 6]], mix(T.ochre, T.band, 0.4), 0.6);
   return cv;
 }
@@ -131,19 +131,19 @@ export function bakeCard(w: number, h: number, o: { fill?: string; lw?: number; 
   return cv;
 }
 
-/** The menu and end-screen ground: linen with border bands top and bottom. */
+/** The menu and end-screen ground: linen with border bands top and bottom, over the whole view. */
 export function bakeBackdrop() {
   const { cv, c } = canvas(W, H);
   linen(c, 0, 0, W, H, T.linen, 4);
   band(c, 0, 0, W, 34, 2);
   band(c, 0, H - 34, W, 34, 6);
   const cols = [T.red, T.sage, T.ochre, T.indigo];
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < Math.ceil(W / 60); i++) {
     bar(c, 30 + i * 60, 0, 34, cols[i % 4]);
     bar(c, 30 + i * 60, H - 34, 34, cols[(i + 2) % 4]);
   }
-  beast(c, 180, 17, T.sage, 1);
-  beast(c, 780, 17, T.ochre, -1);
-  beast(c, 480, H - 17, T.teal, 1);
+  beast(c, W / 2 - 300, 17, T.sage, 1);
+  beast(c, W / 2 + 300, 17, T.ochre, -1);
+  beast(c, W / 2, H - 17, T.teal, 1);
   return cv;
 }

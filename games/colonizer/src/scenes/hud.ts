@@ -9,7 +9,7 @@ import { WOOL } from '../art/figures';
 import { hexNum, mix, SERIF, T } from '../art/stitch';
 import { settings } from '../../../../shared/settings';
 import { t } from '../i18n';
-import { AGE_PIPS, DEED_CARD, MINI, STATUS_CARD, TOAST, TOP_SLOTS } from './layout';
+import { AGE_PIPS, DEED_CARD, MINI, STATUS_CARD, TOAST, TOP_RIGHT, TOP_SLOTS } from './layout';
 
 const HUD_DEPTH = 9990;
 const ink = (size: number, color: string = T.ink, bold = true): Phaser.Types.GameObjects.Text.TextStyle => ({
@@ -69,8 +69,8 @@ export class TopBar {
     this.values.clock = fixed(scene.add.text(TOP_SLOTS.clock + 19, 15, '', ink(14)).setOrigin(0, 0.5), 2);
     fixed(scene.add.image(TOP_SLOTS.faction + 8, 15, `icon-banner-${faction}`), 2);
     fixed(scene.add.text(TOP_SLOTS.faction + 20, 15, t(FACTIONS[faction].name).toUpperCase(), ink(12.5, WOOL[faction].cloth)).setOrigin(0, 0.5), 2);
-    this.boonIcon = fixed(scene.add.image(722, 15, 'icon-shield').setVisible(false), 2);
-    this.edgeIcon = fixed(scene.add.image(752, 15, 'icon-stone').setVisible(false), 2);
+    this.boonIcon = fixed(scene.add.image(TOP_RIGHT.boon, 15, 'icon-shield').setVisible(false), 2);
+    this.edgeIcon = fixed(scene.add.image(TOP_RIGHT.edge, 15, 'icon-stone').setVisible(false), 2);
   }
 
   update(s: GameState) {
