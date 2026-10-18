@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CRATES, CRATE_KINDS, DRUM, HUD_HEIGHT, REACH_Y, SUPPLY_KINDS, VIEW, type CrateKind, type SupplyKind } from '../game/rules';
 import { t } from '../i18n';
-import { GEOM, GRAIN_TILE, TAU, bake, canvas, rgba, rng, tex, type Ctx } from './paint';
+import { FIELD, GEOM, GRAIN_TILE, TAU, bake, canvas, rgba, rng, tex, type Ctx } from './paint';
 import { CRATE_COLORS, NV } from './theme';
 
 // Deadline through a night-vision camera: everything is painted in greys (how bright it shows up in
@@ -462,18 +462,19 @@ function supplyIcon(ctx: Ctx, kind: SupplyKind) {
 
 function ground(ctx: Ctx) {
   const rnd = rng(17);
-  const W = VIEW.w, H = VIEW.h;
+  // Painted over the whole view (`FIELD`), like the comic's road.
+  const W = VIEW.w, H = FIELD.h, L = FIELD.x, R = FIELD.x + FIELD.w;
   ctx.fillStyle = g(0.17);
-  ctx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 9000; i++) {
+  ctx.fillRect(L, 0, R - L, H);
+  for (let i = 0, n = Math.round((9000 * H) / VIEW.h); i < n; i++) {
     ctx.fillStyle = g(0.11 + rnd() * 0.13);
     ctx.fillRect(57 + rnd() * 426, rnd() * H, 1.2 + rnd() * 2, 1.2 + rnd() * 2);
   }
   // Grass on the shoulders reflects infrared: it shows up bright.
-  for (const [x0, x1] of [[0, 57], [483, W]]) {
+  for (const [x0, x1] of [[L, 57], [483, R]]) {
     ctx.fillStyle = g(0.34);
     ctx.fillRect(x0, 0, x1 - x0, H);
-    for (let i = 0; i < 2600; i++) {
+    for (let i = 0, n = Math.round((2600 * (x1 - x0) * H) / (57 * VIEW.h)); i < n; i++) {
       const x = x0 + rnd() * (x1 - x0), y = rnd() * H;
       limb(ctx, [x, y], [x + (rnd() - 0.5) * 4, y - 3 - rnd() * 6], 1, 0.3 + rnd() * 0.35);
     }
@@ -506,29 +507,33 @@ function ground(ctx: Ctx) {
   gr.addColorStop(0, 'rgba(255,255,255,0.16)');
   gr.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = gr;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(L, 0, R - L, H);
 }
 
 function sandbags(ctx: Ctx) {
-  for (let x = 12; x < VIEW.w + 14; x += 28) {
+  // Across the whole view, in step with the bags at 540 wide.
+  const from = 28 * Math.floor(FIELD.x / 28), to = FIELD.x + FIELD.w + 14;
+  for (let x = from + 12; x < to; x += 28) {
     shade(ctx, x, 13, 14, 4);
     vol(ctx, x, 7, 13, 7, 0.46, 0.12);
   }
-  for (let x = -2; x < VIEW.w + 14; x += 28) vol(ctx, x, -3, 12, 6.5, 0.52, 0.12);
+  for (let x = from - 2; x < to; x += 28) vol(ctx, x, -3, 12, 6.5, 0.52, 0.12);
 }
 
 /** Scanlines and the lens vignette, laid over the whole feed. */
 function scan(ctx: Ctx) {
+  // Over the whole view (`FIELD`), its vignette and corners round the view's middle and edges.
+  const { x: L, w: W, h: H } = FIELD, cx = L + W / 2, size = Math.max(W * (VIEW.h / VIEW.w), H);
   ctx.fillStyle = 'rgba(0,0,0,0.16)';
-  for (let y = 0; y < VIEW.h; y += 3) ctx.fillRect(0, y, VIEW.w, 1);
-  const vg = ctx.createRadialGradient(VIEW.w / 2, VIEW.h / 2, VIEW.h * 0.32, VIEW.w / 2, VIEW.h / 2, VIEW.h * 0.72);
+  for (let y = 0; y < H; y += 3) ctx.fillRect(L, y, W, 1);
+  const vg = ctx.createRadialGradient(cx, H / 2, size * 0.32, cx, H / 2, size * 0.72);
   vg.addColorStop(0, 'rgba(0,0,0,0)');
   vg.addColorStop(1, 'rgba(0,0,0,0.7)');
   ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, VIEW.w, VIEW.h);
+  ctx.fillRect(L, 0, W, H);
   // Feed frame corners.
   const c = rgba(PH, 0.5);
-  brackets(ctx, 4, 86, VIEW.w - 8, VIEW.h - 92, c, 18);
+  brackets(ctx, L + 4, 86, W - 8, H - 92, c, 18);
 }
 
 /** Sensor noise: pale specks on transparent, tiled over the feed and nudged every frame. */
@@ -644,9 +649,9 @@ export function bakeNightVision(scene: Phaser.Scene) {
     gr.addColorStop(0, 'rgba(2,10,5,0.85)');
     gr.addColorStop(1, 'rgba(2,10,5,0.6)');
     c.fillStyle = gr;
-    c.fillRect(0, 0, VIEW.w, HUD_HEIGHT);
+    c.fillRect(FIELD.x, 0, FIELD.w, HUD_HEIGHT);
     c.fillStyle = rgba(PH, 0.5);
-    c.fillRect(0, HUD_HEIGHT - 1, VIEW.w, 1);
+    c.fillRect(FIELD.x, HUD_HEIGHT - 1, FIELD.w, 1);
   });
   bake(scene, key('ring'), GEOM.ring, (c) => {
     // The drum's blast radius, marked by the overwatch system: a dashed amber circle with ticks.

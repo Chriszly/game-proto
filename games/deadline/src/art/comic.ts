@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CRATES, CRATE_KINDS, DRUM, HUD_HEIGHT, REACH_Y, SUPPLY_KINDS, VIEW, type CrateKind, type SupplyKind } from '../game/rules';
 import { t } from '../i18n';
-import { GEOM, TAU, bake, circle, lit, path, rng, tex, type Ctx, type Pt } from './paint';
+import { FIELD, GEOM, TAU, bake, circle, lit, path, rng, tex, type Ctx, type Pt } from './paint';
 import { ACID_COLOR, COMIC, CRATE_COLORS } from './theme';
 
 // Deadline as a pulp horror comic: inked outlines, flat colours, halftone dots on the side away
@@ -545,11 +545,13 @@ function supplyIcon(ctx: Ctx, kind: SupplyKind) {
 
 function ground(ctx: Ctx) {
   const rnd = rng(5);
-  const W = VIEW.w, H = VIEW.h, roadL = 57, roadR = 483;
+  // Painted over the whole view (`FIELD`): wider shoulders round the road on a wider screen, and
+  // more road behind the squad on a taller one.
+  const W = VIEW.w, H = FIELD.h, left = FIELD.x, right = FIELD.x + FIELD.w, roadL = 57, roadR = 483;
   ctx.fillStyle = '#3b3f62';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(left, 0, right - left, H);
   // Shoulders: olive grass with ink hatching and tufts.
-  for (const [x0, x1] of [[0, roadL], [roadR, W]]) {
+  for (const [x0, x1] of [[left, roadL], [roadR, right]]) {
     ctx.fillStyle = '#5a6a36';
     ctx.fillRect(x0, 0, x1 - x0, H);
     ctx.save();
@@ -558,13 +560,13 @@ function ground(ctx: Ctx) {
     ctx.clip();
     ctx.strokeStyle = 'rgba(21,18,26,0.55)';
     ctx.lineWidth = 1;
-    for (let y = -40; y < H + 40; y += 7) {
+    for (let y = -40 - (x1 - x0) * 0.5; y < H + 40; y += 7) {
       ctx.beginPath();
       ctx.moveTo(x0, y);
       ctx.lineTo(x1, y + (x1 - x0) * 0.5);
       ctx.stroke();
     }
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0, n = Math.round((26 * (x1 - x0) * H) / (57 * VIEW.h)); i < n; i++) {
       const tx = x0 + 6 + rnd() * (x1 - x0 - 12), ty = rnd() * H;
       path(ctx, [[tx - 6, ty], [tx - 3, ty - 9], [tx, ty - 2], [tx + 3, ty - 11], [tx + 6, ty]]);
       ctx.fillStyle = '#7c8c46';
@@ -631,8 +633,10 @@ function ground(ctx: Ctx) {
 }
 
 function sandbags(ctx: Ctx) {
-  for (let x = 12; x < VIEW.w + 14; x += 28) ink(ctx, R(ctx, x - 13, 0, 26, 14, 7), '#c8ab72', { sh: 2.5, lw: 1.5 });
-  for (let x = -2; x < VIEW.w + 14; x += 28) ink(ctx, R(ctx, x - 12, -9, 24, 12, 6), '#dcc28a', { sh: 2.5, lw: 1.5 });
+  // Across the whole view, in step with the bags at 540 wide.
+  const from = 28 * Math.floor(FIELD.x / 28), to = FIELD.x + FIELD.w + 14;
+  for (let x = from + 12; x < to; x += 28) ink(ctx, R(ctx, x - 13, 0, 26, 14, 7), '#c8ab72', { sh: 2.5, lw: 1.5 });
+  for (let x = from - 2; x < to; x += 28) ink(ctx, R(ctx, x - 12, -9, 24, 12, 6), '#dcc28a', { sh: 2.5, lw: 1.5 });
 }
 
 function splat(ctx: Ctx) {
@@ -722,11 +726,11 @@ export function bakeComic(scene: Phaser.Scene) {
   });
   bake(scene, key('hudbar'), GEOM.hudbar, (c) => {
     c.fillStyle = '#20223a';
-    c.fillRect(0, 0, VIEW.w, HUD_HEIGHT);
+    c.fillRect(FIELD.x, 0, FIELD.w, HUD_HEIGHT);
     c.fillStyle = dots(c, '#2e3150', 4, 1.3);
-    c.fillRect(0, 0, VIEW.w, HUD_HEIGHT);
+    c.fillRect(FIELD.x, 0, FIELD.w, HUD_HEIGHT);
     c.fillStyle = INK;
-    c.fillRect(0, HUD_HEIGHT - 3, VIEW.w, 3);
+    c.fillRect(FIELD.x, HUD_HEIGHT - 3, FIELD.w, 3);
   });
   bake(scene, key('ring'), GEOM.ring, (c) => {
     // The drum's blast ring: orange halftone inside a dashed inked circle.

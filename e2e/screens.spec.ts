@@ -77,8 +77,11 @@ for (const game of GAMES) {
         expect(fit.backing.height, `canvas pixels down for ${Math.round(fit.shown.height)} on screen`).toBeGreaterThanOrEqual(0.99 * fit.shown.height);
         // As big as it fits: the view reaches two opposite edges of the screen.
         expect(fit.filled, 'share of the screen the view spans').toBeGreaterThan(0.99);
-        // A filling game spans the whole screen both ways (every screen here is between 4:3 and 2.4:1).
-        if (FILLS.has(game)) expect(fit.covered, 'share of the screen the view covers').toBeGreaterThan(0.98);
+        // A filling game spans the whole screen both ways (every screen here is between 4:3 and 2.4:1)
+        // when the screen is the game's way round; a desktop screen turned the other way (an upright
+        // game on a laptop) keeps the designed size, as `fillView` in shared/scaling.ts says.
+        const gameWayRound = screen.width >= screen.height === wide;
+        if (FILLS.has(game) && gameWayRound) expect(fit.covered, 'share of the screen the view covers').toBeGreaterThan(0.98);
         expect(fit.scrolls, 'page scrolls').toBe(false);
       }
       expect(errors, 'page errors').toEqual([]);
