@@ -375,7 +375,7 @@ apothecary's shelves), paying the shelf price into that shop's till. Happiness m
 the share it got. Four rounds in a row at 80% or more add a home, up to eight; once full, its
 cottages grow into houses, which want honey cake and Sleeping Tonics as well as bread and Healing
 Draughts. A full district of houses grows into manors, which also want candles and tapers from the
-chandlery. Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
+chandlery, and manors grow into mansions (see the dye house). Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
 the town; Riverside opens once Market Row has houses, and Hilltop once Riverside has.
 
 The second shop is the **chandlery** (10,000 coins). Its beehives give honeycomb, pressed into
@@ -390,6 +390,19 @@ wick (117). Its prices are three times the bakery's:
 | Pixies: hives to press, flax to wheel, press to vat, wheel to vat, vat to the shelves | 540, 540, 900, 900, 1,350 |
 
 ![The chandlery's dipping vat and shop](docs/screenshots/chandlery.webp)
+
+The third shop is the **dye house** (100,000 coins). Its looms weave two flax into linen, and its
+woad mill grinds woad leaves into blue dye. The dye vat makes blue cloth from a linen and a dye (216
+coins) or a cloak from two linen and a dye (351). A full district of manors grows into mansions,
+which also want blue cloth and cloaks.
+
+| Dye house | Cost |
+| --- | --- |
+| Station or counter level | 540, 1,080, 2,160, 4,320 |
+| Dyer (2 per station) or shopkeeper (1) | 810, then 1,620 |
+| Pixies: flax to loom, woad to mill, loom to vat, mill to vat, vat to the shelves | 1,620, 1,620, 2,700, 2,700, 4,050 |
+
+![The dye house's vat and shop](docs/screenshots/dye-house.webp)
 
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 

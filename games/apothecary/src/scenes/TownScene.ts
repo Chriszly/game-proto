@@ -24,7 +24,9 @@ import { TOWN_HUD_H, TOWN_TEXT, TOWN_UI_DEPTH, keepSaving, leaveFor, townCard, t
 
 const LOT = { w: 270, h: 150, gap: 24 };
 /** A district's card, and the gap above the row of them for its heading. */
-const DISTRICT = { w: 270, h: 152, above: 34 };
+const DISTRICT = { w: 270, h: 140, above: 34 };
+/** Room kept free along the bottom for the corner buttons (full screen, sound, pause). */
+const CORNER_H = 50;
 const HOME = { w: 18, gap: 7 };
 const COLUMNS = 3;
 const NOTE = { ...TOWN_TEXT, fontSize: '13px', fontStyle: 'normal' };
@@ -34,6 +36,8 @@ type Lot = 'apothecary' | ShopId;
 export class TownScene extends Phaser.Scene {
   private state!: GameState;
   private views: (() => void)[] = [];
+  /** The lot cards' height and the gap between them: shorter once the lots take two rows. */
+  private lot = { h: LOT.h, gap: LOT.gap };
 
   constructor() {
     super('Town');
@@ -47,20 +51,21 @@ export class TownScene extends Phaser.Scene {
     this.add.rectangle(0, 0, width, height, PAPER_NUM).setOrigin(0);
     const lots: Lot[] = ['apothecary', ...SHOP_IDS];
     const rows = Math.ceil(lots.length / COLUMNS);
-    const block = rows * LOT.h + (rows - 1) * LOT.gap + DISTRICT.above + DISTRICT.h;
-    const top = TOWN_HUD_H + (height - TOWN_HUD_H - block) / 2;
+    this.lot = rows > 1 ? { h: 116, gap: 16 } : { h: LOT.h, gap: LOT.gap };
+    const block = rows * this.lot.h + (rows - 1) * this.lot.gap + DISTRICT.above + DISTRICT.h;
+    const top = TOWN_HUD_H + Math.max(8, (height - TOWN_HUD_H - CORNER_H - block) / 2);
     this.drawRoads(width, height, top, rows, Math.min(COLUMNS, lots.length));
     lots.forEach((lot, i) => {
       const row = Math.floor(i / COLUMNS);
       const inRow = Math.min(COLUMNS, lots.length - row * COLUMNS);
       const col = i % COLUMNS;
-      const x = width / 2 + (col - (inRow - 1) / 2) * (LOT.w + LOT.gap);
-      const y = top + row * (LOT.h + LOT.gap) + LOT.h / 2;
+      const x = width / 2 + (col - (inRow - 1) / 2) * (LOT.w + this.lot.gap);
+      const y = top + row * (this.lot.h + this.lot.gap) + this.lot.h / 2;
       this.addLot(lot, x, y);
     });
-    const districtsY = top + rows * LOT.h + (rows - 1) * LOT.gap + DISTRICT.above;
+    const districtsY = top + rows * this.lot.h + (rows - 1) * this.lot.gap + DISTRICT.above;
     this.add.text(width / 2, districtsY - DISTRICT.above / 2 + 4, t('districts'), { ...TOWN_TEXT, color: PAPER }).setOrigin(0.5);
-    DISTRICTS.forEach((_, i) => this.addDistrict(i, width / 2 + (i - (DISTRICTS.length - 1) / 2) * (DISTRICT.w + LOT.gap), districtsY + DISTRICT.h / 2));
+    DISTRICTS.forEach((_, i) => this.addDistrict(i, width / 2 + (i - (DISTRICTS.length - 1) / 2) * (DISTRICT.w + this.lot.gap), districtsY + DISTRICT.h / 2));
     const purse = townTopBar(this, () => this.state, t('townMap'), { label: t('apothecary'), onTap: () => this.enter('apothecary') });
     this.views.push(purse);
     playMusic(SONG, 'calm');
@@ -73,22 +78,24 @@ export class TownScene extends Phaser.Scene {
     const road = Phaser.Display.Color.HexStringToColor(WASH.dirt).color;
     roads.fillStyle(Phaser.Display.Color.HexStringToColor(WASH.grass).color, 0.9).fillRect(0, TOWN_HUD_H, width, height - TOWN_HUD_H);
     roads.fillStyle(road, 0.85);
-    for (let r = 0; r <= rows; r++) roads.fillRect(0, top + r * (LOT.h + LOT.gap) - LOT.gap / 2 - 9, width, 18);
-    for (let c = 0; c < columns - 1; c++) roads.fillRect(width / 2 + (c - (columns - 2) / 2) * (LOT.w + LOT.gap) - 9, TOWN_HUD_H, 18, height - TOWN_HUD_H);
+    for (let r = 0; r <= rows; r++) roads.fillRect(0, top + r * (this.lot.h + this.lot.gap) - this.lot.gap / 2 - 9, width, 18);
+    for (let c = 0; c < columns - 1; c++) roads.fillRect(width / 2 + (c - (columns - 2) / 2) * (LOT.w + this.lot.gap) - 9, TOWN_HUD_H, 18, height - TOWN_HUD_H);
   }
 
   private addLot(lot: Lot, x: number, y: number) {
-    const card = townCard(this, x, y, 'contract', LOT.w, LOT.h).setInteractive({ useHandCursor: true });
+    const card = townCard(this, x, y, 'contract', LOT.w, this.lot.h).setInteractive({ useHandCursor: true });
     fit(this.add.image(x - LOT.w / 2 + 58, y + 4, lotTexture(lot)));
     const left = x - LOT.w / 2 + 112;
     const name = lot === 'apothecary' ? t('apothecary') : t(SHOPS[lot].name);
-    this.add.text(left, y - LOT.h / 2 + 16, name, { ...TOWN_TEXT, fontSize: '18px' });
+    // Two rows of lots make each card shorter, so its lines close up.
+    const compact = this.lot.h < LOT.h;
+    this.add.text(left, y - this.lot.h / 2 + (compact ? 10 : 16), name, { ...TOWN_TEXT, fontSize: '18px' });
     const makes = lot === 'apothecary' ? t('apothecaryMakes') : t(SHOPS[lot].makes);
-    this.add.text(left, y - LOT.h / 2 + 42, makes, { ...NOTE, wordWrap: { width: LOT.w - 124 } });
+    this.add.text(left, y - this.lot.h / 2 + (compact ? 34 : 42), makes, { ...NOTE, wordWrap: { width: LOT.w - 124 } });
     if (lot !== 'apothecary') {
-      (Object.keys(SHOPS[lot].sells) as GoodId[]).forEach((good, i) => fit(this.add.image(left + 8 + i * 22, y + 18, goodTexture(good)), 1.2));
+      (Object.keys(SHOPS[lot].sells) as GoodId[]).forEach((good, i) => fit(this.add.image(left + 8 + i * 22, y + (compact ? 10 : 18), goodTexture(good)), 1.2));
     }
-    const status = coined(this.add.text(left, y + LOT.h / 2 - 34, '', { ...NOTE, fontStyle: 'bold', color: '#5a2c80' }));
+    const status = coined(this.add.text(left, y + this.lot.h / 2 - 32, '', { ...NOTE, fontStyle: 'bold', color: '#5a2c80' }));
     card.on('pointerdown', () => this.tapLot(lot, card));
     this.views.push(() => {
       if (lot === 'apothecary') return status.setText(t('walkIn'));
@@ -109,12 +116,12 @@ export class TownScene extends Phaser.Scene {
     const homes = this.add.graphics();
     const bar = this.add.graphics();
     const happy = this.add.text(left, topY + 68, '', NOTE);
-    const status = this.add.text(left, topY + 90, '', { ...NOTE, fontStyle: 'bold', color: '#5a2c80' });
-    const wants = this.add.text(left, topY + 128, t('districtWants'), NOTE).setOrigin(0, 0.5);
+    const status = this.add.text(left, topY + 86, '', { ...NOTE, fontStyle: 'bold', color: '#5a2c80' });
+    const wants = this.add.text(left, topY + 118, t('districtWants'), NOTE).setOrigin(0, 0.5);
     const icons = new Map<Need, Phaser.GameObjects.Image>();
     for (const need of new Set(HOME_TIERS.flatMap((tier) => tier.needs))) {
       const key = need in GOODS ? goodTexture(need as GoodId) : itemTexture(need as never);
-      icons.set(need, fit(this.add.image(0, topY + 128, key), 1.2).setVisible(false));
+      icons.set(need, fit(this.add.image(0, topY + 118, key), 1.2).setVisible(false));
     }
     const locked = this.add.text(x, y + 8, '', { ...NOTE, align: 'center', wordWrap: { width: DISTRICT.w - 40 } }).setOrigin(0.5);
     let drawn = '';
@@ -140,7 +147,10 @@ export class TownScene extends Phaser.Scene {
         const k = needs.indexOf(need);
         icon.setVisible(k >= 0);
         if (k < 0) return;
-        icon.setX(left + wants.width + 18 + k * 26).setAlpha(d.short.includes(need) ? 0.35 : 1);
+        // The icons close up, and shrink, as a tier asks for more kinds of goods.
+        const step = Math.min(26, (DISTRICT.w - 32 - wants.width - 10) / needs.length);
+        fit(icon, Math.min(1.2, step / 17));
+        icon.setX(left + wants.width + 10 + step / 2 + k * step).setAlpha(d.short.includes(need) ? 0.35 : 1);
       });
     });
   }
@@ -175,7 +185,7 @@ export class TownScene extends Phaser.Scene {
     }
     sfx('upgrade');
     const note = this.add
-      .text(card.x, card.y - LOT.h / 2 - 12, bought[0], { fontFamily: SERIF, fontSize: '16px', fontStyle: 'bold', color: INK })
+      .text(card.x, card.y, bought[0], { fontFamily: SERIF, fontSize: '16px', fontStyle: 'bold', color: INK })
       .setOrigin(0.5)
       .setDepth(TOWN_UI_DEPTH);
     this.tweens.add({ targets: note, y: note.y - 24, alpha: 0, delay: 900, duration: 900, onComplete: () => note.destroy() });

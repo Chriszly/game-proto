@@ -260,6 +260,19 @@ const en = {
   taper: 'Taper',
   chandler: 'Chandler',
   manorCount: { one: '{n} manor', other: '{n} manors' },
+  dyeHouse: 'Dye house',
+  dyeHouseMakes: 'Blue cloth and cloaks',
+  woadField: 'Woad field',
+  loom: 'Loom',
+  grinder: 'Woad mill',
+  dyeVat: 'Dye vat',
+  woad: 'Woad',
+  linen: 'Linen',
+  dye: 'Blue dye',
+  cloth: 'Blue cloth',
+  cloak: 'Cloak',
+  dyer: 'Dyer',
+  mansionCount: { one: '{n} mansion', other: '{n} mansions' },
 };
 
 export default en;

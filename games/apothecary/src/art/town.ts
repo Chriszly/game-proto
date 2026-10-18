@@ -167,6 +167,82 @@ function drawVat(c: Ctx) {
   both(c, rectPts(20.5, 4, 3, 12, 0.6), '#f0e2a8', { layers: 1 }, { w: 0.5 });
 }
 
+/** Woad: a clump of broad blue-green leaves, crowned with yellow flowers when ripe. 48x44 as shown. */
+function drawWoad(c: Ctx, stage: number) {
+  const height = [8, 20, 30][stage];
+  for (let i = 0; i < 4; i++) {
+    const x = 8 + i * 10.5 + rr(-1, 1);
+    const top = 43 - height + (i % 2) * 3;
+    both(c, [[x, 43], [x - 5, top + height * 0.5], [x, top], [x + 5, top + height * 0.5]], '#5f8a5a', { layers: 2, edge: 0 }, { w: 0.6 });
+    ink(c, [[x, 43], [x, top + 2]], { closed: false, w: 0.4, alpha: 0.6 });
+    if (stage === 2) for (const [dx, dy] of [[-2, -2], [1.5, -3.5], [0, -1]]) both(c, ellPts(x + dx, top + dy, 1.6, 1.4, 8), '#e8cc3a', { layers: 1, edge: 0 }, { w: 0.4 });
+  }
+}
+
+/** A folded length of undyed linen. */
+function drawLinen(c: Ctx) {
+  shadow(c, 8.5, 14, 6.5, 1.4, 0.25);
+  both(c, rectPts(2, 5, 12, 8.5, 1), '#e6dcc0', { layers: 2 }, { w: 0.8 });
+  for (const y of [7.8, 10.6]) ink(c, [[2.5, y], [13.5, y]], { closed: false, w: 0.5, alpha: 0.6 });
+}
+
+/** A pot of deep blue dye. */
+function drawDye(c: Ctx) {
+  shadow(c, 8.5, 14.5, 5.5, 1.4, 0.25);
+  both(c, [[3.5, 6], [12.5, 6], [11.5, 14], [4.5, 14]], '#9a7a5a', { layers: 2 }, { w: 0.8 });
+  both(c, ellPts(8, 6, 4.5, 1.6, 12), '#3a5aa8', { layers: 2, edge: 0 }, { w: 0.6 });
+}
+
+/** A bolt of blue cloth. */
+function drawCloth(c: Ctx) {
+  shadow(c, 8.5, 14, 7, 1.4, 0.25);
+  both(c, rectPts(2, 6, 12, 7.5, 2), '#4a6ab8', { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
+  both(c, ellPts(14, 9.8, 1.8, 3.8, 10), '#34508e', { layers: 1 }, { w: 0.6 });
+}
+
+/** A hooded blue cloak. */
+function drawCloak(c: Ctx) {
+  shadow(c, 8.5, 15, 6, 1.2, 0.25);
+  both(c, [[8, 1.5], [11, 3.5], [11.5, 6], [14, 14.5], [2, 14.5], [4.5, 6], [5, 3.5]], '#34508e', { layers: 2, bloom: 1, cx: 7, cy: 8 }, { w: 0.8 });
+  ink(c, [[8, 6.5], [8, 14]], { closed: false, w: 0.5, alpha: 0.6 });
+  both(c, ellPts(8, 6.6, 1, 1, 8), WASH.brass, { layers: 1, edge: 0 }, { w: 0.4 });
+}
+
+/** A loom: a timber frame with the warp strung down it and linen wound on its front beam. 84x64 as shown. */
+function drawLoom(c: Ctx) {
+  shadow(c, 42, 60, 38, 4, 0.18);
+  for (const lx of [8, 72]) both(c, rectPts(lx, 6, 6, 52, 1), WASH.woodDark, { layers: 2 }, { w: 1 });
+  both(c, rectPts(6, 6, 72, 6, 1.5), WASH.wood, { layers: 2 }, { w: 1.1 });
+  for (let x = 17; x < 70; x += 3) ink(c, [[x, 12], [x, 40]], { closed: false, w: 0.45, col: '#e6dcc0' });
+  both(c, rectPts(14, 22, 58, 4, 1), WASH.woodDeep, { layers: 1 }, { w: 0.8 });
+  both(c, rectPts(14, 30, 58, 10, 1), '#e6dcc0', { layers: 2 }, { w: 0.8 });
+  both(c, rectPts(10, 40, 66, 6, 2), WASH.wood, { layers: 2 }, { w: 1 });
+  ink(c, [[14, 52], [72, 52]], { closed: false, w: 1.4, col: WASH.woodDeep });
+}
+
+/** A grinding stone for woad leaves: a stone wheel rolling in a round trough, pushed by a beam. 84x60 as shown. */
+function drawGrinder(c: Ctx) {
+  shadow(c, 42, 55, 38, 5, 0.18);
+  both(c, ellPts(42, 44, 34, 10, 30), WASH.stoneDark, { layers: 3 }, { w: 1.2 });
+  both(c, ellPts(42, 42, 26, 7, 30), '#4f6a4a', { layers: 2, edge: 0 }, { w: 0.6 });
+  both(c, ellPts(30, 30, 9, 14, 24), WASH.stone, { layers: 3, bloom: 1, cx: 28, cy: 26 }, { w: 1.2 });
+  both(c, ellPts(30, 30, 3, 5, 12), '#5a6066', { layers: 1, edge: 0 }, { w: 0.6 });
+  ink(c, [[30, 30], [80, 18]], { closed: false, w: 3, col: WASH.woodDark });
+  ink(c, [[42, 44], [42, 20]], { closed: false, w: 2.4, col: WASH.woodDeep });
+}
+
+/** A dye vat: a wide wooden tub of blue dye, steaming, with cloth hung over a pole beside it. 84x60 as shown. */
+function drawDyeVat(c: Ctx) {
+  shadow(c, 42, 56, 38, 5, 0.18);
+  both(c, rectPts(58, 6, 4, 48, 1), WASH.woodDark, { layers: 1 }, { w: 0.8 });
+  ink(c, [[56, 8], [82, 8]], { closed: false, w: 2, col: WASH.woodDeep });
+  both(c, [[64, 8], [80, 8], [79, 34], [65, 30]], '#4a6ab8', { layers: 2 }, { w: 0.8 });
+  both(c, [[4, 22], [52, 22], [48, 52], [8, 52]], '#a0703e', { layers: 3, bloom: 1, cx: 16, cy: 30 }, { w: 1.2 });
+  for (const y of [30, 44]) ink(c, [[5, y], [51, y]], { closed: false, w: 1.2, col: WASH.iron });
+  both(c, ellPts(28, 22, 24, 5, 22), '#3a5aa8', { layers: 2 }, { w: 1 });
+  ink(c, [[24, 22], [36, 2]], { closed: false, w: 1.6, col: WASH.woodDark });
+}
+
 /** A millstone on a timber frame, a hopper of grain above it and a sack catching the flour. 88x60 as shown. */
 function drawMill(c: Ctx) {
   shadow(c, 46, 55, 40, 5, 0.18);
@@ -296,6 +372,15 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, 'press', 88, 60, drawPress, 3);
   paint(scene, 'wheel', 80, 64, drawWheel, 3);
   paint(scene, 'vat', 84, 60, drawVat, 3);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('woad', stage), 48, 44, (c) => drawWoad(c, stage), 3, 101 + stage);
+  paint(scene, 'good-woad', 16, 16, (c) => drawWoad(c, 2), 4);
+  paint(scene, 'good-linen', 16, 16, drawLinen, 4);
+  paint(scene, 'good-dye', 16, 16, drawDye, 4);
+  paint(scene, 'good-cloth', 16, 16, drawCloth, 4);
+  paint(scene, 'good-cloak', 16, 16, drawCloak, 4);
+  paint(scene, 'loom', 84, 64, drawLoom, 3);
+  paint(scene, 'grinder', 84, 60, drawGrinder, 3);
+  paint(scene, 'dyeVat', 84, 60, drawDyeVat, 3);
   paint(scene, lotTexture('apothecary'), 96, 84, (c) =>
     drawLot(c, '#5e6e46', '#d8c8a2', (s) => {
       // A green bottle on the sign.
@@ -311,6 +396,10 @@ export function bakeTown(scene: Phaser.Scene) {
     drawLot(c, '#4e5a6e', '#e4d8b4', (s) => {
       both(s, rectPts(86.4, 47, 3.2, 8, 0.6), '#f0e2a8', { layers: 1 }, { w: 0.6 });
       wash(s, [[88, 41.5], [89.4, 44.5], [88, 46], [86.6, 44.5]], WASH.flameLight, { layers: 1, edge: 0 });
+    }), 3);
+  paint(scene, lotTexture('dyeHouse'), 96, 84, (c) =>
+    drawLot(c, '#6e5a7a', '#dccfae', (s) => {
+      both(s, rectPts(84, 46, 8, 7, 1), '#4a6ab8', { layers: 1 }, { w: 0.6 });
     }), 3);
 }
 
