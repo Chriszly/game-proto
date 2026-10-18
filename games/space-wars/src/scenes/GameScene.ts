@@ -22,10 +22,10 @@ import { settings } from '../../../../shared/settings';
 import { playMusic, playSting, stopMusic, ui } from '../../../../shared/audio';
 import { LASER_PITCH, SONG, sfx, type Sfx } from '../audio';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
-import { renderScale, viewPoint } from '../../../../shared/scaling';
+import { renderScale, viewPoint, viewSize } from '../../../../shared/scaling';
 // `tr` is the game's translator (`t` in the other files): `t` names the scene's text helpers here.
 import { t as tr } from '../i18n';
-import { ARMY_TAB, BAR, BOARD, BUTTONS, FONT, GRID_X, KEEP, MAP_VIEW, MINIMAP, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, SECTOR_STRIP, TOP, VIEW, type Button } from './layout';
+import { ARMY_TAB, BAR, BOARD, BUTTONS, CONTRACT_PILL, FONT, GRID_X, GROW, KEEP, LEAD, MAP_VIEW, MINIMAP, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, SECTOR_STRIP, TOP, VIEW, fitView, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
 const MAX_STEP_MS = 100;
@@ -187,13 +187,7 @@ export class GameScene extends Phaser.Scene {
   /** The rivals panel's buttons, in view pixels, as last drawn. */
   rivalButtons: RivalButton[] = [];
   /** The picker's cards, one per faction, in view pixels; the playthrough taps one to begin. */
-  readonly pickCards = FACTIONS.map((_, faction) => ({
-    x: (VIEW.w - FACTIONS.length * CARD_W - (FACTIONS.length - 1) * CARD_GAP) / 2 + faction * (CARD_W + CARD_GAP),
-    y: MAP_VIEW.y + 62,
-    w: CARD_W,
-    h: CARD_H,
-    faction,
-  }));
+  pickCards: { x: number; y: number; w: number; h: number; faction: number }[] = [];
   /** The contract board's cards while it is up, in view pixels; the playthrough taps one. */
   boardCards: GoalCard[] = [];
   /** After a campaign victory, the perks the player can keep, in view pixels. */
@@ -203,7 +197,7 @@ export class GameScene extends Phaser.Scene {
   /** The campaign sector the next battle is fought in (an index into SECTORS). */
   sector = 0;
   /** The picker's sector nodes, in view pixels. */
-  readonly sectorNodes = SECTORS.map((_, sector) => ({ x: SECTOR_STRIP.nodeX + sector * SECTOR_STRIP.nodeStep, y: SECTOR_STRIP.nodeY, r: SECTOR_STRIP.r, sector }));
+  sectorNodes: { x: number; y: number; r: number; sector: number }[] = [];
   /** The last pointer position, in view pixels. */
   private pointer = { x: 0, y: 0 };
   private drag: Drag | null = null;
@@ -268,6 +262,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    // The view takes the screen's shape (setupScaling's fill mode): lay the HUD out for it, and
+    // centre the picker's cards in the map's window.
+    const view = viewSize(this);
+    fitView(view.width, view.height, this.cornerSize(view.width, view.height));
+    this.pickCards = FACTIONS.map((_, faction) => ({
+      x: (VIEW.w - FACTIONS.length * CARD_W - (FACTIONS.length - 1) * CARD_GAP) / 2 + faction * (CARD_W + CARD_GAP),
+      y: MAP_VIEW.y + 62 + GROW.dy / 2,
+      w: CARD_W,
+      h: CARD_H,
+      faction,
+    }));
+    this.sectorNodes = SECTORS.map((_, sector) => ({ x: SECTOR_STRIP.nodeX + sector * SECTOR_STRIP.nodeStep, y: SECTOR_STRIP.nodeY, r: SECTOR_STRIP.r, sector }));
     bakeAll(this);
     // The map scrolls in its own camera; the bars and the text sit on a second one that never moves.
     this.camera = this.cameras.main;
@@ -302,6 +308,9 @@ export class GameScene extends Phaser.Scene {
     this.pickGfx = this.onUi(this.add.graphics().setDepth(20));
     const t = (x: number, y: number, size: number, color: string, bold = false, depth = 12) =>
       this.onUi(this.text(x, y, size, color, bold).setDepth(depth));
+    // The top bar: the counts stay on the left, the contract pill in the middle and the rivals on the right.
+    const pill = CONTRACT_PILL.x - 482;
+    const right = GROW.dx;
     this.hud = {
       faction: t(32, 8, 14, INK_CSS.cream, true),
       crystal: t(182, 5, 18, INK_CSS.cream, true),
@@ -309,29 +318,29 @@ export class GameScene extends Phaser.Scene {
       harvesters: t(286, 9, 12, INK_CSS.cream),
       army: t(378, 9, 12, INK_CSS.cream),
       clock: t(436, 6, 16, INK_CSS.mustard, true),
-      tag: t(490, 10, 10, INK_CSS.cream, true),
-      title: t(578, 9, 11, INK_CSS.chocolate, true),
-      count: t(782, 9, 11, INK_CSS.chocolate, true).setOrigin(1, 0),
-      rivals: t(806, 10, 10, INK_CSS.mustard, true).setText(tr('rivalsTab')),
-      rivalCount: t(950, 5, 17, INK_CSS.cream, true).setOrigin(1, 0),
+      tag: t(pill + 490, 10, 10, INK_CSS.cream, true),
+      title: t(pill + 578, 9, 11, INK_CSS.chocolate, true),
+      count: t(pill + 782, 9, 11, INK_CSS.chocolate, true).setOrigin(1, 0),
+      rivals: t(right + 806, 10, 10, INK_CSS.mustard, true).setText(tr('rivalsTab')),
+      rivalCount: t(right + 950, 5, 17, INK_CSS.cream, true).setOrigin(1, 0),
     };
     const px = PANEL_X;
     this.panel = {
-      line: t(px, 445, 10, INK_CSS.cream).setWordWrapWidth(VIEW.w - px - 106).setMaxLines(2),
-      head: t(px + 8, 476, 10, INK_CSS.cream, true),
-      next: t(VIEW.w - 16, 476, 10, INK_CSS.cream).setOrigin(1, 0),
-      brief: t(px + 8, 492, 12, INK_CSS.chocolate, true),
-      count: t(px + 170, 506, 11, INK_CSS.green, true),
-      reward: t(px + 222, 506, 11, INK_CSS.rust, true),
-      perk: t(px + 8, 521, 10, INK_CSS.cocoa),
-      build: t(GRID_X + 4, 448, 10, INK_CSS.mustard, true).setText(tr('build')),
+      line: t(px, BAR.y + 5, 10, INK_CSS.cream).setWordWrapWidth(VIEW.w - px - 106).setMaxLines(2),
+      head: t(px + 8, BAR.y + 36, 10, INK_CSS.cream, true),
+      next: t(VIEW.w - 16, BAR.y + 36, 10, INK_CSS.cream).setOrigin(1, 0),
+      brief: t(px + 8, BAR.y + 52, 12, INK_CSS.chocolate, true),
+      count: t(px + 170, BAR.y + 66, 11, INK_CSS.green, true),
+      reward: t(px + 222, BAR.y + 66, 11, INK_CSS.rust, true),
+      perk: t(px + 8, BAR.y + 81, 10, INK_CSS.cocoa),
+      build: t(LEAD.x + GRID_X + 4, BAR.y + 8, 10, INK_CSS.mustard, true).setText(tr('build')),
     };
     this.overlay = t(MAP_VIEW.x + MAP_VIEW.w / 2, MAP_VIEW.y + MAP_VIEW.h / 2, 44, INK_CSS.mustard, true, 30)
       .setOrigin(0.5).setAlign('center').setStroke(INK_CSS.chocolate, 8);
     // Tooltips: the hover label names a unit or building on the map; the tip describes a command button.
     this.tip = t(0, 0, 11, INK_CSS.chocolate, false, 25).setOrigin(0, 1).setPadding(7, 5, 7, 5).setBackgroundColor(INK_CSS.cream)
       .setWordWrapWidth(300).setVisible(false);
-    this.pickTitle = t(VIEW.w / 2, MAP_VIEW.y + 18, 22, INK_CSS.mustard, true, 21).setOrigin(0.5, 0).setText(tr('chooseFaction'))
+    this.pickTitle = t(VIEW.w / 2, MAP_VIEW.y + 18 + GROW.dy / 2, 22, INK_CSS.mustard, true, 21).setOrigin(0.5, 0).setText(tr('chooseFaction'))
       .setStroke(INK_CSS.chocolate, 5);
     // The rivals panel: a header, a row per rival with its stance and up to two buttons, and a hint while an offer is open.
     const rp = RIVALS_PANEL;
@@ -429,6 +438,25 @@ export class GameScene extends Phaser.Scene {
       names: this.sectorNodes.map((n) => t(n.x, n.y + n.r + 3, 9, INK_CSS.cream, true, 21).setOrigin(0.5, 0)),
     };
     Math.random = random;
+  }
+
+  /**
+   * The shared corner buttons' footprint in view pixels, measured from the view's bottom-left, with
+   * the view shown as big as fits the page: what the command bar keeps clear of in a filled view.
+   * The row (`shared/corner.ts`: three 30px buttons 6px apart, 12px from the edges) may not be on
+   * the page yet when the scene starts, so its size is taken from there unless it is.
+   */
+  private cornerSize(w: number, h: number) {
+    const parent = this.scale.parent as HTMLElement | undefined;
+    const pw = parent?.clientWidth || window.innerWidth;
+    const ph = parent?.clientHeight || window.innerHeight;
+    const k = Math.min(pw / w, ph / h);
+    const left = (pw - w * k) / 2;
+    const bottom = (ph + h * k) / 2;
+    const row = document.querySelector('.game-corner')?.getBoundingClientRect();
+    const right = Math.max(12 + 3 * 30 + 2 * 6, row?.width ? row.right : 0);
+    const top = Math.min(ph - 12 - 30, row?.width ? row.top : ph);
+    return { w: (right - left) / k, h: (bottom - top) / k + 4 };
   }
 
   private text(x: number, y: number, size: number, color: string, bold = false) {
@@ -1618,11 +1646,11 @@ export class GameScene extends Phaser.Scene {
     const c = s.currentContract();
     const step = s.contract.index;
     g.fillStyle(INK.cream, 1);
-    g.fillRoundedRect(482, 4, 308, 21, 10.5);
+    g.fillRoundedRect(CONTRACT_PILL.x, 4, 308, 21, 10.5);
     g.fillStyle(INK.tangerine, 1);
-    g.fillRoundedRect(482, 4, 90, 21, 10.5);
+    g.fillRoundedRect(CONTRACT_PILL.x, 4, 90, 21, 10.5);
     g.lineStyle(1.5, INK.mustard, 1);
-    g.strokeRoundedRect(482, 4, 308, 21, 10.5);
+    g.strokeRoundedRect(CONTRACT_PILL.x, 4, 308, 21, 10.5);
     if (c) {
       this.setText(h.tag, tr('contractTag', { step: step + 1, steps: CONTRACT_STEPS }));
       this.setText(h.title, c.title(side.def));
@@ -1646,7 +1674,7 @@ export class GameScene extends Phaser.Scene {
     }
     s.sides.forEach((r, k) => {
       if (r.index === PLAYER) return;
-      const x = 862 + (k - 1) * 15;
+      const x = GROW.dx + 862 + (k - 1) * 15;
       g.fillStyle(r.def.color, r.alive ? 1 : 0.15);
       g.fillCircle(x, 15, 5.5);
       g.lineStyle(1.5, INK.cream, r.alive ? 0.9 : 0.4);
@@ -1690,11 +1718,11 @@ export class GameScene extends Phaser.Scene {
     const x = PANEL_X;
     const w = VIEW.w - x - 8;
     g.fillStyle(INK.cream, 1);
-    g.fillRoundedRect(x, 473, w, 62, 6);
+    g.fillRoundedRect(x, BAR.y + 33, w, 62, 6);
     g.fillStyle(INK.tangerine, 1);
-    g.fillRoundedRect(x, 473, w, 16, { tl: 6, tr: 6, bl: 0, br: 0 });
+    g.fillRoundedRect(x, BAR.y + 33, w, 16, { tl: 6, tr: 6, bl: 0, br: 0 });
     g.fillStyle(INK.mustard, 1);
-    g.fillRect(x, 489, w, 2);
+    g.fillRect(x, BAR.y + 49, w, 2);
     const c = s.currentContract();
     const step = s.contract.index;
     const p = this.panel;
@@ -1704,9 +1732,9 @@ export class GameScene extends Phaser.Scene {
       this.setText(p.brief, c.brief(side.def));
       const ratio = Math.min(1, s.contract.progress / c.target);
       g.fillStyle(INK.creamDim, 1);
-      g.fillRoundedRect(x + 8, 509, 156, 8, 4);
+      g.fillRoundedRect(x + 8, BAR.y + 69, 156, 8, 4);
       g.fillStyle(INK.green, 1);
-      g.fillRoundedRect(x + 8, 509, Math.max(8, 156 * ratio), 8, 4);
+      g.fillRoundedRect(x + 8, BAR.y + 69, Math.max(8, 156 * ratio), 8, 4);
       this.setText(p.count, tr('progress', { n: Math.floor(s.contract.progress), target: c.target }));
       this.setText(p.reward, tr('reward', { n: c.reward }));
       this.setText(p.perk, tr('rankPerk', { rank: RANKS[step], perk: c.perk(side.def) }));

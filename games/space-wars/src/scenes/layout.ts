@@ -3,7 +3,17 @@ import { TRACKS, type Track } from '../game/research';
 import type { Build } from '../game/world';
 import type { TextKey } from '../i18n';
 
-export const VIEW = { w: 960, h: 540 };
+/** The designed view: the game's size at 16:9, where nothing moves. */
+export const DESIGN = { w: 960, h: 540 } as const;
+/**
+ * The view the game is laid out in: the designed size grown to the screen's shape (`fitView`, from
+ * `viewSize` at the scene's start). The layout below starts at the designed size and is moved there.
+ */
+export const VIEW = { w: DESIGN.w, h: DESIGN.h };
+/** How much wider (`dx`) and taller (`dy`) the view is than designed: right-pinned things move by `dx`, bottom-pinned ones by `dy`. */
+export const GROW = { dx: 0, dy: 0 };
+/** How far the command bar's left part moves right (`x`) and its contents up (`lift`) to clear the shared corner buttons: see `fitView`. */
+export const LEAD = { x: 0, lift: 0 };
 /** The top bar: the faction's crystal and counts. */
 export const TOP = { h: 34 };
 /** The command bar along the bottom: build and train buttons, and the messages. */
@@ -78,13 +88,15 @@ export const BUTTONS: Button[] = [
   RALLY_BUTTON,
 ];
 /** Where the message line and the contract panel start, right of the research column. */
-export const PANEL_X = RESEARCH_COLUMN.x + RESEARCH_COLUMN.w + 8;
+export let PANEL_X = RESEARCH_COLUMN.x + RESEARCH_COLUMN.w + 8;
 /** The rivals panel (truces and tribute), opened from the top bar's rivals or with T: its box on the map's top right, in view pixels. */
 export const RIVALS_PANEL = { x: VIEW.w - 326, y: TOP.h + 8, w: 318, head: 24, row: 52 };
 /** The minimap: the whole battlefield at a tenth of its size, one pixel a fog cell, in the map's bottom-right corner. */
 export const MINIMAP = { x: VIEW.w - 168, y: BAR.y - 108, w: 160, h: 100 };
 /** The army count on the top bar: tapping it selects every warship. */
 export const ARMY_TAB = { x: 360, w: 70 };
+/** The contract pill in the middle of the top bar: its left edge (it is 308 wide). */
+export const CONTRACT_PILL = { x: 482 };
 /** The part of the top bar that opens the rivals panel when tapped. */
 export const RIVALS_TAB = { x: 798, w: VIEW.w - 798 };
 /** The contract board over the map's top: its header line and its two cards, in view pixels. */
@@ -93,3 +105,62 @@ export const BOARD = { y: MAP_VIEW.y + 6, cardY: MAP_VIEW.y + 26, w: 236, h: 58,
 export const SECTOR_STRIP = { x: 16, y: 352, w: VIEW.w - 32, h: 82, nodeX: 330, nodeStep: 140, nodeY: 380, r: 13 };
 /** The cards a victory offers to keep one perk for the campaign, in a row under the overlay. */
 export const KEEP = { y: MAP_VIEW.y + 210, w: 172, h: 64, gap: 8 };
+
+const base = {
+  BAR: { ...BAR },
+  RESEARCH_COLUMN: { ...RESEARCH_COLUMN },
+  RIVALS_PANEL: { ...RIVALS_PANEL },
+  MINIMAP: { ...MINIMAP },
+  RIVALS_TAB: { ...RIVALS_TAB },
+  PANEL_X,
+  CONTRACT_PILL: { ...CONTRACT_PILL },
+  SECTOR_STRIP: { ...SECTOR_STRIP },
+  KEEP: { ...KEEP },
+  BUTTONS: BUTTONS.map((b) => ({ ...b })),
+};
+
+/**
+ * Lays the HUD out for a view of `w` x `h` (the designed size or bigger, see `setupScaling`'s fill
+ * mode): the top bar stays on top, the command bar and every button on it move to the bottom, the
+ * message line and contract panel stretch to the right edge, the Fall back button, minimap and
+ * rivals pin to it, the map's window takes the space between the bars, and the picker, sector strip
+ * and perk cards stay centred in it.
+ *
+ * `corner` is the shared corner buttons' footprint (full screen, sound, pause) in view pixels from
+ * the view's bottom-left. A filled view no longer has page bars for them, so when they would cover
+ * the build and train rows, a wider view moves the bar's left part right of them (`LEAD.x`), and a
+ * taller one lifts the bar's contents over them (`LEAD.lift`, the bar growing to match). At the
+ * designed size nothing moves.
+ */
+export function fitView(w: number, h: number, corner = { w: 0, h: 0 }) {
+  const dx = w - DESIGN.w;
+  const dy = h - DESIGN.h;
+  const need = Math.ceil(Math.max(0, corner.w + 6 - GRID_X));
+  const x = need > 0 && need <= dx ? need : 0;
+  const lift = need > 0 && !x && dy >= corner.h ? Math.ceil(corner.h) : 0;
+  Object.assign(VIEW, { w, h });
+  Object.assign(GROW, { dx, dy });
+  Object.assign(LEAD, { x, lift });
+  BAR.y = base.BAR.y + dy - lift;
+  BAR.h = base.BAR.h + lift;
+  Object.assign(MAP_VIEW, { w, h: BAR.y - TOP.h });
+  RESEARCH_COLUMN.y = base.RESEARCH_COLUMN.y + dy - lift;
+  PANEL_X = base.PANEL_X + x;
+  RIVALS_PANEL.x = base.RIVALS_PANEL.x + dx;
+  Object.assign(MINIMAP, { x: base.MINIMAP.x + dx, y: base.MINIMAP.y + dy - lift });
+  RIVALS_TAB.x = base.RIVALS_TAB.x + dx;
+  CONTRACT_PILL.x = base.CONTRACT_PILL.x + dx / 2;
+  Object.assign(SECTOR_STRIP, {
+    x: base.SECTOR_STRIP.x + dx / 2,
+    y: base.SECTOR_STRIP.y + dy / 2,
+    nodeX: base.SECTOR_STRIP.nodeX + dx / 2,
+    nodeY: base.SECTOR_STRIP.nodeY + dy / 2,
+  });
+  KEEP.y = base.KEEP.y + dy / 2;
+  BUTTONS.forEach((b, i) => {
+    const from = base.BUTTONS[i];
+    b.y = from.y + dy - lift;
+    // The Fall back button sits at the right end of the message line, which pins to the right.
+    b.x = from.x + (b.key === 'fallback' ? dx : x);
+  });
+}

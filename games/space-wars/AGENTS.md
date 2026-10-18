@@ -7,7 +7,8 @@ the root AGENTS.md.
 ## Current state
 
 Space Wars is an RTS on a random star map, played with taps, box selection and a scrolling camera.
-The battlefield is 1600 by 1000 pixels; the screen shows a 960 by 406 window of it between the top
+The battlefield is 1600 by 1000 pixels; the screen shows a window of it (960 by 406 at the designed 960x540 view, more on a wider or
+taller screen) between the top
 and command bars. Five factions each start with a hub and two harvesters at a fixed start point.
 The player picks one of the five factions on a picker before each battle; the other four are AI.
 The art is a 1970s sci-fi paperback cover: low-poly 3D models baked into sprites at boot (see
@@ -274,7 +275,7 @@ File map (`src/`):
 - `audio.ts`: the game's sound (see "Sound" below): `SONG`, the `sfx` table, its `Sfx` names and
   `LASER_PITCH`. Only `GameScene` imports it.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
-  `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)` from
+  `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game, { fill: true })` from
   `shared/scaling.ts`, and in dev builds puts `game` on `window`. The canvas has `renderScale`
   canvas pixels per view pixel (see "Screen scaling" below).
 - `game/factions.ts`: the `FACTIONS` list (name, outpost name, colours, `tune` multipliers, the
@@ -334,7 +335,7 @@ File map (`src/`):
   would shift the seeded playthrough's map and AI. `update(time)` steps the world by the frame
   gap (clamped to 100 ms), reads `World.events`, pans the camera from the keys and draws everything.
   Two cameras: the main `camera` shows the battlefield in the `MAP_VIEW` viewport; a second, fixed
-  camera (`fixed`) covers the whole 960 by 540 view. Both viewports are set in canvas pixels
+  camera (`fixed`) covers the whole view (`VIEW`, 960 by 540 or bigger, see "Screen scaling"). Both viewports are set in canvas pixels
   (`renderScale` times the view's), and both keep the zoom and top-left origin `setupScaling`
   gives them, so `scrollX` and `scrollY` stay the battlefield point at the map's top-left corner. Every object is made through `onMap` (the
   fixed camera ignores it) or `onUi` (the map camera ignores it), so the bars and text never
@@ -350,7 +351,8 @@ File map (`src/`):
   reads the pointer in view pixels through `viewPoint`),
   `tapMap`, `press` (buttons). Bars and drag boxes use view pixels; placement and commands use
   battlefield pixels, converted with `toWorld`.
-- `scenes/layout.ts`: `VIEW`, `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`
+- `scenes/layout.ts`: `DESIGN` (960x540, the game's config size), `VIEW` (the view the HUD is laid
+  out in), `GROW` and `LEAD` (see "Screen scaling"), `fitView`, `CONTRACT_PILL` (the top bar's contract pill), `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`
   (112 by 30), `GRID_X` (64: where the build and train rows start, leaving the bar's bottom-left
   corner to the shared corner buttons), `BUTTONS` (each button's kind, `build`, `train` or `research`, key and top-left
   corner: four build buttons with Expansion last, four train buttons, and the research column),
@@ -459,8 +461,19 @@ plays, and no cue of the player's side or `gain` plays. Under browser automation
 no sound at all, and the cues change nothing in the battle, so the seeded playthrough plays as
 before.
 
-Screen scaling (`shared/scaling.ts`): lay out in view pixels from `layout.ts` (never
-`this.scale`, which is canvas pixels), read pointers through `viewPoint`, give a new camera its
+Screen scaling (`shared/scaling.ts`): the game fills every screen shape (`setupScaling(game, {
+fill: true })`), so its view is 960x540 or grown to the screen's shape (up to 1296 wide or 720
+tall). `GameScene.create` first calls `fitView(viewSize)` in `layout.ts`, which moves the layout
+constants (they start at the designed size) in place: the command bar, its buttons and the minimap
+move down by `GROW.dy`; the Fall back button, minimap, rivals panel and rivals tab pin to the right
+edge (`GROW.dx`) and the contract pill moves by half of it; the message line and contract panel
+stretch to the right edge; the map window (`MAP_VIEW`) takes the space between the bars, and the
+picker's cards, sector strip and victory perk cards stay centred in it (`GROW.dy / 2`). The view no
+longer leaves page bars for the shared corner buttons, so where they would cover the build and train
+rows (`cornerSize`), a wider view moves the bar's left part right by `LEAD.x` and a taller one lifts
+the bar's contents by `LEAD.lift`. At 960x540 nothing moves (the playthrough clicks there). Lay
+out new HUD with these constants (or `BAR.y + offset`), never fixed numbers past the designed size.
+Lay out in view pixels from `layout.ts` (never `this.scale`, which is canvas pixels), read pointers through `viewPoint`, give a new camera its
 viewport in canvas pixels, and paint new canvas art at `RES` or `sharpRes`. The map camera never
 follows or uses bounds (`scrollTo` clamps it), so it keeps the top-left origin rather than
 `scrollingCamera`. `index.html` has the shared `100dvh` and `touch-action: none` styles.
