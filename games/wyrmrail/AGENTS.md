@@ -66,8 +66,8 @@ File map (all under `src/` unless it starts with `shared/`):
   German entry (and a US one if its spelling differs) in the same PR. Village names are names, not
   texts: they are ids too (`WORKSHOPS`, the `village-<name>` textures) and stay English.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
-  `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
-  `shared/scaling.ts`; in dev builds puts `game` on `window`.
+  `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })`
+  from `shared/scaling.ts` (the view takes the screen's shape, see Screens below); in dev builds puts `game` on `window`.
 - `game/map.ts`: `COLS`, `ROWS`, `Terrain`, `TRACK_COST` (mountain is the tunnel price), `Cargo` (goods and `passengers`),
   `CARGO_NAMES` (each cargo's name and in-sentence word as `TextKey`s), `Tile`, `Village`, `Valley`, `ROOST`, `VILLAGE_NAMES`, `WORKSHOPS`,
   `generateValley`, `terrainAt`, and the tile helpers `key`, `sameTile`, `manhattan`, `opposite`,
@@ -102,8 +102,9 @@ File map (all under `src/` unless it starts with `shared/`):
   charter), the orders and upgrades panel (with the Depot, Remove and Plain toggles), the banner, the
   charter cards and the game over or festival panel (with the medal, which it saves), and wires
   input to sim functions. Exposes `state` and `orderSpots`.
-- `scenes/layout.ts`: `VIEW`, `BOARD`, the isometric projection (`ISO`, `iso`, `tileCenter`,
-  `tileAt`, `groundDepth`), the panel, order card, button and charter card positions,
+- `scenes/layout.ts`: `VIEW` (the designed 960x540), `BOARD` and `DESIGN_BOARD`, `placeBoard`, the
+  isometric projection (`ISO`, `iso`, `tileCenter`, `tileAt`, `groundDepth`), the panel, order
+  card, button and charter card positions, `HINT_BOTTOM`,
   `SEGMENT_GAPS` (where the wyrm's parts ride behind the head) and depths.
 - `audio/sounds.ts`: the sound table `sfx` (`shared/audio.ts`'s `sounds`) and the song `SONG`
   (see Sound below).
@@ -158,7 +159,18 @@ How it runs:
   throw switches). `routable` and `dispatch` use loose routes, since the wyrm can always throw
   switches itself.
 - **Screens:** `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas
-  pixels per game pixel) and zooms the camera, which never scrolls, to match. Every texture is
+  pixels per game pixel) and zooms the camera, which never scrolls, to match. With `fill` the view
+  is 960x540 or bigger in one direction (up to 1296 wide or 720 tall), picked once at start.
+  `GameScene.create` reads `viewSize(this)` and calls `placeBoard`, which stretches `BOARD` over
+  everything left of the panel between the HUD and the hint bar, moves `ISO.ox`/`oy` so the grid
+  sits in the board's middle and sets `PANEL.x` so the panel hugs the right edge. The `valley`
+  texture is baked at the board's size (sky and clouds over all of it). The HUD spans the view
+  (the wyrms' status pinned right, the round line centred in the room between), the hint bar
+  spans the board's foot (`placeHint` keeps its text clear of the shared corner buttons, measured
+  from the DOM every `HINT_CHECK_MS`: centred under the board while it clears them, else centred
+  right of them, shrinking to fit), the upgrade buttons and toggles move down with the bottom edge (the
+  order cards stay at the top), and the game over panel and charter cards are centred in the
+  board. At exactly 960x540 `placeBoard` changes nothing, so the playthrough's taps still land. Every texture is
   baked at `sharpRes` through `bakeCanvas`, so every image showing one is sized with `fit` (a scale
   of its own goes through `fit` too, like the wings' flap and the small cargo icons).
 - **Input:** a scene-wide `pointerdown` (and `pointermove` while held) on the board, unless the
@@ -367,7 +379,8 @@ starts the music again.
   `remove-track.webp`, `game-over.webp`, `new-valley-1.webp`, `new-valley-2.webp`, `steering.webp`,
   `workshops-two-wyrms.webp`, `festival.webp`, `festival-won.webp`, `moods.webp`, `washout.webp`,
   `plain-track.webp`, `charter.webp`, `passengers.webp`, `depot-courier.webp`, `tunnel.webp`,
-  `festival-medal.webp`, `german-round.webp` (round 5 with `?lang=de`) and `cover.png` are not made by
+  `festival-medal.webp`, `german-round.webp` (round 5 with `?lang=de`), `fill-ultrawide.webp` and
+`fill-tablet.webp` (the first screen at 2560x1080 and 1024x768) and `cover.png` are not made by
   the test: play the dev build and capture them by hand (a script can set up later rounds through
   the dev server's `/games/wyrmrail/src/game/sim.ts` module, the same instance the game uses).
 - Moods, courier calls, depots, hazards, charters and passengers all start after round 1
@@ -380,7 +393,8 @@ starts the music again.
 - **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
   without it) and, if its US spelling differs, the US one in `i18n/en-US.ts`; run
   `node scripts/check-translations.mjs`. German runs longer than English: the order card's status
-  and mood tag share one line, the upgrade buttons and the hint line shrink their font to fit, and
+  and mood tag share one line, the upgrade buttons and the hint line (beside the corner buttons)
+  shrink their font to fit, and
   the HUD's round line puts the charter on a second line; check a new text with `?lang=de`.
 
 - **Add a village:** add an entry to `VILLAGE_LIST` in `src/game/map.ts` with its `round` (no
@@ -400,7 +414,8 @@ starts the music again.
   if it has one, placed in `GameScene.createScenery`) and, if track looks different on it, handle
   it in `GameScene.drawTrack` (like `bridge`).
 - **Change the view's angle or size:** `ISO` in `src/scenes/layout.ts` (and in the test). Keep
-  the whole diamond inside `BOARD`, clear of the panel.
+  the whole diamond inside the designed `BOARD` (768x448), clear of the panel; `placeBoard` only
+  centres it in a bigger board.
 - **Add an upgrade:** add its prices to `UPGRADE_COSTS` and a level to `upgrades` in `newGame`,
   apply it where it matters in `sim.ts`, and add a button in `GameScene.createPanel` and its
   caption in `drawPanel` (and a `BUTTONS` row in layout; the panel is full, so make room).
@@ -413,7 +428,10 @@ starts the music again.
 
 ## Gotchas
 
-- `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times the 960x540 view: read
+- `ISO`, `BOARD` and `PANEL` are set by `placeBoard` in `create`; place anything new from them (or
+  from the scene's `view`) rather than from fixed numbers, or it lands wrong on a wider or taller
+  screen.
+- `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times the view: read
   pointers through `worldX/Y`, and show a new texture with `fit(this.add.image(...))` or it is
   drawn `renderScale` times too big. `e2e/screens.spec.ts` at the root opens the game on five
   screens.
