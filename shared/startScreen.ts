@@ -102,7 +102,13 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     game.sound.pauseAll();
   };
   const play = () => {
-    for (const scene of held) if (scene.sys.isPaused()) scene.sys.resume();
+    for (const scene of held) {
+      if (!scene.sys.isPaused()) continue;
+      // A paused scene misses the key-ups of the keys let go behind the screen, so its keys start
+      // again from up, as after the tab lost the focus.
+      scene.input?.keyboard?.resetKeys();
+      scene.sys.resume();
+    }
     held = [];
     game.sound.resumeAll();
     // Start and Resume are a tap or a key press, which lets the browser play sound.
@@ -142,6 +148,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   overlay.querySelector('.game-help-back')?.addEventListener('click', closeHelp);
 
   // Captured on window, before the game's own listeners, so a screen that is up keeps its keys.
+  // Key-ups always reach the game, so a key held when the screen came up is let go there too.
   window.addEventListener(
     'keydown',
     (e) => {
@@ -175,7 +182,6 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     },
     { capture: true },
   );
-  window.addEventListener('keyup', (e) => mode !== 'playing' && e.stopPropagation(), { capture: true });
   // The music plays on behind the pause screen, so its volume can be heard as it is set, but stops
   // with the tab out of sight.
   document.addEventListener('visibilitychange', () => {

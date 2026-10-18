@@ -79,7 +79,8 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 - **Genre filter** (off by default, hub only): a row of genres above the cards (Action, Strategy,
   Management, Puzzle, Adventure) that lists just the games of one. Each card's genres are its
   `data-genres` in `index.html`.
-- **Saved progress**: **Delete all progress** erases every game's saves and keeps the settings.
+- **Saved progress**: **Delete all progress** erases every game's saves and the Continue playing row,
+  and keeps the settings and any other site's storage on the same origin.
 - **Restore defaults** puts the settings back, and **Done** closes the panel.
 
 Each card also has a **⚙** in its corner that opens that game's own settings: whether it has

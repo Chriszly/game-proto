@@ -136,13 +136,21 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   await page.keyboard.press('Enter');
   await expect.poll(fullscreen).toBe(true);
 
-  // Delete all progress clears the games' saves and keeps the settings.
+  // Delete all progress clears the games' saves and Continue playing, keeps the settings, and leaves
+  // other sites' keys on the same origin alone.
   await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('apothecary-save', '{}'));
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{}');
+    localStorage.setItem('other-site-data', '1');
+  });
+  await page.reload();
+  const recent = page.getByRole('navigation', { name: 'Continue playing' });
+  await expect(recent.getByRole('link')).toHaveText(['Apothecary']);
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await dialog.getByRole('button', { name: 'Delete all progress' }).click();
-  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['hub-settings']);
+  expect((await page.evaluate(() => Object.keys(localStorage))).sort()).toEqual(['hub-settings', 'other-site-data']);
+  await expect(recent).toBeHidden();
 
   await dialog.getByRole('button', { name: 'Restore defaults' }).click();
   await expect(choice('Difficulty', 'Normal')).toHaveAttribute('aria-pressed', 'true');
