@@ -26,6 +26,15 @@ import { t } from './i18n';
  * - Art painted into canvases stays as sharp as its canvas; paint it `renderScale` times bigger to
  *   keep it crisp (see `sharpRes`).
  * - On a phone held the wrong way for the game, a hint to turn it covers the paused game.
+ *
+ * With `setupScaling(game, { fill: true })` the view also takes the screen's shape instead of
+ * leaving bars at its sides: it keeps the designed size as its smallest and grows the other way,
+ * up to 2.4:1 for a wide game (960 to 1296 wide on an ultrawide or sideways phone, 540 to 720 tall
+ * on a 4:3 tablet) and the same turned round for an upright game. The shape is picked once, when
+ * the game starts, from the window (on a phone, either way round). A game that fills lays out
+ * against `viewSize(scene)` rather than its designed size: it paints its background over the whole
+ * view, pins its bars and buttons to the view's edges and centres its play area, which
+ * `viewFrame(scene)` gives as the designed-size rectangle in the middle of the view.
  */
 
 /** Canvas pixels per game pixel; 1 until `setupScaling` runs. */
@@ -37,23 +46,57 @@ const MAX_SCALE = 4;
 const MAX_CANVAS_SCALE = 2;
 /** The longest side, in pixels, of a texture `sharpRes` lets a game paint. */
 const MAX_TEXTURE = 4096;
+/** The longest a filling view grows, as a share of its shorter side: an ultrawide monitor. */
+const MAX_ASPECT = 2.4;
+/** The squarest a filling view gets: a 4:3 tablet. */
+const MIN_ASPECT = 4 / 3;
+
+export interface ScalingOptions {
+  /** Grow the view to the screen's shape instead of leaving bars at its sides. */
+  fill?: boolean;
+}
 
 /**
  * Opts a game into sharp scaling. Call it right after `setupGame(game)`, before any scene starts.
  */
-export function setupScaling(game: Phaser.Game) {
-  const view = { w: Number(game.config.width), h: Number(game.config.height) };
+export function setupScaling(game: Phaser.Game, { fill = false }: ScalingOptions = {}) {
+  const design = { w: Number(game.config.width), h: Number(game.config.height) };
   const apply = () => {
+    const view = fill ? fillView(design.w, design.h, game) : design;
     const canvasRenderer = game.config.renderType === Phaser.CANVAS || game.renderer?.type === Phaser.CANVAS;
     renderScale = pickRenderScale(view.w, view.h, canvasRenderer ? MAX_CANVAS_SCALE : MAX_SCALE);
-    if (renderScale !== 1) game.scale.setGameSize(view.w * renderScale, view.h * renderScale);
+    if (renderScale !== 1 || view !== design) game.scale.setGameSize(view.w * renderScale, view.h * renderScale);
   };
   // Phaser boots right away once the page has loaded, which it has when a module script runs.
   if (game.renderer) apply();
   else game.events.once(Phaser.Core.Events.BOOT, apply);
   zoomNewCameras();
   sharpenTexts();
-  addTurnHint(game, view.w >= view.h);
+  addTurnHint(game, design.w >= design.h);
+}
+
+/**
+ * The view for a game designed at `w` x `h` that takes the window's shape: the designed size,
+ * grown along one side to match the window, between 4:3 and 2.4:1. On a touch screen the window is
+ * taken the way round the game wants, so a phone that starts turned the wrong way still fits once
+ * it is turned.
+ */
+export function fillView(w: number, h: number, game?: Phaser.Game) {
+  const parent = game?.scale.parent as HTMLElement | undefined;
+  let ww = parent?.clientWidth || window.innerWidth;
+  let wh = parent?.clientHeight || window.innerHeight;
+  if (window.matchMedia('(pointer: coarse)').matches && ww > wh !== w > h) [ww, wh] = [wh, ww];
+  // A desktop window turned the other way round from the game just keeps the designed size.
+  if (ww > wh !== w > h) return { w, h };
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const designed = long / short;
+  const wanted = Phaser.Math.Clamp(Math.max(ww, wh) / Math.min(ww, wh), MIN_ASPECT, MAX_ASPECT);
+  // A longer screen grows the long side, a squarer one the short side, to whole even pixels.
+  const even = (n: number) => 2 * Math.round(n / 2);
+  const grownLong = wanted > designed ? even(short * wanted) : long;
+  const grownShort = wanted < designed ? even(long / wanted) : short;
+  return w >= h ? { w: grownLong, h: grownShort } : { w: grownShort, h: grownLong };
 }
 
 /**
@@ -84,6 +127,18 @@ export function sharpRes(w: number, h: number, res = 1) {
 /** The size of the game's view in game pixels: what `scene.scale` gives in canvas pixels. */
 export function viewSize(scene: Phaser.Scene) {
   return { width: scene.scale.width / renderScale, height: scene.scale.height / renderScale };
+}
+
+/**
+ * The game's designed size as a rectangle in the middle of its view, in game pixels: the whole
+ * view unless it fills a screen of another shape (see `ScalingOptions.fill`). Centre a play area
+ * that was laid out for the designed size by placing it at this rectangle's `x` and `y`.
+ */
+export function viewFrame(scene: Phaser.Scene) {
+  const { width, height } = viewSize(scene);
+  const w = Math.min(width, Number(scene.game.config.width));
+  const h = Math.min(height, Number(scene.game.config.height));
+  return new Phaser.Geom.Rectangle(Math.round((width - w) / 2), Math.round((height - h) / 2), w, h);
 }
 
 /**
