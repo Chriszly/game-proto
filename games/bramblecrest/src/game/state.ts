@@ -3,7 +3,7 @@
 // whenever the knight changes place or the quest moves on.
 
 import { byDifficulty } from '../../../../shared/settings';
-import type { Facing, ItemId, MapId } from './maps';
+import { isMapId, type Facing, type ItemId, type MapId } from './maps';
 import type { TextKey } from '../i18n';
 
 export const SAVE_KEY = 'bramblecrest-save';
@@ -125,6 +125,11 @@ export function save(s: GameState) {
   }
 }
 
+/** Whether a saved place is on a map that exists, at a real position. */
+function placeOk(p: { map?: unknown; x?: unknown; y?: unknown } | undefined) {
+  return !!p && isMapId(p.map) && Number.isFinite(p.x) && Number.isFinite(p.y);
+}
+
 /** The saved playthrough, or a new one when there is none (or it can't be read). */
 export function load(): GameState {
   try {
@@ -132,7 +137,7 @@ export function load(): GameState {
     if (raw) {
       const saved = JSON.parse(raw) as Partial<GameState>;
       const fresh = newState();
-      if (saved && QUESTS.includes(saved.quest as Quest)) return { ...fresh, ...saved, items: { ...fresh.items, ...saved.items } };
+      if (saved && QUESTS.includes(saved.quest as Quest) && placeOk(saved) && placeOk(saved.spawn ?? fresh.spawn)) return { ...fresh, ...saved, items: { ...fresh.items, ...saved.items } };
     }
   } catch {
     // A broken save starts over.

@@ -23,7 +23,6 @@ export class Hud {
   private plate: Phaser.GameObjects.Graphics;
   private plateW = 0;
   private stones: Phaser.GameObjects.Text;
-  private stoneIcon: Phaser.GameObjects.Image;
   private keys: Phaser.GameObjects.Text;
   private seeds: Phaser.GameObjects.Text;
   private objective: Phaser.GameObjects.Text;
@@ -52,7 +51,7 @@ export class Hud {
     this.dy = this.vh - VIEW.h;
     const fixed = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) => o.setScrollFactor(0).setDepth(DEPTH);
     this.plate = fixed(add.graphics());
-    this.stoneIcon = fixed(add.image(24, 46, 'moonstone').setScale(texScale('moonstone')));
+    fixed(add.image(24, 46, 'moonstone').setScale(texScale('moonstone')));
     this.stones = fixed(add.text(36, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#dff2ff' }));
     this.keys = fixed(add.text(108, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#f0d890' }));
     this.seeds = fixed(add.text(178, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#c8f0a0' }));
@@ -142,7 +141,6 @@ export class Hud {
     this.buttons.vine.setVisible(s.items.hookvine && !dialog);
     this.buttons.roll.setVisible(!dialog);
     this.buttons.seed.setVisible(s.items.seeds && !dialog).setAlpha(s.seeds > 0 ? 1 : 0.4);
-    this.stoneIcon.setVisible(true);
     if (this.placeMs > 0) {
       this.placeMs -= dt;
       this.place.setAlpha(Math.min(1, this.placeMs / 600));
@@ -165,8 +163,8 @@ export class Hud {
     return this.endCard !== null;
   }
 
-  /** The chapter's end card, with how the night went and two ways on. */
-  showEnd(title: string, lines: string[], onKeep: () => void, onNew: () => void) {
+  /** The chapter's end card, with how the night went and two ways on: keep exploring (it just closes) or a new game. */
+  showEnd(title: string, lines: string[], onNew: () => void) {
     const add = this.scene.add;
     // The card is laid out for 960x540 and sits in the middle of the view, its shade over all of it.
     const f = viewFrame(this.scene);
@@ -178,18 +176,18 @@ export class Hud {
     c.add(g);
     c.add(add.text(VIEW.w / 2, 130, title, { fontFamily: FONT, fontSize: '28px', color: '#f0d890' }).setOrigin(0.5));
     c.add(add.text(VIEW.w / 2, 250, lines.join('\n\n'), { fontFamily: FONT, fontSize: '18px', color: '#f3ead2', align: 'center', wordWrap: { width: 520 } }).setOrigin(0.5));
-    const button = (x: number, label: string, fn: () => void) => {
+    const button = (x: number, label: string, fn?: () => void) => {
       const b = add.text(x, 400, label, { fontFamily: FONT, fontSize: '20px', color: '#10163a', backgroundColor: '#f0d890', padding: { x: 16, y: 8 } }).setOrigin(0.5);
       b.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
         ui('click');
         c.destroy();
         this.endCard = null;
-        fn();
+        fn?.();
       });
       c.add(b);
     };
-    button(370, t('keepExploring'), onKeep);
+    button(370, t('keepExploring'));
     button(590, t('newGame'), onNew);
     this.endCard = c;
   }

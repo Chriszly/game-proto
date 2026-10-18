@@ -379,6 +379,11 @@ function belfry(): MapDef {
 
 const BUILT: Record<MapId, () => MapDef> = { village, woods, fen, shrine, belfry };
 
+/** Whether `id` names a map (a save from another version may not). */
+export function isMapId(id: unknown): id is MapId {
+  return typeof id === 'string' && Object.hasOwn(BUILT, id);
+}
+
 /** A fresh copy of a map's layout. */
 export function buildMap(id: MapId): MapDef {
   return BUILT[id]();

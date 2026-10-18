@@ -29,7 +29,10 @@ Implemented today:
   foes and bulbs and cuts bushes and thorns (`SWING_*`), and the hookvine (`VINE_*`, `PULL_SPEED`):
   it flies in the facing direction, over low tiles (`LOW`: water, pits, bushes, the boss ring),
   pulls the knight to a golden post (not the one they stand on), yanks down a raised bulb and stuns
-  a foe. Hearts are counted in halves; a fall wakes the knight at the map's spawn, healed.
+  a foe. Hearts are counted in halves; a fall wakes the knight at the map's spawn, healed. The
+  spawn is where the knight came into the map, or, after a reload, where the game was last saved
+  (`create` calls `enterMap` with `keepSpawn` false). A fall and an exit in the same frame start
+  one fade only (`fadeTo` returns while `fading`).
 - Items: the Old Blade, the Hookvine, lantern oil (a bigger lantern light), small keys and heart
   vessels, all from chests (`openChest`), plus hearts dropped by cut bushes.
 - Bellseeds (`items.seeds`, a count in `seeds` up to `MAX_SEEDS`): Old Sedge gives and refills
@@ -41,7 +44,8 @@ Implemented today:
 - Belfry puzzles: three bell props (`note` 0 to 2) rung with the sword in `BELL_ORDER`; a wrong
   bell starts over, the right tune sets `bells`, which lifts the bars to the flooded room.
 - Shrine puzzles: a key door, a pushable block onto a pressure plate that lifts iron bars (a block
-  on a plate stays), shut doors that close behind the knight while their room still has foes, and
+  on a plate stays), shut doors that close behind the knight while their room still has foes (only
+  once the knight's whole feet box, `FEET`, is in the room, so a door never shuts on them), and
   pit crossings by hookvine posts.
 - Foes (`src/scenes/foes.ts`): slugs, moths (they fly over water and pits), thornlings (they
   stand still and spit seeds) and frogs (they sit, then leap at the knight). Dungeon foes stay
@@ -147,17 +151,21 @@ All in code through `shared/audio.ts` (no audio files), in `src/audio/`:
   view and world point; dragged past `STICK.drag` it goes `live` and steers as a floating stick
   (the base is dragged along past `STICK.r`, `moveInput` returns its direction after the keys,
   snapped to an axis within `STICK.snap` so a block can be pushed), lifted before that it calls
-  `tapWorld` like a click. `addPointer(1)` lets a second finger press the buttons. The HUD draws it
-  with `drawStick`.
+  `tapWorld` like a click. A lift outside the canvas (`pointerupoutside`) ends it too, and a pause
+  (the scene's `PAUSE` event) drops it, since a paused scene never hears the finger lift.
+  `addPointer(1)` lets a second finger press the buttons. The HUD draws it with `drawStick`.
 
 ### Save
 
 `bramblecrest-save` in localStorage: the whole `GameState` (map, position, facing, spawn, hearts,
 items, keys, moonstones, flags, quest, falls, foes beaten). It is written on a map change, on a
-chest, cut thorns, a plate, broken rock, the bells, a moonstone, a quest step and each boss. Flags in
-use: `chest-<id>`, `door-<id>`, `gate-cut`, `woods-thorns`, `plate`, `boss`, `foe-<i>`,
-`belfry-foe-<i>`, `broke-<map>-<x>-<y>`, `bells`, `wraith`, `cat-1` to `cat-3`, plus the flags of
-hidden places. `load` fills in fields a save from an older version lacks (`items.seeds`, `seeds`).
+chest, cut thorns, a key door unlocked, a plate, broken rock, the bells, a moonstone, a quest step
+and each boss. Flags in use: `chest-<id>`, `door-<id>`, `gate-cut`, `woods-thorns`, `plate`,
+`boss`, `foe-<i>`, `belfry-foe-<i>`, `broke-<map>-<x>-<y>`, `bells`, `wraith`, `cat-1` to `cat-3`,
+plus the flags of hidden places. `load` fills in fields a save from an older version lacks
+(`items.seeds`, `seeds`), and starts over when the saved `map` or `spawn` is not a map (`isMapId`)
+or a position is not a number. Cutting the gate before bringing the blade back is fine: the
+elder's `quest-thorns` then moves the quest straight on to `shrine`.
 
 ### Hub settings
 
@@ -210,7 +218,7 @@ hidden places. `load` fills in fields a save from an older version lacks (`items
   and clear with `clearTint().setTintMode(Phaser.TintModes.MULTIPLY)`.
 - Don't name scene fields `time` or `lights`: they clash with `Phaser.Scene`'s own (`now` and
   `glows` are used instead).
-- Beaten foes keep their place in `foes` with `alive` false and a destroyed sprite; skip them in
-  anything that touches the sprite.
+- Beaten foes stay in `foes` with `alive` false and a destroyed sprite until the end of
+  `updateFoes`, which filters them out; skip them in anything that touches the sprite within a frame.
 - The camera has no size until its first frame, so the night skips drawing until it does.
 - Never use a red cross in any art (root AGENTS.md).

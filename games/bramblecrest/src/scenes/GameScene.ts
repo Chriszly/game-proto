@@ -56,6 +56,8 @@ const BELL_LIFT = 72;
 
 const DIRS: Record<Facing, { x: number; y: number }> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 const WARM: [number, number, number] = [255, 190, 110];
+/** The corners of the knight's feet box, offset from their position. */
+const FEET: [number, number][] = [[-8, -6], [8, -6], [-8, 4], [8, 4]];
 
 /** What a tap asked the knight to do once they get there. */
 type Target =
@@ -156,6 +158,9 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', this.onPointer, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+    this.input.on('pointerupoutside', this.onPointerUp, this);
+    // A paused scene never hears the finger lift, so a pause drops the stick.
+    this.events.on(Phaser.Scenes.Events.PAUSE, () => (this.stick = null));
     // A second touch pointer, so one thumb can swing or roll while the other steers.
     this.input.addPointer(1);
     this.enterMap(this.state.map, this.state.x, this.state.y, this.state.facing, false);
@@ -396,9 +401,12 @@ export class GameScene extends Phaser.Scene {
     // A shut door closes behind the knight while its room still has foes (or its queen) in it.
     const room = this.map.rooms.find((r) => r.id === d.room);
     if (!room) return false;
-    const tx = Math.floor(s.x / TILE);
-    const ty = Math.floor(s.y / TILE);
-    const inside = tx >= room.x && tx < room.x + room.w && ty >= room.y && ty < room.y + room.h;
+    // Only once the knight's whole feet box is in the room, so the door never shuts on their feet.
+    const inside = FEET.every(([dx, dy]) => {
+      const tx = Math.floor((s.x + dx) / TILE);
+      const ty = Math.floor((s.y + dy) / TILE);
+      return tx >= room.x && tx < room.x + room.w && ty >= room.y && ty < room.y + room.h;
+    });
     if (!inside) return false;
     if (d.room === 'boss') return !!this.boss || !!this.wraith;
     return this.foes.some((f) => f.alive && f.room === d.room);
@@ -435,7 +443,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Whether the knight's feet fit at (x, y). */
   private free(x: number, y: number) {
-    for (const [dx, dy] of [[-8, -6], [8, -6], [-8, 4], [8, 4]]) if (this.solidTile(Math.floor((x + dx) / TILE), Math.floor((y + dy) / TILE))) return false;
+    for (const [dx, dy] of FEET) if (this.solidTile(Math.floor((x + dx) / TILE), Math.floor((y + dy) / TILE))) return false;
     return true;
   }
 
@@ -690,6 +698,8 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'quest-thorns':
         advance(s, 'thorns');
+        // The gate may already be cut, if the knight went there before coming back.
+        if (hasFlag(s, 'gate-cut')) advance(s, 'shrine');
         this.hud.toast(t('doneQuestBlade'));
         break;
       case 'cat-pet':
@@ -746,7 +756,6 @@ export class GameScene extends Phaser.Scene {
     this.hud.showEnd(
       chapter === 1 ? t('chapterOne') : t('chapterTwo'),
       [t('endStats', { n, total, beaten: s.beaten, falls: s.falls }), ending],
-      () => undefined,
       () => {
         clearSave();
         this.state = newState();
@@ -794,7 +803,7 @@ export class GameScene extends Phaser.Scene {
     }
     // A swing on a buried moonstone's spot digs it up.
     for (const st of this.map.stones)
-      if (st.hidden === 'buried' && !this.dug.has(st.id) && Math.hypot((st.x + 0.5) * TILE - hx, (st.y + 0.5) * TILE - hy) < 30) {
+      if (st.hidden === 'buried' && !this.dug.has(st.id) && Math.hypot((st.x + 0.5) * TILE - hx, (st.y + 0.5) * TILE - hy) <= 32) {
         this.dug.add(st.id);
         this.stoneSprites.get(st.id)?.setVisible(true);
         sfx('glint');
@@ -1080,7 +1089,7 @@ export class GameScene extends Phaser.Scene {
       this.checkExits();
     }
     this.flashes = this.flashes.filter((f) => (f.t -= dt) > 0);
-    this.drawPlayer(dt);
+    this.drawPlayer();
     this.drawWorld();
     this.hud.update(dt, s, this.dialog ? { speaker: this.dialog.speaker, text: this.dialog.lines[this.dialog.i] } : null, DUNGEONS.has(this.map.id));
     this.hud.drawStick(this.stick?.live ? this.stick : null);
@@ -1314,6 +1323,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private fadeTo(then: () => void) {
+    // A fall and an exit can both start a fade in the same frame; the first one wins.
+    if (this.fading) return;
     this.fading = true;
     const cam = this.cameras.main;
     cam.fadeOut(220, 5, 8, 20);
@@ -1325,6 +1336,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkExits() {
+    if (this.fading) return;
     const s = this.state;
     const tx = Math.floor(s.x / TILE);
     const ty = Math.floor(s.y / TILE);
@@ -1579,9 +1591,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateBoss(dt: number) {
     const boss = this.boss;
-    if (!boss) {
-      return;
-    }
+    if (!boss) return;
     if (!boss.awake) {
       if (!this.inRoom('boss')) return;
       boss.awake = true;
@@ -1821,7 +1831,7 @@ export class GameScene extends Phaser.Scene {
     this.player.setTexture(key).setScale(texScale(key)).setFlipX(f === 'left');
   }
 
-  private drawPlayer(dt: number) {
+  private drawPlayer() {
     const s = this.state;
     this.applyFacing();
     const bob = this.walkT > 0 && !settings.reduceMotion ? Math.abs(Math.sin(this.walkT / 90)) * 2 : 0;
@@ -1856,7 +1866,6 @@ export class GameScene extends Phaser.Scene {
       this.vine.setDepth(Math.max(s.y, h.y + 12) + 1);
       this.hookTip.setPosition(h.x, h.y).setDepth(h.y + 13);
     }
-    void dt;
   }
 
   private drawWorld() {
