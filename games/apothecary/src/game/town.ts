@@ -1,6 +1,6 @@
 import type { TextKey } from '../i18n';
 import { createDistricts, type DistrictState } from './districts';
-import type { Upgrade } from './state';
+import type { PriceSign, Upgrade } from './state';
 
 // The town past the apothecary: once the plague is first cured the town grants a charter, and the
 // doctor can buy more shops on the town map, each with its own yard of gardens, stations and a
@@ -274,6 +274,23 @@ export const MAX_SHOPKEEPERS = 1;
 export const workerCost = (id: ShopId, hired: number) => tierCost(id, WORKER_COST) * 2 ** hired;
 export const routeCost = (id: ShopId, route: RouteDef) => tierCost(id, route.cost);
 
+/**
+ * Each shop's outfitter sells one more level of the doctor's pack, boots and sickle, on top of the
+ * apothecary's two; each counts everywhere. Its first cost, before the shop's `tierCost`.
+ */
+export const OUTFITTER_GEAR = ['pack', 'boots', 'sickle'] as const;
+export type Gear = (typeof OUTFITTER_GEAR)[number];
+export const GEAR_COST: Record<Gear, number> = { pack: 120, boots: 100, sickle: 100 };
+export const gearCost = (id: ShopId, gear: Gear) => tierCost(id, GEAR_COST[gear]);
+/**
+ * Each shop's study teaches its own crafting order (a "First:" sign at each station with more than
+ * one recipe) and price signs (Cheap, Fair or Dear on each shelf), like the apothecary's.
+ */
+export const LESSONS = ['craftOrder', 'priceSigns'] as const;
+export type Lesson = (typeof LESSONS)[number];
+export const LESSON_COST: Record<Lesson, number> = { craftOrder: 40, priceSigns: 60 };
+export const lessonCost = (id: ShopId, lesson: Lesson) => tierCost(id, LESSON_COST[lesson]);
+
 /** Beds in each garden, three by three like the apothecary's. */
 export const BEDS = 9;
 /** What each station's in and out pallets, and the shelf, hold of each good. */
@@ -341,6 +358,14 @@ export interface ShopState {
   nextOrderId: number;
   /** Goods handed over, ever. */
   sold: number;
+  /** The levels bought at this shop's outfitter, one at most of each. */
+  outfitter: Record<Gear, Upgrade>;
+  /** The lessons learned at this shop's study. */
+  study: Record<Lesson, Upgrade>;
+  /** What each station makes first once the crafting order is learned, or null for its own order. */
+  priority: Record<string, GoodId | null>;
+  /** Each shelf's price sign once the price signs are learned; Fair unless set. */
+  signs: Partial<Record<GoodId, PriceSign>>;
 }
 
 export interface TownState {
@@ -370,6 +395,10 @@ export function createShop(id: ShopId): ShopState {
     nextOrderIn: WALK_IN_MS,
     nextOrderId: 1,
     sold: 0,
+    outfitter: { pack: none(), boots: none(), sickle: none() },
+    study: { craftOrder: none(), priceSigns: none() },
+    priority: Object.fromEntries(def.stations.map((s) => [s.id, null])),
+    signs: {},
   };
 }
 
@@ -391,6 +420,9 @@ export function normalizeTown(saved: Partial<TownState> | undefined): TownState 
       stations: { ...fresh.stations, ...shop.stations },
       routes: { ...fresh.routes, ...shop.routes },
       counter: { ...fresh.counter, ...shop.counter },
+      outfitter: { ...fresh.outfitter, ...shop.outfitter },
+      study: { ...fresh.study, ...shop.study },
+      priority: { ...fresh.priority, ...shop.priority },
     };
   }
   return town;
@@ -404,6 +436,13 @@ export const gardenOfBed = (bed: number) => Math.floor(bed / BEDS);
 
 /** Whether a station takes a good: it is an input of one of its recipes. */
 export const takes = (station: StationDef, good: GoodId) => station.recipes.some((r) => r.inputs.includes(good));
+
+/** Whether a shop's study has taught a lesson. */
+export const shopStudied = (shop: ShopState, lesson: Lesson) => shop.study[lesson].level > 0;
+/** The goods a station can put first: its recipes' products, when it has more than one. */
+export const priorityChoices = (station: StationDef): GoodId[] => (station.recipes.length > 1 ? station.recipes.map((r) => r.out) : []);
+/** The sign on a good's shelf: Fair unless set, and always Fair before the price signs are learned. */
+export const shopSignOf = (shop: ShopState, good: GoodId): PriceSign => (shopStudied(shop, 'priceSigns') && shop.signs[good]) || 'fair';
 
 /** Whether customers buy a good at this shop. */
 export const sellsGood = (def: ShopDef, good: GoodId) => def.sells[good] !== undefined;

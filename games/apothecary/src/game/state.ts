@@ -1,6 +1,6 @@
 import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type BrewOut, type ItemId, type PlantId, type PotionId, type RefinedId, type SellableId } from './items';
 import type { TextKey } from '../i18n';
-import { createTown, type TownState } from './town';
+import { SHOP_IDS, createTown, type Gear, type TownState } from './town';
 
 export interface Plot {
   plant: PlantId;
@@ -444,13 +444,19 @@ export const stockFactor = (stocked: number, capacity: number) =>
 export const stockedPay = (pay: number, stocked: number, capacity: number) => Math.max(1, Math.round(pay * stockFactor(stocked, capacity)));
 
 /** How many items the doctor carries: four, and one more per pack level. */
-export const carryCapacity = (state: GameState) => 4 + state.upgrades.pack.level;
-/** The most a pack can hold, for laying out the carry slots. */
-export const MAX_CARRY = 4 + UPGRADES.pack.max;
+export const carryCapacity = (state: GameState) => 4 + gearLevel(state, 'pack');
+/** The most a pack can hold, for laying out the carry slots: the apothecary's levels and one a town shop. */
+export const MAX_CARRY = 4 + UPGRADES.pack.max + SHOP_IDS.length;
 /** Walking speed multiplier: a fifth faster per boots level. */
-export const walkSpeed = (state: GameState) => 1 + 0.2 * state.upgrades.boots.level;
+export const walkSpeed = (state: GameState) => 1 + 0.2 * gearLevel(state, 'boots');
 /** Harvest reach in character heights: one, and a quarter more per sickle level. */
-export const harvestReach = (state: GameState) => 1 + 0.25 * state.upgrades.sickle.level;
+export const harvestReach = (state: GameState) => 1 + 0.25 * gearLevel(state, 'sickle');
+/** A piece of the doctor's gear's level: the apothecary's outfitter's, plus one for each town shop's bought. */
+export function gearLevel(state: GameState, gear: Gear) {
+  let level = state.upgrades[gear].level;
+  for (const id of SHOP_IDS) level += state.town.shops[id]?.outfitter[gear].level ?? 0;
+  return level;
+}
 /**
  * Every station keeps each kind of goods coming in or going out on its own pallet, two by two items
  * on the base, and the shop each potion on its own shelf. A pallet or shelf holds `STORAGE_START` of

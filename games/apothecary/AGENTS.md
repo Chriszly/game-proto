@@ -150,6 +150,13 @@ study, shade gardens and a mirrored second production line.
   limits (`MAX_LEVEL`, `MAX_WORKERS`, `MAX_SHOPKEEPERS`, `BEDS`, `SHOP_STORAGE`, `SHOP_PLACES`) and
   timings, the state types (`TownState`: `shops`, a `ShopState` per shop bought, and `hands`, the
   doctor's hands in town, kept apart from `carrying`), `createTown`, `normalizeTown` and `townOpen`.
+  Each shop's market: its outfitter (`OUTFITTER_GEAR`, `Gear`, `GEAR_COST`, `gearCost`; one level each
+  in `ShopState.outfitter`, which `gearLevel` in `state.ts` adds to the apothecary's for
+  `carryCapacity`, `walkSpeed` and `harvestReach`, so `MAX_CARRY` is 4 + 2 + one a shop) and its
+  study (`LESSONS`, `Lesson`, `LESSON_COST`, `lessonCost`, `ShopState.study`, `shopStudied`), which
+  turns on `ShopState.priority` (a station's first product, `priorityChoices`: only stations with
+  more than one recipe) and `ShopState.signs` (`shopSignOf`, reusing the apothecary's `PriceSign`
+  numbers).
 - `src/game/districts.ts`: the households' data, free of Phaser: `Need` (a good or a potion),
   `DISTRICTS`, `HOME_TIERS` (each tier's name and needs), the growth numbers (`START_HOMES`,
   `MAX_HOMES`, `SUPPLY_MS`, `HAPPY_PULL`, `HAPPY`, `UNHAPPY`, `GROW_ROUNDS`), `DistrictState`
@@ -163,10 +170,14 @@ study, shade gardens and a mirrored second production line.
   takes a good off a bought shop's shelf or a potion, plain first, off `state.counter.shelf`, and
   pays the price into that till). Districts use no randomness. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
   `pickUpFromStation`, `stockShopShelf`, `collectShopTill`, `tossGood`, `payStationLevel`,
-  `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`) return `Feedback` like the sim's.
+  `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`, `payGear`, `payLesson`,
+  `cycleShopPriority`, `cycleShopSign`) return `Feedback` like the sim's. `nextRecipe` takes the
+  station's priority first when it is ready; `runOrders` draws wants by `SIGN_DEMAND`, pays
+  `shopPrice` (counter level and sign) and runs patience down by `SIGN_PATIENCE`.
 - `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
-  `ShopDef` (`gardenLayout`, `bedPosition`, `stationLayout`, `counterLayout`, `routePath`,
-  `routeMs`); Phaser-free, since the sim reads route lengths from it.
+  `ShopDef` (`gardenLayout`, `bedPosition`, `MARKET` for the outfitter and study between the
+  gardens and the first station, `stationLayout` with its `priority` sign, `counterLayout` with each
+  shelf's `priceSign`, `routePath`, `routeMs`); Phaser-free, since the sim reads route lengths from it.
 - `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
   (saves, then starts another scene, which loads the save again) and `keepSaving`.
 - `TownScene` lays the lots out in rows of three (`LOT`) with the districts' cards in a row below
