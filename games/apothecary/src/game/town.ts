@@ -308,6 +308,35 @@ export const SHOPS: Record<ShopId, ShopDef> = {
 };
 export const SHOP_IDS = Object.keys(SHOPS) as ShopId[];
 
+/**
+ * A shop's second line: a copy of each of its stations (`<id>2`) in a row below the first, with
+ * its own pixie routes (`<route>2`, from the same gardens and to the same shelves), bought once at
+ * its marker for `LINE2_COST`, like the apothecary's expansion. Its stations level, hire and set
+ * their crafting order apart from the first line's.
+ */
+export const LINE2_COST = 500;
+export const line2Cost = (id: ShopId) => tierCost(id, LINE2_COST);
+export const line2Id = (id: string) => `${id}2`;
+/** Whether a station or route id is the second line's. The first line's ids hold no digits. */
+export const isLine2 = (id: string) => id.endsWith('2');
+/** A second-line id's first-line twin. */
+export const line1Id = (id: string) => (isLine2(id) ? id.slice(0, -1) : id);
+const toLine2 = <E extends RouteEnd>(e: E): E => (typeof e === 'object' && 'station' in e ? { station: line2Id(e.station) } : e) as E;
+const STATIONS_OF = Object.fromEntries(
+  SHOP_IDS.map((id) => [id, [...SHOPS[id].stations, ...SHOPS[id].stations.map((s) => ({ ...s, id: line2Id(s.id) }))]]),
+) as Record<ShopId, StationDef[]>;
+const ROUTES_OF = Object.fromEntries(
+  SHOP_IDS.map((id) => [id, [...SHOPS[id].routes, ...SHOPS[id].routes.map((r) => ({ ...r, id: line2Id(r.id), from: toLine2(r.from), to: toLine2(r.to) }))]]),
+) as Record<ShopId, RouteDef[]>;
+/** Every station of a shop, both lines', first line first. */
+export const shopStations = (def: ShopDef) => STATIONS_OF[def.id];
+/** Every pixie route of a shop, both lines'. */
+export const shopRoutes = (def: ShopDef) => ROUTES_OF[def.id];
+export const stationDef = (def: ShopDef, id: string) => shopStations(def).find((s) => s.id === id)!;
+export const routeDef = (def: ShopDef, id: string) => shopRoutes(def).find((r) => r.id === id)!;
+/** Whether a shop's station or route stands yet: the first line's always, the second's once bought. */
+export const lineOpen = (shop: ShopState, id: string) => !isLine2(id) || shop.line2.level > 0;
+
 /** What the first shop after the apothecary costs; each next one costs `SHOP_COST_STEP` times as much. */
 export const SHOP_BASE_COST = 1_000;
 export const SHOP_COST_STEP = 10;
@@ -479,6 +508,8 @@ export interface ShopState {
   /** Today's contract, or null before its first day; `kept` counts those kept, ever. */
   contract: ShopContract | null;
   kept: number;
+  /** The second line: `level` 1 once bought. */
+  line2: Upgrade;
 }
 
 export interface TownState {
@@ -498,8 +529,8 @@ export function createShop(id: ShopId): ShopState {
   const def = SHOPS[id];
   return {
     beds: def.gardens.flatMap((g) => Array.from({ length: BEDS }, () => g.grow)),
-    stations: Object.fromEntries(def.stations.map((s) => [s.id, { queue: [], work: null, output: [], level: none(), hired: none() }])),
-    routes: Object.fromEntries(def.routes.map((r) => [r.id, { built: false, paid: 0, items: [], next: 0 }])),
+    stations: Object.fromEntries(shopStations(def).map((s) => [s.id, { queue: [], work: null, output: [], level: none(), hired: none() }])),
+    routes: Object.fromEntries(shopRoutes(def).map((r) => [r.id, { built: false, paid: 0, items: [], next: 0 }])),
     shelf: [],
     till: 0,
     serving: 0,
@@ -512,10 +543,11 @@ export function createShop(id: ShopId): ShopState {
     study: { craftOrder: none(), priceSigns: none() },
     recipes: none(),
     guild: { join: none(), growth: none(), belts: none(), storage: none(), prices: none(), slots: none(), customers: none() },
-    priority: Object.fromEntries(def.stations.map((s) => [s.id, null])),
+    priority: Object.fromEntries(shopStations(def).map((s) => [s.id, null])),
     signs: {},
     contract: null,
     kept: 0,
+    line2: none(),
   };
 }
 

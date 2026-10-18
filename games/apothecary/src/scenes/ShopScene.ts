@@ -26,6 +26,12 @@ import {
   LESSONS,
   OUTFITTER_GEAR,
   gardenOpen,
+  isLine2,
+  line1Id,
+  line2Cost,
+  lineOpen,
+  shopRoutes,
+  shopStations,
   gearCost,
   lessonCost,
   levelCost,
@@ -61,6 +67,7 @@ import {
   payRecipe,
   inShopFineWindow,
   payGuildJoin,
+  payLine2,
   payGuildUpgrade,
   shopPrice,
   dropAtStation,
@@ -79,7 +86,7 @@ import {
 import { t } from '../i18n';
 import { coined } from '../ui/coins';
 import { ProgressBar } from '../ui/ProgressBar';
-import { FENCE_Y, MARKET, SHOP_HUD, guildLayout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
+import { FENCE_Y, MARKET, SHOP_HUD, guildLayout, line2Layout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
 import { TOWN_HUD_H, TOWN_TEXT, TOWN_UI_DEPTH, keepSaving, leaveFor, townCard, townTopBar } from './townKit';
 
 // A town shop's yard, built from its `ShopDef` the way the apothecary's is laid out by hand: the
@@ -180,7 +187,7 @@ export class ShopScene extends Phaser.Scene {
     this.createGardens();
     this.createMarket();
     this.createGuild();
-    this.def.stations.forEach((_, i) => this.createStation(i));
+    this.createLine2();
     this.createCounter();
     this.createPixies();
     this.createCustomers();
@@ -198,7 +205,7 @@ export class ShopScene extends Phaser.Scene {
 
   private sign(x: number, y: number, text: string) {
     const name = this.add.text(x, y, text, { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK }).setOrigin(0.5).setDepth(-900);
-    fit(this.add.image(x, y, signTexture(this, name.width + 16))).setDepth(-910);
+    return [name, fit(this.add.image(x, y, signTexture(this, name.width + 16))).setDepth(-910)] as const;
   }
 
   private createGardens() {
@@ -227,8 +234,9 @@ export class ShopScene extends Phaser.Scene {
           fit(plant).setVisible(open());
         });
       }
-      const route = this.def.routes.find((r) => 'garden' in r.from && r.from.garden === g);
-      if (route) this.addRouteMarker(layout.route, route, () => !open());
+      for (const route of shopRoutes(this.def).filter((r) => 'garden' in r.from && r.from.garden === g)) {
+        this.addRouteMarker(isLine2(route.id) ? layout.route2 : layout.route, route, () => !open() || !lineOpen(this.shop, route.id));
+      }
     });
   }
 
@@ -307,8 +315,31 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
-  private createStation(i: number) {
-    const def = this.def.stations[i];
+  /**
+   * The first line's stations, and the second line's once bought: until then its sign and the
+   * marker that buys it stand in the middle of its row.
+   */
+  private createLine2() {
+    this.def.stations.forEach((s) => this.createStation(s));
+    const l = line2Layout(this.id);
+    const sign = this.sign(l.sign.x, l.sign.y, t('secondLine'));
+    const bought = () => this.shop.line2.level > 0;
+    this.addLevelMarker(l.buy, 'land', () => this.shop.line2, 1, () => line2Cost(this.id), () => payLine2(this.state, this.id), (_lv, left) =>
+      t('buildCost', { name: t('secondLine'), coins: formatNumber(left) }),
+    );
+    let built = false;
+    const build = () => {
+      if (built || !bought()) return;
+      built = true;
+      for (const part of sign) part.setVisible(false);
+      for (const s of shopStations(this.def)) if (isLine2(s.id)) this.createStation(s);
+    };
+    build();
+    this.views.push(build);
+  }
+
+  private createStation(def: StationDef) {
+    const i = this.def.stations.findIndex((s) => s.id === line1Id(def.id));
     const l = stationLayout(this.id, def.id);
     const image = fit(this.add.image(l.at.x, l.at.y, def.texture));
     image.setDepth(l.at.y + image.displayHeight / 2);
@@ -330,7 +361,7 @@ export class ShopScene extends Phaser.Scene {
     this.addLevelMarker(l.hire, 'hire', () => station().hired, MAX_WORKERS, (n) => workerCost(this.id, n), () => payWorker(this.state, this.id, def.id), (_n, left) =>
       t('hireCost', { coins: formatNumber(left) }),
     );
-    const route = this.def.routes.find((r) => 'station' in r.from && r.from.station === def.id);
+    const route = shopRoutes(this.def).find((r) => 'station' in r.from && r.from.station === def.id);
     if (route) this.addRouteMarker(l.route, route);
     // Its goods in and out, each an icon and how many there are.
     const ins = [...new Set(def.recipes.flatMap((r) => r.inputs))];
@@ -447,7 +478,7 @@ export class ShopScene extends Phaser.Scene {
       }
       return pool[i];
     };
-    const paths = this.def.routes.map((r) => {
+    const paths = shopRoutes(this.def).map((r) => {
       const path = routePath(this.id, r);
       return { route: r, path, length: Math.hypot(path[1].x - path[0].x, path[1].y - path[0].y) };
     });
@@ -803,11 +834,11 @@ export class ShopScene extends Phaser.Scene {
 
   /** Sounds of what the shop does on its own: a station done, a sale, an order filled or walked off. */
   private createSound() {
-    let made = this.def.stations.map((s) => this.shop.stations[s.id].output.length);
+    let made = shopStations(this.def).map((s) => this.shop.stations[s.id].output.length);
     let sold = this.shop.sold;
     let orders = [...this.shop.orders];
     this.views.push(() => {
-      const now = this.def.stations.map((s) => this.shop.stations[s.id].output.length);
+      const now = shopStations(this.def).map((s) => this.shop.stations[s.id].output.length);
       if (now.some((n, i) => n > made[i])) sfx('bubble');
       made = now;
       const gone = orders.filter((o) => !this.shop.orders.includes(o));

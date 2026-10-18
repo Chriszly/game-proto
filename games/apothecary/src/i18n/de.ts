@@ -128,6 +128,8 @@ const de: Translation<typeof en> = {
   notOnShelf: 'Noch nicht im Regal',
   serveInShop: 'Zum Bedienen in den Laden gehen',
   landBought: 'Neues Land gekauft!',
+  secondLine: 'Zweite Werkstatt',
+  line2Built: 'Zweite Werkstatt gebaut!',
   tableBuilt: 'Mahltisch gebaut!',
   cauldronBuilt: 'Kessel gebaut!',
   fieldPlanted: 'Feld bepflanzt!',
