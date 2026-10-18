@@ -293,7 +293,11 @@ study, shade gardens and a mirrored second production line.
   `shown`). `standOnMarkers` runs the first shown marker under the feet once every
   `MARKER_INTERVAL_MS` (200); each call moves one item or pays at most 5 coins (`UPGRADE_STEP`).
   Purple markers (`pays`) take coins only once the doctor's body has stood still for `STILL_MS`
-  (400, tracked in `stillSince`), so walking over one buys nothing; their captions show the coins
+  (400, tracked in `stillSince`), so walking over one buys nothing. The longer the doctor then stays
+  on the same marker (`lastMarker`, `markerSince`), the more each payment takes: the scene sets
+  `payment.boost` (`state.ts`) to `payBoost(held)`, doubling every `PAY_DOUBLE_MS` (1s) up to
+  `MAX_PAY_BOOST` (64), around `act` and back to 1 after; `pay` in `sim.ts` and `payTowards` in
+  `townSim.ts` multiply their step by it, and `ShopScene` does the same; their captions show the coins
   still to pay (cost minus `paid`), with no bar.
   A level marker sets `paused` after a level completes until the doctor steps off, and is hidden
   (marker and caption) once its last level is bought. Each purple marker gets the `UpgradeIcon` of

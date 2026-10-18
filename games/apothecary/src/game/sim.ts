@@ -71,6 +71,7 @@ import {
   orderable,
   researched,
   studied,
+  payment,
   RESEARCH_ORDER,
   BLIGHT_DAY,
   BLIGHT_EVERY_MS,
@@ -793,12 +794,12 @@ export function pickUpFromCauldron(state: GameState, id: CauldronId = 'cauldron'
 }
 
 const UPGRADE_STEP = 5;
-/** Pays a handful of coins towards `cost`; once it is fully paid, `complete` says what was bought. */
+/** Pays a handful of coins towards `cost` (more the longer the doctor stays, see `payment`); once it is fully paid, `complete` says what was bought. */
 function pay(state: GameState, toward: { paid: number }, cost: number, complete: () => string): Feedback {
-  const coins = Math.min(UPGRADE_STEP, state.coins, cost - toward.paid);
+  const coins = Math.min(UPGRADE_STEP * payment.boost, state.coins, cost - toward.paid);
   state.coins -= coins;
   toward.paid += coins;
-  return toward.paid < cost ? [`-${coins} coins`] : [complete()];
+  return toward.paid < cost ? [t('coinsPaid', { n: coins })] : [complete()];
 }
 
 /** Pays towards the next of something bought in levels, going up once fully paid. */

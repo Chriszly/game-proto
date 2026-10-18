@@ -213,6 +213,16 @@ export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
 export const upgradeCost = (id: UpgradeId, level: number) => UPGRADES[id].cost * 2 ** level;
 
+/**
+ * How hard a purple marker pays: each payment is `boost` times its usual size. The scenes raise it
+ * the longer the doctor stands on the marker (`payBoost`) and set it back to 1 after paying.
+ */
+export const payment = { boost: 1 };
+/** Paying speeds up the longer the doctor stays on a marker: twice as much a step for every `PAY_DOUBLE_MS`, up to `MAX_PAY_BOOST`. */
+export const PAY_DOUBLE_MS = 1_000;
+export const MAX_PAY_BOOST = 64;
+export const payBoost = (heldMs: number) => Math.min(MAX_PAY_BOOST, 2 ** Math.floor(Math.max(0, heldMs) / PAY_DOUBLE_MS));
+
 /** Every station a craftsman can be hired for. */
 export const STATIONS: StationId[] = ['refiner', 'cauldron', 'refiner2', 'cauldron2', 'counter'];
 /** The stations that craft, and so have a priority: the refining tables and cauldrons. */

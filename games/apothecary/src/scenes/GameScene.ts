@@ -121,6 +121,8 @@ import {
   plagueStage,
   rivalUndercuts,
   signOf,
+  payBoost,
+  payment,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
@@ -341,6 +343,9 @@ export class GameScene extends Phaser.Scene {
   private nextMarkerAt = 0;
   /** Since when the doctor has stood still, by `this.time.now`, or null while walking. */
   private stillSince: number | null = null;
+  /** The marker the doctor's feet are on, and since when: paying speeds up the longer they stay. */
+  private lastMarker?: Marker;
+  private markerSince = 0;
   /** The purple marker that last refused to take coins, so its buzz plays once until the doctor steps off. */
   private refusedMarker: Marker | null = null;
   /** Plot centres, in plot order, for finding ripe plants within the doctor's reach. */
@@ -2342,6 +2347,10 @@ export class GameScene extends Phaser.Scene {
     const under = (m: Marker) => m.zone.contains(this.feetX(), this.feetY());
     for (const m of this.markers) if (m.paused && !under(m)) m.paused = false;
     const marker = this.markers.find((m) => m.shown() && under(m));
+    if (marker !== this.lastMarker) {
+      this.lastMarker = marker;
+      this.markerSince = this.time.now;
+    }
     const moving = this.player.body!.velocity.lengthSq() > 0;
     if (moving) this.stillSince = null;
     else this.stillSince ??= this.time.now;
@@ -2349,7 +2358,10 @@ export class GameScene extends Phaser.Scene {
     if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
     if (marker.pays && (this.stillSince === null || this.time.now - this.stillSince < STILL_MS)) return;
     this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
+    // The longer the doctor stays on a purple marker, the more each payment takes.
+    if (marker.pays) payment.boost = payBoost(this.time.now - Math.max(this.stillSince!, this.markerSince) - STILL_MS);
     const feedback = marker.act();
+    payment.boost = 1;
     if (feedback) this.showFeedback(feedback);
     // A purple marker that takes nothing (no coins, or the herb market with nothing to trade) buzzes once a visit.
     else if (marker.pays && !this.refusedMarker) {

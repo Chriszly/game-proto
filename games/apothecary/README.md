@@ -36,7 +36,7 @@ bigger than the screen, so the camera follows the doctor.
 | Tap a slot in the hands bar (bottom of the screen) | Throw that item away; a small bin on each full slot shows it |
 | Tap a waiting customer's order bubble | With the doctor inside the shop, hand them everything they want that is on the shelf |
 | Cogwheel (top bar) | Open the settings |
-| Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there, with what it gives beside the arrow (a sack at a refining table, an empty bottle at a cauldron, a coin at the till). Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; its caption shows the coins still to pay |
+| Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there, with what it gives beside the arrow (a sack at a refining table, an empty bottle at a cauldron, a coin at the till). Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; the longer you stay, the faster it pays (twice as fast every second); its caption shows the coins still to pay |
 
 ![The floating touch stick under a steering finger](docs/screenshots/touch-stick.webp)
 

@@ -12,7 +12,7 @@ import { signTexture } from '../art/ui';
 import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick, type Feedback } from '../game/sim';
-import { MAX_CARRY, carryCapacity, harvestReach, walkSpeed, type GameState, type Upgrade } from '../game/state';
+import { MAX_CARRY, carryCapacity, harvestReach, payBoost, payment, walkSpeed, type GameState, type Upgrade } from '../game/state';
 import {
   BEDS,
   COUNTER_PAY,
@@ -102,6 +102,9 @@ export class ShopScene extends Phaser.Scene {
   private nextHarvestAt = 0;
   private nextFeedbackAt = 0;
   private stillSince: number | null = null;
+  /** The marker the doctor's feet are on, and since when: paying speeds up the longer they stay. */
+  private lastMarker?: Marker;
+  private markerSince = 0;
   private refused: Marker | null = null;
   private sickleAngle = 0;
   private lastHarvestingAt = -Infinity;
@@ -433,13 +436,20 @@ export class ShopScene extends Phaser.Scene {
     const under = (m: Marker) => m.zone.contains(feet.x, feet.y);
     for (const m of this.markers) if (m.paused && !under(m)) m.paused = false;
     const marker = this.markers.find((m) => m.shown() && under(m));
+    if (marker !== this.lastMarker) {
+      this.lastMarker = marker;
+      this.markerSince = this.time.now;
+    }
     if (this.player.body!.velocity.lengthSq() > 0) this.stillSince = null;
     else this.stillSince ??= this.time.now;
     if (marker !== this.refused) this.refused = null;
     if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
     if (marker.pays && (this.stillSince === null || this.time.now - this.stillSince < STILL_MS)) return;
     this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
+    // The longer the doctor stays on a purple marker, the more each payment takes.
+    if (marker.pays) payment.boost = payBoost(this.time.now - Math.max(this.stillSince!, this.markerSince) - STILL_MS);
     const feedback = marker.act();
+    payment.boost = 1;
     if (feedback) this.showFeedback(feedback);
     else if (marker.pays && !this.refused) {
       this.refused = marker;
