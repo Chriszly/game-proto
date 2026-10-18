@@ -348,7 +348,7 @@ export function bakeKnights(scene: Phaser.Scene) {
       ctx.lineTo(28, 26);
     }, veyl.accent, 1.5, 4);
   });
-  // Kael's crimson wave (The Fall).
+  // Kael's teal wave (The Fall).
   paint(scene, 'rb-bolt-fallen', 30, 34, (ctx) => {
     outline(ctx, () => ctx.arc(4, 17, 18, -0.9, 0.9), schemeOf('kael', 1).bolt, 4, 12);
   });

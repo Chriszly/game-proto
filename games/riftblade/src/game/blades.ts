@@ -14,7 +14,7 @@ const rank = (s: GameState, id: string) => s.ranks[id] ?? 0;
 const cap = (s: GameState, id: string) => s.capstones.includes(id);
 const cross = (s: GameState, id: string) => s.crossovers.includes(id);
 
-/** Kael Varro is drawn in his Fallen colours (a crimson blade) once he takes The Fall. */
+/** Kael Varro is drawn in his Fallen colours (Lord Vharn's teal blade) once he takes The Fall. */
 export function heroVariant(s: GameState) {
   return s.hero === 'kael' && rank(s, 'the-fall') > 0 ? 1 : 0;
 }
