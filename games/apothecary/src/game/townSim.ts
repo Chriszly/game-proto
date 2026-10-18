@@ -4,7 +4,7 @@ import { routeMs } from '../scenes/shopLayout';
 import { DISTRICTS, GROW_ROUNDS, HAPPY, HAPPY_PULL, HOME_TIERS, MAX_HOMES, START_HOMES, SUPPLY_MS, UNHAPPY, districtAsks, type DistrictState, type Need } from './districts';
 import { FINE, type PotionId } from './items';
 import type { Feedback } from './sim';
-import { PRICE_SIGNS, SIGN_DEMAND, SIGN_PATIENCE, SIGN_PAY, SIGN_SET, carryCapacity, gearLevel, payment, potionPrice, speedAt, type GameState, type Upgrade } from './state';
+import { PRICE_SIGNS, SIGN_DEMAND, SIGN_PATIENCE, SIGN_PAY, SIGN_SET, carryCapacity, gearLevel, payment, potionPrice, speedAt, UPGRADES, type GameState, type Upgrade } from './state';
 import {
   BEDS,
   COUNTER_PAY,
@@ -14,20 +14,27 @@ import {
   MAX_SHOPKEEPERS,
   MAX_WORKERS,
   ROUTE_GAP_MS,
-  ROUTE_SPEED,
   SHOPS,
   SHOP_IDS,
   SHOP_PATIENCE,
-  SHOP_PLACES,
   SHOP_SERVE_MS,
-  SHOP_STORAGE,
   WALK_IN_MS,
   createShop,
   gardenOpen,
   gearCost,
   recipeCost,
+  guildCost,
+  guildJoinCost,
+  shopFootfall,
+  shopGrowth,
   shopKnows,
   shopMakes,
+  shopPlaces,
+  shopPriceBoost,
+  shopRouteSpeed,
+  shopStorage,
+  SHOP_GUILD_UPGRADES,
+  type ShopGuild,
   shopSells,
   lessonCost,
   priorityChoices,
@@ -75,8 +82,8 @@ function inFlight(shop: ShopState, def: ShopDef, to: RouteDef['to'], good: GoodI
   return n;
 }
 
-const queueRoom = (shop: ShopState, station: string, good: GoodId) => count(shop.stations[station].queue, good) < SHOP_STORAGE;
-export const shelfRoom = (shop: ShopState, good: GoodId) => count(shop.shelf, good) < SHOP_STORAGE;
+const queueRoom = (shop: ShopState, station: string, good: GoodId) => count(shop.stations[station].queue, good) < shopStorage(shop);
+export const shelfRoom = (shop: ShopState, good: GoodId) => count(shop.shelf, good) < shopStorage(shop);
 
 /**
  * The recipe a station starts next: one whose inputs are in and whose product has room; its
@@ -91,7 +98,7 @@ function nextRecipe(shop: ShopState, shopDef: ShopDef, def: StationDef, station:
       if (at < 0) return false;
       queue.splice(at, 1);
     }
-    return count(station.output, r.out) < SHOP_STORAGE;
+    return count(station.output, r.out) < shopStorage(shop);
   });
   const first = shopStudied(shop, 'craftOrder') ? shop.priority[def.id] : null;
   const preferred = first && ready.find((r) => r.out === first);
@@ -118,7 +125,7 @@ function runStation(shop: ShopState, shopDef: ShopDef, def: StationDef, dt: numb
     left -= step;
     if (work.progress < work.ms) return;
     // Done: it waits on the station while its pallet is full.
-    if (count(station.output, work.out) >= SHOP_STORAGE) return;
+    if (count(station.output, work.out) >= shopStorage(shop)) return;
     station.output.push(work.out);
     station.work = null;
   }
@@ -127,9 +134,9 @@ function runStation(shop: ShopState, shopDef: ShopDef, def: StationDef, dt: numb
 /** Takes one good for a route from its source, or null when there is nothing it can carry. */
 function takeForRoute(shop: ShopState, def: ShopDef, route: RouteDef): GoodId | null {
   const accepts = (good: GoodId) => {
-    if (route.to === 'shelf') return sellsGood(def, good) && count(shop.shelf, good) + inFlight(shop, def, 'shelf', good) < SHOP_STORAGE;
+    if (route.to === 'shelf') return sellsGood(def, good) && count(shop.shelf, good) + inFlight(shop, def, 'shelf', good) < shopStorage(shop);
     const station = def.stations.find((s) => s.id === (route.to as { station: string }).station)!;
-    return takes(station, good) && count(shop.stations[station.id].queue, good) + inFlight(shop, def, route.to, good) < SHOP_STORAGE;
+    return takes(station, good) && count(shop.stations[station.id].queue, good) + inFlight(shop, def, route.to, good) < shopStorage(shop);
   };
   if ('garden' in route.from) {
     const garden = def.gardens[route.from.garden];
@@ -154,7 +161,7 @@ function takeForRoute(shop: ShopState, def: ShopDef, route: RouteDef): GoodId | 
 function runRoute(id: ShopId, shop: ShopState, def: ShopDef, route: RouteDef, dt: number) {
   const state = shop.routes[route.id];
   if (!state.built) return;
-  const ms = routeMs(id, route, ROUTE_SPEED);
+  const ms = routeMs(id, route, shopRouteSpeed(shop));
   for (const item of state.items) item.at = Math.min(ms, item.at + dt);
   // Goods at the end land on their station's queue or the shelf, or wait there for room.
   state.items = state.items.filter((item) => {
@@ -176,7 +183,7 @@ function runRoute(id: ShopId, shop: ShopState, def: ShopDef, route: RouteDef, dt
 
 /** What a customer pays for a good now: its price, the counter's level and the shelf's sign. */
 export const shopPrice = (shop: ShopState, def: ShopDef, good: GoodId) =>
-  Math.round((def.sells[good] ?? 0) * (1 + COUNTER_PAY * shop.counter.level.level) * SIGN_PAY[shopSignOf(shop, good)]);
+  Math.round((def.sells[good] ?? 0) * (1 + COUNTER_PAY * shop.counter.level.level) * shopPriceBoost(shop) * SIGN_PAY[shopSignOf(shop, good)]);
 
 /** The orders at the counter, walked in and waiting. */
 export const arrived = (shop: ShopState) => shop.orders.filter((o) => o.walk <= 0);
@@ -224,7 +231,7 @@ function runOrders(shop: ShopState, def: ShopDef, dt: number, rand: () => number
   shop.nextOrderIn -= dt;
   if (shop.nextOrderIn > 0) return;
   const taken = new Set(shop.orders.map((o) => o.spot));
-  const spot = [...Array(SHOP_PLACES).keys()].find((s) => !taken.has(s));
+  const spot = [...Array(shopPlaces(shop)).keys()].find((s) => !taken.has(s));
   if (spot === undefined) {
     shop.nextOrderIn = 1_000;
     return;
@@ -236,7 +243,7 @@ function runOrders(shop: ShopState, def: ShopDef, dt: number, rand: () => number
   const pay = Object.fromEntries(wants.map((w) => [w, shopPrice(shop, def, w)]));
   const patience = SHOP_PATIENCE * byDifficulty(1.5, 1, 0.7);
   shop.orders.push({ id: shop.nextOrderId++, wants, pay, walk: WALK_IN_MS, patience, maxPatience: patience, face: Math.floor(rand() * CUSTOMER_FACES), spot });
-  shop.nextOrderIn = 7_000 + rand() * 5_000;
+  shop.nextOrderIn = (7_000 + rand() * 5_000) / shopFootfall(shop);
 }
 
 /**
@@ -250,7 +257,7 @@ export function tickTown(state: GameState, dt: number, working: Working | null, 
     if (!shop) continue;
     const def = SHOPS[id];
     const here = working?.shop === id ? working.at : null;
-    shop.beds.forEach((grown, b) => gardenOpen(shop, gardenOfBed(b)) && (shop.beds[b] = Math.min(grown + dt, def.gardens[gardenOfBed(b)].grow)));
+    shop.beds.forEach((grown, b) => gardenOpen(shop, gardenOfBed(b)) && (shop.beds[b] = Math.min(grown + dt * shopGrowth(shop), def.gardens[gardenOfBed(b)].grow)));
     for (const station of def.stations) runStation(shop, def, station, dt, here === station.id);
     for (const route of def.routes) runRoute(id, shop, def, route, dt);
     runCounter(shop, dt, here === 'counter');
@@ -273,7 +280,7 @@ function supplyNeed(state: GameState, need: Need): boolean {
       const price = SHOPS[id].sells[need];
       if (!shop || price === undefined || !shop.shelf.includes(need)) continue;
       shop.shelf.splice(shop.shelf.indexOf(need), 1);
-      shop.till += Math.round(price * (1 + COUNTER_PAY * shop.counter.level.level));
+      shop.till += Math.round(price * (1 + COUNTER_PAY * shop.counter.level.level) * shopPriceBoost(shop));
       return true;
     }
     return false;
@@ -485,6 +492,19 @@ export function payRecipe(state: GameState, id: ShopId): Feedback | null {
   const recipes = state.town.shops[id]!.recipes;
   const research = SHOPS[id].research;
   return payLevel(state, recipes, recipeCost(id, recipes.level), research.length, () => t('learned', { potion: goodName(research[recipes.level - 1]) }));
+}
+
+/** Pays towards joining a shop's guild. */
+export function payGuildJoin(state: GameState, id: ShopId): Feedback | null {
+  return payLevel(state, state.town.shops[id]!.guild.join, guildJoinCost(id), 1, () => t('welcomeGuild'));
+}
+
+/** Pays towards a shop guild upgrade's next level, once the guild is joined. */
+export function payGuildUpgrade(state: GameState, id: ShopId, upgrade: ShopGuild): Feedback | null {
+  const guild = state.town.shops[id]!.guild;
+  if (guild.join.level === 0) return null;
+  const u = guild[upgrade];
+  return payLevel(state, u, guildCost(id, upgrade, u.level), SHOP_GUILD_UPGRADES[upgrade].max, () => t('levelUp', { name: t(UPGRADES[upgrade].name), level: u.level + 1 }));
 }
 
 /** Moves a shop station's priority on: none, then each product it makes, and back to none. */

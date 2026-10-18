@@ -1,4 +1,4 @@
-import { BEDS, SHOPS, SHOP_PLACES, type GoodId, type RouteDef, type RouteEnd, type ShopId } from '../game/town';
+import { BEDS, MAX_SHOP_PLACES, SHOPS, SHOP_GUILD, type GoodId, type RouteDef, type RouteEnd, type ShopGuild, type ShopId } from '../game/town';
 
 // Where everything stands in a town shop's yard, worked out from its `ShopDef`: its gardens stacked
 // at the left, its market (the outfitter and the study) right of them, its stations in a row along `LINE_Y`, and the shop at the right, open to the street
@@ -106,9 +106,23 @@ export function counterLayout(id: ShopId) {
     work: { x: cx, y: 452 },
     till: { x: cx + 92, y: 452 },
     counter: { x: cx, y: 530 },
-    place: (spot: number): Point => ({ x: cx + (spot - (SHOP_PLACES - 1) / 2) * 84, y: 606 }),
-    street: (spot: number): Point => ({ x: cx + (spot - (SHOP_PLACES - 1) / 2) * 30, y: SHOP_WORLD_H + 30 }),
+    place: (spot: number): Point => ({ x: cx + (spot - (MAX_SHOP_PLACES - 1) / 2) * 72, y: 606 }),
+    street: (spot: number): Point => ({ x: cx + (spot - (MAX_SHOP_PLACES - 1) / 2) * 30, y: SHOP_WORLD_H + 30 }),
     shopkeeper: { x: cx + 40, y: 508 },
+  };
+}
+
+/**
+ * The guild, under the first two stations: its sign, the marker to join it and, once joined, a
+ * row of its six upgrades.
+ */
+export function guildLayout(id: ShopId) {
+  const cx = (stationX(0) + stationX(Math.min(1, SHOPS[id].stations.length - 1))) / 2;
+  const y = 492;
+  return {
+    sign: { x: cx, y: y - 48 },
+    join: { x: cx, y },
+    upgrade: (u: ShopGuild): Point => ({ x: cx + (SHOP_GUILD.indexOf(u) - (SHOP_GUILD.length - 1) / 2) * 90, y }),
   };
 }
 

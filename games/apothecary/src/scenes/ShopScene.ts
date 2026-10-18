@@ -12,16 +12,16 @@ import { signTexture } from '../art/ui';
 import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick, type Feedback } from '../game/sim';
-import { MAX_CARRY, SIGN_NAMES, carryCapacity, gearLevel, harvestReach, payBoost, payment, walkSpeed, type GameState, type Upgrade } from '../game/state';
+import { MAX_CARRY, SIGN_NAMES, UPGRADES, carryCapacity, gearLevel, harvestReach, payBoost, payment, walkSpeed, type GameState, type Upgrade } from '../game/state';
 import {
   BEDS,
   OPEN_GARDENS,
   MAX_LEVEL,
   MAX_SHOPKEEPERS,
   MAX_WORKERS,
-  ROUTE_SPEED,
   SHOPS,
-  SHOP_STORAGE,
+  SHOP_GUILD,
+  SHOP_GUILD_UPGRADES,
   WALK_IN_MS,
   LESSONS,
   OUTFITTER_GEAR,
@@ -36,6 +36,10 @@ import {
   shopSignOf,
   shopStudied,
   routeCost,
+  guildCost,
+  guildJoinCost,
+  shopRouteSpeed,
+  shopStorage,
   workerCost,
   type GoodId,
   type RouteDef,
@@ -52,6 +56,8 @@ import {
   goodName,
   payLesson,
   payRecipe,
+  payGuildJoin,
+  payGuildUpgrade,
   shopPrice,
   dropAtStation,
   harvestBed,
@@ -69,7 +75,7 @@ import {
 import { t } from '../i18n';
 import { coined } from '../ui/coins';
 import { ProgressBar } from '../ui/ProgressBar';
-import { FENCE_Y, MARKET, SHOP_HUD, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
+import { FENCE_Y, MARKET, SHOP_HUD, guildLayout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
 import { TOWN_HUD_H, TOWN_TEXT, TOWN_UI_DEPTH, keepSaving, leaveFor, townCard, townTopBar } from './townKit';
 
 // A town shop's yard, built from its `ShopDef` the way the apothecary's is laid out by hand: the
@@ -167,6 +173,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.createGardens();
     this.createMarket();
+    this.createGuild();
     this.def.stations.forEach((_, i) => this.createStation(i));
     this.createCounter();
     this.createPixies();
@@ -243,6 +250,23 @@ export class ShopScene extends Phaser.Scene {
     );
   }
 
+
+  /** The guild under the first stations: a marker to join it, then its six upgrades. */
+  private createGuild() {
+    const l = guildLayout(this.id);
+    const guild = () => this.shop.guild;
+    this.sign(l.sign.x, l.sign.y, t('guild'));
+    this.addLevelMarker(l.join, 'guild', () => guild().join, 1, () => guildJoinCost(this.id), () => payGuildJoin(this.state, this.id), (_lv, left) =>
+      t('buildCost', { name: t('joinGuild'), coins: formatNumber(left) }),
+    );
+    for (const id of SHOP_GUILD) {
+      const { max } = SHOP_GUILD_UPGRADES[id];
+      this.addLevelMarker(l.upgrade(id), id, () => guild()[id], max, (lv) => guildCost(this.id, id, lv), () => payGuildUpgrade(this.state, this.id, id), (lv, left) =>
+        t('levelCost', { name: t(UPGRADES[id].name), level: lv + 2, coins: formatNumber(left) }),
+        () => guild().join.level === 0,
+      );
+    }
+  }
 
   /** A small tappable sign; a tap calls `tap` and doesn't walk the doctor. Shown while `shown` holds. */
   private addTapSign(at: Point, w: number, tap: () => Feedback | null, shown: () => boolean) {
@@ -323,7 +347,7 @@ export class ShopScene extends Phaser.Scene {
     this.views.push(() => {
       const n = list().filter((g) => g === good).length;
       icon.setAlpha(n > 0 ? 1 : 0.4).setVisible(shown());
-      text.setText(`${n}/${SHOP_STORAGE}`).setVisible(shown());
+      text.setText(`${n}/${shopStorage(this.shop)}`).setVisible(shown());
     });
   }
 
@@ -412,14 +436,14 @@ export class ShopScene extends Phaser.Scene {
       }
       return pool[i];
     };
-    const paths = this.def.routes.map((r) => ({ route: r, path: routePath(this.id, r), ms: 0 }));
-    for (const p of paths) {
-      const [a, b] = p.path;
-      p.ms = (Math.hypot(b.x - a.x, b.y - a.y) / ROUTE_SPEED) * 1000;
-    }
+    const paths = this.def.routes.map((r) => {
+      const path = routePath(this.id, r);
+      return { route: r, path, length: Math.hypot(path[1].x - path[0].x, path[1].y - path[0].y) };
+    });
     this.views.push(() => {
       let n = 0;
-      for (const { route, path, ms } of paths) {
+      for (const { route, path, length } of paths) {
+        const ms = (length / shopRouteSpeed(this.shop)) * 1000;
         for (const item of this.shop.routes[route.id].items) {
           const k = Math.min(1, item.at / ms);
           const x = path[0].x + (path[1].x - path[0].x) * k;
@@ -505,8 +529,9 @@ export class ShopScene extends Phaser.Scene {
     cost: (level: number) => number,
     pay: () => Feedback | null,
     caption: (level: number, left: number) => string,
+    locked: () => boolean = () => false,
   ) {
-    const open = () => get().level < max;
+    const open = () => get().level < max && !locked();
     this.addMarker(
       at,
       upgradePad(icon),
