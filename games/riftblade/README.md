@@ -174,7 +174,7 @@ two or three nodes on the star map (tap it or press its number):
 - **Rest**: heal half your max health.
 - **Event**: a choice with a twist, one of: a **stranded bot** (take it along as a turret drone
   for the next world, or strip it for 20 credits), a **derelict cache** (40 credits, or a random
-  gear piece for 15% of your max health), a **shrine of the Current** (give a tier of one ability
+  gear piece for 15% of your max health; with no gear left to give, 40 credits at no cost), a **shrine of the Current** (give a tier of one ability
   for two tiers of another) or a **lumen well** (a free level-up, or 25 credits).
 
 Then the next world begins. Credits come from elites (6 each), the bosses (30) and each world

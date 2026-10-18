@@ -236,6 +236,8 @@ export class SoundCues {
     }
     if (s.phase === 'run' && was !== 'run' && was !== 'select' && was !== 'levelup') play('warp');
     else if (s.phase === 'run' && s.planet !== this.planet) play('warp');
+    // The clock restarts on each planet, so a wave's tense music from the last one ends here.
+    if (s.planet !== this.planet) this.tenseUntil = 0;
     this.phase = s.phase;
     this.planet = s.planet;
     this.arena = s.arena;

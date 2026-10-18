@@ -9,7 +9,7 @@ import { t as tr } from '../i18n';
 import { HEROES } from './heroes';
 import { at } from './upgrades';
 import { botCount, botMax, type Ally, type Bullet, type Bot, type Enemy, type GameState } from './state';
-import { addBomb, bolt, damage, explode, heal, knock, near, nearest, pop, ready, stats, swarmSpot, volley } from './sim';
+import { HURT_GRACE_MS, addBomb, bolt, damage, explode, heal, knock, near, nearest, pop, ready, stats, swarmSpot, volley } from './sim';
 
 const rank = (s: GameState, id: string) => s.ranks[id] ?? 0;
 const cap = (s: GameState, id: string) => s.capstones.includes(id);
@@ -115,7 +115,7 @@ export function squadHurt(s: GameState, taken: number, x?: number, y?: number) {
   if (s.hero !== 'triad') return false;
   hurtBots(s, taken, x, y);
   s.damageTaken += taken;
-  s.player.hurtMs = 450;
+  s.player.hurtMs = HURT_GRACE_MS;
   if (!alive(s).length) {
     s.player.hp = 0;
     s.phase = 'lost';

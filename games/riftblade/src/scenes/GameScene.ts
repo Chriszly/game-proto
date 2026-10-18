@@ -21,7 +21,7 @@ import { SoundCues } from '../audio/cues';
 import { sfx } from '../audio/sfx';
 import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader, unlockPanel } from '../ui/panels';
 import {
-  BOSS_BAR, CENTER, CREDITS_TAG, OBJECTIVE_HUD, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, SCREEN, FRAME, XP_BAR, fitLayout, inside,
+  BOSS_BAR, CENTER, CREDITS_TAG, OBJECTIVE_HUD, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, SCREEN, FRAME, VIEW, XP_BAR, fitLayout, inside,
 } from './layout';
 
 /** A pool of images for one kind of thing on the field, reused frame to frame. */
@@ -286,7 +286,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     ui('click');
-    startRun(this.state, id, unlockedHeroes(this.progress));
+    startRun(this.state, id, unlockedHeroes(this.progress), (Math.hypot(SCREEN.w, SCREEN.h) - Math.hypot(VIEW.w, VIEW.h)) / 2);
     this.savedDeeds = 0;
     this.recorded = false;
     this.hero.setTexture(heroKey(id)).setVisible(true);
@@ -347,7 +347,8 @@ export class GameScene extends Phaser.Scene {
       const asked = s.phase === 'run' && this.sigQueued;
       const used = s.signatures;
       frame(s, delta, { ...move, signature: asked });
-      if (s.phase === 'run') this.sigQueued = false;
+      // A press the sim could not take (a level-up or a panel) is dropped, not saved for later.
+      this.sigQueued = false;
       // The signature still cooling down (or a knight's with nothing to act on).
       if (asked && s.signatures === used) ui('refuse');
     }
@@ -763,7 +764,7 @@ export class GameScene extends Phaser.Scene {
     for (const b of s.bullets) {
       if (b.spin) {
         // A thrown blade spins as it flies.
-        bo.next(bladeKey(b.color as HeroId), b.x, b.y).setRotation(s.time / 45);
+        bo.next(bladeKey(b.color as HeroId), b.x, b.y).setRotation(still ? Math.atan2(b.vy, b.vx) : s.time / 45);
         continue;
       }
       const im = bo.next(`rb-bolt-${b.color}`, b.x, b.y);
@@ -1062,10 +1063,5 @@ export class GameScene extends Phaser.Scene {
     const [x3, y3] = tip(10, -2.4);
     g.fillStyle(0x070b16, 0.6).fillCircle(ax, ay, 16);
     g.fillStyle(OBJ_COLOR, 0.95).fillTriangle(x1, y1, x2, y2, x3, y3);
-  }
-
-  /** The hero's position on screen (always the middle of the view), for the test. */
-  get heroOnScreen() {
-    return { ...CENTER };
   }
 }
