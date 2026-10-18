@@ -546,7 +546,9 @@ export class GameScene extends Phaser.Scene {
       this.musicPart = part;
       playMusic(SONG, part);
     }
-    if (s.wind !== this.lastWind && s.wind !== 0 && playing) sfx('gust');
+    // Only while stacking: the next stone's wind is rolled as a break opens, and must still gust when play resumes.
+    if (!playing) return;
+    if (s.wind !== this.lastWind && s.wind !== 0) sfx('gust');
     this.lastWind = s.wind;
   }
 
@@ -593,8 +595,8 @@ export class GameScene extends Phaser.Scene {
   private show(e: GameEvent) {
     const s = this.state;
     if (e.type === 'placed') {
-      const i = s.stones.length - 1;
-      const stone = s.stones[i];
+      // Drawn from the event: a topple may already have taken the stone off `s.stones`.
+      const { stone, row: i } = e;
       const g = this.add.graphics().setDepth(3).setPosition(stone.x, this.worldY(i * STONE_H));
       drawStone(g, stone.w, stone.tier, stone.perfect, stone.kind, stone.material);
       this.stoneViews.push(g);
@@ -607,7 +609,7 @@ export class GameScene extends Phaser.Scene {
     } else if (e.type === 'missed') {
       sfx(e.drop.caught ? 'saved' : 'crash');
       if (s.phase === 'over') playSting(SONG, 'fall');
-      this.debris(e.drop.x, this.worldY(stackHeight(s)), e.drop.w, s.tier, s.moving.kind, s.moving.material);
+      this.debris(e.drop.x, this.worldY(stackHeight(s)), e.drop.w, e.tier, e.kind, e.material);
       this.cameras.main.shake(200, 0.006);
       if (e.drop.caught) this.announce([t('graceName'), t('caught')]);
       if (s.phase === 'over') saveBest(s.best);
@@ -653,7 +655,7 @@ export class GameScene extends Phaser.Scene {
       if (s.phase !== 'crowned') sfx(e.balanced ? 'chime' : 'meh');
       if (s.phase === 'crowned') this.crownTemple();
       // A break between tiers says so itself; only a wobbly tier with nothing to buy goes straight on.
-      else if (s.phase !== 'blessing') this.announce([`Tier ${e.tier} is wobbly`, e.tier + 1 === GILDED_TIER ? `Tier ${GILDED_TIER} is gilded: x${GILDED_MULT} favor` : 'No blessing this time']);
+      else if (s.phase !== 'blessing') this.announce([t('wobbly', { tier: e.tier })]);
       saveBest(s.best);
     }
   }
