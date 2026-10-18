@@ -1,7 +1,7 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { commissionAt, grandOf, offered, type Commission } from './commissions';
 import { edictRule, edictsFor, PERKS, type Edict, type Perk } from './charter';
-import { GEM, MASTER, combine, isGem, isGemmed, isShield, isSword, shield, sword, tierOf } from './items';
+import { GEM, MASTER, combine, isGemmed, isShield, isSword, shield, sword, tierOf } from './items';
 import { SHIELD_TOP } from './shields';
 import {
   BARREL,
@@ -174,7 +174,8 @@ function comeBack(s: GameState, hero: Returning) {
  * anvil, if the forge is hot and there is room.
  */
 export function forge(s: GameState) {
-  if (s.heatMs > 0) return false;
+  // A new charter forges nothing until its edict is chosen.
+  if (s.heatMs > 0 || edictOffers(s)) return false;
   const slot = s.slots.indexOf(null);
   if (slot < 0) return false;
   const tier = Math.random() < oreChance(s) ? 2 : 1;
@@ -214,7 +215,7 @@ function put(s: GameState, place: number, item: number | null) {
   }
 }
 /** Whether a place exists in this smithy: a bought anvil, or the bought barrel. */
-const placeable = (s: GameState, place: number) => (place === BARREL ? s.ranks.barrel > 0 : place >= 0 && place < s.slots.length && place < MAX_SLOTS);
+const placeable = (s: GameState, place: number) => (place === BARREL ? s.ranks.barrel > 0 : place >= 0 && place < s.slots.length);
 
 /**
  * Drops what lies at `from` onto `to` (an anvil or the barrel): onto an empty place it moves, onto
@@ -288,8 +289,7 @@ export function chooseCommission(s: GameState, grand: boolean) {
  */
 export function deliverable(s: GameState, item: number | null) {
   const c = standing(s);
-  if (!c || s.choosing || item === null || isGem(item)) return false;
-  if (!isSword(item)) return false;
+  if (!c || s.choosing || item === null || !isSword(item)) return false;
   const tier = tierOf(item);
   if (tier === MAX_TIER && c.tier !== MAX_TIER) return true;
   return tier === c.tier && (!c.gem || isGemmed(item));

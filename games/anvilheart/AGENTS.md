@@ -118,7 +118,8 @@ Implemented today:
   `returned` true, the sword on the first empty anvil, the trophy paid, a `returned` event). A
   battered sword (`isBattered`, textures `sword-<tier>[-gem]-worn`, dull glass with notches)
   merges and sells as its tier; `combine` repairs it with a Rusty Dagger either way round
-  (`repaired`), which `drop` pays `repairPay` (a fifth of its price) and pushes `repaired`. The
+  (`repaired`; a gemmed dagger passes its gem on, and does not repair a sword that already has
+  one), which `drop` pays `repairPay` (a fifth of its price) and pushes `repaired`. The
   card's trait line reads "Back from the quest" for a returned hero with no trait.
 - Guild reputation (`reputation`, 0 to `REP_MAX` 100, starting at `REP_START` 50): an exact-fit
   sale adds `REP_EXACT` (5), a walk-off takes `REP_WALKOFF` (10). `visitorEveryMs` (6s at 50, 3s at
@@ -167,8 +168,8 @@ Missing or rough:
 - "New smithy" resets at once with no confirmation, and the saved key is only rewritten on the
   next action.
 - Saved `coins`, `sold`, `bestTier` and `ranks` are trusted as loaded; only `slots`, `idle`,
-  `barrel`, `commission`, `choosing`, `stars`, `charter`, `reputation` and `won` are checked (in
-  `newShop`).
+  `barrel`, `commission`, `choosing`, `stars`, `charter`, `reputation`, `won`, `autoForge`,
+  `shieldMode`, `bestShield` (clamped), `perks` and `edict` are checked (in `newShop`).
 - The banner text is small (8 to 13px) to fit the top bar.
 
 ## Architecture
@@ -264,19 +265,26 @@ How it runs:
 - Tick: `GameScene.update(time)` takes `dt` from the frame timestamp (clamped to `MAX_STEP_MS`,
   250ms), adds it to `clock`, and calls `tick(state, dt)`, which cools the forge, forges when
   `autoForging`, drains the hammer streak and patience (a walk-off costs reputation), rusts idle
-  swords, brings heroes back and brings adventurers. If that pushed a `forged` event the scene
-  saves. Then it draws (`drawChooser` last, which hides the offer window once a choice is made).
+  swords, brings heroes back and brings adventurers. If that (or the Forge button since the last
+  frame) pushed a `forged`, `rusted`, `returned` or `left` event the scene saves. Then it draws,
+  ending with `drawChooser` (which hides the offer window once a choice is made), `drawEdicts` and
+  `playPart`.
 - Input: pointers are read through `pointer.worldX/worldY` (game pixels; `pointer.x/y` are canvas
   pixels once `setupScaling` runs). Scene `pointerdown` picks up a sword or gem from an anvil or the barrel (`pickUp`; on an
   unbought barrel it buys it), `pointermove` moves the held sprite, `pointerup` calls `putDown`,
   which calls `drop` if over an anvil or the barrel, `deliver` if over the banner, or `sell` if over
-  a desk with an adventurer. `gameout` puts the sword back. Pick-ups and buys are ignored while a
-  window shows (`windowOpen`: the win or the offer window). A `pointerdown` on the banner with
+  a desk with an adventurer. `gameout` and the scene's `pause` (the shared pause screen, whose
+  `pointerup` never arrives) put the sword back. A press on an interactive object (a button or
+  link) never reaches `pickUp`, so a window button that closes its window can't pick up the sword
+  under it. Forging, pick-ups and buys are ignored while a window shows (`windowOpen`: the win,
+  offer, perk or edict window), and `forge` in the sim also refuses while a new charter's edict
+  waits. A `pointerdown` on the banner with
   nothing under it opens the offer window while `choosing`, or the win window once `won`. Forge
   and upgrade buttons call `forge` and `buy`; a
   bought Auto Forge's button calls `toggleAutoForge` instead. The offer window's buttons call
   `chooseCommission`, the win window's second button `foundCharter` (then `clearBoard` throws the
-  sprites away, as "New smithy" does). Each successful action calls `save()`.
+  sprites away, as "New smithy" does). Each successful action calls `save()` (a forge is saved by
+  `update`, on its `forged` event).
 - Rendering is mixed. Sword sprites (`swords[]`, one per anvil up to `MAX_SLOTS`, drawn at
   `CELL_SCALE`, and `barrelSword`, all kept by `drawItem`) and visitor containers (`visitors`,
   keyed by adventurer id, each with its hidden fit `tag`) are diffed against state. The `marks`
@@ -293,9 +301,9 @@ State model (`src/game/state.ts`):
 
 - `GameState.slots` is `SLOTS` (16) entries, or `MAX_SLOTS` (20) once `ranks.row` is 1, each an
   item number or `null`, numbered row by row from the top left. An item is a sword tier (1 to
-  `MAX_TIER`), `GEM` (-1) or a sword with flags added: `SET` (100) for a gem, `BATTERED` (200)
-  for a hero's returned sword, or both (300); use the `items.ts` helpers, never compare raw
-  numbers. `idle` has one entry per slot. `barrel` holds one item or null. A "place" is an anvil
+  `MAX_TIER`), `GEM` (-1), a sword with flags added (`SET` (100) for a gem, `BATTERED` (200)
+  for a hero's returned sword, `MASTER` (400) for a Masterwork, in any mix) or a buckler (`SHIELD`
+  plus its tier, 1001 to 1005); use the `items.ts` helpers, never compare raw numbers. `idle` has one entry per slot. `barrel` holds one item or null. A "place" is an anvil
   index or `BARREL`.
 - `adventurers` holds at most `desksOf` (3, or 4 with the perk); each has a unique `desk`, `wants`
   (minimum tier), `gem` (wants it gemmed), `trait`, `shield` (0, or the least buckler of a set
@@ -372,7 +380,7 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
   from `shared/settings.ts`, and then by the reputation's `patienceFactor`. The base constants in
   `src/game/state.ts` are unchanged.
 - Reduced motion: `GameScene.drawEvents` skips the halo flash on a merge when
-  `settings.reduceMotion` is on. With it on, `drawMarks` also holds the pulsing frames on the
+  `settings.reduceMotion` is on, and `commissionDone` skips the banner's halo. With it on, `drawMarks` also holds the pulsing frames on the
   matching swords and desks at full alpha, `drawForge` holds the furnace on its `furnace-0` frame
   instead of flickering, `hammerStreak` shows the burst still and fading with no flying sparks,
   and `commissionDone` does not pulse the banner. The pop tween on the merged sword, the draining
@@ -571,8 +579,8 @@ Effects (`sfx`, plus the shared `ui`):
   anvils are drawn at `CELL_SCALE`.
 - Dropping on a desk with nobody there does nothing; the sword returns to its slot.
 - Visitor containers are built once in `makeVisitor` and never refreshed; anything about an
-  adventurer that changes over time must be drawn in `drawMarks` (like the patience bar and the
-  fit tag).
+  adventurer that changes over time must be drawn in `drawMarks` (like the patience bar, the fit
+  tag and the order card's price, which drops when guild stars are spent).
 - The streak bonus and the commission reward are paid inside `drop`, so a merge's coins land
   before the scene draws; `sold` events carry the `fit` for the floating text.
 - The discovered row reads `bestTier`, so it shows every tier up to the best one made, even a
