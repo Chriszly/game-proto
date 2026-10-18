@@ -2,12 +2,12 @@ import Phaser from 'phaser';
 import { formatNumber } from '../../../../shared/i18n';
 import { playMusic, ui } from '../../../../shared/audio';
 import { viewSize } from '../../../../shared/scaling';
+import { settings } from '../../../../shared/settings';
 import { SONG, sfx } from '../audio';
 import { INK, PAPER, PAPER_NUM, SERIF, WASH, fit } from '../art/paint';
 import { itemTexture } from '../art/items';
 import { goodTexture, lotTexture } from '../art/town';
 import { DISTRICTS, HOME_TIERS, districtFull, townIsCity, type Need } from '../game/districts';
-import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick } from '../game/sim';
 import type { GameState } from '../game/state';
@@ -44,8 +44,8 @@ export class TownScene extends Phaser.Scene {
   }
 
   create() {
+    // Entered only through `leaveFor`, which saved a moment ago, so there is no time away to catch up on.
     this.state = loadState();
-    catchUp(this.state, Date.now());
     this.views = [];
     const { width, height } = viewSize(this);
     this.add.rectangle(0, 0, width, height, PAPER_NUM).setOrigin(0);
@@ -105,7 +105,7 @@ export class TownScene extends Phaser.Scene {
       });
     }
     const status = coined(this.add.text(left, y + this.lot.h / 2 - 32, '', { ...NOTE, fontStyle: 'bold', color: '#5a2c80' }));
-    card.on('pointerdown', () => this.tapLot(lot, card));
+    card.on('pointerdown', () => this.tapLot(lot, card, x));
     this.views.push(() => {
       if (lot === 'apothecary') return status.setText(t('walkIn'));
       const shop = this.state.town.shops[lot];
@@ -184,7 +184,8 @@ export class TownScene extends Phaser.Scene {
     }
   }
 
-  private tapLot(lot: Lot, card: Phaser.GameObjects.Image) {
+  /** `homeX` is where the card sits, so a shake started during another one still ends there. */
+  private tapLot(lot: Lot, card: Phaser.GameObjects.Image, homeX: number) {
     if (lot === 'apothecary' || this.state.town.shops[lot]) {
       ui('click');
       this.enter(lot);
@@ -193,7 +194,9 @@ export class TownScene extends Phaser.Scene {
     const bought = buyShop(this.state, lot);
     if (!bought) {
       ui('refuse');
-      this.tweens.add({ targets: card, x: card.x + 4, duration: 50, yoyo: true, repeat: 2 });
+      this.tweens.killTweensOf(card);
+      card.x = homeX;
+      if (!settings.reduceMotion) this.tweens.add({ targets: card, x: homeX + 4, duration: 50, yoyo: true, repeat: 2 });
       return;
     }
     sfx('upgrade');

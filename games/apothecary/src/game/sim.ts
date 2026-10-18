@@ -618,7 +618,7 @@ function serveCustomers(state: GameState, dt: number, workingAt: StationId | nul
     if (workingAt === 'counter') serveFromShelf(state, atCounter);
     return;
   }
-  if (!state.orders.some((o) => atCounter(o) && o.wants.some((want) => counter.shelf.includes(want)))) {
+  if (!state.orders.some((o) => atCounter(o) && o.wants.some((want) => counter.shelf.some((p) => plainOf(p) === want)))) {
     counter.serving = 0;
     return;
   }
@@ -937,7 +937,6 @@ export function payBelt(state: GameState, id: BeltId): Feedback | null {
   return loaded.length > 0 ? [...feedback, t('toPixies', { n: loaded.length })] : feedback;
 }
 
-/** Drops everything the doctor carries; the goods are gone. */
 /** Throws away the `i`th thing the doctor carries (bottom first), for goods that are no longer needed. */
 export function dropItem(state: GameState, i: number): Feedback | null {
   const [item] = state.carrying.splice(i, 1);

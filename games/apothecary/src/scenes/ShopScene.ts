@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { formatNumber } from '../../../../shared/i18n';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { scrollingCamera, splitHudCamera, viewPoint, viewSize } from '../../../../shared/scaling';
+import { settings } from '../../../../shared/settings';
 import { SONG, sfx } from '../audio';
 import { pickUpPad, upgradePad, type UpgradeIcon } from '../art/markers';
 import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
@@ -9,7 +10,6 @@ import { PIXIE_FRAMES } from '../art/pixies';
 import { bakeYard, bedTexture, goodTexture, yardTexture } from '../art/town';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
-import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick, type Feedback } from '../game/sim';
 import { FINE_SHARE, MAX_CARRY, SIGN_NAMES, UPGRADES, carryCapacity, gearLevel, harvestReach, payBoost, payment, walkSpeed, type GameState, type Upgrade } from '../game/state';
@@ -161,8 +161,8 @@ export class ShopScene extends Phaser.Scene {
   }
 
   create(data: { shop: ShopId }) {
+    // Entered only through `leaveFor`, which saved a moment ago, so there is no time away to catch up on.
     this.state = loadState();
-    catchUp(this.state, Date.now());
     this.id = data.shop;
     this.def = SHOPS[this.id];
     this.markers = [];
@@ -405,7 +405,7 @@ export class ShopScene extends Phaser.Scene {
       const price = coined(this.add.text(at.x, at.y + 52, t('coinPrice', { n: this.def.sells[good]! }), { ...COUNT, fontSize: '11px' }).setOrigin(0.5, 0).setDepth(at.y));
       const icon = fit(this.add.image(at.x, at.y - 8, goodTexture(good)), 1.5).setDepth(at.y + 1);
       this.views.push(() => {
-        price.setText(t('coinPrice', { n: this.payFor(good) })).setVisible(known());
+        price.setText(t('coinPrice', { n: shopPrice(this.shop, this.def, good) })).setVisible(known());
         icon.setVisible(known());
       });
       // Its price sign: Cheap, Fair or Dear, once the study has taught them.
@@ -436,11 +436,6 @@ export class ShopScene extends Phaser.Scene {
     );
     const keeper = fit(this.add.image(l.shopkeeper.x, l.shopkeeper.y, craftsmanTexture(1)).setOrigin(0.5, 1).setDepth(l.shopkeeper.y));
     this.views.push(() => keeper.setVisible(c().hired.level > 0));
-  }
-
-  /** What a customer pays for a good now, counter level and price sign included. */
-  private payFor(good: GoodId) {
-    return shopPrice(this.shop, this.def, good);
   }
 
   private addRouteMarker(at: Point, route: RouteDef, locked: () => boolean = () => false) {
@@ -489,9 +484,12 @@ export class ShopScene extends Phaser.Scene {
         for (const item of this.shop.routes[route.id].items) {
           const k = Math.min(1, item.at / ms);
           const x = path[0].x + (path[1].x - path[0].x) * k;
-          const y = path[0].y + (path[1].y - path[0].y) * k - Math.sin(k * Math.PI) * 18 + Math.sin(this.time.now / 160 + n) * 2;
+          // Wings beat and the pixie bobs as it flies; with reduced motion it glides.
+          const bob = settings.reduceMotion ? 0 : Math.sin(this.time.now / 160 + n) * 2;
+          const y = path[0].y + (path[1].y - path[0].y) * k - Math.sin(k * Math.PI) * 18 + bob;
           const { pixie, good } = get(n++);
-          pixie.setVisible(true).setPosition(x, y).setTexture(PIXIE_FRAMES[Math.floor(this.time.now / 120 + n) % 2]).setFlipX(path[1].x < path[0].x);
+          const beat = settings.reduceMotion ? 0 : Math.floor(this.time.now / 120 + n) % 2;
+          pixie.setVisible(true).setPosition(x, y).setTexture(PIXIE_FRAMES[beat]).setFlipX(path[1].x < path[0].x);
           fit(pixie);
           good.setVisible(true).setPosition(x, y + 12).setTexture(goodTexture(item.good));
           fit(good);
@@ -513,7 +511,7 @@ export class ShopScene extends Phaser.Scene {
       for (const [id, c] of shown) {
         if (orders.some((o) => o.id === id)) continue;
         for (const part of [c.body, c.bubble, ...c.icons]) part.destroy();
-        c.bar.set(null);
+        c.bar.destroy();
         shown.delete(id);
       }
       for (const order of orders) {
