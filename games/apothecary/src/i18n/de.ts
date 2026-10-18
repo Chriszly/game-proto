@@ -250,6 +250,19 @@ const de: Translation<typeof en> = {
   districtSteady: 'Kommt zurecht',
   districtFull: 'Voll ausgebaut',
   districtLocked: 'Öffnet, sobald {district} Häuser hat',
+  chandlery: 'Kerzenzieherei',
+  chandleryMakes: 'Kerzen und Stabkerzen',
+  flaxField: 'Flachsfeld',
+  press: 'Wachspresse',
+  wheel: 'Spinnrad',
+  vat: 'Tauchbottich',
+  flax: 'Flachs',
+  wax: 'Bienenwachs',
+  wick: 'Docht',
+  candle: 'Kerze',
+  taper: 'Stabkerze',
+  chandler: 'Kerzenzieher',
+  manorCount: { one: '{n} Gutshaus', other: '{n} Gutshäuser' },
 };
 
 /** Texts that read the same in German. */

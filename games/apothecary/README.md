@@ -374,9 +374,22 @@ through its district's list, and takes it off the shelf of the shop that sells i
 apothecary's shelves), paying the shelf price into that shop's till. Happiness moves halfway towards
 the share it got. Four rounds in a row at 80% or more add a home, up to eight; once full, its
 cottages grow into houses, which want honey cake and Sleeping Tonics as well as bread and Healing
-Draughts. Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
-the town; Riverside opens once Market Row has houses, and Hilltop once Riverside has. The coming
-shops' goods will be what manors ask for.
+Draughts. A full district of houses grows into manors, which also want candles and tapers from the
+chandlery. Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
+the town; Riverside opens once Market Row has houses, and Hilltop once Riverside has.
+
+The second shop is the **chandlery** (10,000 coins). Its beehives give honeycomb, pressed into
+beeswax at the wax press, and its flax field gives flax, spun into wicks at the spinning wheel. The
+dipping vat makes a candle from a beeswax and a wick (72 coins) or a taper from two beeswax and a
+wick (117). Its prices are three times the bakery's:
+
+| Chandlery | Cost |
+| --- | --- |
+| Station or counter level | 180, 360, 720, 1,440 |
+| Chandler (2 per station) or shopkeeper (1) | 270, then 540 |
+| Pixies: hives to press, flax to wheel, press to vat, wheel to vat, vat to the shelves | 540, 540, 900, 900, 1,350 |
+
+![The chandlery's dipping vat and shop](docs/screenshots/chandlery.webp)
 
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 

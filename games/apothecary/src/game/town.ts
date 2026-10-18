@@ -9,7 +9,7 @@ import type { Upgrade } from './state';
 // as the shop before's, while its goods sell for about as much more. Phaser-free, like `state.ts`.
 
 /** What a town shop grows, makes and sells. The apothecary's wheat and flour are painted the same. */
-export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake';
+export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper';
 
 export const GOODS: Record<GoodId, { color: number }> = {
   wheat: { color: 0xd9b24a },
@@ -17,10 +17,15 @@ export const GOODS: Record<GoodId, { color: number }> = {
   flour: { color: 0xf1e8d0 },
   bread: { color: 0xb8783a },
   honeyCake: { color: 0xd8944a },
+  flax: { color: 0x7a8fc8 },
+  wax: { color: 0xe8d070 },
+  wick: { color: 0xe8e0c8 },
+  candle: { color: 0xf0e2a8 },
+  taper: { color: 0xf4e8c0 },
 };
 
 /** The shops on the town map besides the apothecary, in the order they are bought. */
-export type ShopId = 'bakery';
+export type ShopId = 'bakery' | 'chandlery';
 
 export interface Recipe {
   inputs: GoodId[];
@@ -101,6 +106,38 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     ],
     sells: { bread: 24, honeyCake: 39 },
     worker: 'baker',
+  },
+  chandlery: {
+    id: 'chandlery',
+    name: 'chandlery',
+    makes: 'chandleryMakes',
+    tier: 2,
+    gardens: [
+      { good: 'honeycomb', grow: 30_000, name: 'beehives' },
+      { good: 'flax', grow: 26_000, name: 'flaxField' },
+    ],
+    stations: [
+      { id: 'press', name: 'press', texture: 'press', recipes: [{ inputs: ['honeycomb'], out: 'wax', ms: 3_000 }] },
+      { id: 'wheel', name: 'wheel', texture: 'wheel', recipes: [{ inputs: ['flax'], out: 'wick', ms: 2_500 }] },
+      {
+        id: 'vat',
+        name: 'vat',
+        texture: 'vat',
+        recipes: [
+          { inputs: ['wax', 'wick'], out: 'candle', ms: 5_000 },
+          { inputs: ['wax', 'wax', 'wick'], out: 'taper', ms: 7_000 },
+        ],
+      },
+    ],
+    routes: [
+      { id: 'hives', from: { garden: 0 }, to: { station: 'press' }, cost: 60 },
+      { id: 'flax', from: { garden: 1 }, to: { station: 'wheel' }, cost: 60 },
+      { id: 'press', from: { station: 'press' }, to: { station: 'vat' }, cost: 100 },
+      { id: 'wheel', from: { station: 'wheel' }, to: { station: 'vat' }, cost: 100 },
+      { id: 'vat', from: { station: 'vat' }, to: 'shelf', cost: 150 },
+    ],
+    sells: { candle: 72, taper: 117 },
+    worker: 'chandler',
   },
 };
 export const SHOP_IDS = Object.keys(SHOPS) as ShopId[];
