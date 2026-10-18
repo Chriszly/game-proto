@@ -8,8 +8,6 @@ import type { RelicId } from './relics';
 // Everything about a run, as plain data: the hero, the deck, where on the map they are, and the
 // fight in progress. The playthrough test reads it through `window.game`.
 
-/** The Knight's health; the heroes' own are in `heroes.ts`. */
-export const MAX_HP = 50;
 export const ENERGY = 3;
 export const HAND_SIZE = 5;
 /** Resting at a campfire heals this share of the hero's health. */
@@ -129,6 +127,10 @@ export interface Fight {
   powers: CardId[];
   /** How many cards the hero has played this turn (Doubt makes the first dearer). */
   played: number;
+  /** How many cards have been drawn this fight (the draw sound listens to it). */
+  drawn: number;
+  /** Whether the hero was Vulnerable when the turn ended: Vulnerable put on during the foes' turn starts wearing off the round after. */
+  wasVulnerable: boolean;
   /** The gold the foes leave behind once they all fall. */
   gold: number;
 }

@@ -23,7 +23,7 @@ export class Cues {
   private lastPop: number;
   private fight: Fight | null;
   private foes: number;
-  private hand: number;
+  private drawn: number;
   private draw: number;
   private gold: number;
   private curses: number;
@@ -37,7 +37,7 @@ export class Cues {
     this.lastPop = s.nextId - 1;
     this.fight = s.fight;
     this.foes = s.fight?.enemies.length ?? 0;
-    this.hand = s.fight?.hand.length ?? 0;
+    this.drawn = s.fight?.drawn ?? 0;
     this.draw = s.fight?.draw.length ?? 0;
     this.gold = s.gold;
     this.curses = s.deck.filter(isCurse).length;
@@ -77,12 +77,12 @@ export class Cues {
     const f = s.fight;
     if (f && f === this.fight) {
       if (f.enemies.length < this.foes) heard.add('die');
-      if (f.hand.length > this.hand) heard.add('draw');
+      if (f.drawn > this.drawn) heard.add('draw');
       if (f.draw.length > this.draw) heard.add('shuffle');
     }
     this.fight = f;
     this.foes = f?.enemies.length ?? 0;
-    this.hand = f?.hand.length ?? 0;
+    this.drawn = f?.drawn ?? 0;
     this.draw = f?.draw.length ?? 0;
 
     const curses = s.deck.filter(isCurse).length;

@@ -2,12 +2,12 @@ import { byDifficulty } from '../../../../shared/settings';
 import { t } from '../i18n';
 import { COMMON, DOUBT_COST, POWER_BLOCK, POWER_STRENGTH, RARE, THORNS, WOUND_HURT, canBeTempered, card, cardName, isCurse, tempered, type BaseId, type CardId } from './cards';
 import { DEPTH_CURSE, depthFoeHp, DEEP_REST_HEAL, loadBestDepth, saveBestDepth } from './depth';
-import { ENEMIES, type EnemyKind, type Intent, type StatusKind } from './enemies';
+import { ENEMIES, type EnemyKind, type StatusKind } from './enemies';
 import { ALTAR_COST, CHEST_CURSE, EVENTS, POOL_COST, POOL_HEAL, SHRINE_CURSE, SHRINE_GOLD } from './events';
 import { FLASKS, FLASK_BLOCK, FLASK_DRAW, FLASK_ENERGY, FLASK_HEAL, FLASK_IDS, FLASK_POISON, FLASK_PRICE, FLASK_SLOTS, type FlaskId } from './flasks';
 import { HEROES, type HeroId } from './heroes';
 import { ACTS, ACT_FOES, makeMap, reachable } from './map';
-import { RELICS, RELIC_IDS, type RelicId } from './relics';
+import { BONE_CHARM_VULNERABLE, EMBER_LANTERN_ENERGY, GOLDEN_IDOL_GOLD, MENDING_MOSS_HEAL, OAK_WARD_BLOCK, RELICS, RELIC_IDS, VENOM_GLAND_POISON, WHETSTONE_DAMAGE, relicText, type RelicId } from './relics';
 import {
   CARD_PRICE,
   CLEARED_MS,
@@ -124,7 +124,6 @@ export function useFlask(s: GameState, slot: number) {
   else if (id === 'block') gainBlock(s, FLASK_BLOCK);
   else if (id === 'draw') drawCards(s, FLASK_DRAW);
   else for (const e of [...f.enemies]) applyPoison(s, e, FLASK_POISON);
-  if (f.enemies.length === 0) clearFight(s);
   return true;
 }
 
@@ -184,7 +183,7 @@ function startFight(s: GameState, foes: EnemyKind[]) {
       // Foes are a quarter weaker on Easy and 30% tougher on Hard, and tougher again down the depths.
       const hp = Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3) * depthFoeHp(s.depth));
       const status = noStatus();
-      if (hasRelic(s, 'boneCharm')) status.vulnerable = 2;
+      if (hasRelic(s, 'boneCharm')) status.vulnerable = BONE_CHARM_VULNERABLE;
       return { id: s.nextId++, kind, hp, maxHp: hp, block: 0, strength: 0, status, step: 0, intent: ENEMIES[kind].moves[0], hitMs: 0, actMs: 0 };
     }),
     acted: 0,
@@ -192,6 +191,8 @@ function startFight(s: GameState, foes: EnemyKind[]) {
     strength: 0,
     powers: [],
     played: 0,
+    drawn: 0,
+    wasVulnerable: false,
     gold: foes.reduce((sum, kind) => sum + ENEMIES[kind].gold, 0),
   };
   startTurn(s);
@@ -199,10 +200,10 @@ function startFight(s: GameState, foes: EnemyKind[]) {
 
 function startTurn(s: GameState) {
   const f = s.fight!;
-  f.block = hasRelic(s, 'oakWard') ? 3 : 0;
+  f.block = hasRelic(s, 'oakWard') ? OAK_WARD_BLOCK : 0;
   f.turn++;
   f.played = 0;
-  f.energy = ENERGY + (f.turn === 1 && hasRelic(s, 'emberLantern') ? 1 : 0);
+  f.energy = ENERGY + (f.turn === 1 && hasRelic(s, 'emberLantern') ? EMBER_LANTERN_ENERGY : 0);
   s.phase = 'player';
   // The powers in play do their turn's work before the hand is drawn.
   for (const id of f.powers) {
@@ -216,7 +217,8 @@ function startTurn(s: GameState) {
   drawCards(s, HAND_SIZE);
 }
 
-const hasPower = (s: GameState, power: NonNullable<ReturnType<typeof card>['power']>) => !!s.fight?.powers.some((id) => card(id).power === power);
+/** How many copies of this power are in play; each copy adds its effect again. */
+const powerCount = (s: GameState, power: NonNullable<ReturnType<typeof card>['power']>) => s.fight?.powers.filter((id) => card(id).power === power).length ?? 0;
 
 /** Draws up to n cards, shuffling the discard pile into the draw pile when it runs out. */
 function drawCards(s: GameState, n: number) {
@@ -229,6 +231,7 @@ function drawCards(s: GameState, n: number) {
     }
     const id = f.draw.shift()!;
     f.hand.push(id);
+    f.drawn++;
     // A Wound bites when drawn, but never kills.
     if (card(id).curse === 'wound' && s.hp > 1) {
       const hurt = Math.min(WOUND_HURT, s.hp - 1);
@@ -254,7 +257,7 @@ export function canPlay(s: GameState, index: number) {
 
 /** What one hit of a card's `damage` deals to this foe before its block: the Whetstone, the hero's Weak and the foe's Vulnerable. */
 export function heroHit(s: GameState, damage: number, e: Enemy) {
-  let d = damage + (hasRelic(s, 'whetstone') ? 2 : 0) + (s.fight?.strength ?? 0);
+  let d = damage + (hasRelic(s, 'whetstone') ? WHETSTONE_DAMAGE : 0) + (s.fight?.strength ?? 0);
   if (s.fight?.status.weak) d = Math.floor(d * WEAK_MULT);
   if (e.status.vulnerable) d = Math.floor(d * VULNERABLE_MULT);
   return d;
@@ -314,13 +317,14 @@ function gainBlock(s: GameState, amount: number) {
   pop(s, 'hero', `+${amount}`, 'block');
 }
 
-/** Poisons a foe, 2 more with the Venom Gland; with the Venom Veil in play, poison aimed at one foe splashes half onto the others. */
+/** Poisons a foe, more with the Venom Gland; with the Venom Veil in play, poison aimed at one foe splashes half onto the others, once per Veil. */
 function applyPoison(s: GameState, e: Enemy, amount: number, splash = false) {
   const f = s.fight!;
-  const total = amount + (hasRelic(s, 'venomGland') ? 2 : 0);
+  const total = amount + (hasRelic(s, 'venomGland') ? VENOM_GLAND_POISON : 0);
   applyStatus(s, e.status, e.id, 'poison', total);
-  if (splash && hasPower(s, 'splash')) {
-    for (const other of f.enemies) if (other !== e) applyStatus(s, other.status, other.id, 'poison', Math.ceil(total / 2));
+  const veils = splash ? powerCount(s, 'splash') : 0;
+  if (veils > 0) {
+    for (const other of f.enemies) if (other !== e) applyStatus(s, other.status, other.id, 'poison', Math.ceil(total / 2) * veils);
   }
 }
 
@@ -347,7 +351,7 @@ function damageEnemy(s: GameState, e: Enemy, amount: number) {
   if (e.hp <= 0) f.enemies.splice(f.enemies.indexOf(e), 1);
 }
 
-/** Hits the hero for this much, through block; with Thorns in play, the foe that hit takes damage back. */
+/** Hits the hero for this much, through block; with Thorns in play, the foe that hit takes damage back, once per Thorns. */
 function damageHero(s: GameState, amount: number, from?: Enemy) {
   const f = s.fight!;
   const blocked = Math.min(f.block, amount);
@@ -355,10 +359,9 @@ function damageHero(s: GameState, amount: number, from?: Enemy) {
   s.hp = Math.max(0, s.hp - (amount - blocked));
   s.heroHitMs = HIT_MS;
   pop(s, 'hero', blocked === amount ? t('blocked') : `-${amount - blocked}`, 'damage');
-  if (from && hasPower(s, 'thorns')) damageEnemy(s, from, THORNS);
+  const thorns = from ? powerCount(s, 'thorns') : 0;
+  if (from && thorns > 0) damageEnemy(s, from, THORNS * thorns);
 }
-
-export const intentOf = (e: Enemy): Intent => e.intent;
 
 /** Draws a foe's next move at random from its list, never the one it just made. */
 function nextIntent(e: Enemy) {
@@ -375,6 +378,7 @@ export function endTurn(s: GameState) {
   f.hand = [];
   for (const e of f.enemies) e.block = 0;
   f.status.weak = Math.max(0, f.status.weak - 1);
+  f.wasVulnerable = f.status.vulnerable > 0;
   f.acted = 0;
   s.phase = 'enemy';
   s.timerMs = ENEMY_ACT_MS;
@@ -425,11 +429,11 @@ function curse(s: GameState, id: CardId) {
   pop(s, 'hero', t('cursedPop', { name: cardName(id) }), 'status');
 }
 
-/** After the foes' turn: Vulnerable wears off a turn on everyone, the hero's poison bites, and the hero's turn starts. */
+/** After the foes' turn: Vulnerable wears off a turn on everyone (on the hero only if it was there before the foes' turn, so a foe's Vulnerable lasts its full number of foe turns), the hero's poison bites, and the hero's turn starts. */
 function endRound(s: GameState) {
   const f = s.fight!;
   for (const e of f.enemies) e.status.vulnerable = Math.max(0, e.status.vulnerable - 1);
-  f.status.vulnerable = Math.max(0, f.status.vulnerable - 1);
+  if (f.wasVulnerable) f.status.vulnerable = Math.max(0, f.status.vulnerable - 1);
   if (f.status.poison > 0) {
     s.hp = Math.max(0, s.hp - f.status.poison);
     s.heroHitMs = HIT_MS;
@@ -478,10 +482,10 @@ export function tick(s: GameState, dt: number) {
 /** The last foe fell: gold, the Mending Moss, then the reward, the descent or the win. */
 function winFight(s: GameState) {
   const room = s.rooms[s.at!];
-  s.goldWon = Math.round(s.fight!.gold * (hasRelic(s, 'goldenIdol') ? 1.5 : 1));
+  s.goldWon = Math.round(s.fight!.gold * (hasRelic(s, 'goldenIdol') ? GOLDEN_IDOL_GOLD : 1));
   s.gold += s.goldWon;
   s.fight = null;
-  if (hasRelic(s, 'mendingMoss')) heal(s, 5);
+  if (hasRelic(s, 'mendingMoss')) heal(s, MENDING_MOSS_HEAL);
   const flask = room.kind === 'elite' || room.kind === 'boss' ? grantFlask(s) : null;
   if (room.kind !== 'boss') {
     offerReward(s, room.kind === 'elite');
@@ -499,7 +503,7 @@ function winFight(s: GameState) {
     return;
   }
   const relic = grantRelic(s);
-  s.notice = relic ? t('boneRelic', { name: t(RELICS[relic].name), text: t(RELICS[relic].text) }) : t('boneGold', { n: RELIC_GOLD });
+  s.notice = relic ? t('boneRelic', { name: t(RELICS[relic].name), text: relicText(relic) }) : t('boneGold', { n: RELIC_GOLD });
   if (flask) s.notice = t('boneFlask', { notice: s.notice, name: t(FLASKS[flask].name) });
   s.phase = 'descend';
 }
@@ -726,7 +730,7 @@ export function chooseEvent(s: GameState, choice: number) {
     if (choice === 0) {
       const relic = grantRelic(s);
       curse(s, CHEST_CURSE);
-      const found = relic ? t('foundRelic', { name: t(RELICS[relic].name), text: t(RELICS[relic].text) }) : t('foundGold', { n: RELIC_GOLD });
+      const found = relic ? t('foundRelic', { name: t(RELICS[relic].name), text: relicText(relic) }) : t('foundGold', { n: RELIC_GOLD });
       s.notice = t('chestCurse', { found, curse: cardName(CHEST_CURSE) });
     }
   } else if (choice === 0) {

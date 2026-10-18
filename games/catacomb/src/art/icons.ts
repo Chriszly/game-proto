@@ -460,7 +460,7 @@ const flask = (dark: string, light: string, shine: string) =>
     '.....ww.....',
     '....ssss....',
     '....s..s....',
-    '...s....s...',
+    '...sS...s...',
     '..s......s..',
     '..sDDDDDDs..',
     '..sDLDDDDs..',
