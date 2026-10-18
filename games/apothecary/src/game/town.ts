@@ -9,7 +9,7 @@ import type { Upgrade } from './state';
 // as the shop before's, while its goods sell for about as much more. Phaser-free, like `state.ts`.
 
 /** What a town shop grows, makes and sells. The apothecary's wheat and flour are painted the same. */
-export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper' | 'woad' | 'linen' | 'dye' | 'cloth' | 'cloak';
+export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper' | 'woad' | 'linen' | 'dye' | 'cloth' | 'cloak' | 'ore' | 'timber' | 'charcoal' | 'iron' | 'horseshoe' | 'pot';
 
 export const GOODS: Record<GoodId, { color: number }> = {
   wheat: { color: 0xd9b24a },
@@ -27,10 +27,16 @@ export const GOODS: Record<GoodId, { color: number }> = {
   dye: { color: 0x3a5aa8 },
   cloth: { color: 0x4a6ab8 },
   cloak: { color: 0x34508e },
+  ore: { color: 0x8a5a4a },
+  timber: { color: 0x9a6a3a },
+  charcoal: { color: 0x2e2a2a },
+  iron: { color: 0x6a707a },
+  horseshoe: { color: 0x7a808a },
+  pot: { color: 0x3a3d48 },
 };
 
 /** The shops on the town map besides the apothecary, in the order they are bought. */
-export type ShopId = 'bakery' | 'chandlery' | 'dyeHouse';
+export type ShopId = 'bakery' | 'chandlery' | 'dyeHouse' | 'smithy';
 
 export interface Recipe {
   inputs: GoodId[];
@@ -175,6 +181,38 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     ],
     sells: { cloth: 216, cloak: 351 },
     worker: 'dyer',
+  },
+  smithy: {
+    id: 'smithy',
+    name: 'smithy',
+    makes: 'smithyMakes',
+    tier: 4,
+    gardens: [
+      { good: 'timber', grow: 34_000, name: 'coppice' },
+      { good: 'ore', grow: 36_000, name: 'orePit' },
+    ],
+    stations: [
+      { id: 'kiln', name: 'kiln', texture: 'kiln', recipes: [{ inputs: ['timber'], out: 'charcoal', ms: 3_500 }] },
+      { id: 'bloomery', name: 'bloomery', texture: 'bloomery', recipes: [{ inputs: ['ore', 'charcoal'], out: 'iron', ms: 5_000 }] },
+      {
+        id: 'anvil',
+        name: 'anvil',
+        texture: 'anvil',
+        recipes: [
+          { inputs: ['iron'], out: 'horseshoe', ms: 6_000 },
+          { inputs: ['iron', 'iron'], out: 'pot', ms: 8_000 },
+        ],
+      },
+    ],
+    routes: [
+      { id: 'timber', from: { garden: 0 }, to: { station: 'kiln' }, cost: 60 },
+      { id: 'ore', from: { garden: 1 }, to: { station: 'bloomery' }, cost: 60 },
+      { id: 'kiln', from: { station: 'kiln' }, to: { station: 'bloomery' }, cost: 100 },
+      { id: 'bloomery', from: { station: 'bloomery' }, to: { station: 'anvil' }, cost: 100 },
+      { id: 'anvil', from: { station: 'anvil' }, to: 'shelf', cost: 150 },
+    ],
+    sells: { horseshoe: 648, pot: 1_053 },
+    worker: 'smith',
   },
 };
 export const SHOP_IDS = Object.keys(SHOPS) as ShopId[];

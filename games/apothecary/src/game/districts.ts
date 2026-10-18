@@ -26,6 +26,7 @@ export const HOME_TIERS: { name: TextKey; needs: Need[] }[] = [
   { name: 'houseCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic'] },
   { name: 'manorCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper'] },
   { name: 'mansionCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper', 'cloth', 'cloak'] },
+  { name: 'palaceCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper', 'cloth', 'cloak', 'horseshoe', 'pot'] },
 ];
 
 /** Homes a district starts with when it opens, and the most it holds. */

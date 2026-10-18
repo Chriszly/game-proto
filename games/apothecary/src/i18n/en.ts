@@ -273,6 +273,21 @@ const en = {
   cloak: 'Cloak',
   dyer: 'Dyer',
   mansionCount: { one: '{n} mansion', other: '{n} mansions' },
+  smithy: 'Smithy',
+  smithyMakes: 'Horseshoes and iron pots',
+  coppice: 'Coppice',
+  orePit: 'Ore pit',
+  kiln: 'Charcoal kiln',
+  bloomery: 'Bloomery',
+  anvil: 'Anvil',
+  ore: 'Iron ore',
+  timber: 'Timber',
+  charcoal: 'Charcoal',
+  iron: 'Iron',
+  horseshoe: 'Horseshoe',
+  pot: 'Iron pot',
+  smith: 'Smith',
+  palaceCount: { one: '{n} palace', other: '{n} palaces' },
 };
 
 export default en;

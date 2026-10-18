@@ -243,6 +243,112 @@ function drawDyeVat(c: Ctx) {
   ink(c, [[24, 22], [36, 2]], { closed: false, w: 1.6, col: WASH.woodDark });
 }
 
+/** A coppice bed: hazel shoots from a cut stool, grown into poles ready to cut. 48x44 as shown. */
+function drawCoppice(c: Ctx, stage: number) {
+  const height = [8, 22, 36][stage];
+  both(c, ellPts(24, 41, 12, 3.5, 16), WASH.woodDark, { layers: 2 }, { w: 0.9 });
+  for (let i = 0; i < 5; i++) {
+    const x = 16 + i * 4;
+    const tip = x + (i - 2) * 3;
+    ink(c, [[x, 40], [tip, 41 - height]], { closed: false, w: stage === 2 ? 2.2 : 1.3, col: '#8a6a40' });
+    if (stage > 0) both(c, ellPts(tip, 41 - height + 3, 3.2, 2.2, 10), WASH.leaf, { layers: 1, edge: 0 }, { w: 0.4 });
+  }
+}
+
+/** An ore pit: a dug hollow in the earth, filling with rust-red stones of ore. 48x44 as shown. */
+function drawOrePit(c: Ctx, stage: number) {
+  both(c, ellPts(24, 34, 18, 7, 20), '#4a3628', { layers: 2 }, { w: 0.9 });
+  const stones: Pt[] = [[17, 33], [24, 31], [31, 33], [20, 28], [28, 28], [24, 25]];
+  for (const [x, y] of stones.slice(0, [1, 3, 6][stage])) both(c, ellPts(x, y, 4, 3, 10), chance(0.5) ? '#8a5a4a' : '#7a4e40', { layers: 2, bloom: 1, cx: x - 1, cy: y - 1 }, { w: 0.7 });
+  ink(c, [[38, 30], [44, 14]], { closed: false, w: 1.6, col: WASH.woodDark });
+  both(c, [[42, 12], [48, 15], [45, 17]], WASH.ironRim, { layers: 1 }, { w: 0.6 });
+}
+
+function drawOre(c: Ctx) {
+  shadow(c, 8.5, 14, 6, 1.4, 0.25);
+  both(c, [[2.5, 12], [4, 6], [9, 3.5], [13.5, 7], [13, 12.5]], '#8a5a4a', { layers: 2, bloom: 1, cx: 6, cy: 7 }, { w: 0.8 });
+  for (const [x, y] of [[6, 8], [10, 9]]) wash(c, ellPts(x, y, 1, 0.8, 6), '#c08a5a', { layers: 1, edge: 0 });
+}
+
+function drawTimber(c: Ctx) {
+  shadow(c, 8.5, 14, 7, 1.4, 0.25);
+  for (const y of [11, 7]) {
+    both(c, rectPts(2, y - 2.5, 11, 5, 2), '#9a6a3a', { layers: 2 }, { w: 0.7 });
+    both(c, ellPts(13, y, 2, 2.5, 10), '#d8b07a', { layers: 1 }, { w: 0.6 });
+  }
+}
+
+function drawCharcoal(c: Ctx) {
+  shadow(c, 8.5, 14, 6.5, 1.4, 0.25);
+  for (const [x, y] of [[5, 11], [10.5, 11.5], [8, 7]]) both(c, rectPts(x - 3, y - 2.2, 6, 4.4, 1.4), '#2e2a2a', { layers: 2 }, { w: 0.6, col: '#151212' });
+}
+
+function drawIron(c: Ctx) {
+  shadow(c, 8.5, 13.5, 6.5, 1.4, 0.25);
+  both(c, [[2, 11], [4.5, 7], [14, 7], [12, 11]], '#6a707a', { layers: 2 }, { w: 0.8 });
+  both(c, [[2, 11], [12, 11], [12, 13], [2, 13]], '#4f545c', { layers: 1 }, { w: 0.7 });
+}
+
+function drawHorseshoe(c: Ctx) {
+  shadow(c, 8.5, 14.5, 5.5, 1.3, 0.25);
+  const outer: Pt[] = [];
+  for (let i = 0; i <= 16; i++) {
+    const a = Math.PI * 0.85 + (i / 16) * Math.PI * 1.3;
+    outer.push([8 + Math.cos(a) * 6, 8.5 + Math.sin(a) * 6]);
+  }
+  ink(c, outer, { closed: false, w: 3, col: '#7a808a' });
+  ink(c, outer, { closed: false, w: 0.6 });
+  for (const [x, y] of [[3.5, 10], [12.5, 10], [5, 4.5], [11, 4.5]]) wash(c, ellPts(x, y, 0.5, 0.5, 6), '#2a2a2a', { layers: 1, edge: 0 });
+}
+
+function drawPot(c: Ctx) {
+  shadow(c, 8.5, 14.5, 6.5, 1.4, 0.25);
+  both(c, ellPts(8, 9.5, 6.2, 5, 20), WASH.iron, { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
+  both(c, ellPts(8, 5.5, 5, 1.4, 14), WASH.ironRim, { layers: 1 }, { w: 0.6 });
+  ink(c, [[3, 5.5], [3, 3], [13, 3], [13, 5.5]], { closed: false, w: 0.7 });
+}
+
+/** A charcoal kiln: a turf-covered mound smouldering, smoke curling from its vent. 84x60 as shown. */
+function drawKiln(c: Ctx) {
+  shadow(c, 42, 56, 38, 5, 0.18);
+  const mound: Pt[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const a = Math.PI + (i / 24) * Math.PI;
+    mound.push([42 + Math.cos(a) * 36, 54 + Math.sin(a) * 30]);
+  }
+  both(c, mound, '#5a4a32', { layers: 3, bloom: 1, cx: 32, cy: 34 }, { w: 1.2 });
+  hatch(c, mound.map(([x, y]) => [x + 8, y] as Pt), { gap: 2.4, alpha: 0.25, w: 0.5 });
+  for (const [x, y] of [[22, 44], [42, 34], [60, 44]]) both(c, ellPts(x, y, 6, 3, 10), WASH.grassDark, { layers: 1, edge: 0 }, { w: 0.4 });
+  wash(c, ellPts(42, 50, 6, 4, 10), WASH.flame, { layers: 2, edge: 0 });
+  for (const [x, y, r] of [[44, 20, 5], [48, 12, 6], [44, 4, 5]]) wash(c, ellPts(x, y, r, r * 0.8, 12), '#b8b0a8', { layers: 1, edge: 0, alpha: 0.6 });
+}
+
+/** A bloomery: a clay chimney furnace glowing at its foot, a pair of bellows beside it. 84x64 as shown. */
+function drawBloomery(c: Ctx) {
+  shadow(c, 42, 60, 36, 4, 0.18);
+  both(c, [[24, 58], [30, 8], [46, 8], [52, 58]], '#a8704a', { layers: 3, bloom: 1, cx: 34, cy: 30 }, { w: 1.2 });
+  hatch(c, [[38, 8], [46, 8], [52, 58], [38, 58]], { gap: 2.4, alpha: 0.25, w: 0.5 });
+  both(c, ellPts(38, 8, 8, 2.4, 14), '#3a2614', { layers: 1 }, { w: 0.8 });
+  wash(c, rectPts(32, 46, 12, 10, 3), WASH.flame, { layers: 2, edge: 0 });
+  wash(c, rectPts(35, 49, 6, 6, 2), WASH.flameCore, { layers: 1, edge: 0 });
+  both(c, [[58, 50], [80, 44], [80, 56], [58, 54]], WASH.leather, { layers: 2 }, { w: 0.9 });
+  ink(c, [[58, 52], [50, 52]], { closed: false, w: 1.6, col: WASH.woodDark });
+  ink(c, [[80, 44], [82, 36]], { closed: false, w: 1.4, col: WASH.woodDark });
+}
+
+/** An anvil on a stump, a hammer resting on it and a tub of water at its side. 84x60 as shown. */
+function drawAnvil(c: Ctx) {
+  shadow(c, 40, 56, 34, 5, 0.18);
+  both(c, rectPts(26, 34, 26, 22, 3), WASH.woodDark, { layers: 2 }, { w: 1 });
+  both(c, ellPts(39, 34, 13, 3, 16), WASH.wood, { layers: 1 }, { w: 0.8 });
+  both(c, [[14, 20], [62, 20], [56, 26], [46, 26], [46, 32], [32, 32], [32, 26], [22, 26]], WASH.iron, { layers: 2, bloom: 1, cx: 30, cy: 22 }, { w: 1 });
+  both(c, [[14, 20], [4, 22], [14, 24]], WASH.iron, { layers: 1 }, { w: 0.8 });
+  ink(c, [[44, 18], [60, 8]], { closed: false, w: 1.8, col: WASH.woodDark });
+  both(c, rectPts(56, 4, 8, 6, 1), WASH.ironRim, { layers: 1 }, { w: 0.6 });
+  both(c, [[64, 40], [80, 40], [78, 56], [66, 56]], WASH.woodDark, { layers: 2 }, { w: 0.9 });
+  both(c, ellPts(72, 40, 8, 2, 12), '#5a7a9a', { layers: 1, edge: 0 }, { w: 0.5 });
+}
+
 /** A millstone on a timber frame, a hopper of grain above it and a sack catching the flour. 88x60 as shown. */
 function drawMill(c: Ctx) {
   shadow(c, 46, 55, 40, 5, 0.18);
@@ -381,6 +487,17 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, 'loom', 84, 64, drawLoom, 3);
   paint(scene, 'grinder', 84, 60, drawGrinder, 3);
   paint(scene, 'dyeVat', 84, 60, drawDyeVat, 3);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('timber', stage), 48, 44, (c) => drawCoppice(c, stage), 3, 111 + stage);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('ore', stage), 48, 44, (c) => drawOrePit(c, stage), 3, 121 + stage);
+  paint(scene, 'good-ore', 16, 16, drawOre, 4);
+  paint(scene, 'good-timber', 16, 16, drawTimber, 4);
+  paint(scene, 'good-charcoal', 16, 16, drawCharcoal, 4);
+  paint(scene, 'good-iron', 16, 16, drawIron, 4);
+  paint(scene, 'good-horseshoe', 16, 16, drawHorseshoe, 4);
+  paint(scene, 'good-pot', 16, 16, drawPot, 4);
+  paint(scene, 'kiln', 84, 60, drawKiln, 3);
+  paint(scene, 'bloomery', 84, 64, drawBloomery, 3);
+  paint(scene, 'anvil', 84, 60, drawAnvil, 3);
   paint(scene, lotTexture('apothecary'), 96, 84, (c) =>
     drawLot(c, '#5e6e46', '#d8c8a2', (s) => {
       // A green bottle on the sign.
@@ -400,6 +517,10 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, lotTexture('dyeHouse'), 96, 84, (c) =>
     drawLot(c, '#6e5a7a', '#dccfae', (s) => {
       both(s, rectPts(84, 46, 8, 7, 1), '#4a6ab8', { layers: 1 }, { w: 0.6 });
+    }), 3);
+  paint(scene, lotTexture('smithy'), 96, 84, (c) =>
+    drawLot(c, '#4a4a4e', '#cfc2a2', (s) => {
+      both(s, [[83, 47], [93, 47], [91, 50], [89, 50], [89, 53], [87, 53], [87, 50], [85, 50]], WASH.iron, { layers: 1 }, { w: 0.5 });
     }), 3);
 }
 
