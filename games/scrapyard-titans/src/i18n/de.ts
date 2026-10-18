@@ -311,6 +311,7 @@ const de: Translation<typeof en> = {
   lostHp: '  -{n} LP',
   wonGold: '  +{n} Gold',
   plusGold: '+{n} Gold',
+  partsFull: 'Teile voll',
   plusG: '+{n} G',
   miss: 'daneben',
   escaped: 'entkommen!',

@@ -26,7 +26,10 @@ Implemented today:
 - Star-ups: `addUnit` merges three copies of the same star into the next star (up to 3), keeping
   their items up to `MAX_ITEMS` and sending the rest to the player's parts.
 - Items: six parts (`PARTS`) and 21 finished items (`COMBOS`, `comboOf`); `equip` bolts a part on
-  and builds the finished item when a robot already carries a lone part.
+  and builds the finished item when a robot already carries a lone part. The item bench holds
+  `ITEM_BENCH` (10): every part or item a player gets (drops, sales, star-ups, drafts, power cards,
+  scrap tokens) goes through `giveItem`, which scraps it when the bench is full. The scene then
+  floats "Parts full" (`partsFull`) over an orb or the item bench instead of the item's name.
 - Power cards (`AUGMENTS`): offered at rounds with `augment` set (2-1, 3-2, 4-2) and picked with
   `pickAugment`.
 - Rounds (`stageRounds`): stage 1 is three neutral rounds and a draft; later stages are
@@ -42,10 +45,13 @@ Implemented today:
 - Draft rounds (`startDraft`, `draftPick`): one robot with a part or item per living seat plus
   one, on a ring; lowest health picks first, `DRAFT_PICK_S` each.
 - Commander avatars walk the board's near edge (`COMMANDER_HOME`) and collect monster drops (orbs),
-  and the rival walks the far edge (`RIVAL_HOME`).
+  and the rival walks the far edge (`RIVAL_HOME`). The avatar walks by `GameScene.t`, so it keeps
+  pace with the fight's speed and watch steps at any frame rate; the items themselves are granted
+  in `endFight`.
 - Scrap Rat round: the rat runs about the board; the player taps it to zap it (`zapRat`), and each
   hit on it shakes gold loose until it escapes.
-- Speed button (1x/2x, T), reduced motion (no shake, flash, bob or idle sway).
+- Speed button (1x/2x, T), reduced motion (no shake, flash, orb bob, idle sway, avatar hop or
+  circling stun stars).
 - Shop lock (`Player.shopLocked`, `toggleShopLock`, the Lock button `BUTTONS.lock` or L):
   `startPlan` skips `rollShop` for a locked shop; `reroll` unlocks it. The AI never locks.
 - Scouting: during planning a tap on a rival's row in the players list sets `GameScene.scout`;
@@ -119,8 +125,10 @@ File map (`src/`):
   numbers and orbs), drafts, commanders, and input (`onDown`/`onMove`/`onUp` for tap and drag,
   `onKey`).
 
-The phase flow: `plan` (timed by `PLAN_S`) → `fight` → `result` → next round's `plan`, or `draft`;
-`won`/`lost` end the match. `GameScene.tick` drives it with the frame's delta; the fight advances
+The phase flow: `plan` (timed by `PLAN_S`) → `fight` → `result` → next round's `plan`, or `draft`
+→ next round's `plan`; every plan after the match's first pays income and XP and rolls the shop.
+`won`/`lost` end the match (`matchOver`; when the last commanders all fall in one round, the one
+placed 1st wins). `GameScene.tick` drives it with the frame's delta; the fight advances
 in `STEP_S` steps times the playback speed.
 
 Shared code it imports: `shared/audio.ts`, `shared/setupGame.ts`, `shared/scaling.ts` (`setupScaling`, `sharpRes`,
@@ -129,11 +137,14 @@ Shared code it imports: `shared/audio.ts`, `shared/setupGame.ts`, `shared/scalin
 
 ### Hub settings
 
-- Difficulty: `newMatch` gives the player `byDifficulty(130, 100, 80)` health, and `startPlan`
+- Difficulty: `newMatch` gives the player `byDifficulty(130, 100, 80)` health (also its
+  `Player.maxHp`, which scales its bar in the players list), and `startPlan`
   gives each rival `byDifficulty(-1, 0, 1)` gold a round. Keep the README rows in step.
-- Reduced motion: no camera shake on slams, no hit flash, no idle sway or orb bob.
+- Reduced motion: no camera shake on slams, no hit flash, no idle sway or orb bob, no avatar walk
+  bounce or skill hop, and stun stars stand still instead of circling.
 - Watch AI (`?watch`): the scene starts a match at once with a random commander, season and
-  terrain, seat 0 is AI-run (`human` false: `aiPlan` near the end of each plan phase, skill at 3 s),
+  terrain, seat 0 is AI-run (`human` false: `aiPlan` near the end of each plan phase, skill at 3 s;
+  the taps and keys that act for the player, R, X, E, L, 1-3 and Space, do nothing),
   and `mountWatch` shows the panel; `watchSteps()` ticks per frame. Watch another on the end screen
   starts the next match.
 

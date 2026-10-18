@@ -71,8 +71,9 @@ terrain tiles. The plan phase lasts 30 seconds; when it runs out the fight start
 
 - **Parts and items.** Six parts (Buzzsaw, Servo, Plating, Fuel Cell, Capacitor, Scope) each add a
   stat; any two on one robot build one of 21 finished items with a special effect (like the Chain
-  Saw's cleave or the Reactor Core's restart). A robot carries 3 items. With a part picked up, a tag
-  over each robot names what it would build there, and the panel lists every recipe for that part.
+  Saw's cleave or the Reactor Core's restart). A robot carries 3 items, and you hold up to 10 parts
+  and items; any more are scrapped. With a part picked up, a tag over each robot names what it
+  would build there, and the panel lists every recipe for that part.
 - **Damage meter.** After each fight the panel under the players list ranks your robots by the
   damage they dealt, and names the one that took the most.
 - **Power cards.** At rounds 2-1, 3-2 and 4-2 every commander picks one of three power cards

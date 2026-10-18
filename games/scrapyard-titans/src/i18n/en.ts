@@ -311,6 +311,7 @@ const en = {
   lostHp: '  -{n} HP',
   wonGold: '  +{n} gold',
   plusGold: '+{n} gold',
+  partsFull: 'Parts full',
   plusG: '+{n}g',
   miss: 'miss',
   escaped: 'escaped!',

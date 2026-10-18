@@ -64,7 +64,6 @@ export const shopCardX = (i: number) => SHOP.x0 + i * (SHOP.cardW + SHOP.gap);
 /** The zone a robot is dropped on to sell it: the whole shop row. */
 export const SELL_ZONE = { x: SHOP.x0, y: SHOP.y, w: 5 * SHOP.cardW + 4 * SHOP.gap, h: SHOP.h };
 
-export const LEFT = { x: 8, w: 152 };
 /** The gold, level and buttons panel at the bottom left. */
 export const LEFT_BOTTOM = { x: 8, y: 426 };
 /** Where the terrain legend sits, over the shop's left end. */
@@ -76,7 +75,6 @@ export const BUTTONS = {
   fight: { x: 800, y: 440, w: 150, h: 48 },
   speed: { x: 800, y: 496, w: 72, h: 30 },
   skill: { x: 800, y: 440, w: 150, h: 48 },
-  watchSkill: { x: 878, y: 496, w: 72, h: 30 },
   /** Right of the bench: keeps the shop for the next round. */
   lock: { x: 736, y: 380, w: 62, h: 26 },
 };
@@ -119,7 +117,7 @@ export function placeLayout(w: number, h: number, fx: number, fy: number) {
   SELL_ZONE.x = SHOP.x0;
   SELL_ZONE.y = SHOP.y;
   for (const k of ['reroll', 'xp', 'sell'] as const) move(BUTTONS[k], D.BUTTONS[k], 0, bottom);
-  for (const k of ['fight', 'speed', 'skill', 'watchSkill'] as const) move(BUTTONS[k], D.BUTTONS[k], right, bottom);
+  for (const k of ['fight', 'speed', 'skill'] as const) move(BUTTONS[k], D.BUTTONS[k], right, bottom);
   move(BUTTONS.lock, D.BUTTONS.lock, fx, fy);
   move(LEFT_BOTTOM, D.LEFT_BOTTOM, 0, bottom);
   move(INFO_PANEL, D.INFO_PANEL, right, bottom);
