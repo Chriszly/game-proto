@@ -109,8 +109,8 @@ export function drawKnight(ctx: Ctx, id: HeroId, x: number, y: number, z: number
     ctx.stroke();
     blade(ctx, x + 22, y + 46, x + 46, y + 2, sch.bolt, 5, z);
   } else if (id === 'corvin') {
-    // Light brown robes with a darker belt, a beard, the blade held back.
-    shape(ctx, robe(ctx, x, y + 6, 46, 58), sch.body, '#e1c49a', 10, z);
+    // Red robes with a darker belt, a beard, the blade held back.
+    shape(ctx, robe(ctx, x, y + 6, 46, 58), sch.body, '#e8857a', 10, z);
     ctx.fillStyle = mark;
     ctx.fillRect(x - 23, y + 24, 46, 6);
     ctx.fillStyle = '#e8d2b0';

@@ -229,7 +229,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     short: 'corvinShort',
     weapon: 'corvinWeapon',
     pools: ['blade', 'current'],
-    schemes: [{ name: 'Elder', body: '#a98763', accent: '#5fd0ff', mark: '#6e5233', bolt: '#5fd0ff' }],
+    schemes: [{ name: 'Elder', body: '#a8282c', accent: '#5fd0ff', mark: '#5c1418', bolt: '#5fd0ff' }],
     maxHp: 125,
     speed: 140,
     aim: 'spin',
