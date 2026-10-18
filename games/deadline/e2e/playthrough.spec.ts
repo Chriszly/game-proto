@@ -13,7 +13,7 @@ type UpgradeKind = 'rate' | 'damage' | 'companion' | 'pierce';
 interface Stats { damage: number; fireInterval: number; companions: number; pierce: number }
 interface GameState {
   wave: number;
-  phase: 'wave' | 'break' | 'supply' | 'over';
+  phase: 'wave' | 'break' | 'supply' | 'role' | 'over';
   kills: number;
   stats: Stats;
   collected: Record<UpgradeKind, number>;

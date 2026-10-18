@@ -127,6 +127,8 @@ const SPLAT_MS = 900;
 const BLAM_EVERY = 6;
 /** A SPLUT! on every this many kills (comic only). */
 const SPLUT_EVERY = 4;
+/** Taps on the game over screen are ignored for this long (game time, in ms) after it opens. */
+const OVER_GRACE_MS = 600;
 /** The pitch of a zombie's death sound: the small ones squeak, the big ones thud (bosses have their own). */
 const KILL_PITCH: Partial<Record<EnemyKind, number>> = { crawler: 1.4, runner: 1.15, spitter: 1.05, brute: 0.75, riot: 0.85 };
 
@@ -367,6 +369,8 @@ export class GameScene extends Phaser.Scene {
   private flameClock = 0;
   /** The press that is down started on a button, so dragging it doesn't move the hero. */
   private pressOnUi = false;
+  /** Game time since the game over screen opened; taps on it count only after `OVER_GRACE_MS`. */
+  private overMs = 0;
 
   /** Every image and the sprite it shows, so a style switch can swap all their textures. */
   private skins = new Map<Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite, string>();
@@ -466,6 +470,7 @@ export class GameScene extends Phaser.Scene {
     this.bossAct = null;
     this.flameClock = 0;
     this.pressOnUi = false;
+    this.overMs = 0;
     this.supplyUi = [];
     this.cards = [];
     this.shop = [];
@@ -734,6 +739,8 @@ export class GameScene extends Phaser.Scene {
       this.pressOnUi = true;
       if (this.hud.onSwitch(x, y)) this.switchStyle();
       else if (s.phase === 'over') {
+        // A tap still meant for steering as the horde breaks through doesn't skip the screen.
+        if (this.overMs < OVER_GRACE_MS) return;
         const button = this.shop.find((b) => inBox(x, y, b));
         if (button) button.act();
         else {
@@ -749,6 +756,9 @@ export class GameScene extends Phaser.Scene {
       } else if (this.hud.onKit(x, y) && ((s.phase === 'wave' && s.sandbags > 0) || s.placing)) {
         s.placing = !s.placing;
         ui('click');
+      } else if (this.hud.onKit(x, y) && s.phase !== 'wave') {
+        // Sandbags only go down in a wave; between waves a tap on the kit panel does nothing.
+        ui('refuse');
       } else if (s.placing) {
         // A tap on the road puts the wall in that lane; anywhere else puts the sandbags away.
         if (y > HUD_HEIGHT + 30 && y < REACH_Y) this.placeWall(laneAt(x));
@@ -845,6 +855,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     const dt = Math.min(delta, 100);
     this.animateFeed();
+    if (this.state.phase === 'over') this.overMs += dt;
     // Nothing moves while the game is over, or a supply drop or a survivor's role is being picked.
     if (this.state.phase === 'over' || this.state.phase === 'supply' || this.state.phase === 'role') return;
     this.runMs += dt;
@@ -1026,7 +1037,8 @@ export class GameScene extends Phaser.Scene {
       b.prevY = b.y;
       b.x += (b.vx * dt) / 1000;
       b.y -= (b.vy * dt) / 1000;
-      if (b.y < HUD_HEIGHT - 10 || b.x < FIELD.x || b.x > FIELD.x + FIELD.w) this.bullets.release(b);
+      // A ricochet can fly downwards, so the bottom edge counts too.
+      if (b.y < HUD_HEIGHT - 10 || b.y > FIELD.y + FIELD.h || b.x < FIELD.x || b.x > FIELD.x + FIELD.w) this.bullets.release(b);
       else b.sprite.setPosition(b.x, b.y);
     }
   }
@@ -1442,7 +1454,7 @@ export class GameScene extends Phaser.Scene {
         if (!t.alive || b.hit.includes(t.id)) continue;
         const reach = ('upgrade' in t ? PICKUP.halfSize : DRUM.halfSize) + BULLET.radius;
         const nearX = Phaser.Math.Clamp(t.x, Math.min(b.x, b.prevX), Math.max(b.x, b.prevX));
-        if (Math.abs(nearX - t.x) > reach || b.y > t.y + reach || b.prevY < t.y - reach) continue;
+        if (Math.abs(nearX - t.x) > reach || Math.min(b.y, b.prevY) > t.y + reach || Math.max(b.y, b.prevY) < t.y - reach) continue;
         b.hit.push(t.id);
         t.hp -= damage;
         if (t.hp <= 0) {
@@ -1523,8 +1535,8 @@ export class GameScene extends Phaser.Scene {
     s.age = 0;
     s.sprite.setPosition(e.x, e.y).setScale(((isBoss(e.kind) ? 3 : e.kind === 'brute' ? 1.6 : e.kind === 'crawler' ? 0.7 : 1) * GEOM.splat.w) / s.sprite.frame.width).setAlpha(1).setVisible(true);
     if (this.style === 'comic' && this.state.kills % SPLUT_EVERY === 0) this.effect('sfx-splut', e.x - 30, e.y + 10, { life: 450, grow: 0.1, angle: -5 });
-    this.enemies.release(e);
     // The Brood Mother bursts into crawlers; the Bloater leaves a huge acid pool on the squad's line.
+    // Released after that, so the burst can't reuse (and move) the dying boss's own enemy object.
     if (e.kind === 'brood') {
       this.spawnPack(e, 'crawler', BROOD.burst, 24);
       this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: tr(this.style === 'comic' ? 'fxBroodBursts' : 'nvFxBroodBursts') });
@@ -1532,6 +1544,7 @@ export class GameScene extends Phaser.Scene {
       this.lobAcid(e.x, e.y, BLOATER.poolRadius, 600, BLOATER.poolMs);
       this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: tr(this.style === 'comic' ? 'fxAcidBursts' : 'nvFxAcidBursts') });
     }
+    this.enemies.release(e);
   }
 
   /** A fuel drum goes up: every zombie in its ring takes the blast. */
@@ -1886,6 +1899,7 @@ export class GameScene extends Phaser.Scene {
 
   private gameOver() {
     this.state.phase = 'over';
+    this.overMs = 0;
     this.state.frenzyMs = 0;
     this.state.placing = false;
     this.pointerTarget = null;
@@ -2154,6 +2168,7 @@ export class GameScene extends Phaser.Scene {
     this.supplyUi = [];
     this.cards = [];
     s.phase = 'over';
+    this.overMs = 0;
     s.frenzyMs = 0;
     s.placing = false;
     this.pointerTarget = null;
