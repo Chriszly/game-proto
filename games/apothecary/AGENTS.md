@@ -213,7 +213,8 @@ study, shade gardens and a mirrored second production line.
 - `TownScene` lays the lots out in rows of three (`LOT`) with the districts' cards in a row below
   (`DISTRICT`, `addDistrict`, homes drawn as little houses by `drawHomes`), all centred in the view.
 - `src/scenes/TownScene.ts` (`Town`) and `src/scenes/ShopScene.ts` (`Shop`, started with
-  `{ shop }`): both call `loadState` and `catchUp` on create, and run the apothecary with
+  `{ shop }`): both call `loadState` on create (not `catchUp`: they are only entered through
+  `leaveFor`, which saves first, so there is no time away), and run the apothecary with
   `tick(state, dt, null)` (as while away) next to `tickTown`; `GameScene` runs `tickTown(state, dt,
   null)` after its own `tick`. `src/art/town.ts` paints the goods, the beds (`bedTexture`: hives, flax, woad, coppice, ore pit, orchard, lavender, madder, copper pit), each
   shop's stations (mill, oven, wax press, spinning wheel, dipping vat, loom, dye mill, dye vat,
@@ -253,7 +254,8 @@ study, shade gardens and a mirrored second production line.
 - `src/ui/`: `BackStack` (items piled on the doctor), `IconRow` (customer wants), `Pallet` (crate
   stacks, exposes `item` and `count`, `setVisible`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
   ones first; exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
-  an optional last argument sets its height, 6 by default; `setZone` marks a golden end zone, used for the cauldron's fine window),
+  an optional last argument sets its height, 6 by default; `setZone` marks a golden end zone, used for the cauldron's fine window;
+  `destroy` removes it, as `ShopScene` does when a customer leaves),
   `RecipeBook` (exposes `lines`, in the game's language), `coins` (`coined`: gold coins over the
   `{coin}` slots of a text), `Settings` (read-only view of the hub's
   settings, the difficulty named by the shared texts, and New game).
@@ -288,7 +290,8 @@ study, shade gardens and a mirrored second production line.
   card (`TOWN_CARD`, `createTown`) and the away chip (below the town card), `UI_DEPTH + 1` for panels.
   The cards over the world (contract, town, plague, the order strip's and the hands bar, and the
   town shops' hands bar) are drawn at `HUD_CARD_ALPHA` (0.72), so the yard shows through; their
-  text and icons stay opaque.
+  text and icons stay opaque. The top bar, the hands bar and these cards are interactive and stop
+  a tap (`stopTaps`), so it never falls through to a sign or walk target in the world under them.
 - Walking: arcade physics steps once per drawn frame; WASD/arrows set velocity directly, and
   `limitWalkStep` (on `PRE_UPDATE`) caps a step at `MAX_WALK_STEP_PX` (20) so a long frame can't
   carry the feet through a station or wall (static obstacles from `addObstacle` and `SHOP_BLOCKS`).
@@ -361,8 +364,8 @@ study, shade gardens and a mirrored second production line.
   the station's `output` and hands to its tray; the pallets are those trays drawn. `createBelts`
   draws a pixie and the item's icon for each riding item, a lane's `laneOffset` to the side of the
   route; in its last `PIXIE_APPROACH_MS` the pixie flies over to `dropSpot` (its kind's pallet at
-  `BELT_TARGET`, or its shelf). Wings beat and pixies bob on `this.time.now`, still with reduced
-  motion. Pixies are drawn at `PIXIE_DEPTH`, above everything standing. A built belt hides its pick-up marker, and its drop marker
+  `BELT_TARGET`, or its shelf). Wings beat and pixies bob on `this.time.now`; with reduced motion
+  they glide on their first frame. Pixies are drawn at `PIXIE_DEPTH`, above everything standing. A built belt hides its pick-up marker, and its drop marker
   unless the doctor carries that kind; the counter's drop stays until `doneByHand` is false for
   both cauldron belts. Goods get on at `beltSpan(id, kind).start` (mandrakes on their patch's
   feeder) and join the main run at `join`. Each cauldron belt runs on its own into its side of the
@@ -554,9 +557,11 @@ brew's `out` may be `PANACEA`.
   `guild` counts as having joined if it bought or paid into any guild upgrade. A save from before
   `COLUMNS_LAYOUT` (5) first gets `ontoColumns`, which scales each belt item's `at` by its belt's
   new `BELT_MS` over the old `U_BELT_MS`, so it keeps its place along the shorter run; then a save
-  from before `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's
-  join on today's belts. A save from before `HEART_LAYOUT` (6) first of all gets `ontoHeart`, which
-  scales each belt item's `at` by `BELT_MS` over `COLUMNS_BELT_MS` for the rows. A save
+  from before `HEART_LAYOUT` (6) gets `ontoHeart`, which scales each belt item's `at` by `BELT_MS`
+  over `COLUMNS_BELT_MS` for the rows; last, a save from before `FEEDERS_LAYOUT` (3) gets
+  `ontoOwnRuns`, which moves belt items up to their run's join on today's belts (so the U goes to
+  columns, then to the heart, then onto its own runs). A new layout migration that rescales goes
+  before `ontoOwnRuns`. A save
   whose `layout` differs from `LAYOUT` (6, the rows) gets the fresh `player` spot.
 - Away: `GameScene.create` calls `catchUp(state, Date.now())` right after `loadState` and keeps the
   result in the public `away` field; `createAwayChip` shows it (top right, `AWAY_CHIP`) until tapped.
@@ -613,9 +618,13 @@ brew's `out` may be `PANACEA`.
 - Difficulty scales one number, customer patience: `newOrder` in `src/game/sim.ts` multiplies
   `maxPatience` by `byDifficulty(1.5, 1, 0.7)` from `shared/settings.ts` (Easy 1.5, Normal 1,
   Hard 0.7). Keep Normal exactly as designed: the playthrough runs on Normal.
-- Reduced motion: the game has no camera shake or flash. `addCauldron` reads
+- Reduced motion: the game has no camera shake or flash. `GameScene` reads
   `settings.reduceMotion` (imported as `hubSettings`, since the scene has its own `settings`
-  panel) and leaves the cauldron on its still frame instead of playing the `cauldron-boil` flicker.
+  panel): `addCauldron` leaves the cauldron on its still frame instead of playing the
+  `cauldron-boil` flicker, the craftsmen at the stations stop rocking while they work, the belt
+  pixies glide on their first frame without bobbing, and `createWeather` keeps only the tint (no
+  rain or heat waves). `ShopScene` holds its route pixies still the same way, and `TownScene` skips
+  the shake of a lot card the player can't afford.
 - The game's Settings panel only shows the difficulty and frame rate ("Change these on the hub
   page") and has "New game". Settings are read once at page load.
 - A change to what the difficulty scales updates the Apothecary row of the difficulty table in the

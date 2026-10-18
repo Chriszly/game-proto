@@ -101,7 +101,6 @@ import {
   isMarketDay,
   weatherFor,
   type Weather,
-  DAY_MS as DAY,
   GARDEN_NAMES,
   GARDEN_NAMES_IN,
   SEAL_PRICE,
@@ -256,7 +255,6 @@ const DAY_BAR = { left: -140, right: 90 };
 const HUD_ICON_BUTTON = 36;
 /** The hands card at the bottom of the screen: its height and the slots' spacing. */
 const HANDS_BAR = { h: 40, gap: 40 };
-/** Where the contract card and the away chip sit on screen, below the top bar. */
 /** Pixies fly above everything standing in the world, under the order bubbles and bars. */
 const PIXIE_DEPTH = 5000;
 /** How long before the end of its route a pixie turns off towards the pallet or shelf its goods go on. */
@@ -1388,7 +1386,7 @@ export class GameScene extends Phaser.Scene {
     const x = CONTRACT_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+    this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
     const icon = fit(this.add.image(x + 22, y + h / 2 + 1, itemTexture('sleepingTonic')), 1.8).setDepth(d + 0.1);
     const title = this.add.text(x + 42, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const pips = this.add.graphics().setDepth(d + 0.1);
@@ -1480,7 +1478,7 @@ export class GameScene extends Phaser.Scene {
     const x = PLAGUE_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+    const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
     const bell = fit(this.add.image(x + 19, y + h / 2, 'bell')).setDepth(d + 0.1);
     const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const pips = this.add.graphics().setDepth(d + 0.1);
@@ -1539,7 +1537,7 @@ export class GameScene extends Phaser.Scene {
       }
       seen = { stage: plague.stage, relapses: plague.relapses, cured: plague.cured, season };
       const stage = plagueStage(this.state);
-      const key = `${season}:${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${this.state.seals}:${Math.ceil(plague.left / (DAY / 4))}`;
+      const key = `${season}:${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${this.state.seals}:${Math.ceil(plague.left / (DAY_MS / 4))}`;
       if (key === drawn) return;
       drawn = key;
       for (const part of parts) part.setVisible(true);
@@ -1574,7 +1572,7 @@ export class GameScene extends Phaser.Scene {
           pips.lineStyle(1.1, 0x2a1d14, k < plague.made ? 0.95 : 0.5).strokeCircle(px, y + 31, r);
         }
         count.setText(`${plague.made}/${plague.need}`).setX(x + 48 + plague.need * gap - gap / 2 + 4);
-        const days = plague.left / DAY;
+        const days = plague.left / DAY_MS;
         side.setText(days >= 1 ? t('daysLeft', { n: Math.ceil(days) }) : t('lastDay'));
       }
     });
@@ -1750,7 +1748,7 @@ export class GameScene extends Phaser.Scene {
     const x = TOWN_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+    this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
     const icon = fit(this.add.image(x + 19, y + h / 2, 'weather-mild')).setDepth(d + 0.1);
     const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const label = this.add.text(x + 36, y + 31, t('reputation'), { ...HUD_TEXT, fontSize: '12px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
@@ -1806,10 +1804,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * "While you were away: +32 coins, 9 potions" on a violet chip under the top bar, after the
-   * automation caught up on the time away; tapping it puts it away.
-   */
   /**
    * Today's weather over the yard: a grey-blue dusk and falling rain on a rainy day, a warm haze with
    * heat rising in wavy lines in a drought, a little golden light on a fair day, and nothing on a
@@ -1876,7 +1870,7 @@ export class GameScene extends Phaser.Scene {
     const key = cardTexture(this, 'chip', w, h);
     const chips = Array.from({ length: MAX_ORDER_SLOTS }, (_, i) => {
       const cx = x + i * (w + gap) + w / 2;
-      const card = this.card(cx, y + h / 2, 'chip', key).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+      const card = this.card(cx, y + h / 2, 'chip', key).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
       const icons = [0, 1].map(() => fit(this.add.image(0, y + 12, itemTexture('healingDraught'))).setDepth(d + 0.1));
       const patience = new ProgressBar(this, cx, y + h - 10, w - 10, 0x58a35a, d + 0.1);
       return { cx, card, icons, patience };
@@ -1897,13 +1891,17 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * "While you were away: +32 coins, 9 potions" on a violet chip under the top bar, after the
+   * automation caught up on the time away; tapping it puts it away.
+   */
   private createAwayChip() {
     const away = this.away;
     if (!away) return;
     // The chip keeps its right edge and grows to the left when the numbers are long.
     const { y, h } = AWAY_CHIP;
     const d = UI_DEPTH;
-        const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const sum = coined(this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1));
     const w = Math.max(AWAY_CHIP.w, Math.ceil(lead.width + sum.width + 46));
     const x = viewFrame(this).x + AWAY_CHIP.x + AWAY_CHIP.w - w;
@@ -1924,16 +1922,11 @@ export class GameScene extends Phaser.Scene {
   private createHud() {
     const { width, height } = viewSize(this);
     const first = this.children.list.length;
-    // Taps on the bar stop here rather than falling through to a priority sign in the world below.
-    const stopTaps = (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-      e.stopPropagation();
-      this.pinching();
-    };
     fit(this.add.image(0, 0, cardTexture(this, 'bar', width, HUD_HEIGHT)))
       .setOrigin(0)
       .setDepth(UI_DEPTH)
       .setInteractive()
-      .on('pointerdown', stopTaps);
+      .on('pointerdown', this.stopTaps);
     const style = HUD_TEXT;
     fit(this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin'), 1.6).setDepth(UI_DEPTH);
     const coins = this.add.text(42, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
@@ -1976,7 +1969,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH)
       .setAlpha(HUD_CARD_ALPHA)
       .setInteractive()
-      .on('pointerdown', stopTaps);
+      .on('pointerdown', this.stopTaps);
     label.setX(barX + 12);
     const frames: Phaser.GameObjects.Image[] = [];
     const bins: Phaser.GameObjects.Image[] = [];
@@ -2091,6 +2084,12 @@ export class GameScene extends Phaser.Scene {
       });
     return [button, text] as const;
   }
+
+  /** Stops a tap on a HUD card here rather than letting it fall through to a sign in the world below. */
+  private readonly stopTaps = (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+    e.stopPropagation();
+    this.pinching();
+  };
 
   /** True while two fingers are down, which starts a pinch; it also cancels the walk. */
   private pinching() {

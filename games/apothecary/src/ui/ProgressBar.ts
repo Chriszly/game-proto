@@ -20,6 +20,11 @@ export class ProgressBar {
     this.bar = scene.add.graphics().setDepth(depth);
   }
 
+  /** Removes the bar from its scene. */
+  destroy() {
+    this.bar.destroy();
+  }
+
   /** Changes how wide the bar is, keeping its middle, from the next `set` on. */
   resize(width: number) {
     if (width === this.width) return;
