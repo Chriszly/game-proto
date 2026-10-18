@@ -72,5 +72,45 @@ export const SKILL_BOOK = {
 };
 export const BUTTON = { w: 180, h: 40 };
 
+/**
+ * The part of the world the view shows. The camera keeps the designed 960x540 in the middle of a
+ * view that fills a screen of another shape (`setupScaling(game, { fill: true })`), so the world
+ * keeps its coordinates and this runs from (-frame.x, -frame.y). Set by `placeHud`.
+ */
+export const SEEN = { x: 0, y: 0, w: VIEW.w, h: VIEW.h };
+
+type Box = { x: number; y?: number; w?: number };
+/** HUD boxes pinned to the view's edges, with their designed positions: left or right, top or bottom, or stretched across. */
+const TRACK_MARK_Y = TRACK.markY;
+const PINS: [Box, 'left' | 'right' | 'stretch', 'top' | 'bottom', Box][] = (
+  [
+    [BARRICADE_BAR, 'left', 'top'],
+    [TRACK, 'left', 'top'],
+    [HEAT, 'left', 'top'],
+    [BOSS_BAR, 'left', 'top'],
+    [FORTIFY, 'left', 'top'],
+    [REPAIR, 'left', 'top'],
+    [SKILL_BOOK.button, 'left', 'top'],
+    [XP_BAR, 'stretch', 'bottom'],
+    [SPEED, 'right', 'bottom'],
+    [STREAK, 'right', 'bottom'],
+  ] as [Box, 'left' | 'right' | 'stretch', 'top' | 'bottom'][]
+).map(([box, h, v]) => [box, h, v, { ...box }]);
+
+/**
+ * Sets `SEEN` for a view with the designed size at `frame` in its middle (`viewFrame`), and pins
+ * the HUD's boxes to the view's edges. With no margins (exactly 960x540) nothing moves.
+ */
+export function placeHud(frame: { x: number; y: number }) {
+  Object.assign(SEEN, { x: -frame.x, y: -frame.y, w: VIEW.w + 2 * frame.x, h: VIEW.h + 2 * frame.y });
+  for (const [box, h, v, design] of PINS) {
+    box.x = design.x + (h === 'right' ? frame.x : -frame.x);
+    if (h === 'stretch') box.w = design.w! + 2 * frame.x;
+    if (design.y !== undefined) box.y = design.y + (v === 'bottom' ? frame.y : -frame.y);
+  }
+  // The track's marks ride in its panel.
+  TRACK.markY = TRACK_MARK_Y - frame.y;
+}
+
 export const UI_DEPTH = 10_000;
 export const FONT = 'system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';

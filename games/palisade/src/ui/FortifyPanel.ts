@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ui } from '../../../../shared/audio';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
-import { FORTIFY, UI_DEPTH, VIEW } from '../scenes/layout';
+import { FORTIFY, SEEN, UI_DEPTH, VIEW } from '../scenes/layout';
 import { FORT_IDS, FORTS, type FortId } from '../game/forts';
 import type { Forts } from '../game/state';
 import { drawPanel, textStyle } from './panel';
@@ -23,7 +23,7 @@ export class FortifyPanel {
     private onBuy: (id: FortId) => void,
   ) {
     const dim = scene.add
-      .rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.35)
+      .rectangle(VIEW.w / 2, VIEW.h / 2, SEEN.w, SEEN.h, 0x0e1218, 0.35)
       .setInteractive()
       .on('pointerdown', () => this.close());
     this.body = scene.add.container(0, 0);
