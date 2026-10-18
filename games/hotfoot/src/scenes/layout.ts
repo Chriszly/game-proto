@@ -1,14 +1,24 @@
-// Where things are drawn in the 960x540 view. The rules' own sizes (the knight's box, jump and
-// trap heights) are in src/game/state.ts.
+// Where things are drawn, laid out for the designed 960x540 view. The game fills every screen shape
+// (`setupScaling(game, { fill: true })`), so `fitLayout` moves these to the view picked at start,
+// before anything is painted: the world gets wider and its sky taller, the HUD's middle and right
+// stay pinned, and the margin under the road keeps to the bottom edge. At 960x540 nothing moves.
+// The rules' own sizes (the knight's box, jump and trap heights) are in src/game/state.ts.
 
-export const VIEW = { w: 960, h: 540 };
+/** The designed view. */
+export const DESIGN = { w: 960, h: 540 };
+/** The view the game runs in: the designed size grown to the screen's shape (see `fitLayout`). */
+export const VIEW = { ...DESIGN };
+/** The road's top in the designed view. */
+export const DESIGN_GROUND_Y = 430;
 export const HUD_HEIGHT = 40;
-/** The top of the road, where the knight's feet run. */
-export const GROUND_Y = 430;
-/** Where the knight runs across the screen; the course scrolls past. */
-export const RUNNER_X = 220;
+/** The top of the road, where the knight's feet run; lower on a taller view, under a taller sky. */
+export let GROUND_Y = DESIGN_GROUND_Y;
+/** Where the knight runs across the screen; the course scrolls past. Further right on a wider view. */
+export let RUNNER_X = 220;
 /** Taps above this line jump, taps below it slide. */
-export const TAP_SPLIT_Y = VIEW.h / 2;
+export let TAP_SPLIT_Y = VIEW.h / 2;
+/** How far the HUD's middle items (the stage's name, streak chip, run track) and its right-hand items moved from the designed view. */
+export const HUD_SHIFT = { mid: 0, right: 0 };
 /** The miniature's gold frame: the painted scene sits inside it, the vellum margin round it. */
 export const FRAME = { x: 7, y: 42, w: 946, bottom: GROUND_Y + 11 };
 /** The run track under the HUD: its vellum strip, and the ruled line from 0 m to its end. */
@@ -37,3 +47,39 @@ export const ACTION_BUTTONS = { y: 490, r: 40, slideX: 780, jumpX: 890 };
 
 export const UI_DEPTH = 10_000;
 export const FONT = 'Georgia, "Times New Roman", "DejaVu Serif", serif';
+
+/**
+ * Moves the layout to a view of `w` x `h` game pixels (`viewSize`), at least the designed size:
+ * `dx` more wide puts the knight and the HUD's middle `dx / 2` right and its right-hand items `dx`
+ * right; `dy` more tall lowers the road and everything under it by `dy`, so the sky above grows.
+ * Overlays centre in the view. Called once by `BootScene`, before any art is painted.
+ */
+export function fitLayout(w: number, h: number) {
+  const dx = Math.max(0, Math.round(w - DESIGN.w));
+  const dy = Math.max(0, Math.round(h - DESIGN.h));
+  if (VIEW.w !== DESIGN.w || VIEW.h !== DESIGN.h || (dx === 0 && dy === 0)) return;
+  const mid = Math.round(dx / 2);
+  VIEW.w += dx;
+  VIEW.h += dy;
+  GROUND_Y += dy;
+  RUNNER_X += mid;
+  TAP_SPLIT_Y = VIEW.h / 2;
+  HUD_SHIFT.mid = mid;
+  HUD_SHIFT.right = dx;
+  FRAME.w += dx;
+  FRAME.bottom += dy;
+  for (const k of ['left', 'right', 'x0', 'x1'] as const) TRACK[k] += mid;
+  TAG.x += dx;
+  DARE_TAG.x += dx;
+  STAGE_TITLE.x += mid;
+  STAGE_TITLE.y += Math.round(dy / 2);
+  STREAK_CHIP.x += mid;
+  MARGIN.scrollY += dy;
+  MARGIN.captionX += mid;
+  MARGIN.captionY += dy;
+  for (const xs of Object.values(CARDS.xs)) xs.forEach((x, i) => (xs[i] = x + mid));
+  CARDS.y += Math.round(dy / 2);
+  ACTION_BUTTONS.y += dy;
+  ACTION_BUTTONS.slideX += dx;
+  ACTION_BUTTONS.jumpX += dx;
+}

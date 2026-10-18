@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FRAME, GROUND_Y, MARGIN, VIEW } from '../scenes/layout';
+import { DESIGN, DESIGN_GROUND_Y, FRAME, GROUND_Y, MARGIN, VIEW } from '../scenes/layout';
 import { C, bezant, circle, gold, heartPath, hl, oval, paint, poly, seeded, shade, star6, type Ctx, type Pt } from './ink';
 
 // The world as a gothic miniature on a vellum page: a diapered sky of lapis and madder lozenges with
@@ -7,9 +7,13 @@ import { C, bezant, circle, gold, heartPath, hl, oval, paint, poly, seeded, shad
 // lollipop trees and a ruined tower nearer the road, a turf road strewn with flowers, and a margin of
 // acanthus scrollwork under it. Traps, coins, the checkpoint banner and the wayside shrine are
 // painted in the same flat colours and ink. Most of it is drawn in page units (twice screen size) and
-// scaled by half, so the numbers match the approved mockup. The scrolling layers wrap every 960 px.
+// scaled by half, so the numbers match the approved mockup. The scrolling layers wrap every 960 px;
+// the page, sky and frame are painted as wide as the view, and the sky as tall as the road is low.
 
-const W = VIEW.w;
+/** The width the scrolling layers wrap at. */
+const W = DESIGN.w;
+/** How much lower the road is than designed, in page units (a taller view grows the sky). */
+const lift = () => (GROUND_Y - DESIGN_GROUND_Y) * U;
 /** Page units per screen pixel. */
 const U = 2;
 /** The road in page units, inside a layer whose bottom edge is the road. */
@@ -17,6 +21,7 @@ const half = (ctx: Ctx) => ctx.scale(1 / U, 1 / U);
 
 /** The vellum page behind everything: stains, and the bas-de-page scrollwork with its snail. */
 function page(scene: Phaser.Scene) {
+  const W = VIEW.w;
   paint(scene, 'page', W, VIEW.h, (ctx) => {
     ctx.fillStyle = C.vellum;
     ctx.fillRect(0, 0, W, VIEW.h);
@@ -63,8 +68,8 @@ function page(scene: Phaser.Scene) {
       circle(ctx, cx + 46, yB - 30 * s, 6, gold(ctx, cx + 40, yB - 6, cx + 52, yB + 6), 2);
     }
     // A snail crawling along the margin: a drollery.
-    const sx = 1780;
-    const sy = 1040;
+    const sx = (W - 70) * U;
+    const sy = (MARGIN.scrollY + 33) * U;
     poly(ctx, [[sx - 40, sy], [sx + 50, sy], [sx + 60, sy - 12], [sx + 70, sy - 30], [sx + 64, sy - 34], [sx + 52, sy - 14], [sx - 30, sy - 8]], '#c9b08a', 2.5);
     circle(ctx, sx, sy - 26, 24, C.madder, 2.5);
     ctx.strokeStyle = C.goldLight;
@@ -88,16 +93,19 @@ function page(scene: Phaser.Scene) {
 
 /** The miniature's sky, inside the frame: a diaper of lapis and madder, sunset clouds, stars and the moon. */
 function sky(scene: Phaser.Scene) {
+  const W = VIEW.w;
   const w = FRAME.w;
   const h = GROUND_Y - FRAME.y;
   paint(scene, 'sky', w, h, (ctx) => {
     half(ctx);
-    // Page coordinates of the mockup: the sky's top-left corner is (14, 84).
-    ctx.translate(-FRAME.x * U, -FRAME.y * U);
+    // Page coordinates of the mockup: the sky's top-left corner is (14, 84). A taller sky moves
+    // everything down by `lift` and carries the diaper on up.
+    const up = lift();
+    ctx.translate(-FRAME.x * U, -FRAME.y * U + up);
     const top = FRAME.y * U;
-    const bottom = GROUND_Y * U;
+    const bottom = GROUND_Y * U - up;
     const D = 56;
-    for (let r = -1; (r * D) / 2 < bottom - top + D; r++) {
+    for (let r = -1 - 2 * Math.ceil(up / D); (r * D) / 2 < bottom - top + D; r++) {
       for (let c = -1; c * D < W * U + D; c++) {
         const cx = c * D + (r % 2 ? D / 2 : 0);
         const cy = top + (r * D) / 2;
@@ -428,8 +436,8 @@ function blade(scene: Phaser.Scene) {
   paint(scene, 'blade', 46, bottom, (ctx) => {
     half(ctx);
     ctx.translate(46, 0);
-    const top = 622;
-    const log = 760;
+    const top = 622 + lift();
+    const log = 760 + lift();
     const tip = bottom * U;
     const w = 54;
     for (let y = 0; y < top - 4; y += 15) {
@@ -661,6 +669,7 @@ function banderole(scene: Phaser.Scene) {
  * one round the painted scene.
  */
 function frame(scene: Phaser.Scene) {
+  const W = VIEW.w;
   paint(scene, 'frame', W, VIEW.h, (ctx) => {
     ctx.fillStyle = C.vellum;
     ctx.fillRect(0, FRAME.y - 4, FRAME.x, FRAME.bottom - FRAME.y + 8);

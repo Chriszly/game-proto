@@ -45,7 +45,7 @@ import {
 import { t, type TextKey } from '../i18n';
 import { BoonCards } from '../ui/BoonCards';
 import { makeButton } from '../ui/Button';
-import { ACTION_BUTTONS, ARMOURY_PANEL, DARE_TAG, FONT, FRAME, GROUND_Y, MARGIN, RUNNER_X, STAGE_TITLE, STREAK_CHIP, TAG, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
+import { ACTION_BUTTONS, ARMOURY_PANEL, DARE_TAG, FONT, FRAME, GROUND_Y, HUD_SHIFT, MARGIN, RUNNER_X, STAGE_TITLE, STREAK_CHIP, TAG, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the run forward. */
 const MAX_STEP_MS = 100;
@@ -672,13 +672,15 @@ export class GameScene extends Phaser.Scene {
     const d = UI_DEPTH;
     this.add.image(0, 0, 'hud-band').setOrigin(0).setDepth(d);
     this.hud = this.add.graphics().setDepth(d + 1);
-    this.add.image(457, 20, 'initial').setDepth(d + 1);
-    this.stageText = this.add.text(474, 21, '', textStyle(19, C.goldPale, 0)).setOrigin(0, 0.5).setDepth(d + 1);
-    this.distText = this.add.text(719, 21, '', textStyle(17, C.goldPale, 0)).setOrigin(0.5).setDepth(d + 1);
-    this.add.image(765, 21, 'coin-0').setDepth(d + 1);
-    this.coinText = this.add.text(794, 21, '', textStyle(17, C.goldLight, 0)).setOrigin(0.5).setDepth(d + 1);
-    this.coinsLabel = this.add.text(815, 22, t('coins'), { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: C.frost }).setOrigin(0, 0.5).setDepth(d + 1);
-    this.bestText = this.add.text(905, 21, '', textStyle(16, C.frost, 0)).setOrigin(0.5).setDepth(d + 1);
+    // The hearts keep to the left edge, the stage's name to the middle, the distance, coins and best to the right edge.
+    const { mid, right } = HUD_SHIFT;
+    this.add.image(457 + mid, 20, 'initial').setDepth(d + 1);
+    this.stageText = this.add.text(474 + mid, 21, '', textStyle(19, C.goldPale, 0)).setOrigin(0, 0.5).setDepth(d + 1);
+    this.distText = this.add.text(719 + right, 21, '', textStyle(17, C.goldPale, 0)).setOrigin(0.5).setDepth(d + 1);
+    this.add.image(765 + right, 21, 'coin-0').setDepth(d + 1);
+    this.coinText = this.add.text(794 + right, 21, '', textStyle(17, C.goldLight, 0)).setOrigin(0.5).setDepth(d + 1);
+    this.coinsLabel = this.add.text(815 + right, 22, t('coins'), { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: C.frost }).setOrigin(0, 0.5).setDepth(d + 1);
+    this.bestText = this.add.text(905 + right, 21, '', textStyle(16, C.frost, 0)).setOrigin(0.5).setDepth(d + 1);
 
     // The streak chip: a gold medallion with the multiplier, its name, and a bar to the next one.
     const c = STREAK_CHIP;
@@ -824,7 +826,7 @@ export class GameScene extends Phaser.Scene {
     const right = VIEW.w - 10;
     const scale = Math.min(1, (right - left) / text.width);
     const half = (text.width * scale) / 2;
-    text.setScale(scale).setX(Phaser.Math.Clamp(905, left + half, right - half));
+    text.setScale(scale).setX(Phaser.Math.Clamp(905 + HUD_SHIFT.right, left + half, right - half));
   }
 
   private createTitle() {
