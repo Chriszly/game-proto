@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
-import { renderScale } from '../../../../shared/scaling';
+import { renderScale, viewFrame, viewSize } from '../../../../shared/scaling';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { SONG, sfx } from '../audio';
 import { CANVAS, TS, nameColor, paintFog, paintTerrain, placeNames, tintOf } from '../art/map';
@@ -100,7 +100,6 @@ import {
   SHOP,
   SMALL_BUTTON,
   UI_DEPTH,
-  VIEW,
   tileCentre,
 } from './layout';
 
@@ -259,6 +258,10 @@ export class GameScene extends Phaser.Scene {
     this.overlayKey = '';
     this.musicPart = '';
     this.state = loadGame() ?? newGame();
+    // The sheet is laid out for 960x540; on a screen of another shape the camera centres it in the
+    // view and the drafting table fills the rest.
+    const frame = viewFrame(this);
+    this.cameras.main.setScroll(-frame.x, -frame.y);
 
     this.drawSheet();
     this.terrainTex = this.canvasTexture('island-terrain');
@@ -444,13 +447,24 @@ export class GameScene extends Phaser.Scene {
 
   // ---- The sheet.
 
+  /** The whole view in world coordinates: the designed 960x540 with the extra the screen's shape adds around it. */
+  private viewRect() {
+    const frame = viewFrame(this);
+    const { width, height } = viewSize(this);
+    return { x: -frame.x, y: -frame.y, w: width, h: height };
+  }
+
   /** The drafting table, the survey sheet with its header, scale bar, north arrow and grid labels, and the panel card. */
   private drawSheet() {
     const g = this.add.graphics();
-    g.fillStyle(hex(TABLE)).fillRect(0, 0, VIEW.w, VIEW.h);
+    const table = this.viewRect();
+    g.fillStyle(hex(TABLE)).fillRect(table.x, table.y, table.w, table.h);
     g.lineStyle(1, hex(TABLE_LINE), 0.1);
-    for (let x = 0; x < VIEW.w; x += 12) g.lineBetween(x + 0.5, 0, x + 0.5, VIEW.h);
-    for (let y = 0; y < VIEW.h; y += 12) g.lineBetween(0, y + 0.5, VIEW.w, y + 0.5);
+    // The grid lines stay on the sheet's 12px pitch, out past its edges.
+    const x0 = table.x - (((table.x % 12) + 12) % 12);
+    const y0 = table.y - (((table.y % 12) + 12) % 12);
+    for (let x = x0; x < table.x + table.w; x += 12) g.lineBetween(x + 0.5, table.y, x + 0.5, table.y + table.h);
+    for (let y = y0; y < table.y + table.h; y += 12) g.lineBetween(table.x, y + 0.5, table.x + table.w, y + 0.5);
     for (const r of [SHEET_RECT, PANEL]) {
       for (let k = 1; k <= 4; k++) g.fillStyle(0x000000, 0.035).fillRect(r.x - k + 1, r.y - k + 3 + k, r.w + 2 * k - 2, r.h + 2 * k - 2);
     }
@@ -1251,7 +1265,8 @@ export class GameScene extends Phaser.Scene {
   private overlayBase(title: string) {
     const c = this.add.container(0, 0).setDepth(UI_DEPTH);
     // The dim covers the whole screen and swallows taps, so the map can't be surveyed behind it.
-    const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, hex(DIM), DIM_ALPHA).setOrigin(0).setInteractive();
+    const view = this.viewRect();
+    const dim = this.add.rectangle(view.x, view.y, view.w, view.h, hex(DIM), DIM_ALPHA).setOrigin(0).setInteractive();
     const left = OVERLAY.x - OVERLAY.w / 2;
     const top = OVERLAY.y - OVERLAY.h / 2;
     const g = this.add.graphics();
