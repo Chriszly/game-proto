@@ -347,12 +347,33 @@ export const lessonCost = (id: ShopId, lesson: Lesson) => tierCost(id, LESSON_CO
 export const RECIPE_COST = 60;
 export const recipeCost = (id: ShopId, level: number) => tierCost(id, RECIPE_COST) * 2 ** level;
 
+/**
+ * A shop's guild, joined once for `GUILD_JOIN_COST`, then selling its upgrades like the
+ * apothecary's guild: faster beds, faster pixies, more room on every pallet and shelf, dearer
+ * prices, another place at the counter and customers coming in more often.
+ */
+export const SHOP_GUILD = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers'] as const;
+export type ShopGuild = (typeof SHOP_GUILD)[number];
+/** Each guild upgrade's levels, and its first cost, doubling a level, before the shop's `tierCost`. */
+export const SHOP_GUILD_UPGRADES: Record<ShopGuild, { max: number; cost: number }> = {
+  growth: { max: 2, cost: 60 },
+  belts: { max: 2, cost: 90 },
+  storage: { max: 3, cost: 75 },
+  prices: { max: 2, cost: 60 },
+  slots: { max: 1, cost: 90 },
+  customers: { max: 2, cost: 75 },
+};
+export const GUILD_JOIN_COST = 150;
+export const guildJoinCost = (id: ShopId) => tierCost(id, GUILD_JOIN_COST);
+export const guildCost = (id: ShopId, upgrade: ShopGuild, level: number) => tierCost(id, SHOP_GUILD_UPGRADES[upgrade].cost) * 2 ** level;
+
 /** Beds in each garden, three by three like the apothecary's. */
 export const BEDS = 9;
 /** What each station's in and out pallets, and the shelf, hold of each good. */
 export const SHOP_STORAGE = 12;
-/** Customers at the counter at once. */
+/** Customers at the counter at once, and with the guild's slots. */
 export const SHOP_PLACES = 3;
+export const MAX_SHOP_PLACES = SHOP_PLACES + SHOP_GUILD_UPGRADES.slots.max;
 /** How long a customer takes to walk from the street to the counter. */
 export const WALK_IN_MS = 3_000;
 export const SHOP_PATIENCE = 40_000;
@@ -420,6 +441,8 @@ export interface ShopState {
   study: Record<Lesson, Upgrade>;
   /** The recipes learned at this shop's study: `level` of its `research`, in order. */
   recipes: Upgrade;
+  /** The shop's guild: `join` once, then its upgrades. */
+  guild: Record<'join' | ShopGuild, Upgrade>;
   /** What each station makes first once the crafting order is learned, or null for its own order. */
   priority: Record<string, GoodId | null>;
   /** Each shelf's price sign once the price signs are learned; Fair unless set. */
@@ -456,6 +479,7 @@ export function createShop(id: ShopId): ShopState {
     outfitter: { pack: none(), boots: none(), sickle: none() },
     study: { craftOrder: none(), priceSigns: none() },
     recipes: none(),
+    guild: { join: none(), growth: none(), belts: none(), storage: none(), prices: none(), slots: none(), customers: none() },
     priority: Object.fromEntries(def.stations.map((s) => [s.id, null])),
     signs: {},
   };
@@ -482,6 +506,7 @@ export function normalizeTown(saved: Partial<TownState> | undefined): TownState 
       outfitter: { ...fresh.outfitter, ...shop.outfitter },
       study: { ...fresh.study, ...shop.study },
       recipes: shop.recipes ?? fresh.recipes,
+      guild: { ...fresh.guild, ...shop.guild },
       priority: { ...fresh.priority, ...shop.priority },
     };
   }
@@ -496,6 +521,21 @@ export const gardenOfBed = (bed: number) => Math.floor(bed / BEDS);
 
 /** Whether a station takes a good: it is an input of one of its recipes. */
 export const takes = (station: StationDef, good: GoodId) => station.recipes.some((r) => r.inputs.includes(good));
+
+/** A shop guild upgrade's level. */
+const guildLevel = (shop: ShopState, upgrade: ShopGuild) => shop.guild[upgrade].level;
+/** What each pallet and shelf of a shop holds of a good: 6 more a level of its guild's storage. */
+export const shopStorage = (shop: ShopState) => SHOP_STORAGE + 6 * guildLevel(shop, 'storage');
+/** Customers at a shop's counter at once. */
+export const shopPlaces = (shop: ShopState) => SHOP_PLACES + guildLevel(shop, 'slots');
+/** How fast a shop's beds grow: a quarter faster a level of its guild's growth. */
+export const shopGrowth = (shop: ShopState) => 1 + 0.25 * guildLevel(shop, 'growth');
+/** How fast a shop's pixies fly: half again as fast a level. */
+export const shopRouteSpeed = (shop: ShopState) => ROUTE_SPEED * (1 + 0.5 * guildLevel(shop, 'belts'));
+/** What a shop's prices are multiplied by: a quarter more a level. */
+export const shopPriceBoost = (shop: ShopState) => 1 + 0.25 * guildLevel(shop, 'prices');
+/** How much more often customers come in: once more as often a level. */
+export const shopFootfall = (shop: ShopState) => 1 + guildLevel(shop, 'customers');
 
 /** Whether a shop's study has taught a lesson. */
 export const shopStudied = (shop: ShopState, lesson: Lesson) => shop.study[lesson].level > 0;

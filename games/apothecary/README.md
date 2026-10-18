@@ -380,6 +380,9 @@ before (three times as much a shop) but nothing like the shop itself:
 | Outfitter: pack, boots, sickle (one level each) | 360, 300, 300 |
 | Study: crafting order, price signs | 120, 180 |
 | Study: apple tart, then fruit cake | 180, 360 |
+| Guild: join | 450 |
+| Guild: growth, pixies, prices (2 levels each) | 180, 360; 270, 540; 180, 360 |
+| Guild: storage (3 levels), slots (1), customers (2) | 225, 450, 900; 270; 225, 450 |
 
 Between its gardens and its first station, every shop has a little market of its own, like the
 apothecary's. Its **outfitter** sells one more level of the doctor's pack, boots and sickle, which
@@ -405,6 +408,15 @@ shop as in the one before:
 | Tavern | Orchard (apples) | Cider: two apples (3,645) | Apple ale: malt, dried hops and an apple (5,346) |
 
 ![The bakery's orchard, planted with the apple tart learned, and the fruit cake for sale at its study](docs/screenshots/shop-recipes.webp)
+
+Under its first two stations every shop also has a **guild**, like the apothecary's. Join it once,
+and its six upgrades go up for sale in a row: growth (its beds grow a quarter faster a level), pixies
+(half again as fast a level), storage (6 more of each good on every pallet and shelf a level, from
+12), prices (a quarter dearer a level), slots (a fourth customer at the counter) and customers (they
+come in as often again a level). They count only in that shop, and cost three times as much in
+each shop as in the one before.
+
+![A shop's guild, joined, with its upgrades for sale](docs/screenshots/shop-guild.webp)
 
 ![A shop's market: the outfitter's three markers and the study's two lessons](docs/screenshots/town-market.webp)
 

@@ -49,7 +49,7 @@ study, shade gardens and a mirrored second production line.
   iron pots) and the Tavern (barley field and hop garden, maltings, oast and brew kettle, ale and
   stout). Each shop also has a third garden and two recipes its study teaches (apple tart and
   fruit cake, lavender soap and scented candle, red cloth and gown with madder and red dye, copper
-  pot and lantern, cider and apple ale). With more than three lots the map lays them in two rows of shorter cards (`lot`), and
+  pot and lantern, cider and apple ale). Each shop has a guild of its own too: growth, pixies, storage, prices, slots and customers. With more than three lots the map lays them in two rows of shorter cards (`lot`), and
   keeps `CORNER_H` free at the bottom for the corner buttons. Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
   households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
   then houses, manors, which want candles and tapers, mansions, which want blue cloth and cloaks, palaces, which want horseshoes and iron pots, and castles, drawn as battlemented towers, which want ale and stout) and buys it off a shop's shelf (potions
@@ -163,6 +163,10 @@ study, shade gardens and a mirrored second production line.
   product is known (not in `research`, or learned), `shopMakes` whether a good is in use yet (known,
   and taken by a known recipe if any takes it), `shopSells` what customers ask for. The third garden
   (index `OPEN_GARDENS`) grows, ripens and feeds its pixies only once `gardenOpen` (a recipe learned).
+  Each shop's guild (`ShopState.guild`: `join`, then one `Upgrade` per `SHOP_GUILD` id;
+  `SHOP_GUILD_UPGRADES` for levels and costs, `GUILD_JOIN_COST`, `guildJoinCost`, `guildCost`) feeds
+  `shopStorage` (pallets and shelves, in place of `SHOP_STORAGE`), `shopPlaces` (up to
+  `MAX_SHOP_PLACES`), `shopGrowth`, `shopRouteSpeed`, `shopPriceBoost` and `shopFootfall`.
 - `src/game/districts.ts`: the households' data, free of Phaser: `Need` (a good or a potion),
   `DISTRICTS`, `HOME_TIERS` (each tier's name and needs), the growth numbers (`START_HOMES`,
   `MAX_HOMES`, `SUPPLY_MS`, `HAPPY_PULL`, `HAPPY`, `UNHAPPY`, `GROW_ROUNDS`), `DistrictState`
@@ -176,13 +180,13 @@ study, shade gardens and a mirrored second production line.
   takes a good off a bought shop's shelf or a potion, plain first, off `state.counter.shelf`, and
   pays the price into that till). Districts use no randomness. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
   `pickUpFromStation`, `stockShopShelf`, `collectShopTill`, `tossGood`, `payStationLevel`,
-  `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`, `payGear`, `payLesson`, `payRecipe`,
+  `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`, `payGear`, `payLesson`, `payRecipe`, `payGuildJoin`, `payGuildUpgrade`,
   `cycleShopPriority`, `cycleShopSign`) return `Feedback` like the sim's. `nextRecipe` skips recipes
   not learned yet and takes the station's priority first when it is ready; `runOrders` draws wants by `SIGN_DEMAND`, pays
-  `shopPrice` (counter level and sign) and runs patience down by `SIGN_PATIENCE`.
+  `shopPrice` (counter level, guild prices and sign) and runs patience down by `SIGN_PATIENCE`.
 - `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
   `ShopDef` (`gardenLayout`, `bedPosition`, `MARKET` for the outfitter and study, with its recipe marker, between the
-  gardens and the first station, `stationLayout` with its `priority` sign, `counterLayout` with each
+  gardens and the first station, `stationLayout` with its `priority` sign, `guildLayout` under the first two stations, `counterLayout` with each
   shelf's `priceSign`, `routePath`, `routeMs`); Phaser-free, since the sim reads route lengths from it.
 - `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
   (saves, then starts another scene, which loads the save again) and `keepSaving`.
