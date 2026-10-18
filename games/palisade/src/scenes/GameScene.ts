@@ -1,6 +1,7 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { ui } from '../../../../shared/audio';
+import { formatNumber } from '../../../../shared/i18n';
 import { sfx } from '../audio/sfx';
 import { FIGURES, foeTexture, guardTexture } from '../art/characters';
 import { bossNodeTexture, relicTexture } from '../art/icons';
@@ -282,8 +283,9 @@ export class GameScene extends Phaser.Scene {
     this.sounds.mark(s);
     let ticked = 0;
     if (!this.skillBook.open && !this.hirePanel.open && !this.fortifyPanel.open) {
-      // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
-      const game = s.choices ? dt : dt * this.speed;
+      // The battle plays at the chosen speed; the level-up's and the road choice's auto-pick
+      // countdowns stay in real seconds.
+      const game = s.choices || s.roadChoices ? dt : dt * this.speed;
       tick(s, game, this.levelUp.autoPick);
       if (!s.choices && !held(s)) this.clock += game;
       ticked = game;
@@ -445,8 +447,8 @@ export class GameScene extends Phaser.Scene {
       sprite.setAlpha(fade);
       this.eliteLabels.get(e.id)?.setAlpha(fade);
       // A hit flashes white, in blinks so a foe under steady fire still shows; with reduced motion
-      // the blinks and the burn's flicker hold still.
-      if (e.hitMs > 0 && this.blink(50) === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      // there is no flash and the burn's flicker holds still.
+      if (e.hitMs > 0 && !settings.reduceMotion && this.blink(50) === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else if (e.burnMs > 0) sprite.setTint(this.blink(120) ? 0xffb070 : 0xffd8a0).setTintMode(Phaser.TintModes.MULTIPLY);
       else if (e.slowMs > 0) sprite.setTint(0xa8dcf8).setTintMode(Phaser.TintModes.MULTIPLY);
       else if (e.trait === 'enraged' && e.hp < e.maxHp / 2) sprite.setTint(0xffb0a0).setTintMode(Phaser.TintModes.MULTIPLY);
@@ -853,7 +855,7 @@ export class GameScene extends Phaser.Scene {
     for (let x = bx + 15; x < bx + fw; x += 22) g.lineBetween(x, by + 14, x - 4, by + 26);
     this.foesText.setText(t('foesLeft', { n: s.toSpawn.length + s.enemies.length }));
     this.slainText.setText(t('slain', { n: s.kills }));
-    this.coinsText.setText(String(s.coins));
+    this.coinsText.setText(formatNumber(s.coins));
     this.bestText.setText(t('bestWave', { n: s.bestWave }));
 
     // Experience along the bottom: the blue fill, and a gold preview of the experience still
@@ -989,7 +991,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     const current = step <= 9;
-    this.trackNumber.setVisible(current).setPosition(at(step), y).setText(String(s.wave));
+    this.trackNumber.setVisible(current).setPosition(at(step), y).setText(formatNumber(s.wave));
     fit(this.trackBoss.setTexture(bossNodeTexture(tr.boss)), 0.62).setPosition(at(10), y).setAlpha(step > 10 ? 0.6 : 1);
     if (step === 10) g.lineStyle(2, GOLD.light, 0.5 + 0.5 * this.pulse(700)).strokePoints(this.hexPts(at(10), y, 13), true);
     fit(this.trackChest.setTexture(finished ? 'chest-open' : 'chest'), 0.62).setPosition(at(10) + 30, y - 1);
@@ -1404,7 +1406,7 @@ export class GameScene extends Phaser.Scene {
       this.guardFlash.push(0);
       this.lastGuardCd.push(0);
       this.add
-        .zone(slot.x, slot.y - GUARD_HIT.h / 2 + 8, GUARD_HIT.w, GUARD_HIT.h)
+        .zone(slot.x, slot.y - GUARD_HIT.h / 2 + GUARD_HIT.below, GUARD_HIT.w, GUARD_HIT.h)
         .setDepth(UI_DEPTH - 3)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -1600,6 +1602,7 @@ export class GameScene extends Phaser.Scene {
   /** A new run at an unlocked heat, from wave 1 (or a forced march's start) with the hero kept. */
   private restartAt(heat: number, start = 1) {
     this.state = startHeat(this.state, heat, start);
+    this.startWave = 1;
     saveProgress(progressOf(this.state));
     this.clearSprites();
   }

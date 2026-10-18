@@ -34,7 +34,7 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | Tap a road card | After a boss, take that road for the next ten waves (after 10 seconds one is taken at random) |
 | Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random, and a pop-up names it) |
 | Auto-pick checkbox (beside the level-up's countdown) | On by default; untick it to halt the countdown so a level-up waits for your pick, tick it to let it run again |
-| 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up countdown stays 10 real seconds |
+| 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up and road countdowns stay 10 real seconds |
 | Skill book (in the top bar) | Open the skill book; the battle waits until Back |
 | Hover over (or tap) the barricade's bar | Show its health, what Stout Timber adds and how much it mends after each wave |
 | Fight again / New hero | After a fall: start again keeping the hero, or with a new one; the "Next run at" row picks the heat and the "Start at" row the wave (a forced march) |
@@ -239,7 +239,7 @@ the panel is open.
 
 | Fortification | Cost | What it does |
 | --- | --- | --- |
-| Stake line | 25 coins | A row of stakes behind the barricade. Once the barricade is down, foes stop at the stakes and hack through 80 of them before walking on (Spiked Stakes pricks them there too); buying it again sets it back to full |
+| Stake line | 25 coins | A row of stakes behind the barricade. Once the barricade is down, foes stop at the stakes and hack through 80 of them before walking on (Spiked Stakes pricks them there too), and foes at the stakes stay at them when the barricade is mended; buying it again sets it back to full |
 | Oil pot | 15 coins | Armed on the barricade (one at a time). The first foe to reach it next wave bursts the pot: every foe near it takes 15 and burns for 6s, Warded elites aside |
 | Lookout | 20 coins | A pennant on the barricade: Arrow Rain's ring is 40% wider for the next three waves (the one it was bought before included) |
 
