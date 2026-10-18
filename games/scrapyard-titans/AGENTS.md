@@ -74,7 +74,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540) with `GameScene`, calls `setupGame(game,
-  { howToPlay })` and `setupScaling(game)`, and in dev builds puts `game` on `window`.
+  { howToPlay })` and `setupScaling(game, { fill: true })` (the view takes the screen's shape,
+  960 to 1296 wide and 540 to 720 tall), and in dev builds puts `game` on `window`.
 - `howToPlay.ts`: the How to play text in British English (US English spells it the same and falls
   back to it) and German, picked with `byLanguage`; update both when controls or the loop change.
 - `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
@@ -101,8 +102,19 @@ File map (`src/`):
   commanders and part icons; `bakeAll` makes textures `unit:<id>`, `mon:<id>`, `cmd:<name key>` and
   `item:<id>` at `sharpRes` resolution.
 - `scenes/layout.ts`: positions of every HUD block and button, and the board projection
-  (`project`, `boardPoint`, `tileAt`).
-- `scenes/GameScene.ts`: scene key `Game`. The menu, the HUD (rebuilt when `dirty`), board and
+  (`project`, `boardPoint`, `tileAt`), all designed for 960x540. `GameScene.create` calls
+  `placeLayout` once with `viewSize` and `viewFrame`, which moves them in place for the real view
+  (`VIEWPORT` holds its size and the frame offset `fx`, `fy`): the board, bench, Lock, commander
+  homes and draft ring sit in the designed-size frame in the middle of the view, the shop and
+  terrain legend in it sideways but down at the bottom edge, the left column's bottom panel and
+  buttons (`LEFT_BOTTOM`, Reroll, Buy XP, Sell) at the bottom edge, the players list at the right
+  edge and the info panel, Fight, skill and speed buttons at the bottom right. The traits and parts
+  stay at the top left. At exactly 960x540 nothing moves. A new HUD position goes in `layout.ts`
+  with its line in `placeLayout`.
+- `scenes/GameScene.ts`: scene key `Game`. It imports `VIEWPORT` as `VIEW`, so `VIEW.w` and `h`
+  are the view's size: the sky, stars and top bar cover the whole view, the arena rings follow the
+  frame, and the menu, power card and end overlays are centred (x on `VIEW.w / 2`, y offset by
+  `VIEW.fy`). The menu, the HUD (rebuilt when `dirty`), board and
   unit views (`syncViews`, `drawUnits`), fight playback (`consume` turns events into effects,
   numbers and orbs), drafts, commanders, and input (`onDown`/`onMove`/`onUp` for tap and drag,
   `onKey`).
@@ -184,7 +196,8 @@ greyed-out button or shop card (`button` pushes a refusal for them).
   `cover.png`), `draft.webp` and `scrap-rat.webp` are from a scratch `?watch` run with the watch
   panel hidden; `scout.webp`, `part-preview.webp` and `damage-meter.webp` from a scratch run that
   plays round 1-1 with real clicks; `german-result.webp` is the test's `3-result` run with a
-  `de-DE` browser locale.
+  `de-DE` browser locale; `fill-ultrawide.webp` (2560x1080) and `fill-tablet.webp` (1024x768)
+  show the plan phase on a wider and a taller view, from a scratch run.
 
 ## Making common changes
 

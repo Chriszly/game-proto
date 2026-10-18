@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { viewPoint } from '../../../../shared/scaling';
+import { viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
 import { aiLog, mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { playMusic, playSting, stopMusic, ui, type PlayOptions } from '../../../../shared/audio';
 import { FIGHT_SONG, PLAN_SONG, play, type Sfx } from '../audio';
@@ -22,7 +22,7 @@ import { ordinal, t } from '../i18n';
 import { CMD_TEX, INK, UNIT_TEX, bakeAll, cmdKey, itemKey, monsterKey, textureRes, unitKey } from '../art/paint';
 import {
   BENCH, BOARD_VIEW, BUTTONS, COMMANDER_HOME, DRAFT_RING, INFO_PANEL, ITEMS_PANEL, PLAYERS_PANEL, RIVAL_HOME, SELL_ZONE, SHOP,
-  TRAITS_PANEL, UNIT_SCALE, VIEW, benchX, boardPoint, project, shopCardX, tileAt,
+  LEFT_BOTTOM, TERRAIN_LEGEND, TRAITS_PANEL, UNIT_SCALE, VIEWPORT as VIEW, benchX, placeLayout, boardPoint, project, shopCardX, tileAt,
 } from './layout';
 
 const C = {
@@ -188,6 +188,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    const view = viewSize(this);
+    const frame = viewFrame(this);
+    placeLayout(view.width, view.height, frame.x, frame.y);
     bakeAll(this);
     this.bgG = this.add.graphics().setDepth(0);
     this.boardG = this.add.graphics().setDepth(1);
@@ -199,7 +202,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.add(this.hudG);
     this.overlay = this.add.container(0, 0).setDepth(2000);
     this.topText = this.add.text(12, 8, '', { fontFamily: FONT, fontSize: '13px', color: C.text, fontStyle: 'bold' }).setDepth(1001);
-    this.banner = this.add.text(VIEW.w / 2, 206, '', { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold', stroke: INK, strokeThickness: 6 }).setOrigin(0.5).setDepth(1500);
+    this.banner = this.add.text(VIEW.w / 2, VIEW.fy + 206, '', { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold', stroke: INK, strokeThickness: 6 }).setOrigin(0.5).setDepth(1500);
     this.avatar = this.add.image(0, 0, cmdKey(PLAYER_COMMANDERS[0].name)).setOrigin(0.5, CMD_TEX.footY / CMD_TEX.h).setVisible(false);
     this.rivalImg = this.add.image(RIVAL_HOME.x, RIVAL_HOME.y, cmdKey(RIVALS[0].name)).setOrigin(0.5, CMD_TEX.footY / CMD_TEX.h).setVisible(false);
     this.bubble = this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '11px', color: '#1a1438', backgroundColor: '#e8f6ff', padding: { x: 6, y: 4 }, wordWrap: { width: 150 } }).setOrigin(1, 1).setDepth(1400).setVisible(false);
@@ -586,8 +589,8 @@ export class GameScene extends Phaser.Scene {
 
   private dropOrb(monsterId: number, item?: string, gold?: number) {
     const v = this.views.get(`b${monsterId}`);
-    const x = v?.x ?? 480;
-    const y = v?.y ?? 160;
+    const x = v?.x ?? VIEW.fx + 480;
+    const y = v?.y ?? VIEW.fy + 160;
     this.orbs.push({ x, y, item, gold, at: this.t });
   }
 
@@ -719,12 +722,18 @@ export class GameScene extends Phaser.Scene {
   private drawBackground() {
     const g = this.bgG;
     g.fillStyle(C.bg).fillRect(0, 0, VIEW.w, VIEW.h);
-    g.fillGradientStyle(0x120e2a, 0x120e2a, 0x2d1f5c, 0x2d1f5c, 1).fillRect(0, 0, VIEW.w, 380);
-    for (let i = 0; i < 90; i++) {
-      g.fillStyle(0xffffff, 0.25 + ((i * 37) % 10) / 20).fillRect((i * 157) % VIEW.w, (i * 61) % 340, (i % 7) === 0 ? 2 : 1.4, (i % 7) === 0 ? 2 : 1.4);
+    const { fx, fy } = VIEW;
+    // The sky runs down to the shop row (380 on the designed view), its stars to 40 above that.
+    const sky = VIEW.h - 160;
+    g.fillGradientStyle(0x120e2a, 0x120e2a, 0x2d1f5c, 0x2d1f5c, 1).fillRect(0, 0, VIEW.w, sky);
+    // The stars repeat in 960x340 tiles, so a wider or taller view gets more of them.
+    for (let ty = 0; ty < sky - 40; ty += 340) for (let tx = 0; tx < VIEW.w; tx += 960) for (let i = 0; i < 90; i++) {
+      const x = tx + ((i * 157) % 960);
+      const y = ty + ((i * 61) % 340);
+      if (x < VIEW.w && y < sky - 40) g.fillStyle(0xffffff, 0.25 + ((i * 37) % 10) / 20).fillRect(x, y, (i % 7) === 0 ? 2 : 1.4, (i % 7) === 0 ? 2 : 1.4);
     }
-    g.lineStyle(2, C.cyan, 0.22).strokeEllipse(480, 220, 860, 330);
-    g.lineStyle(1, C.cyan, 0.12).strokeEllipse(480, 220, 940, 380);
+    g.lineStyle(2, C.cyan, 0.22).strokeEllipse(fx + 480, fy + 220, 860, 330);
+    g.lineStyle(1, C.cyan, 0.12).strokeEllipse(fx + 480, fy + 220, 940, 380);
   }
 
   private drawBoard() {
@@ -1086,20 +1095,21 @@ export class GameScene extends Phaser.Scene {
       if (id) this.hud.add(this.add.image(x + ITEMS_PANEL.size / 2, y + ITEMS_PANEL.size / 2, itemKey(id)).setScale(1.15 / (textureRes.get(itemKey(id)) ?? 3)));
     }
     // Left bottom: gold, level and buttons.
-    g.fillStyle(C.panel, 0.92).fillRoundedRect(8, 426, 152, 108, 8);
-    this.txt(16, 430, `${me.gold}`, 20, C.gold, { fontStyle: 'bold' });
-    this.txt(16 + 12 * String(me.gold).length + 4, 436, t('gold'), 11, C.dim);
-    this.txt(92, 428, t('level', { n: me.level }), 13, '#ffffff', { fontStyle: 'bold' });
+    const lb = LEFT_BOTTOM.y;
+    g.fillStyle(C.panel, 0.92).fillRoundedRect(LEFT_BOTTOM.x, lb, 152, 108, 8);
+    this.txt(16, lb + 4, `${me.gold}`, 20, C.gold, { fontStyle: 'bold' });
+    this.txt(16 + 12 * String(me.gold).length + 4, lb + 10, t('gold'), 11, C.dim);
+    this.txt(92, lb + 2, t('level', { n: me.level }), 13, '#ffffff', { fontStyle: 'bold' });
     const need = xpToNext(me);
-    g.fillStyle(0x000000, 0.6).fillRect(92, 446, 60, 5);
-    g.fillStyle(C.mana).fillRect(92, 446, need ? (60 * me.xp) / need : 60, 5);
-    this.txt(92, 451, need ? t('xp', { xp: me.xp, need }) : t('maxLevel'), 9, C.dim);
+    g.fillStyle(0x000000, 0.6).fillRect(92, lb + 20, 60, 5);
+    g.fillStyle(C.mana).fillRect(92, lb + 20, need ? (60 * me.xp) / need : 60, 5);
+    this.txt(92, lb + 25, need ? t('xp', { xp: me.xp, need }) : t('maxLevel'), 9, C.dim);
     const planning = m.phase === 'plan';
     this.button(g, BUTTONS.reroll, t('reroll', { n: rerollCost(me) }), () => this.doReroll(), { on: planning && me.gold >= rerollCost(me), size: 11 });
     this.button(g, BUTTONS.xp, t('buyXp', { n: 4 }), () => this.doXp(), { on: planning && me.gold >= 4 && me.level < 9, size: 11 });
     const selUnit = this.selected?.kind === 'unit' ? unitAt(me, this.selected.spot) : null;
     if (selUnit && planning) this.button(g, BUTTONS.sell, t('sellFor', { n: sellValue(selUnit) }), () => this.doSell(), { color: 0xffb703, size: 11 });
-    else this.txt(80, 508, t('boardCount', { n: boardCount(me), max: me.level }), 11, boardCount(me) > me.level ? '#ff8a7a' : C.dim);
+    else this.txt(80, lb + 82, t('boardCount', { n: boardCount(me), max: me.level }), 11, boardCount(me) > me.level ? '#ff8a7a' : C.dim);
     // The shop.
     me.shop.forEach((s, i) => {
       const x = shopCardX(i);
@@ -1157,7 +1167,7 @@ export class GameScene extends Phaser.Scene {
       this.button(g, BUTTONS.skill, t(used ? 'skillUsed' : 'skillKey', { skill: t(skill.name) }), () => this.doSkill(), { on: !used && me.human, size: 13, color: 0xff5cf0 });
     }
     if (m.phase === 'fight' || m.phase === 'result' || m.phase === 'plan') this.button(g, BUTTONS.speed, t('speed', { n: this.speed }), () => this.toggleSpeed(), { size: 11 });
-    if (m.opts.terrain) this.txt(170, 412, t('terrainLegend'), 9, C.dim);
+    if (m.opts.terrain) this.txt(TERRAIN_LEGEND.x, TERRAIN_LEGEND.y, t('terrainLegend'), 9, C.dim);
     if (planning) {
       const locked = me.shopLocked;
       this.button(g, BUTTONS.lock, t(locked ? 'locked' : 'lock'), () => this.toggleLock(), { on: me.human, size: 10, color: locked ? 0xffd166 : C.panelLine });
@@ -1300,11 +1310,11 @@ export class GameScene extends Phaser.Scene {
     const me = player(m);
     if (m.phase === 'plan' && me.human && me.augmentOffer) {
       g.fillStyle(0x05040f, 0.72).fillRect(0, 0, VIEW.w, VIEW.h);
-      say(VIEW.w / 2, 70, t('pickCard'), 24, '#ffffff', { fontStyle: 'bold' }).setOrigin(0.5);
-      say(VIEW.w / 2, 100, t('pickCardHint'), 12, C.dim).setOrigin(0.5);
+      say(VIEW.w / 2, VIEW.fy + 70, t('pickCard'), 24, '#ffffff', { fontStyle: 'bold' }).setOrigin(0.5);
+      say(VIEW.w / 2, VIEW.fy + 100, t('pickCardHint'), 12, C.dim).setOrigin(0.5);
       me.augmentOffer.forEach((id, i) => {
         const a = AUGMENT_BY_ID[id];
-        const r = { x: VIEW.w / 2 - 330 + i * 230, y: 130, w: 200, h: 250 };
+        const r = { x: VIEW.w / 2 - 330 + i * 230, y: VIEW.fy + 130, w: 200, h: 250 };
         g.fillStyle(0x1d1846, 1).fillRoundedRect(r.x, r.y, r.w, r.h, 14);
         g.lineStyle(3, 0xff5cf0, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 14);
         g.lineStyle(1.5, C.cyan, 0.6).strokeRoundedRect(r.x + 8, r.y + 8, r.w - 16, r.h - 16, 10);
@@ -1317,10 +1327,10 @@ export class GameScene extends Phaser.Scene {
     } else if (m.phase === 'won' || m.phase === 'lost') {
       g.fillStyle(0x05040f, 0.8).fillRect(0, 0, VIEW.w, VIEW.h);
       const place = m.phase === 'won' ? 1 : me.place;
-      say(VIEW.w / 2, 150, t(m.phase === 'won' ? 'won' : 'lost'), 34, m.phase === 'won' ? '#7cf3ff' : '#ff8a7a', { fontStyle: 'bold', stroke: INK, strokeThickness: 6 }).setOrigin(0.5);
-      say(VIEW.w / 2, 200, t(watching ? 'seatFinished' : 'youFinished', { place: ordinal(place), round: roundLabel(m) }), 16, '#ffffff').setOrigin(0.5);
-      say(VIEW.w / 2, 228, t('endStats', { played: this.stats.played, wins: this.stats.wins, best: this.stats.best ? ordinal(this.stats.best) : '-' }), 12, C.dim).setOrigin(0.5);
-      this.button(g, { x: VIEW.w / 2 - 90, y: 270, w: 180, h: 44 }, t(watching ? 'watchAnother' : 'playAgain'), () => {
+      say(VIEW.w / 2, VIEW.fy + 150, t(m.phase === 'won' ? 'won' : 'lost'), 34, m.phase === 'won' ? '#7cf3ff' : '#ff8a7a', { fontStyle: 'bold', stroke: INK, strokeThickness: 6 }).setOrigin(0.5);
+      say(VIEW.w / 2, VIEW.fy + 200, t(watching ? 'seatFinished' : 'youFinished', { place: ordinal(place), round: roundLabel(m) }), 16, '#ffffff').setOrigin(0.5);
+      say(VIEW.w / 2, VIEW.fy + 228, t('endStats', { played: this.stats.played, wins: this.stats.wins, best: this.stats.best ? ordinal(this.stats.best) : '-' }), 12, C.dim).setOrigin(0.5);
+      this.button(g, { x: VIEW.w / 2 - 90, y: VIEW.fy + 270, w: 180, h: 44 }, t(watching ? 'watchAnother' : 'playAgain'), () => {
         ui('click');
         playMusic(PLAN_SONG, 'calm');
         this.state = null;
@@ -1336,11 +1346,11 @@ export class GameScene extends Phaser.Scene {
 
   private buildMenu(g: Phaser.GameObjects.Graphics, say: (x: number, y: number, s: string, size: number, color?: string, opts?: Partial<Phaser.Types.GameObjects.Text.TextStyle>) => Phaser.GameObjects.Text) {
     g.fillStyle(0x05040f, 0.55).fillRect(0, 0, VIEW.w, VIEW.h);
-    say(VIEW.w / 2, 46, t('title'), 38, '#7cf3ff', { fontStyle: 'bold', stroke: INK, strokeThickness: 7 }).setOrigin(0.5);
-    say(VIEW.w / 2, 82, t('tagline'), 13, C.text).setOrigin(0.5);
-    say(VIEW.w / 2, 112, t('pickCommander'), 14, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
+    say(VIEW.w / 2, VIEW.fy + 46, t('title'), 38, '#7cf3ff', { fontStyle: 'bold', stroke: INK, strokeThickness: 7 }).setOrigin(0.5);
+    say(VIEW.w / 2, VIEW.fy + 82, t('tagline'), 13, C.text).setOrigin(0.5);
+    say(VIEW.w / 2, VIEW.fy + 112, t('pickCommander'), 14, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
     PLAYER_COMMANDERS.forEach((c, i) => {
-      const r = { x: VIEW.w / 2 - 345 + i * 235, y: 128, w: 220, h: 150 };
+      const r = { x: VIEW.w / 2 - 345 + i * 235, y: VIEW.fy + 128, w: 220, h: 150 };
       const on = this.menu.commander === i;
       g.fillStyle(on ? 0x2a2360 : C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 12);
       g.lineStyle(on ? 3 : 1.5, on ? 0xffb703 : C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 12);
@@ -1355,9 +1365,9 @@ export class GameScene extends Phaser.Scene {
         this.dirty = true;
       } });
     });
-    say(VIEW.w / 2, 296, t('season'), 13, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
+    say(VIEW.w / 2, VIEW.fy + 296, t('season'), 13, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
     SETS.forEach((s, i) => {
-      const r = { x: VIEW.w / 2 - 300 + i * 310, y: 312, w: 290, h: 58 };
+      const r = { x: VIEW.w / 2 - 300 + i * 310, y: VIEW.fy + 312, w: 290, h: 58 };
       const on = this.menu.set === s.id;
       g.fillStyle(on ? 0x2a2360 : C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 10);
       g.lineStyle(on ? 2.5 : 1.2, on ? C.cyan : C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 10);
@@ -1369,7 +1379,7 @@ export class GameScene extends Phaser.Scene {
         this.dirty = true;
       } });
     });
-    const tr = { x: VIEW.w / 2 - 300, y: 384, w: 290, h: 40 };
+    const tr = { x: VIEW.w / 2 - 300, y: VIEW.fy + 384, w: 290, h: 40 };
     g.fillStyle(this.menu.terrain ? 0x2a2360 : C.panel, 0.95).fillRoundedRect(tr.x, tr.y, tr.w, tr.h, 10);
     g.lineStyle(this.menu.terrain ? 2.5 : 1.2, this.menu.terrain ? 0x39e58c : C.panelLine, 1).strokeRoundedRect(tr.x, tr.y, tr.w, tr.h, 10);
     say(tr.x + 12, tr.y + 6, t(this.menu.terrain ? 'terrainOn' : 'terrainOff'), 13, '#ffffff', { fontStyle: 'bold' });
@@ -1379,11 +1389,11 @@ export class GameScene extends Phaser.Scene {
       ui('click');
       this.dirty = true;
     } });
-    this.button(g, { x: VIEW.w / 2 + 10, y: 384, w: 290, h: 40 }, t('startMatch'), () => {
+    this.button(g, { x: VIEW.w / 2 + 10, y: VIEW.fy + 384, w: 290, h: 40 }, t('startMatch'), () => {
       ui('click');
       this.startMatch();
     }, { list: this.overlayButtons, container: this.overlay, size: 16, color: 0xffb703 });
-    if (this.stats.played) say(VIEW.w / 2, 446, t('menuStats', { played: this.stats.played, wins: this.stats.wins, best: ordinal(this.stats.best) }), 11, C.dim).setOrigin(0.5);
+    if (this.stats.played) say(VIEW.w / 2, VIEW.fy + 446, t('menuStats', { played: this.stats.played, wins: this.stats.wins, best: ordinal(this.stats.best) }), 11, C.dim).setOrigin(0.5);
   }
 
   // ------------------------------------------------------------------ actions
