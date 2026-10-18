@@ -36,6 +36,15 @@ study, shade gardens and a mirrored second production line.
   merchant wagon across the street on wagon days; the herb market below the outfitter; an
   overstock cut that starts past 5 of a potion on its shelf; cauldrons that brew what the shop is
   shortest of, and gardens that grow at close to the same pace.
+- The town (the first of a planned series of PRs): once `state.seals > 0` (`townOpen`) a Town
+  button left of Recipes opens the `Town` scene, a map of lot cards: the apothecary and one per shop
+  in `SHOPS`. A shop costs `shopCost` (1,000 for the bakery, then ten times more each `tier`) and is
+  walked into as its own `Shop` scene, a yard laid out from its `ShopDef`: gardens, a row of
+  stations with drop, work and pick-up markers, and a counter whose shelves customers buy from.
+  Stations, the counter and pixie routes have purple markers; their costs grow by `TIER_STEP` (3)
+  a tier. The Bakery is the only shop so far (wheat and honeycomb, mill and oven, bread and honey
+  cake). Planned next: households and districts that ask for goods, then the Chandlery, Dye house,
+  Smithy and Tavern.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
   Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
@@ -47,7 +56,7 @@ study, shade gardens and a mirrored second production line.
   The palette is kept dark and muted (deep greens, dark earth and floor boards, aged-paper cards
   under dark ink): keep new ground, card and surface colours in that range, and only items, markers
   and the brew bright.
-- There is one scene with no title or lose screen; the only win screen is the cure's panel
+- There is no title or lose screen; the only win screen is the cure's panel
   (`showWin`). Sound effects and chiptune music are made in code (see Sound). A customer who runs out of patience leaves and lowers the reputation.
 - Leftovers: `GAME_WIDTH`/`GAME_HEIGHT` in `src/main.ts` are only used there. `DOCTOR_W`/`DOCTOR_H`
   in `src/art/doctor.ts` are exported but unused.
@@ -74,7 +83,7 @@ study, shade gardens and a mirrored second production line.
   garden inside a sentence, `SIGN_NAMES`, `SIGN_SET`), as do `GARDEN_AREAS` in layout. A new text
   gets its German entry (and a US one if its spelling differs) in the same PR.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, arcade physics with
-  `fixedStep: false`, `pixelArt: false`, aged-paper background `PAPER`), registers `BootScene` and `GameScene`, calls `setupGame(game)`
+  `fixedStep: false`, `pixelArt: false`, aged-paper background `PAPER`), registers `BootScene`, `GameScene`, `TownScene` and `ShopScene`, calls `setupGame(game)`
   from `shared/setupGame.ts` and `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/audio.ts`: the game's sound (`shared/audio.ts`): `SONG`, `RUSH_SONG` and the `sfx` table
   (see Sound).
@@ -122,6 +131,30 @@ study, shade gardens and a mirrored second production line.
   (capped at `AWAY_CAP_MS`, 2h; nothing under `AWAY_MIN_MS`, 60s) through `tick` in 500ms steps
   with nobody on a work spot and every customer at the counter, and returns an `AwaySummary`
   (`ms`, `coins`, `potions`) or null. `hasAutomation`: any craftsman hired or belt built.
+  It also runs `tickTown` each step, and counts the shops' tills into `coins`; `hasAutomation`
+  also holds for `townAutomated` (a town worker, shopkeeper or pixie route).
+- `src/game/town.ts`: the town's data, free of Phaser: `GoodId` and `GOODS`, the shop defs
+  (`ShopDef`: gardens, stations with recipes, pixie `routes`, `sells` with base prices, `tier`) in
+  `SHOPS`, the cost helpers (`shopCost`, `tierCost`, `levelCost`, `workerCost`, `routeCost`), the
+  limits (`MAX_LEVEL`, `MAX_WORKERS`, `MAX_SHOPKEEPERS`, `BEDS`, `SHOP_STORAGE`, `SHOP_PLACES`) and
+  timings, the state types (`TownState`: `shops`, a `ShopState` per shop bought, and `hands`, the
+  doctor's hands in town, kept apart from `carrying`), `createTown`, `normalizeTown` and `townOpen`.
+- `src/game/townSim.ts`: the town's rules. `tickTown(state, dt, working, rand)` grows the beds,
+  runs every station (crew: its workers plus the doctor on its work spot), pixie route, counter and
+  customers of every shop bought; it calls `rand` only for a shop bought, so a game without one uses
+  the same randomness as before. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
+  `pickUpFromStation`, `stockShopShelf`, `collectShopTill`, `tossGood`, `payStationLevel`,
+  `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`) return `Feedback` like the sim's.
+- `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
+  `ShopDef` (`gardenLayout`, `bedPosition`, `stationLayout`, `counterLayout`, `routePath`,
+  `routeMs`); Phaser-free, since the sim reads route lengths from it.
+- `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
+  (saves, then starts another scene, which loads the save again) and `keepSaving`.
+- `src/scenes/TownScene.ts` (`Town`) and `src/scenes/ShopScene.ts` (`Shop`, started with
+  `{ shop }`): both call `loadState` and `catchUp` on create, and run the apothecary with
+  `tick(state, dt, null)` (as while away) next to `tickTown`; `GameScene` runs `tickTown(state, dt,
+  null)` after its own `tick`. `src/art/town.ts` paints the goods, hives, mill, oven, a shop's yard
+  (`bakeYard`) and the lot houses (`bakeTown`, called by `BootScene`).
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
 - `src/scenes/GameScene.ts`: builds the world, markers and HUD, reads input, walks the doctor
   around stations and through the shop door, calls the sim each frame and updates views. Also
@@ -387,7 +420,9 @@ save or load, 0 in a new game), `reputation` (0 to 100), `regulars` (`face`, `wa
 `relapses`, `cured`, or null before day 5), `signs` (a `PriceSign` per potion, Fair when missing),
 `rival` (`open`, `day`, `potion`, `sold`, `streak`, and `dayShare` once a kept contract ended the day early),
 `seals` (town seals), `wagon` (`day`, `potion`, `crate`, `pay`, `left`, `sold`, or null) and
-`marketPick` (the herb market's good to buy). The contract may have a `bundle` (`potion`, `need`,
+`marketPick` (the herb market's good to buy). `town` (`TownState`) holds the shops bought and the
+doctor's hands in town; `loadState` fills it through `normalizeTown`, which merges each shop, station
+and route per key, so new shops and stations load into old saves. The contract may have a `bundle` (`potion`, `need`,
 `made`); the plague may have `season` and `curedDay`. Each order also has `tip`, its full tip (`maxTip`
 of its size), and may have `asked`, `face`, `regular` and `rush`. `counter.shelf` and `carrying`
 can hold fine potions. A plot may be `blighted` with `blightMs`; a belt item may carry `run`; a
@@ -553,6 +588,11 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
   that hands nothing over (out of the shop or not on the shelf), a wagon tap without a full crate,
   and a purple or herb market marker that takes nothing (no coins, nothing to trade), once a visit
   (`refusedMarker`, reset on stepping off).
+- The town's scenes play the `calm` part. `ShopScene` plays `swish` + `pluck` for a bed cut,
+  `drop`, `pickUp`, `pay`, `cascade` (the till) and `upgrade` at its markers as the apothecary does,
+  `toss` for a hands slot, `bubble`, `sell`, `served` and `hmph` from what changed in its shop each
+  frame, and `ui('refuse')` for a marker that takes nothing. `TownScene` plays `ui('click')` for a
+  lot walked into, `upgrade` for a shop bought and `ui('refuse')` for one the purse can't pay.
 - Not done: no ambience (cauldron bubble loop, rain) and no sound per pixie, as the plan says.
 
 ## Testing hooks
@@ -659,6 +699,10 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
 - `replantGarden` must change plots in place: `createPlots` keeps each plot object in a closure.
 - New randomness in `tick` must stay behind a condition that is false on day 1 (like the blight's),
   or the playthrough's seeded orders change.
+- The town's randomness (`tickTown`'s customers) runs only for a shop bought, which needs the
+  cure, so the playthrough never reaches it. A new shop is a `SHOPS` entry with its goods in
+  `GoodId`, `GOODS` and art in `src/art/town.ts`, a lot house in `lotTexture` and its texts; the
+  scenes lay it out from its def.
 - `rival.open` starts true and `rival.day` 0, so the rival exists in every save; it only does
   anything from `RIVAL_DAY`. `rival.potion` is null until then and once closed.
 - Fine potions are not in `POTIONS`, so they have no pallets, shelves, belt lanes or orders of their
