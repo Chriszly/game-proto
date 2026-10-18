@@ -148,7 +148,7 @@ File map (`src/`):
   `Translation<typeof en>`, with `keepEnglish` for the title) and `i18n/en-US.ts` (only "armor").
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
-  `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
+  `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the garden, HUD, panel, golem menu and banner, and the garden
   picker each time it opens (`createPicker(mode)`, `showPicker`, `closePicker`) and the boon pick (`showBoons`); turns taps into
@@ -157,7 +157,8 @@ File map (`src/`):
   hedges, golems (and combo vines, form beads), pests (and mole mounds), shots, bars, level beads
   and the hover from the state; turns `state.pops` into splats, "+N" labels and flying droplets
   (`sapPop`); shows the banner (`waveDone`, `announce`); saves best, bloom and stars in `refresh`
-  when they change.
+  when they change. `frame` is the designed frame in the view (see Screens), and `dim()` the
+  overlays' dark cover over the whole view.
 - `scenes/layout.ts`: `VIEW`, `HUD` (title, garden tag and tag positions), `SPEED_BUTTON`,
   `GOLEM_MENU` (four chips wide), `GARDEN_CARD`, `PANEL`, `SEED_BUTTONS` (`ys` and `hs` per
   card, in `SEEDS` order), `PREVIEW`, `HINT`, `WAVE_BUTTON`, `BUTTON`, `UI_DEPTH`, `FONT` (a system sans stack), and
@@ -195,24 +196,34 @@ File map (`src/`):
   at 1.7x with a crown), ported from the approved mockup's
   drawing script.
 - `art/textures.ts`: `bakeTextures` (every texture, listed at the top of the file: `bg-0`,
-  `edge`, `tree`, `bud`/`bloom`, `golem-<kind>`, `sprout`, `hedge`, `pest-<kind>`, `mound`,
+  `tree`, `bud`/`bloom`, `golem-<kind>`, `sprout`, `hedge`, `pest-<kind>`, `mound`,
   `slime`, `slow`, `shot-<kind>`, `sap`, `glow`, `splat`, `leaf`, `card-<h>[-dim]` (one per
   height in `SEED_BUTTONS.hs`), `rim-<h>`,
   `card-locked`, `btn-wave[-off]`, `menu`, `chip[-off]`, `speed[-on]`, `pill`,
   `gcard[-rim|-locked]`, `btn`), `bakeGarden` and `gardenBg` (each garden's `bg-<n>`, baked when
-  it is first planted) and `TREE_FLOWERS`, where the five flowers sit on the tree. A garden's
-  static scene (table, garden slab, paths, soil beds, HUD strip and tags, panel slab, preview pad)
-  is its one `bg-<n>` texture.
+  it is first planted), `bakeTable` (the `table` over the whole view with the HUD strip and its
+  tags across its top, and `edge`, the table from the view's left edge to the board, which hides
+  pests coming in; baked by `GameScene` once it knows the view) and `TREE_FLOWERS`, where the five
+  flowers sit on the tree. A garden's static scene over the table (garden slab, paths, soil beds,
+  panel slab, preview pad) is its one `bg-<n>` texture, transparent where the table shows.
 - `ui/Button.ts`: `makeButton`, the clay button used by the garden picker's Back.
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/settings.ts` (`byDifficulty`,
+`shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewSize`, `viewFrame`), `shared/settings.ts` (`byDifficulty`,
 `settings`), `shared/i18n.ts` (`translator`, `byLanguage`) and `shared/audio.ts` (`sounds`, `ui`,
 `playMusic`, `playSting`).
 
 Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
-4K screen) and zooms the one camera to match from its top-left; it never scrolls, so the scene
-keeps working in view pixels and needs no `viewSize` or `viewPoint`. Text and Graphics draw at the
+4K screen) and zooms the one camera to match from its top-left. With `fill: true` the view takes
+the screen's shape (960 to 1296 wide, 540 to 720 tall). Everything is still laid out for the
+designed 960x540 frame: `GameScene.create` takes `viewFrame(this)` as `frame` and scrolls the camera
+to `-frame.x, -frame.y`, so the board, panel, banner, golem menu and the overlays (centred on
+`VIEW.w / 2`) sit in the middle of the view, and world coordinates stay the designed ones. Around
+them, the `table` image (at `-frame.x, -frame.y`, the view's size from `viewSize`) fills the view
+and carries the HUD strip across its top; the HUD's objects are moved up by `frame.y` after
+`createHud`, so the HUD stays pinned to the view's top edge (and so does the sap droplets' target).
+The overlays' dim covers the whole view, and `seedButtons` and `waveButton` add the frame's offset
+so they stay in view pixels. At 960x540 the frame is the whole view and nothing moves. Text and Graphics draw at the
 full `renderScale`. The clay is painted at `sharpRes`, held to `MAX_RES` (2) in `clay.ts`, since
 its blur-filter shadows cost about the cube of the resolution at start-up. `addSharp` sets the
 texture source's `resolution` and trims its frame to the view size, so every `add.image`,
@@ -376,11 +387,13 @@ Heartwood falls.
 
 ## Gotchas
 
-- A texture added outside `bake` (like `edge`) goes through `addSharp` with its canvas's
+- A texture added outside `bake` (like `edge`, cut from `table`) goes through `addSharp` with its canvas's
   resolution, or it shows `res` times too big. A canvas filter works in canvas pixels: build it
   with `blur`, which scales by the canvas's resolution.
 - `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times view pixels; read pointers
-  through game objects' own events or `pointer.worldX/Y`, and lay out with `VIEW` or `viewSize`.
+  through game objects' own events or `pointer.worldX/Y` (the camera scrolls by the frame's offset).
+  Lay out in the designed frame (`VIEW`, `layout.ts`); something that must reach the view's edges
+  goes from `-frame.x, -frame.y` at the size of `viewSize`, and HUD objects are moved up by `frame.y`.
 
 - `SEED_BUTTONS.ys` and `hs` are indexed in `SEEDS` order; a card under 70px tall uses the short
   card layout (the thorn golem's), and the hedge strip has its own.

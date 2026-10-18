@@ -6,10 +6,12 @@ import { C, E, PI, Pp, R, addSharp, bake, blur, ctx, drop, ellipse, flower, gole
 // Every texture, painted in clay at startup. Sizes and anchors are in view pixels; painters work in
 // art units (2 per view pixel) around their anchor.
 //
-// bg-<n>          garden n's whole static scene: the studio table, the garden slab with its pressed
-//                 paths and soil beds, the HUD strip with its tags, the side panel and the wave
-//                 preview's dark pad
-// edge            the strip of table left of the board, drawn over pests coming in
+// table           the studio table over the whole view, with the HUD strip and its tags across its
+//                 top; baked once at the view's size (see `bakeTable`)
+// bg-<n>          garden n's static scene over the table, in the designed 960x540 frame: the
+//                 garden slab with its pressed paths and soil beds, the side panel and the wave
+//                 preview's dark pad (transparent where the table shows)
+// edge            the table from the view's left edge to the board, drawn over pests coming in
 // tree            the Heartwood without its flowers; bud and bloom are its flowers
 // golem-<kind>    a golem standing, anchored at its feet
 // sprout          a seed growing, anchored at its mound's foot
@@ -48,16 +50,24 @@ export function bakeGarden(scene: Phaser.Scene, n: number) {
   bake(scene, gardenBg(n), 960, 540, () => paintBackground(GARDENS[n]));
 }
 
-export function bakeTextures(scene: Phaser.Scene) {
-  const bg = bake(scene, gardenBg(0), 960, 540, () => paintBackground(GARDENS[0]));
-  if (bg && !scene.textures.exists('edge')) {
+/**
+ * Bakes the table and the HUD strip for a view of `w` x `h` with the designed frame at (fx, fy),
+ * and the edge that hides pests coming in, unless they are baked already (the view never changes).
+ */
+export function bakeTable(scene: Phaser.Scene, w: number, h: number, fx: number, fy: number) {
+  const table = bake(scene, 'table', w, h, () => paintTable(w, h, fx, fy));
+  if (table) {
     const edge = document.createElement('canvas');
-    const res = bg.width / 960;
-    edge.width = Math.round((GRID.x - 3) * res);
-    edge.height = bg.height;
-    edge.getContext('2d')!.drawImage(bg, 0, 0);
+    const res = table.width / w;
+    edge.width = Math.round((fx + GRID.x - 3) * res);
+    edge.height = table.height;
+    edge.getContext('2d')!.drawImage(table, 0, 0);
     addSharp(scene, 'edge', edge, res);
   }
+}
+
+export function bakeTextures(scene: Phaser.Scene) {
+  bake(scene, gardenBg(0), 960, 540, () => paintBackground(GARDENS[0]));
 
   bake(scene, 'tree', 130, 120, paintTree, 65, 70);
   bake(scene, 'bud', 28, 28, () => flower(0, 0, 1.05, false), 14, 14);
@@ -238,30 +248,45 @@ function paintLockedCard() {
   ellipse(tx, ty + 7, 4, 4, '#6a4a10');
 }
 
-function paintBackground(garden: Garden) {
-  const routes = garden.routes.map((r) => r.points.map((p) => ({ x: p.x * A, y: p.y * A })));
-  // The studio table: warm wood with a vignette.
+/** The studio table over a `w` x `h` view, its designed frame at (fx, fy), with the HUD strip across the top. */
+function paintTable(w: number, h: number, fx: number, fy: number) {
+  const [tw, th, ox, oy] = [w * A, h * A, fx * A, fy * A];
+  // Warm wood with a vignette, centred on the frame and grown with the view.
   ctx.fillStyle = C.table;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, tw, th);
   reseed(3);
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < Math.round((60 * th) / H); i++) {
     ctx.strokeStyle = `rgba(${rnd() < 0.5 ? '255,220,170' : '20,10,4'},0.06)`;
     ctx.lineWidth = 2 + rnd() * 6;
     ctx.beginPath();
-    const y = rnd() * H;
+    const y = rnd() * th;
     ctx.moveTo(0, y);
-    ctx.bezierCurveTo(600, y + rnd() * 40 - 20, 1300, y + rnd() * 40 - 20, W, y + rnd() * 30 - 15);
+    ctx.bezierCurveTo(tw * 0.31, y + rnd() * 40 - 20, tw * 0.68, y + rnd() * 40 - 20, tw, y + rnd() * 30 - 15);
     ctx.stroke();
   }
-  const vignette = () => {
-    const vg = ctx.createRadialGradient(W * 0.4, H * 0.4, 300, W / 2, H / 2, 1200);
-    vg.addColorStop(0, 'rgba(255,200,140,0.12)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.5)');
-    return vg;
-  };
-  ctx.fillStyle = vignette();
-  ctx.fillRect(0, 0, W, H);
+  const grow = Math.max(w / 960, h / 540);
+  const vg = ctx.createRadialGradient(ox + W * 0.4, oy + H * 0.4, 300 * grow, tw / 2, th / 2, 1200 * grow);
+  vg.addColorStop(0, 'rgba(255,200,140,0.12)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, tw, th);
 
+  // The HUD: a strip of rolled clay across the view's top, with tags pressed on over the frame.
+  ctx.save();
+  ctx.filter = blur(10);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(0, 100, tw, 18);
+  ctx.restore();
+  R(-20, -30, tw + 40, 136, 30, C.hud, { shadow: false, rim: 10, spec: false, print: false });
+  const tag = (x: number, w: number, col = C.tag) => R(ox + x * A, 28, w * A, 72, 30, col, { sb: 5, sx: 4, sy: 6, rim: 6 });
+  tag(HUD.wave.x, HUD.wave.w);
+  tag(HUD.leaf.x, HUD.leaf.w);
+  tag(HUD.sap.x, HUD.sap.w);
+  tag(HUD.bloom.x, HUD.bloom.w, '#d8e6b0');
+}
+
+function paintBackground(garden: Garden) {
+  const routes = garden.routes.map((r) => r.points.map((p) => ({ x: p.x * A, y: p.y * A })));
   // The garden slab.
   const bx = G.x;
   const by = G.y;
@@ -328,11 +353,8 @@ function paintBackground(garden: Garden) {
       ellipse(x, y, 5, 3, 'rgba(90,60,30,0.35)');
     }
   }
-  // The table again left of the board, where pests come in.
-  ctx.fillStyle = C.table;
-  ctx.fillRect(0, by - 20, G.x - 6, bh + 40);
-  ctx.fillStyle = vignette();
-  ctx.fillRect(0, by - 20, G.x - 6, bh + 40);
+  // Clear left of the board, where pests come in, so the table shows through.
+  ctx.clearRect(0, by - 20, G.x - 6, bh + 40);
 
   // Soil beds: brown clay pads with pressed furrows.
   reseed(12);
@@ -378,19 +400,6 @@ function paintBackground(garden: Garden) {
       }
     }
   }
-
-  // The HUD: a strip of rolled clay with tags pressed on.
-  ctx.save();
-  ctx.filter = blur(10);
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(0, 100, W, 18);
-  ctx.restore();
-  R(-20, -30, W + 40, 136, 30, C.hud, { shadow: false, rim: 10, spec: false, print: false });
-  const tag = (x: number, w: number, col = C.tag) => R(x * A, 28, w * A, 72, 30, col, { sb: 5, sx: 4, sy: 6, rim: 6 });
-  tag(HUD.wave.x, HUD.wave.w);
-  tag(HUD.leaf.x, HUD.leaf.w);
-  tag(HUD.sap.x, HUD.sap.w);
-  tag(HUD.bloom.x, HUD.bloom.w, '#d8e6b0');
 
   // The panel: a slab of moss-green clay; the cards are stuck on by the scene.
   R(PANEL.x * A, PANEL.y * A, PANEL.w * A, PANEL.h * A, 28, C.hud, { sb: 16, sa: 0.55, sx: 10, sy: 14, rim: 12, spec: false });
