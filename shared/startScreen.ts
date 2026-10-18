@@ -49,7 +49,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   const resumeButton = overlay.querySelector<HTMLButtonElement>('.game-resume-button')!;
   const hint = overlay.querySelector<HTMLDivElement>('.game-overlay-hint')!;
   const help = overlay.querySelector<HTMLElement>('.game-help-body');
-  overlay.querySelector('.game-overlay-volumes')!.append(...volumeSliders());
+  overlay.querySelector('.game-overlay-volumes')!.append(...volumeSliders('pause'));
 
   const pauseButton = document.createElement('button');
   pauseButton.type = 'button';
@@ -221,6 +221,7 @@ function helpHtml(howToPlay: HowToPlay) {
     ...howToPlay.controls,
     { input: t('pauseInput'), action: t('pauseAction') },
     { input: t('soundInput'), action: t('soundAction') },
+    { input: t('soundMenuInput'), action: t('soundMenuAction') },
     ...(document.fullscreenEnabled ? [{ input: t('fullScreenInput'), action: t('fullScreenAction') }] : []),
   ];
   const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');

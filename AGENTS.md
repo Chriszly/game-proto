@@ -147,9 +147,10 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   (each with its own rate limit, at most 12 at once), `ui` has the shared `click`, `coin` and the
   `refuse` buzz that every game plays for an action it can't do, and `playMusic(song, part)`,
   `playSting` and `stopMusic` play chiptune written as note text (a `Song` with calm, battle, boss
-  and sting parts). `setupGame` adds the sound button (and the M key) to the corner row
-  (`shared/corner.ts`: full screen, sound and pause, 12px plus the safe area from the edges), the
-  pause screen sets the Music and Effects volumes, and the hub's settings hold them (`music`,
+  and sting parts). `setupGame` adds the sound button (and the M key, which mutes) to the corner row
+  (`shared/corner.ts`: full screen, sound and pause, 12px plus the safe area from the edges); the
+  button opens the sound menu with the Music and Effects volumes and Mute, the pause screen sets the
+  same volumes, and the hub's settings hold them (`music`,
   `effects`, `muted`). Sound starts on the first tap or key press, and never under browser
   automation, so playthroughs run as before. A game plays one sound per volley rather than per
   bullet, only for what the player can see, only for the player's own actions where the AI shares

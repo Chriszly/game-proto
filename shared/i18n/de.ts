@@ -83,8 +83,11 @@ const de: Translation<typeof en> = {
   fullScreenAction: 'Vollbild',
   soundOffButton: 'Stumm (M)',
   soundOnButton: 'Ton an (M)',
-  soundInput: 'M oder der Lautsprecherknopf',
+  soundButton: 'Ton',
+  soundInput: 'M',
   soundAction: 'Ton an oder aus',
+  soundMenuInput: 'Der Lautsprecherknopf',
+  soundMenuAction: 'Lautstärke von Musik und Effekten',
   musicVolume: 'Musik',
   effectsVolume: 'Effekte',
   turnSideways: 'Dreh dein Handy quer, um zu spielen',
@@ -138,4 +141,4 @@ const de: Translation<typeof en> = {
 export default de;
 
 /** Texts that are the same in German, so the translation check doesn't flag them. */
-export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction'];
+export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction', 'soundInput'];

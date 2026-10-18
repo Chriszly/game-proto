@@ -91,7 +91,7 @@ with its folder name, see `shared/progress.ts`) and **Play**.
 Above the cards, **Continue playing** links the last three games played on this device, and a link
 at the bottom of the hub opens the bug and feedback forms. The covers load as they scroll into view.
 
-Every game also has a full screen button in its bottom left corner, and the **F** key toggles full screen. Browsers that cannot take a page full screen, such as iPhones, don't show the button. Beside it, the speaker button (or the **M** key) mutes every sound and turns it back on, and the pause screen sets the music and effects volumes. The corner buttons keep 12px clear of the edges, plus a phone's safe area, so rounded corners never cut them.
+Every game also has a full screen button in its bottom left corner, and the **F** key toggles full screen. Browsers that cannot take a page full screen, such as iPhones, don't show the button. Beside it, the speaker button opens the sound menu, with one volume for the music, one for the sound effects and a Mute button; the **M** key mutes every sound and turns it back on, and the pause screen sets the same volumes. The corner buttons keep 12px clear of the edges, plus a phone's safe area, so rounded corners never cut them.
 
 Every game shows a loading screen while its art is drawn, then waits on a start screen until **Start** is pressed (or Enter or Space). The pause button next to full screen, the **P** key or leaving the tab pauses it; Resume, P, Space or Esc play on, and the pause screen links back to all games. Both screens have a **How to play** button (or the **H** key) that shows the game's goal, its controls, how a round goes and a few tips; Back, H or Esc close it.
 
