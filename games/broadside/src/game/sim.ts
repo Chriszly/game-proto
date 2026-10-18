@@ -167,14 +167,15 @@ export function tick(s: GameState, dt: number) {
   moveBalls(s, dt);
   landShells(s, dt);
   ram(s);
-  for (const fort of s.forts.filter((f) => f.hp <= 0)) raze(s, fort);
-  s.forts = s.forts.filter((f) => f.hp > 0);
 
   // A fireship sunk blows up and may take others down with it, so keep sinking until none are left.
   for (let down = s.enemies.filter((e) => e.hp <= 0); down.length; down = s.enemies.filter((e) => e.hp <= 0)) {
     s.enemies = s.enemies.filter((e) => e.hp > 0);
     for (const e of down) sink(s, e);
   }
+  // Razed after the sinking, so a fort a fireship's blast brings down is razed (and paid) this tick too.
+  for (const fort of s.forts.filter((f) => f.hp <= 0)) raze(s, fort);
+  s.forts = s.forts.filter((f) => f.hp > 0);
   for (const e of s.escorts.filter((e) => e.hp <= 0)) effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: e.kind as EnemyKind });
   s.escorts = s.escorts.filter((e) => e.hp > 0);
   if (s.convoy?.state === 'sailing' && !convoyShip(s)) s.convoy.state = 'lost';
@@ -374,7 +375,7 @@ function captain(s: GameState, e: Ship, target: Ship, dt: number) {
   const close = () => {
     const round = planDetour(e, target, last);
     if (round) {
-      e.detour = { island: round.island, side: round.side };
+      e.detour = { island: round.island, side: round.side, to: { x: target.x, y: target.y } };
       want = round.heading;
     }
   };
@@ -416,7 +417,7 @@ function sailConvoy(s: GameState, e: Ship, to: number, dt: number) {
   const type = ENEMIES[e.kind as keyof typeof ENEMIES];
   let want = bearing(e, island);
   const round = planDetour(e, island, e.detour, to);
-  e.detour = round ? { island: round.island, side: round.side } : null;
+  e.detour = round ? { island: round.island, side: round.side, to: { x: island.x, y: island.y } } : null;
   if (round) want = round.heading;
   const shorten = shoalAhead(e, e.heading, undefined, to) ? SHORTEN_SAIL : 1;
   steer(e, fend(e, want, to), type.turn, speedOf(s, e) * shorten, dt);
@@ -503,13 +504,14 @@ function planDetour(ship: Ship, target: { x: number; y: number }, last: Ship['de
 
 /**
  * The course an enemy ship going round an island means to sail: from the ship to the coast, round
- * it, and a little way on toward the player, as points near the ship (not wrapped, so the line
- * never jumps across the sea). Empty when the ship is not detouring. The scene draws it dotted.
+ * it, and a little way on toward its target (the player, or the convoy it hunts), as points near
+ * the ship (not wrapped, so the line never jumps across the sea). Empty when the ship is not
+ * detouring. The scene draws it dotted.
  */
-export function detourCourse(s: GameState, e: Ship) {
+export function detourCourse(e: Ship) {
   if (!e.detour) return [];
-  const { side } = e.detour;
-  const way = roundIsland(e.detour.island, e, s.player, side);
+  const { side, to } = e.detour;
+  const way = roundIsland(e.detour.island, e, to, side);
   const { island, ax, ay } = way;
   const o = offset(e, island);
   const cx = e.x + o.dx;
@@ -518,9 +520,9 @@ export function detourCourse(s: GameState, e: Ship) {
   const points = [{ x: e.x, y: e.y }];
   const steps = Math.max(1, Math.ceil(way.sweep / 0.18));
   for (let k = 0; k <= steps; k++) points.push(at(way.t1 + (side * way.sweep * k) / steps));
-  // A short leg on toward the player once round.
+  // A short leg on toward the target once round.
   const end = points[points.length - 1];
-  const b = bearing(end, s.player);
+  const b = bearing(end, to);
   points.push({ x: end.x + Math.cos(b) * 60, y: end.y + Math.sin(b) * 60 });
   return points;
 }
@@ -632,7 +634,7 @@ function firePlayer(s: GameState, side: Side, charge: number) {
       aim = out + Math.max(-p.arc, Math.min(p.arc, wrap(bearing(player, spot) - out)));
       far = Math.min(inReach, distance(player, spot));
     }
-    lob(s, player, wrapCoord(player.x + Math.cos(aim) * far, WORLD.w), wrapCoord(player.y + Math.sin(aim) * far, WORLD.h), shell, 0);
+    lob(s, player, wrapCoord(player.x + Math.cos(aim) * far, WORLD.w), wrapCoord(player.y + Math.sin(aim) * far, WORLD.h), shell);
     player.reload[side] = p.reloadMs;
     return;
   }
@@ -652,6 +654,14 @@ function ownMortar(s: GameState, dt: number) {
   if (s.mortarMs > 0) return;
   const foe = nearestFoe(s, s.player, OWN_MORTAR.range);
   if (!foe) return;
+  // The crew holds fire while the shell could burst on the player's own ship or a prize, now or
+  // where she will be when it lands, and tries again next tick.
+  const lead = SHELL_MS / 1000;
+  const spot = { x: foe.x + Math.cos(foe.heading) * speedOf(s, foe) * lead, y: foe.y + Math.sin(foe.heading) * speedOf(s, foe) * lead };
+  const playerSpeed = stats(s).speed * windSpeed(s.wind, s.player.heading);
+  const ahead = { x: s.player.x + Math.cos(s.player.heading) * playerSpeed * lead, y: s.player.y + Math.sin(s.player.heading) * playerSpeed * lead };
+  const near = (at: { x: number; y: number }, ship: Ship) => distance(at, spot) < SHELL_R + SHELL_SPREAD + radiusOf(ship) * 0.5;
+  if (near(s.player, s.player) || near(ahead, s.player) || s.escorts.some((e) => near(e, e))) return;
   lobAt(s, s.player, foe, speedOf(s, foe), OWN_MORTAR.damage, SHELL_SPREAD);
   s.mortarMs = perkValue(s, 'mortar', OWN_MORTAR.reloadMs, 0);
 }
@@ -739,17 +749,11 @@ function lobAt(s: GameState, from: { x: number; y: number }, target: Ship, targe
   const r = Math.random() * spread;
   const x = wrapCoord(target.x + Math.cos(target.heading) * lead + Math.cos(a) * r, WORLD.w);
   const y = wrapCoord(target.y + Math.sin(target.heading) * lead + Math.sin(a) * r, WORLD.h);
-  lob(s, from, x, y, damage, 0);
+  lob(s, from, x, y, damage);
 }
 
 /** A shell in the air from `from` toward the spot marked, coming down `SHELL_MS` later. */
-function lob(s: GameState, from: { x: number; y: number }, x: number, y: number, damage: number, spread: number) {
-  if (spread) {
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.random() * spread;
-    x = wrapCoord(x + Math.cos(a) * r, WORLD.w);
-    y = wrapCoord(y + Math.sin(a) * r, WORLD.h);
-  }
+function lob(s: GameState, from: { x: number; y: number }, x: number, y: number, damage: number) {
   s.shells.push({ id: s.nextId++, x, y, ms: SHELL_MS, total: SHELL_MS, damage });
   effect(s, 'smoke', from.x, from.y, 800, { heading: bearing(from, { x, y }) });
 }
@@ -760,7 +764,7 @@ function fortsFire(s: GameState, dt: number) {
   const playerSpeed = stats(s).speed * windSpeed(s.wind, player.heading);
   for (const fort of s.forts) {
     fort.reload = Math.max(0, fort.reload - dt);
-    if (fort.reload > 0 || distance(fort, player) >= FORT.range) continue;
+    if (fort.hp <= 0 || fort.reload > 0 || distance(fort, player) >= FORT.range) continue;
     lobAt(s, fort, player, playerSpeed, FORT.damage, FORT_SPREAD);
     fort.reload = FORT.reloadMs;
   }
@@ -928,7 +932,8 @@ function sink(s: GameState, e: Ship) {
   effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: kind });
   s.loot.push({ id: s.nextId++, x: e.x, y: e.y, gold: lootOf(s, kind), ms: LOOT_MS });
   if (kind === 'fireship') blast(s, e.x, e.y, FIRE_BLAST, ENEMIES.fireship.damage);
-  if (hasPerk(s, 'salvage')) s.player.hp = Math.min(s.player.maxHp, s.player.hp + perkValue(s, 'salvage', SALVAGE_HULL, 0));
+  // Not for a player sunk this same tick: salvage can't raise a wreck.
+  if (hasPerk(s, 'salvage') && s.player.hp > 0) s.player.hp = Math.min(s.player.maxHp, s.player.hp + perkValue(s, 'salvage', SALVAGE_HULL, 0));
 }
 
 /** The sailors a prize crew for `e` must number: half her full crew, less with Grapnels. */
@@ -1201,12 +1206,24 @@ export function setSail(s: GameState, course: CourseId | null = null) {
   return true;
 }
 
-/** Places a ship of the player's `k`th in line astern of her, on her heading, loaded. */
+/**
+ * Places a ship of the player's `k`th in line astern of her, on her heading, loaded: never on an
+ * island, but further astern until the sea is clear (as `spawn` does round the horizon).
+ */
 function station(s: GameState, e: Ship, k: number) {
   const p = s.player;
-  e.x = p.x - Math.cos(p.heading) * CONSORT_STATION * k;
-  e.y = p.y - Math.sin(p.heading) * CONSORT_STATION * k;
-  wrapPoint(e);
+  for (let n = 0; n < 12; n++) {
+    const back = CONSORT_STATION * (k + n / 2);
+    e.x = p.x - Math.cos(p.heading) * back;
+    e.y = p.y - Math.sin(p.heading) * back;
+    wrapPoint(e);
+    const clear = ISLANDS.every((i) => {
+      const { ax, ay } = zoneOf(i, e);
+      const { dx, dy } = offset(i, e);
+      return Math.hypot(dx / ax, dy / ay) >= 1;
+    });
+    if (clear) break;
+  }
   e.heading = p.heading;
   e.reload = { port: 0, starboard: 0 };
 }

@@ -130,7 +130,7 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | --- | --- | --- |
    | Salvage | Every ship sunk patches 6 hull | Patches 12 |
    | Bouncing shot | A ball of yours that would splash skips once across the water and flies half as far again | Skips twice |
-   | A mortar of your own | Every 6 seconds a shell is lobbed at the nearest enemy within 360, bursting for 22 | Every 4 seconds |
+   | A mortar of your own | Every 6 seconds a shell is lobbed at the nearest enemy within 360, bursting for 22 (it holds fire while the shell could land on your own ship or a prize) | Every 4 seconds |
    | Prize gun crews | Your prizes reload twice as fast | Three times as fast |
    | Grapnels | Boarding takes half the time and a prize needs half the crew | A quarter of each |
    | Swivel guns | Broadsides train half as wide again either side (48 degrees instead of 32) | Twice as wide (64 degrees) |
