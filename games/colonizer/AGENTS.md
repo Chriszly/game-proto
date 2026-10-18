@@ -28,7 +28,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   sling whirl, lance or axe charge). With `settings.reduceMotion` every pose holds its first frame.
 - Economy: wood (trees), food (berry bushes and farms), ore (2x2 gold mines). Villagers gather a
   load of ten, drop it at the Town Center or at a Lumber or Mining Camp, and go back to the same node
-  or the nearest of its kind. Builders and new villagers go to work on their own.
+  or the nearest of its kind. Builders and new villagers go to work on their own (every builder
+  of a site, not only the one who finished it: `afterBuild`).
 - Buildings (`BUILDINGS` in `src/game/data.ts`): Town Center, House, Farm, Lumber Camp, Mining Camp,
   Barracks, Archery Range, Stable, Academy, Watchtower; one per faction (`faction` on the def,
   `UNIQUE`): Forge (Ember, soldiers cost `FORGE_COST` 80%), Dock (Tide, on a shore, `DOCK_FOOD` every
@@ -224,7 +225,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `setRally` plants a rally flag and `clearRally` takes it down, `endRaid` ends a raid whose raiders turn back, `campAt`/`campSpots` find a camp and the tiles round it,
   `monumentLeft` reads a Monument's count, `deedCount` and `deedsDone` read
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
-  player's sight, and `entityAt` finds what is under a point.
+  player's sight, and `entityAt` finds what is under a point (a mouse click prefers
+  the player's own unit over an enemy standing on it).
 - `src/game/planner.ts`: `think(state, dt, side = AI)` runs the AI for a side every 4 s of game time (`THINK_MS`). It issues
   the same commands a player would, through the sim's functions, and at most `ACTIONS_PER_THINK`
   (2) of them each time, about 30 a minute, so it can't out-click a player. Each command goes
@@ -369,7 +371,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   gather step for farms, Age III in `ownBonus`. Hit points can be fractional under Shieldwall.
 - One raid is tracked at a time (`GameState.raid`): `startRaid` does nothing while a raid is under
   way, so in watch mode a side's raid can go untracked while the other's is on. A raid ends when
-  every raider has fallen (repelled) or with `endRaid` when the planner calls its party home.
+  every raider has fallen (repelled), with `endRaid` when the planner calls its party home, or,
+  with no credit to anyone, when the raiding side is knocked out (`checkWinner`). A side knocked
+  out of a three-way match loses its sheltering villagers with its buildings.
 - `speedOf` in `sim.ts` gives cavalry the Stirrups speed (`STIRRUPS_SPEED`) when they move.
 - Garrisoned villagers are not in `s.units`, so nothing targets, draws or selects them; code that
   counts a player's villagers (the planner's `TARGET_VILLAGERS`) adds `garrisoned(s, owner)`.
@@ -422,7 +426,8 @@ Sound table (`src/audio/sfx.ts`), and where each plays (in `GameScene` unless no
 - `raidHorn`, `repelled`: a raid on the player starts, or is repelled (`SoundCues`).
 - `cache`, `relicGain`, `relicLost`: the player takes a cache, holds a relic or loses one (`SoundCues`).
 - `monument`: anyone's Monument finished (`SoundCues`).
-- `crumble`: a building falls on screen, a Town Centre included (`SoundCues`).
+- `crumble`: a building falls on screen, a Town Centre included (`SoundCues`; not a palisade piece a
+  new gate replaces).
 - Shared: `ui('click')` for the other panel buttons and the menu, `ui('coin')` for a Market trade,
   `ui('refuse')` for every refused action and a disabled panel button.
 
@@ -481,8 +486,8 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
 - Add a building: add it to `BUILDINGS` (its name key in the `i18n/` files) and `BUILD_ORDER` (or `BUILD_MORE`; page one holds 10 plus
   two buttons, so it is full), give it a painter in `PAINT`
   (`src/art/scenery.ts`), and if it trains or researches, make `trains` or `research` say so. The
-  panel and the planner pick it up from the data; add it to `BUILD_PLAN` in the planner if the AI
-  should build it.
+  panel and the planner pick it up from the data; add it to each temperament's `plan` in
+  `TEMPERAMENTS` (`src/game/data.ts`) if the AI should build it.
 - Add a tech: add it to `TECHS` with its building and cost, then give its effect a line in the sim
   (`gatherBonus` for gathering, `ownBonus` for damage; `research` checks `age2` and `advance`).
 - Add a deed: add it to `DEEDS` and `Player.deeds`, keep it in `updateDeeds` and `deedCount`, and
