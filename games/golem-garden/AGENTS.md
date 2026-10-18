@@ -48,7 +48,7 @@ Implemented today:
   `state.selected` is a `SeedKind`). `plant` on a free path cell (`freePath`, never the
   Heartwood's) pushes a `Hedge` (`HEDGE.cost` = 15 sap, `HEDGE.hp` = 60) with `stops`: for each
   route, the distance `HEDGE_STOP` (30px) before the cell's centre (`routeDist`), or null. In
-  `step`, a walking pest that would pass a stop halts there, sets `Pest.chewing` and takes
+  `step`, a walking pest that would pass a stop halts there and takes
   `bite * CHEW_PER_BITE` (6) health a second off the hedge; crows (`flies`) and a mole in its
   tunnel pass. Hedges at 0 health are dropped. The scene draws them (`drawHedges`) with a bar.
 - Compost (GG9): `finishWave` from `COMPOST.fromWave` (3) adds `COMPOST.rate` (10%) of the sap
@@ -79,9 +79,12 @@ Implemented today:
 - Calling early: once a wave's queue is empty, the wave button reads "Call wave N now, +15 early";
   `startWave` then finishes the current wave at once (bonus, bud, best) plus `EARLY_BONUS` and
   starts the next. Not on `HARVEST_WAVE`: `canCallEarly` is false there, so the harvest
-  counts the leaves left once wave 30 is cleared, and the button reads "Harvest wave".
+  counts the leaves left once wave 30 is cleared, and the button reads "Harvest wave". Nor while
+  a Queen Slug is on the path (`queenOnPath`): the button reads "squash the queen" until she is
+  squashed or gets through.
   The preview above it counts the next wave's pests with `waveCounts`.
-- Boons (GG11): `finishWave` after a Queen Slug wave (`wave % BOSS_EVERY === 0`) sets
+- Boons (GG11): `finishWave` after a Queen Slug wave (`wave % BOSS_EVERY === 0`) whose queen
+  was squashed (`state.queenSquashed`, set in `step`'s kill loop, cleared as a wave begins) sets
   `state.offer` to `boonOffer(wave / BOSS_EVERY)`, three of `BOONS` (the first three, then the
   last three, in turn). The scene holds the game still (ticks by 0) while `offer` is set and shows
   `showBoons` (after the harvest picker closes, when both come at wave 30); a card calls
@@ -119,6 +122,10 @@ Missing or rough:
 - Pests come in at the board's left edge from under a strip of table (`edge`), so they pop in at
   the first path cell's left half.
 - Pests on the same stretch can overlap; nothing spreads them out.
+- At a 16:9 view (frame y 0) the shared corner buttons (full screen, sound, pause; x 12 to 114,
+  y 498 to 528) cover the bottom 14px of cells (0,6) and (1,6): a tap there hits a button and the
+  level beads of a golem there hide under them. Clearing them means a smaller or moved `GRID`,
+  which changes the pixel distances the balance is tuned in.
 - The hit flash is a fill tint, which the canvas renderer (used by the playthrough) does not draw.
 - Calling early counts the current wave as done even though its last pests are still walking:
   they can still bite the Heartwood, but its bonus and bud are already paid.
@@ -178,12 +185,12 @@ File map (`src/`):
   `THORNY_STARS` and `LEAN_SAP`. Every name and blurb in the catalogues (golems, with `lower` for
   inside a sentence and `card` for a tall seed card's two lines, the hedge, forms, targets, boons and
   twists) is a `TextKey`, shown with `t`.
-- `game/state.ts`: `GameState`, `Golem` (with `form` and `target`), `Hedge`, `Pest` (with
-  `chewing`), `Shot`, `Pop`, `Slime`, `SHOT_MS`, `newGame(best, bloom, garden, stars, thorny, laurels)`,
+- `game/state.ts`: `GameState`, `Golem` (with `form` and `target`), `Hedge`, `Pest`, `Shot`,
+  `Pop`, `Slime`, `SHOT_MS`, `newGame(best, bloom, garden, stars, thorny, laurels)`,
   `gardenOf`, `totalStars`, `gardenOpen`, `thornyOpen`, `twistOf`, `boonCount`, `unlocked`, `seedCost`, `select`, `golemAt`, `hedgeAt`,
   `freeSoil`, `freePath`, `canPlant`, `plant`, `upgradeCost`, `picksForm`, `upgrade(s, g, form)`,
   `boonedStats`, `statsOf(s, g)`, `setTarget`, `nextTarget`, `uprootValue`, `uproot`, `canMove`, `move`, `neighbours`,
-  `comboAt`, `slimed`, `canCallEarly`, `nextWave`, `regrowPrice`, `canRegrow`, `regrow`, `sunRow`,
+  `comboAt`, `slimed`, `queenOnPath`, `canCallEarly`, `nextWave`, `regrowPrice`, `canRegrow`, `regrow`, `sunRow`,
   `takeBoon`, `startWave` (returns `'start'`, `'early'` or null) and `tick`. No Phaser.
 - `game/save.ts`: `loadBest`/`saveBest`, `loadBloom`/`saveBloom`, `loadGarden`/`saveGarden`,
   `loadThorny`/`saveThorny`, `loadStars`/`saveStars`, `loadLaurels`/`saveLaurels`.
@@ -210,7 +217,7 @@ File map (`src/`):
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
 `shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewSize`, `viewFrame`), `shared/settings.ts` (`byDifficulty`,
-`settings`), `shared/i18n.ts` (`translator`, `byLanguage`) and `shared/audio.ts` (`sounds`, `ui`,
+`settings`), `shared/i18n.ts` (`translator`, `byLanguage`, `formatNumber`) and `shared/audio.ts` (`sounds`, `ui`,
 `playMusic`, `playSting`).
 
 Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
@@ -235,7 +242,7 @@ How it runs:
 - `GameScene.update` takes game time from the frame's timestamp (clamped to `MAX_STEP_MS`) and
   calls `tick` (with twice the time when `fast`), which plays it in steps of at most 16ms. Each
   step: shots and slime age, the wave's queue spawns pests whose `atMs` has come (each on the next
-  route in turn), pests walk (slowed if `slowMs`; halted and `chewing` at a hedge's stop unless
+  route in turn), pests walk (slowed if `slowMs`; halted, chewing, at a hedge's stop unless
   they fly or are under ground; a mole's `under` is set in its tunnel; the queen slimes the cells
   round her), pests past their route's `length` bite the Heartwood, chewed-through hedges go,
   seeds grow, grown golems off cooldown (slower on slime) throw at the pest their `target` picks
@@ -259,11 +266,11 @@ How it runs:
 State model (`GameState` in `src/game/state.ts`): `garden` (index into `GARDENS`), `wave` (being
 fought, or next while building), `phase` (`'build'`, `'wave'` or `'over'`), `heart`, `sap`,
 `selected` (a `SeedKind`), `golems` (each with `spent`, `form` and `target`), `hedges` (each with
-`hp` and `stops`), `pests` (each with `route`, `under` and `chewing`), `queue`, `spawned`,
+`hp` and `stops`), `pests` (each with `route` and `under`), `queue`, `spawned`,
 `slime`, `fast`, `waveMs`, `waveHpScale`, `shots`, `kills`, `bloom` (0 to 5), `pops` (squashed
 pests not yet shown; the scene empties it every frame), `best`, `compost` (paid at the last wave's
 end), `stars` (per garden), `harvest` (this garden's, 0 before wave 30), `thorny`, `laurels` (per
-garden), `boons`, `sunRows`, `offer` (the boons to pick from, or empty), `regrown` and `nextId`. Golem
+garden), `boons`, `sunRows`, `offer` (the boons to pick from, or empty), `queenSquashed`, `regrown` and `nextId`. Golem
 positions are cells; pest positions are `dist` pixels along their route. The open menu, its form
 mode and the golem being moved (`picked`, `formMenu`, `moving`) are the scene's, not the state's.
 
@@ -288,8 +295,8 @@ what the rules did in a frame by diffing the state around `tick` (`soundWatch` b
 sound plays at most once a frame, and nothing plays while the picker or a boon pick holds the
 game still (it ticks by 0).
 
-Music (`syncMusic`, called in `create` and every `update`): `CALM` (96 BPM, G major pentatonic,
-part `calm`, chords G Em C D) between waves and after the Heartwood falls; `WAVES` (132 BPM)
+Music (`syncMusic`, called in `create` and every `update`, before the stings, so a sting ducks
+the song that plays on): `CALM` (96 BPM, G major pentatonic, part `calm`, chords G Em C D) between waves and after the Heartwood falls; `WAVES` (132 BPM)
 `battle` while a wave comes and `boss` (E minor) on a Queen Slug wave (`wave % BOSS_EVERY`).
 Changing song fades the old one; battle and boss switch at the next bar. `STINGS` (120 BPM):
 `harvest1` to `harvest3` (one rising note per star) when the harvest picker opens, `lose` when the
@@ -401,12 +408,14 @@ Heartwood falls.
   (Raise, Aim, Move, Uproot); `refreshMenu` and `menuTap` agree on that order.
 - A hedge's `stops` are fixed when it is planted, from the garden's routes; a pest exactly at a
   stop keeps chewing because the halt test is `dist <= stop <= next`.
-- `startWave` during a wave returns null until the queue is empty, and always on wave 30. The scene shows the "called
+- `startWave` during a wave returns null until the queue is empty, while a Queen Slug walks, and
+  always on wave 30. The scene shows the "called
   early" banner itself (from the click), while a natural clear is spotted in `update`.
 - A golem's damage lands when it throws; the shot image is cosmetic, so a pest can vanish before
   the rock arrives.
-- `tapCell` opens the menu whenever the cell has a golem, so planting never replaces one, and a tap
-  anywhere with a menu open only closes it.
+- `tapCell` opens the menu whenever the cell has a golem, so planting never replaces one; with a
+  menu open, a tap on another golem switches the menu to it, and a tap anywhere else only closes
+  it. A seed card closes the menu, so the next tap on soil plants.
 - The scene saves `best` and `bloom` on any rise (in `refresh`, so an early call counts too);
   `newGame` reads them back on restart.
 - Picking "furthest along" (`first` targeting) compares the share of each pest's route walked,

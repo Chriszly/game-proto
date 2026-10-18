@@ -85,8 +85,6 @@ export interface Pest {
   slowFactor: number;
   /** Time left on its hit flash, in ms. */
   hitMs: number;
-  /** Chewing on a hedge in its way. */
-  chewing: boolean;
 }
 
 /** A thrown stone, moss clump or thorn in flight, drawn by the scene; its damage lands when thrown. */
@@ -161,6 +159,8 @@ export interface GameState {
   sunRows: number[];
   /** The three boons to pick from after a Queen Slug wave, or empty when there is no pick to make. */
   offer: Boon[];
+  /** The Queen Slug was squashed this wave (one that got through to the Heartwood earns no boons). */
+  queenSquashed: boolean;
   /** Leaves regrown this garden; each makes the next one dearer. */
   regrown: number;
   nextId: number;
@@ -207,6 +207,7 @@ export function newGame(best: number, bloom = 0, garden = 0, stars: number[] = [
     boons: [],
     sunRows: [],
     offer: [],
+    queenSquashed: false,
     regrown: 0,
     nextId: 1,
   };
@@ -369,9 +370,15 @@ export function comboAt(s: GameState, kind: GolemKind, col: number, row: number)
 /** Whether (col, row) is slimed by the Queen Slug. */
 export const slimed = (s: GameState, col: number, row: number) => s.slime.some((c) => c.col === col && c.row === row);
 
-/** Whether the next wave can be called early: the current one has all come in but is still on the path. */
-/** The harvest wave can't be called early: its stars count the leaves left once its pests are done. */
-export const canCallEarly = (s: GameState) => s.phase === 'wave' && s.queue.length === 0 && s.wave !== HARVEST_WAVE;
+/** Whether a Queen Slug is still on the path. */
+export const queenOnPath = (s: GameState) => s.pests.some((p) => PEST_INFO[p.kind].boss);
+
+/**
+ * Whether the next wave can be called early: the current one has all come in but is still on the
+ * path. The harvest wave can't be called early: its stars count the leaves left once its pests are
+ * done. Nor can a wave while its Queen Slug walks: its boons wait to see whether she is squashed.
+ */
+export const canCallEarly = (s: GameState) => s.phase === 'wave' && s.queue.length === 0 && s.wave !== HARVEST_WAVE && !queenOnPath(s);
 
 /** The wave the wave button would send next. */
 export const nextWave = (s: GameState) => (s.phase === 'build' ? s.wave : s.wave + 1);
@@ -413,12 +420,14 @@ function beginWave(s: GameState) {
   s.queue = spawns;
   s.waveHpScale = hpScale;
   s.waveMs = 0;
+  s.queenSquashed = false;
 }
 
 /**
  * Counts wave `s.wave` as done: its bonus, compost on the sap unspent (from COMPOST.fromWave), a bud
- * on the Heartwood, the best, after a Queen Slug wave three boons to pick from, and at HARVEST_WAVE
- * the garden's harvest stars (and in its thorny variant, its laurel), and moves on.
+ * on the Heartwood, the best, after a Queen Slug wave whose queen was squashed three boons to pick
+ * from, and at HARVEST_WAVE the garden's harvest stars (and in its thorny variant, its laurel), and
+ * moves on.
  */
 function finishWave(s: GameState) {
   const cap = COMPOST.cap + BOON.compostCap * boonCount(s, 'compost');
@@ -431,7 +440,7 @@ function finishWave(s: GameState) {
     s.stars[s.garden] = Math.max(s.stars[s.garden], s.harvest);
     if (s.thorny) s.laurels[s.garden] = 1;
   }
-  if (s.wave % BOSS_EVERY === 0) s.offer = boonOffer(s.wave / BOSS_EVERY);
+  if (s.wave % BOSS_EVERY === 0 && s.queenSquashed) s.offer = boonOffer(s.wave / BOSS_EVERY);
   s.wave++;
 }
 
@@ -500,7 +509,7 @@ function step(s: GameState, dt: number) {
       const { kind } = s.queue.shift()!;
       const hp = Math.round(PEST_INFO[kind].hp * s.waveHpScale);
       const route = s.spawned++ % routes.length;
-      s.pests.push({ id: s.nextId++, kind, hp, maxHp: hp, route, dist: 0, under: false, slowMs: 0, slowFactor: 1, hitMs: 0, chewing: false });
+      s.pests.push({ id: s.nextId++, kind, hp, maxHp: hp, route, dist: 0, under: false, slowMs: 0, slowFactor: 1, hitMs: 0 });
     }
   }
 
@@ -514,13 +523,11 @@ function step(s: GameState, dt: number) {
     const slowed = p.slowMs > 0 ? p.slowFactor : 1;
     const length = routes[p.route].length;
     let next = p.dist + (info.speed * slowed * dt) / 1000;
-    p.chewing = false;
     if (!info.flies && !p.under) {
       for (const hedge of s.hedges) {
         const stop = hedge.stops[p.route];
         if (stop === null || p.dist > stop || next < stop) continue;
         next = stop;
-        p.chewing = true;
         hedge.hp -= (info.bite * CHEW_PER_BITE * dt) / 1000;
       }
     }
@@ -606,6 +613,7 @@ function step(s: GameState, dt: number) {
     const bounty = PEST_INFO[p.kind].bounty;
     s.sap += bounty;
     s.kills++;
+    if (PEST_INFO[p.kind].boss) s.queenSquashed = true;
     const at = pathPoint(routes[p.route], p.dist);
     s.pops.push({ x: at.x, y: at.y, sap: bounty });
   }
