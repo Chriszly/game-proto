@@ -8,6 +8,7 @@ import { OBJECTIVES, stonesToFind, type GameState } from '../game/state';
 import { t } from '../i18n';
 import { ui } from '../../../../shared/audio';
 import { BUTTONS, STICK, VIEW } from './layout';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 
 const FONT = 'Georgia, "Times New Roman", serif';
 const DEPTH = 10000;
@@ -37,9 +38,18 @@ export class Hud {
   private placeMs = 0;
   private toastMs = 0;
   private endCard: Phaser.GameObjects.Container | null = null;
+  /** The view's size: the hearts sit top left, the journal top right, the buttons bottom right. */
+  private vw: number;
+  private vh: number;
+  /** How far the view is wider and taller than the designed 960x540. */
+  private dx: number;
+  private dy: number;
 
   constructor(private scene: Phaser.Scene) {
     const add = scene.add;
+    ({ width: this.vw, height: this.vh } = viewSize(scene));
+    this.dx = this.vw - VIEW.w;
+    this.dy = this.vh - VIEW.h;
     const fixed = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) => o.setScrollFactor(0).setDepth(DEPTH);
     this.plate = fixed(add.graphics());
     this.stoneIcon = fixed(add.image(24, 46, 'moonstone').setScale(texScale('moonstone')));
@@ -47,21 +57,27 @@ export class Hud {
     this.keys = fixed(add.text(108, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#f0d890' }));
     this.seeds = fixed(add.text(178, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#c8f0a0' }));
     this.objective = fixed(
-      add.text(VIEW.w - 12, 12, '', { fontFamily: FONT, fontSize: '15px', color: '#f3ead2', align: 'right', backgroundColor: 'rgba(10,14,36,0.55)', padding: { x: 10, y: 6 } }).setOrigin(1, 0),
+      add.text(this.vw - 12, 12, '', { fontFamily: FONT, fontSize: '15px', color: '#f3ead2', align: 'right', backgroundColor: 'rgba(10,14,36,0.55)', padding: { x: 10, y: 6 } }).setOrigin(1, 0),
     );
-    this.place = fixed(add.text(VIEW.w / 2, 84, '', { fontFamily: FONT, fontSize: '30px', color: '#f3ead2', stroke: '#0a0e24', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0));
-    this.toastText = fixed(add.text(VIEW.w / 2, 130, '', { fontFamily: FONT, fontSize: '18px', color: '#dff2ff', stroke: '#0a0e24', strokeThickness: 4 }).setOrigin(0.5).setAlpha(0));
+    this.place = fixed(add.text(this.vw / 2, 84, '', { fontFamily: FONT, fontSize: '30px', color: '#f3ead2', stroke: '#0a0e24', strokeThickness: 5 }).setOrigin(0.5).setAlpha(0));
+    this.toastText = fixed(add.text(this.vw / 2, 130, '', { fontFamily: FONT, fontSize: '18px', color: '#dff2ff', stroke: '#0a0e24', strokeThickness: 4 }).setOrigin(0.5).setAlpha(0));
     this.buttons = {
-      sword: fixed(add.image(BUTTONS.sword.x, BUTTONS.sword.y, 'btn-sword').setScale(texScale('btn-sword') * (BUTTONS.sword.r / 30))),
-      roll: fixed(add.image(BUTTONS.roll.x, BUTTONS.roll.y, 'btn-roll').setScale(texScale('btn-roll') * (BUTTONS.roll.r / 30))),
-      vine: fixed(add.image(BUTTONS.vine.x, BUTTONS.vine.y, 'btn-vine').setScale(texScale('btn-vine') * (BUTTONS.vine.r / 30))),
-      seed: fixed(add.image(BUTTONS.seed.x, BUTTONS.seed.y, 'btn-seed').setScale(texScale('btn-seed') * (BUTTONS.seed.r / 30))),
+      sword: fixed(add.image(this.btn('sword').x, this.btn('sword').y, 'btn-sword').setScale(texScale('btn-sword') * (BUTTONS.sword.r / 30))),
+      roll: fixed(add.image(this.btn('roll').x, this.btn('roll').y, 'btn-roll').setScale(texScale('btn-roll') * (BUTTONS.roll.r / 30))),
+      vine: fixed(add.image(this.btn('vine').x, this.btn('vine').y, 'btn-vine').setScale(texScale('btn-vine') * (BUTTONS.vine.r / 30))),
+      seed: fixed(add.image(this.btn('seed').x, this.btn('seed').y, 'btn-seed').setScale(texScale('btn-seed') * (BUTTONS.seed.r / 30))),
     };
     this.stick = fixed(add.graphics());
     this.box = fixed(add.graphics()).setDepth(DEPTH + 1);
-    this.speaker = fixed(add.text(150, 398, '', { fontFamily: FONT, fontSize: '17px', color: '#f0d890', fontStyle: 'bold' })).setDepth(DEPTH + 2);
-    this.line = fixed(add.text(150, 424, '', { fontFamily: FONT, fontSize: '19px', color: '#f3ead2', wordWrap: { width: 650 }, lineSpacing: 4 })).setDepth(DEPTH + 2);
-    this.hint = fixed(add.text(810, 500, '', { fontFamily: FONT, fontSize: '13px', color: '#a8b0d0' }).setOrigin(1, 0.5)).setDepth(DEPTH + 2);
+    this.speaker = fixed(add.text(150 + this.dx / 2, 398 + this.dy, '', { fontFamily: FONT, fontSize: '17px', color: '#f0d890', fontStyle: 'bold' })).setDepth(DEPTH + 2);
+    this.line = fixed(add.text(150 + this.dx / 2, 424 + this.dy, '', { fontFamily: FONT, fontSize: '19px', color: '#f3ead2', wordWrap: { width: 650 }, lineSpacing: 4 })).setDepth(DEPTH + 2);
+    this.hint = fixed(add.text(810 + this.dx / 2, 500 + this.dy, '', { fontFamily: FONT, fontSize: '13px', color: '#a8b0d0' }).setOrigin(1, 0.5)).setDepth(DEPTH + 2);
+  }
+
+  /** A touch button's place, kept at the same distance from the view's bottom-right corner. */
+  private btn(id: keyof typeof BUTTONS) {
+    const b = BUTTONS[id];
+    return { x: b.x + this.dx, y: b.y + this.dy, r: b.r };
   }
 
   /** The floating stick under a steering finger: a faint ring with a gold knob, or nothing. */
@@ -81,7 +97,8 @@ export class Hud {
 
   /** Which touch button, if any, is at a point on the screen. */
   buttonAt(p: { x: number; y: number }, s: GameState): keyof typeof BUTTONS | null {
-    for (const [id, b] of Object.entries(BUTTONS) as [keyof typeof BUTTONS, (typeof BUTTONS)['sword']][]) {
+    for (const id of Object.keys(BUTTONS) as (keyof typeof BUTTONS)[]) {
+      const b = this.btn(id);
       if (!this.buttons[id].visible) continue;
       if (id === 'vine' && !s.items.hookvine) continue;
       if (id === 'seed' && !s.items.seeds) continue;
@@ -139,8 +156,8 @@ export class Hud {
     this.line.setText(dialog?.text ?? '');
     this.hint.setText(dialog ? t('readOn') : '');
     if (dialog) {
-      this.box.fillStyle(0x0a0e24, 0.86).fillRoundedRect(130, 388, 700, 132, 14);
-      this.box.lineStyle(2, 0xc8b070, 0.8).strokeRoundedRect(130, 388, 700, 132, 14);
+      this.box.fillStyle(0x0a0e24, 0.86).fillRoundedRect(130 + this.dx / 2, 388 + this.dy, 700, 132, 14);
+      this.box.lineStyle(2, 0xc8b070, 0.8).strokeRoundedRect(130 + this.dx / 2, 388 + this.dy, 700, 132, 14);
     }
   }
 
@@ -151,9 +168,11 @@ export class Hud {
   /** The chapter's end card, with how the night went and two ways on. */
   showEnd(title: string, lines: string[], onKeep: () => void, onNew: () => void) {
     const add = this.scene.add;
-    const c = add.container(0, 0).setScrollFactor(0).setDepth(DEPTH + 10);
+    // The card is laid out for 960x540 and sits in the middle of the view, its shade over all of it.
+    const f = viewFrame(this.scene);
+    const c = add.container(f.x, f.y).setScrollFactor(0).setDepth(DEPTH + 10);
     const g = add.graphics();
-    g.fillStyle(0x05081a, 0.82).fillRect(0, 0, VIEW.w, VIEW.h);
+    g.fillStyle(0x05081a, 0.82).fillRect(-f.x, -f.y, this.vw, this.vh);
     g.fillStyle(0x10163a, 0.95).fillRoundedRect(180, 90, 600, 360, 18);
     g.lineStyle(2, 0xc8b070, 0.9).strokeRoundedRect(180, 90, 600, 360, 18);
     c.add(g);
