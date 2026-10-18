@@ -9,7 +9,7 @@ import type { Upgrade } from './state';
 // as the shop before's, while its goods sell for about as much more. Phaser-free, like `state.ts`.
 
 /** What a town shop grows, makes and sells. The apothecary's wheat and flour are painted the same. */
-export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper' | 'woad' | 'linen' | 'dye' | 'cloth' | 'cloak' | 'ore' | 'timber' | 'charcoal' | 'iron' | 'horseshoe' | 'pot';
+export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper' | 'woad' | 'linen' | 'dye' | 'cloth' | 'cloak' | 'ore' | 'timber' | 'charcoal' | 'iron' | 'horseshoe' | 'pot' | 'barley' | 'hops' | 'malt' | 'driedHops' | 'ale' | 'stout';
 
 export const GOODS: Record<GoodId, { color: number }> = {
   wheat: { color: 0xd9b24a },
@@ -33,10 +33,16 @@ export const GOODS: Record<GoodId, { color: number }> = {
   iron: { color: 0x6a707a },
   horseshoe: { color: 0x7a808a },
   pot: { color: 0x3a3d48 },
+  barley: { color: 0xd8c070 },
+  hops: { color: 0x8ab84a },
+  malt: { color: 0xb08a4a },
+  driedHops: { color: 0x9aa05a },
+  ale: { color: 0xd89a3a },
+  stout: { color: 0x3a2618 },
 };
 
 /** The shops on the town map besides the apothecary, in the order they are bought. */
-export type ShopId = 'bakery' | 'chandlery' | 'dyeHouse' | 'smithy';
+export type ShopId = 'bakery' | 'chandlery' | 'dyeHouse' | 'smithy' | 'tavern';
 
 export interface Recipe {
   inputs: GoodId[];
@@ -213,6 +219,38 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     ],
     sells: { horseshoe: 648, pot: 1_053 },
     worker: 'smith',
+  },
+  tavern: {
+    id: 'tavern',
+    name: 'tavern',
+    makes: 'tavernMakes',
+    tier: 5,
+    gardens: [
+      { good: 'barley', grow: 28_000, name: 'barleyField' },
+      { good: 'hops', grow: 34_000, name: 'hopGarden' },
+    ],
+    stations: [
+      { id: 'maltings', name: 'maltings', texture: 'maltings', recipes: [{ inputs: ['barley'], out: 'malt', ms: 3_500 }] },
+      { id: 'oast', name: 'oast', texture: 'oast', recipes: [{ inputs: ['hops'], out: 'driedHops', ms: 3_000 }] },
+      {
+        id: 'kettle',
+        name: 'kettle',
+        texture: 'kettle',
+        recipes: [
+          { inputs: ['malt', 'driedHops'], out: 'ale', ms: 6_000 },
+          { inputs: ['malt', 'malt', 'driedHops'], out: 'stout', ms: 8_000 },
+        ],
+      },
+    ],
+    routes: [
+      { id: 'barley', from: { garden: 0 }, to: { station: 'maltings' }, cost: 60 },
+      { id: 'hops', from: { garden: 1 }, to: { station: 'oast' }, cost: 60 },
+      { id: 'maltings', from: { station: 'maltings' }, to: { station: 'kettle' }, cost: 100 },
+      { id: 'oast', from: { station: 'oast' }, to: { station: 'kettle' }, cost: 100 },
+      { id: 'kettle', from: { station: 'kettle' }, to: 'shelf', cost: 150 },
+    ],
+    sells: { ale: 1_944, stout: 3_159 },
+    worker: 'brewer',
   },
 };
 export const SHOP_IDS = Object.keys(SHOPS) as ShopId[];

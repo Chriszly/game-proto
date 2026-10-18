@@ -45,13 +45,16 @@ study, shade gardens and a mirrored second production line.
   a tier. The shops so far are the Bakery (wheat and honeycomb, mill and oven, bread and honey
   cake) the Chandlery (honeycomb and flax, wax press, spinning wheel and dipping vat, candles
   and tapers) the Dye house (flax and woad, loom, woad mill and dye vat, blue cloth and
-  cloaks) and the Smithy (coppice and ore pit, charcoal kiln, bloomery and anvil, horseshoes and
-  iron pots). With more than three lots the map lays them in two rows of shorter cards (`lot`), and
+  cloaks), the Smithy (coppice and ore pit, charcoal kiln, bloomery and anvil, horseshoes and
+  iron pots) and the Tavern (barley field and hop garden, maltings, oast and brew kettle, ale and
+  stout). With more than three lots the map lays them in two rows of shorter cards (`lot`), and
   keeps `CORNER_H` free at the bottom for the corner buttons. Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
   households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
-  then houses, manors, which want candles and tapers, mansions, which want blue cloth and cloaks, and palaces, which want horseshoes and iron pots) and buys it off a shop's shelf (potions
-  off the apothecary's), and happy districts grow homes and then tiers (see `runDistrict`). Planned
-  next: the Tavern, each adding goods that a tier asks for.
+  then houses, manors, which want candles and tapers, mansions, which want blue cloth and cloaks, palaces, which want horseshoes and iron pots, and castles, drawn as battlemented towers, which want ale and stout) and buys it off a shop's shelf (potions
+  off the apothecary's), and happy districts grow homes and then tiers (see `runDistrict`). Once
+  every district is full at the last tier (`townIsCity`), the districts heading on the map turns
+  into the city note (`townCity`), the second ending. A further shop needs a new `HOME_TIERS` entry
+  too, and `drawHomes` then draws only the new last tier as castles.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
   Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth

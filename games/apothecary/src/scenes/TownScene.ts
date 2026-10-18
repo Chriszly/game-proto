@@ -6,7 +6,7 @@ import { SONG, sfx } from '../audio';
 import { INK, PAPER, PAPER_NUM, SERIF, WASH, fit } from '../art/paint';
 import { itemTexture } from '../art/items';
 import { goodTexture, lotTexture } from '../art/town';
-import { DISTRICTS, HOME_TIERS, districtFull, type Need } from '../game/districts';
+import { DISTRICTS, HOME_TIERS, districtFull, townIsCity, type Need } from '../game/districts';
 import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick } from '../game/sim';
@@ -64,7 +64,9 @@ export class TownScene extends Phaser.Scene {
       this.addLot(lot, x, y);
     });
     const districtsY = top + rows * this.lot.h + (rows - 1) * this.lot.gap + DISTRICT.above;
-    this.add.text(width / 2, districtsY - DISTRICT.above / 2 + 4, t('districts'), { ...TOWN_TEXT, color: PAPER }).setOrigin(0.5);
+    // The second ending: once every district is full of castles, the heading says the town is a city.
+    const heading = this.add.text(width / 2, districtsY - DISTRICT.above / 2 + 4, t('districts'), { ...TOWN_TEXT, color: PAPER }).setOrigin(0.5);
+    this.views.push(() => heading.setText(townIsCity(this.state.town.districts) ? t('townCity') : t('districts')));
     DISTRICTS.forEach((_, i) => this.addDistrict(i, width / 2 + (i - (DISTRICTS.length - 1) / 2) * (DISTRICT.w + this.lot.gap), districtsY + DISTRICT.h / 2));
     const purse = townTopBar(this, () => this.state, t('townMap'), { label: t('apothecary'), onTap: () => this.enter('apothecary') });
     this.views.push(purse);
@@ -165,7 +167,11 @@ export class TownScene extends Phaser.Scene {
       const left = x + k * (HOME.w + HOME.gap);
       const base = y + 18;
       g.fillStyle(wall, 1).fillRect(left, base - h, HOME.w, h);
-      g.fillStyle(roof, 1).fillTriangle(left - 3, base - h, left + HOME.w + 3, base - h, left + HOME.w / 2, base - h - 10);
+      // Castles, the last tier, are stone towers with battlements instead of a roof.
+      if (tier === HOME_TIERS.length - 1) {
+        g.fillStyle(0xb8b0a0, 1).fillRect(left, base - h, HOME.w, h);
+        for (let m = 0; m < 3; m++) g.fillRect(left + m * (HOME.w / 2.5), base - h - 5, HOME.w / 5, 5);
+      } else g.fillStyle(roof, 1).fillTriangle(left - 3, base - h, left + HOME.w + 3, base - h, left + HOME.w / 2, base - h - 10);
       g.fillStyle(0x5a3a22, 1).fillRect(left + HOME.w / 2 - 3, base - 7, 6, 7);
       g.lineStyle(1, 0x2a1c12, 0.8).strokeRect(left, base - h, HOME.w, h);
     }

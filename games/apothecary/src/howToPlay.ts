@@ -43,7 +43,7 @@ const en: HowToPlay = {
     'Some days a merchant wagon across the street buys a whole crate of one potion at a premium: tap it to sell.',
     'The herb market below the outfitter buys and sells plants and refined goods at prices that change with the weather.',
     'Once the town is cured its Town map opens: buy a bakery and more shops, each ten times dearer than the last, and supply the whole town.',
-    'The districts on the Town map buy from your shelves every half minute: keep them supplied and their homes grow from cottages into houses.',
+    'The districts on the Town map buy from your shelves every half minute: keep them supplied and their homes grow from cottages into houses and on up to castles. Fill every district with castles and the town becomes a city.',
   ],
 };
 
@@ -88,7 +88,7 @@ const de: HowToPlay = {
     'An manchen Tagen kauft ein Händlerwagen gegenüber eine ganze Kiste eines Tranks zu einem Aufpreis: tipp ihn an, um zu verkaufen.',
     'Der Kräutermarkt unter dem Ausstatter kauft und verkauft Pflanzen und verarbeitete Waren zu Preisen, die sich mit dem Wetter ändern.',
     'Ist die Stadt geheilt, öffnet sich ihr Stadtplan: kauf eine Bäckerei und weitere Läden, jeder zehnmal teurer als der letzte, und beliefere die ganze Stadt.',
-    'Die Viertel auf dem Stadtplan kaufen jede halbe Minute aus deinen Regalen: versorge sie, und ihre Hütten wachsen zu Häusern.',
+    'Die Viertel auf dem Stadtplan kaufen jede halbe Minute aus deinen Regalen: versorge sie, und ihre Hütten wachsen zu Häusern und weiter bis zu Burgen. Sind alle Viertel voller Burgen, wird die Stadt zur Großstadt.',
   ],
 };
 

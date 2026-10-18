@@ -349,6 +349,91 @@ function drawAnvil(c: Ctx) {
   both(c, ellPts(72, 40, 8, 2, 12), '#5a7a9a', { layers: 1, edge: 0 }, { w: 0.5 });
 }
 
+/** Barley: bearded ears on pale stalks, nodding when ripe. 48x44 as shown. */
+function drawBarley(c: Ctx, stage: number) {
+  const height = [7, 20, 32][stage];
+  for (let i = 0; i < 6; i++) {
+    const x = 5 + i * 7.6 + rr(-1, 1);
+    const top = 43 - height + (i % 2) * 3;
+    const lean = rr(0, 3);
+    ink(c, [[x, 43], [x + lean * 0.4, (43 + top) / 2], [x + lean, top + 3]], { closed: false, w: 1.3, col: stage === 2 ? '#c8b060' : '#7aa84c' });
+    if (stage === 2) {
+      both(c, ellPts(x + lean + 1, top + 3, 2.2, 4.5, 12), '#dcc470', { layers: 2, edge: 0 }, { w: 0.6 });
+      for (const d of [-2, 0, 2]) ink(c, [[x + lean + 1 + d * 0.6, top], [x + lean + 1 + d * 1.6, top - 6]], { closed: false, w: 0.4, col: '#b89a50' });
+    }
+  }
+}
+
+/** Hops: bines twining up a pole, hung with pale green cones when ripe. 48x44 as shown. */
+function drawHops(c: Ctx, stage: number) {
+  const height = [10, 26, 40][stage];
+  for (const x of [14, 34]) {
+    ink(c, [[x, 44], [x, 44 - height]], { closed: false, w: 1.6, col: WASH.woodDark });
+    const vine: Pt[] = [];
+    for (let k = 0; k <= 10; k++) vine.push([x + Math.sin(k * 1.4) * 3, 44 - (k / 10) * height]);
+    ink(c, vine, { closed: false, w: 1, col: '#5f8a42' });
+    for (let k = 1; k < 5; k++) {
+      const [lx, ly] = vine[k * 2];
+      both(c, ellPts(lx + (k % 2 ? 4 : -4), ly, 3, 2, 8), WASH.leaf, { layers: 1, edge: 0 }, { w: 0.4 });
+      if (stage === 2) both(c, ellPts(lx + (k % 2 ? -3 : 3), ly + 2, 2, 3, 8), '#b8d870', { layers: 1, edge: 0 }, { w: 0.4 });
+    }
+  }
+}
+
+function drawSack(c: Ctx, fill: string, mark: (c: Ctx) => void) {
+  shadow(c, 8.5, 14.5, 6, 1.4, 0.25);
+  both(c, [[4, 14.5], [2.5, 8], [5, 4], [11, 4], [13.5, 8], [12, 14.5]], '#c8b088', { layers: 2 }, { w: 0.8 });
+  ink(c, [[4.5, 5.5], [11.5, 5.5]], { closed: false, w: 0.8 });
+  both(c, ellPts(8, 4, 3, 1.2, 10), fill, { layers: 1, edge: 0 }, { w: 0.4 });
+  mark(c);
+}
+
+/** A tankard of ale (amber) or stout (near black), with a head of foam. */
+function drawTankard(c: Ctx, beer: string) {
+  shadow(c, 8, 14.5, 6, 1.3, 0.25);
+  both(c, rectPts(3, 5, 9, 9.5, 1), beer, { layers: 2 }, { w: 0.8 });
+  for (const y of [7.5, 12]) ink(c, [[3, y], [12, y]], { closed: false, w: 0.8, col: WASH.woodDeep });
+  ink(c, [[12, 7], [14.5, 8], [14.5, 11.5], [12, 12.5]], { closed: false, w: 1.1 });
+  both(c, ellPts(7.5, 5, 5, 2, 12), '#f4ecd8', { layers: 1, edge: 0 }, { w: 0.5 });
+}
+
+/** A malting floor: a wide wooden tray of sprouting barley with a rake across it. 88x60 as shown. */
+function drawMaltings(c: Ctx) {
+  shadow(c, 44, 55, 40, 5, 0.18);
+  both(c, [[4, 30], [84, 30], [80, 52], [8, 52]], WASH.wood, { layers: 2 }, { w: 1.1 });
+  both(c, [[9, 32], [79, 32], [76, 46], [12, 46]], '#c8a860', { layers: 3, bloom: 1, cx: 30, cy: 38 }, { w: 0.6 });
+  for (let i = 0; i < 40; i++) wash(c, ellPts(rr(14, 74), rr(34, 44), 1, 0.7, 6), '#a8883e', { layers: 1, edge: 0 });
+  ink(c, [[20, 40], [64, 8]], { closed: false, w: 1.8, col: WASH.woodDark });
+  ink(c, [[14, 44], [26, 36]], { closed: false, w: 2.2, col: WASH.woodDeep });
+  for (const leg of [10, 76]) ink(c, [[leg, 52], [leg, 58]], { closed: false, w: 2, col: WASH.woodDark });
+}
+
+/** An oast: a round brick kiln under a white conical cowl, drying hops. 72x68 as shown. */
+function drawOast(c: Ctx) {
+  shadow(c, 36, 64, 30, 4, 0.18);
+  both(c, rectPts(14, 32, 44, 32, 2), '#a8603e', { layers: 3, bloom: 1, cx: 24, cy: 40 }, { w: 1.2 });
+  for (let y = 38; y < 64; y += 6) ink(c, [[14, y], [58, y]], { closed: false, w: 0.45, alpha: 0.45 });
+  both(c, [[10, 34], [36, 6], [62, 34]], '#e8e2d2', { layers: 3 }, { w: 1.2 });
+  hatch(c, [[36, 6], [62, 34], [36, 34]], { gap: 2.4, alpha: 0.2, w: 0.5 });
+  both(c, [[34, 2], [42, 2], [44, 8], [34, 8]], WASH.woodDark, { layers: 1 }, { w: 0.8 });
+  wash(c, rectPts(30, 52, 12, 12, 2), WASH.flame, { layers: 2, edge: 0 });
+}
+
+/** A copper brew kettle over a fire, with a cask beside it. 88x64 as shown. */
+function drawKettle(c: Ctx) {
+  shadow(c, 44, 60, 40, 4, 0.18);
+  for (const [dx, h, col] of [[-6, 7, WASH.flame], [2, 9, WASH.flameLight], [-2, 5, WASH.flameCore]] as [number, number, string][]) {
+    wash(c, [[30 + dx - 4, 60], [30 + dx, 60 - h], [30 + dx + 4, 60]], col, { layers: 2, edge: 0 });
+  }
+  both(c, ellPts(30, 34, 24, 20, 30), '#c07a3a', { layers: 3, bloom: 2, cx: 22, cy: 28 }, { w: 1.3 });
+  hatch(c, ellPts(38, 36, 14, 16, 20), { gap: 2.4, alpha: 0.22, w: 0.5 });
+  both(c, ellPts(30, 16, 16, 4, 20), '#8a4a26', { layers: 2 }, { w: 1 });
+  both(c, ellPts(30, 15, 12, 2.6, 16), '#d89a3a', { layers: 1, edge: 0 }, { w: 0.5 });
+  both(c, ellPts(70, 46, 14, 14, 24), WASH.wood, { layers: 2, bloom: 1, cx: 66, cy: 42 }, { w: 1 });
+  for (const x of [62, 78]) ink(c, [[x, 33], [x, 59]], { closed: false, w: 1.2, col: WASH.iron });
+  both(c, ellPts(70, 46, 3, 3, 10), WASH.woodDeep, { layers: 1 }, { w: 0.5 });
+}
+
 /** A millstone on a timber frame, a hopper of grain above it and a sack catching the flour. 88x60 as shown. */
 function drawMill(c: Ctx) {
   shadow(c, 46, 55, 40, 5, 0.18);
@@ -498,6 +583,25 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, 'kiln', 84, 60, drawKiln, 3);
   paint(scene, 'bloomery', 84, 64, drawBloomery, 3);
   paint(scene, 'anvil', 84, 60, drawAnvil, 3);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('barley', stage), 48, 44, (c) => drawBarley(c, stage), 3, 131 + stage);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('hops', stage), 48, 44, (c) => drawHops(c, stage), 3, 141 + stage);
+  paint(scene, 'good-barley', 16, 16, (c) => {
+    for (const x of [5, 8, 11]) {
+      ink(c, [[x, 15], [x + 1, 6]], { closed: false, w: 0.9, col: '#b89a50' });
+      both(c, ellPts(x + 1, 5, 1.6, 3.4, 10), '#dcc470', { layers: 1, edge: 0 }, { w: 0.5 });
+    }
+  }, 4);
+  paint(scene, 'good-hops', 16, 16, (c) => {
+    for (const [x, y] of [[5.5, 8], [10.5, 9], [8, 12]]) both(c, ellPts(x, y, 2.6, 3.4, 10), '#a8d060', { layers: 2 }, { w: 0.6 });
+    ink(c, [[8, 2], [8, 6]], { closed: false, w: 0.8, col: '#5f8a42' });
+  }, 4);
+  paint(scene, 'good-malt', 16, 16, (c) => drawSack(c, '#b08a4a', () => {}), 4);
+  paint(scene, 'good-driedHops', 16, 16, (c) => drawSack(c, '#9aa05a', (s) => both(s, ellPts(8, 10, 2, 2.6, 8), '#9aa05a', { layers: 1 }, { w: 0.5 })), 4);
+  paint(scene, 'good-ale', 16, 16, (c) => drawTankard(c, '#d89a3a'), 4);
+  paint(scene, 'good-stout', 16, 16, (c) => drawTankard(c, '#3a2618'), 4);
+  paint(scene, 'maltings', 88, 60, drawMaltings, 3);
+  paint(scene, 'oast', 72, 68, drawOast, 3);
+  paint(scene, 'kettle', 88, 64, drawKettle, 3);
   paint(scene, lotTexture('apothecary'), 96, 84, (c) =>
     drawLot(c, '#5e6e46', '#d8c8a2', (s) => {
       // A green bottle on the sign.
@@ -521,6 +625,14 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, lotTexture('smithy'), 96, 84, (c) =>
     drawLot(c, '#4a4a4e', '#cfc2a2', (s) => {
       both(s, [[83, 47], [93, 47], [91, 50], [89, 50], [89, 53], [87, 53], [87, 50], [85, 50]], WASH.iron, { layers: 1 }, { w: 0.5 });
+    }), 3);
+  paint(scene, lotTexture('tavern'), 96, 84, (c) =>
+    drawLot(c, '#7a5a3a', '#e0d0a8', (s) => {
+      s.save();
+      s.translate(83.5, 45);
+      s.scale(0.6, 0.6);
+      drawTankard(s, '#d89a3a');
+      s.restore();
     }), 3);
 }
 

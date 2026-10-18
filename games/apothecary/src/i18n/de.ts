@@ -291,6 +291,22 @@ const de: Translation<typeof en> = {
   pot: 'Eisentopf',
   smith: 'Schmied',
   palaceCount: { one: '{n} Palast', other: '{n} Paläste' },
+  tavern: 'Wirtshaus',
+  tavernMakes: 'Bier und Starkbier',
+  barleyField: 'Gerstenfeld',
+  hopGarden: 'Hopfengarten',
+  maltings: 'Mälzerei',
+  oast: 'Hopfendarre',
+  kettle: 'Braukessel',
+  barley: 'Gerste',
+  hops: 'Hopfen',
+  malt: 'Malz',
+  driedHops: 'Getrockneter Hopfen',
+  ale: 'Bier',
+  stout: 'Starkbier',
+  brewer: 'Brauer',
+  castleCount: { one: '{n} Burg', other: '{n} Burgen' },
+  townCity: 'Jedes Viertel ist voller Burgen: Die Stadt ist eine Großstadt!',
 };
 
 /** Texts that read the same in German. */
