@@ -180,7 +180,7 @@ export interface Upgrade {
  * much every pallet and shelf holds, the shop's prices, an extra order slot and how often customers
  * come in.
  */
-export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'storage' | 'prices' | 'slots' | 'customers' | 'research' | 'craftOrder' | 'priceSigns' | 'herbalist';
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'storage' | 'prices' | 'slots' | 'customers' | 'research' | 'craftOrder' | 'priceSigns' | 'replant' | 'herbalist';
 export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
 export const GUILD_UPGRADES = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers', 'herbalist'] as const;
 
@@ -204,10 +204,11 @@ export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: Text
   herbalist: { max: 1, cost: 60, name: 'herbalist' },
   // Each level learns the next recipe in RESEARCH_ORDER.
   research: { max: 4, cost: 30, name: 'study' },
-  // Also at the study: learning to choose what each table and cauldron makes first, and to price
-  // each shelf with its sign.
+  // Also at the study: learning to choose what each table and cauldron makes first, to price each
+  // shelf with its sign, and to replant a garden from its sign.
   craftOrder: { max: 1, cost: 40, name: 'craftOrder' },
   priceSigns: { max: 1, cost: 60, name: 'priceSigns' },
+  replant: { max: 1, cost: 30, name: 'replanting' },
 };
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
@@ -348,8 +349,14 @@ export const RESEARCH_ORDER: readonly PotionId[] = ['vigourTonic', 'shadowElixir
 /** Whether the apothecary can brew a potion: known from the start, or learned at the study. */
 export const researched = (state: GameState, potion: PotionId) =>
   KNOWN_RECIPES.includes(potion) || RESEARCH_ORDER.indexOf(potion) < state.upgrades.research.level;
-/** Whether the study has taught the crafting order (the tables' and cauldrons' "First:" signs) or the shelves' price signs. */
-export const studied = (state: GameState, id: 'craftOrder' | 'priceSigns') => state.upgrades[id].level > 0;
+/** The study's lessons besides its recipes: one level each. */
+export type Lesson = 'craftOrder' | 'priceSigns' | 'replant';
+export const LESSONS: readonly Lesson[] = ['craftOrder', 'priceSigns', 'replant'];
+/**
+ * Whether the study has taught a lesson: the crafting order (the tables' and cauldrons' "First:"
+ * signs), the shelves' price signs, or replanting a garden from its sign.
+ */
+export const studied = (state: GameState, id: Lesson) => state.upgrades[id].level > 0;
 /** The potions brewed with nightshade, which customers ask for only once a shade garden grows it. */
 export const NEEDS_NIGHTSHADE: readonly PotionId[] = ['shadowElixir', 'moonlightSalve', 'witchsBrew'];
 /**
@@ -542,6 +549,7 @@ export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
   'level-research': 'belt-garden',
   'level-craftOrder': 'belt-garden',
   'level-priceSigns': 'belt-garden',
+  'level-replant': 'belt-garden',
   'level-herbalist': 'level-growth',
 };
 

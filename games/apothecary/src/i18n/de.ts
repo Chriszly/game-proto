@@ -61,6 +61,8 @@ const de: Translation<typeof en> = {
   study: 'Studierstube',
   craftOrder: 'Reihenfolge',
   priceSigns: 'Preisschilder',
+  replanting: 'Umpflanzen',
+  learnLesson: '{lesson}: in der Studierstube lernen',
 
   // Pixie routes
   gardenPixies: 'Gartenfeen',

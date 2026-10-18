@@ -17,10 +17,14 @@ its drop and pick-up markers north of it, either side, and its work spot just ab
 pallets stand left of it and its out pallets right of it, and its name, its "First:" sign and its
 upgrade, craftsman and pixie markers sit in a row below it. The shop stands in the middle and faces
 the street at the bottom; the doctor goes in by its north door, where the counter's drop-off
-stands outside. The market below holds the outfitter and the study on the left and the guild on
+stands outside. Hedges line the ground below the shop on both sides, since only customers use the
+street. The market below holds the outfitter and the study on the left and the guild on
 the right. The right half is grass until the expansion is bought, which opens it up for a second
 production line that mirrors the first. Pixies fly goods along each row into the shop. The map is
-bigger than the screen, so the camera follows the doctor.
+bigger than the screen, so the camera follows the doctor. The cards over the yard (the contract,
+the town and plague cards, the orders and the hands) are a little see-through.
+
+![Hedges either side of the street below the shop](docs/screenshots/hedges.webp)
 
 ![A new game: one line and the shop](docs/screenshots/rows-new-game.webp)
 
@@ -89,13 +93,14 @@ and its caption names the next recipe. Customers only ask for potions the apothe
 and a cauldron only brews those. The Recipes panel lists every recipe, the ones still to learn
 faded with "Study" in place of their price.
 
-The study also teaches two crafts, each its own lesson with its own purple marker either side of
-the desk, for sale with the recipes: the **crafting order** (40 coins), which puts up the "First:"
-signs at the tables and cauldrons (see **Priority**), and the **price signs** (60 coins), which put
-up the Cheap, Fair and Dear signs at the shelves (see **Price signs**). Until then a station makes
-things in its own order and every potion sells at Fair.
+The study also teaches three crafts, each its own lesson with its own purple marker around the
+desk, for sale with the recipes: **replanting** (30 coins), which lets a garden's sign switch what
+it grows (see **Replanting**), the **crafting order** (40 coins), which puts up the "First:" signs
+at the tables and cauldrons (see **Priority**), and the **price signs** (60 coins), which put up the
+Cheap, Fair and Dear signs at the shelves (see **Price signs**). Until then the gardens grow what
+they were planted with, a station makes things in its own order and every potion sells at Fair.
 
-![The study, with the crafting order, the Vigour Tonic and the price signs for sale](docs/screenshots/study.webp)
+![The study, with replanting, the price signs, the crafting order and the Vigour Tonic for sale](docs/screenshots/study.webp)
 
 **The shade garden** grows nightshade, for the Shadow Elixir, the Moonlight Salve and the Witch's
 Brew. It stands at the top of the market, on the left, and is planted on its
@@ -134,7 +139,7 @@ hands-off until then.
 
 ![Blight in the wheat field: the withered beds, and the town card's warning](docs/screenshots/blight.webp)
 
-**Replanting**: tap a garden's sign to switch all nine of its beds to the next plant its line
+**Replanting**: once the study has taught it, tap a garden's sign to switch all nine of its beds to the next plant its line
 grows: wheat, mandrake, and nightshade once the line's shade garden is planted (the shade garden
 can be switched too). The sign shows the plant's name and icon. Every bed starts again from seed
 and the blight is cleared, so rebalancing the gardens for the day's contract costs a crop. The
@@ -273,7 +278,7 @@ than wait.
 purchase puts the next one out, in this order: refining table level 2, pack 2, cauldron level 2, a
 craftsman at the counter, then the garden's pixies. From the garden's pixies on it branches out:
 boots, sickle, the counter's upgrade, craftsmen at the table and cauldron, the table's pixies, the
-shade garden, the study and its two crafts, and entry to the guild (50 coins), which puts the guild's growth, pixies,
+shade garden, the study and its three crafts, and entry to the guild (50 coins), which puts the guild's growth, pixies,
 storage and prices upgrades up for sale. The cauldron's pixies follow the table's, the land follows the
 cauldron's pixies, customers follows prices and the extra slot follows customers. The second line's things are for sale once their
 station stands.

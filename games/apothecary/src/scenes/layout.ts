@@ -88,15 +88,16 @@ export const GUILD = {
 };
 /**
  * The study in the left market, beside the outfitter: a writing desk under its sign, the marker
- * below it where the doctor pays to learn the next recipe, and either side of the desk the markers
- * to learn the crafting order and the price signs.
+ * below it where the doctor pays to learn the next recipe, either side of the desk the markers to
+ * learn replanting and the price signs, and left of the recipe's the one for the crafting order.
  */
 export const STUDY = {
   sign: { x: 560, y: 664 },
   desk: { x: 560, y: 706 },
-  learn: { x: 560, y: 780 },
-  craftOrder: { x: 500, y: 716 },
+  learn: { x: 615, y: 780 },
+  replant: { x: 500, y: 716 },
   priceSigns: { x: 620, y: 716 },
+  craftOrder: { x: 510, y: 780 },
 };
 /** Where the doctor stands to buy the expansion's land: at the corner of the second line's yard by the shop. */
 export const EXPANSION_LAND = { x: 1030, y: 584 };
@@ -225,6 +226,12 @@ export const SHOP_BLOCKS = [
   { x: LEFT, y: SHOP.y, w: WALL, h: SHOP.h },
   { x: RIGHT, y: SHOP.y, w: WALL, h: SHOP.h },
 ];
+/**
+ * The hedges either side of the ground below the shop, the street and what stands across it, which
+ * the doctor can't walk: each a line of clipped bushes from the shop's bottom wall to the world's
+ * edge, just outside `SHOP_BLOCKS`.
+ */
+export const HEDGES = [LEFT - 10, RIGHT + WALL + 10].map((x) => ({ x, from: BOTTOM + WALL + 10, to: WORLD.h }));
 /** The street customers walk up to the street door on. */
 export const STREET_PATH = { x: SHOP_STREET_DOOR.from, y: BOTTOM, w: SHOP_STREET_DOOR.to - SHOP_STREET_DOOR.from, h: WORLD.h - BOTTOM };
 /** Where the doctor lines up to walk through the back door: just inside it and just outside it. */

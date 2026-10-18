@@ -41,6 +41,8 @@ export function loadState(): GameState {
     // was already using.
     if (!saved.upgrades?.craftOrder && Object.values(state.priority).some((p) => p)) state.upgrades.craftOrder = { level: 1, paid: 0 };
     if (!saved.upgrades?.priceSigns && Object.values(state.signs ?? {}).some((s) => s && s !== 'fair')) state.upgrades.priceSigns = { level: 1, paid: 0 };
+    // Likewise replanting, for a save with a garden already growing something else.
+    if (!saved.upgrades?.replant && state.plots.some((p, i) => p.plant !== fresh.plots[i]?.plant)) state.upgrades.replant = { level: 1, paid: 0 };
     // Rescale first: the joins `ontoOwnRuns` moves goods up to are on today's shorter belts.
     if ((saved.layout ?? 0) < COLUMNS_LAYOUT) ontoColumns(state);
     if ((saved.layout ?? 0) < HEART_LAYOUT) ontoHeart(state);
