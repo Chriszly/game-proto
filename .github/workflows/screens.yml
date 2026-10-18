@@ -31,12 +31,14 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          all=$(cd games && for d in */; do d=${d%/}; if grep -qs 'setupScaling(game)' "$d/src/main.ts"; then echo "$d"; fi; done)
+          all=$(cd games && for d in */; do d=${d%/}; if grep -qs 'setupScaling(game' "$d/src/main.ts"; then echo "$d"; fi; done)
+          # The same test as e2e/screens.spec.ts; finding no game means the test above broke.
+          if [ -z "$all" ]; then echo "No game calls setupScaling(game...) in its src/main.ts."; exit 1; fi
           if [ -z "$BASE" ]; then
             changed=$all # a push to main or workflow_dispatch: check every game
           else
             files=$(git diff --name-only "$BASE" HEAD)
-            if echo "$files" | grep -qE '^(shared/|e2e/screens\.spec\.ts$|\.github/workflows/screens\.yml$|package(-lock)?\.json$|playwright\.config\.ts$|vite\.config\.ts$)'; then
+            if echo "$files" | grep -qE '^(shared/|e2e/screens\.spec\.ts$|\.github/workflows/screens\.yml$|package(-lock)?\.json$|tsconfig(\.e2e)?\.json$|playwright\.config\.ts$|vite\.config\.ts$)'; then
               changed=$all
             else
               changed=$(for g in $all; do if echo "$files" | grep -q "^games/$g/"; then echo "$g"; fi; done)
@@ -75,3 +77,19 @@ jobs:
             test-results
             playwright-report
           retention-days: 14
+
+  # One check for every game's screens, failing when the picker or any game's job failed.
+  result:
+    name: Screens
+    needs: [changes, screens]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that no checked game failed
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          SCREENS: ${{ needs.screens.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then echo "Choosing the games to check failed."; exit 1; fi
+          if [ "$SCREENS" != success ] && [ "$SCREENS" != skipped ]; then echo "A game failed its screens; see the screens jobs."; exit 1; fi
+          echo "Screens passed."

@@ -75,7 +75,7 @@ jobs:
             changed=$all # a push to main or workflow_dispatch: open every game
           else
             files=$(git diff --name-only "$BASE" HEAD)
-            if echo "$files" | grep -qE '^(index\.html$|favicon\.svg$|e2e/hub\.spec\.ts$|shared/|\.github/workflows/hub\.yml$|package(-lock)?\.json$|playwright\.config\.ts$|vite\.config\.ts$)'; then
+            if echo "$files" | grep -qE '^(index\.html$|favicon\.svg$|e2e/hub\.spec\.ts$|shared/|\.github/workflows/hub\.yml$|package(-lock)?\.json$|tsconfig(\.e2e)?\.json$|playwright\.config\.ts$|vite\.config\.ts$)'; then
               changed=$all
             else
               changed=$(for g in $all; do if echo "$files" | grep -q "^games/$g/"; then echo "$g"; fi; done)
