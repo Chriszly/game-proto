@@ -134,6 +134,8 @@ export class GameScene extends Phaser.Scene {
   private note?: Phaser.GameObjects.Text;
   /** The ingredients the label's rows show, from the top: the first customer's, then the second's. */
   private rows: Kind[] = [];
+  /** How many of each the rows ask for: kept from `buildPanel`, since a royal commission's needs move on before its label is rebuilt. */
+  private rowNeeds: Partial<Record<Kind, number>> = {};
 
   constructor() {
     super('Game');
@@ -245,7 +247,7 @@ export class GameScene extends Phaser.Scene {
     this.clearHint();
     const ta = this.state.board[a.row][a.col];
     const tb = this.state.board[b.row][b.col];
-    // Jars and resin hold their tiles: they don't move at all.
+    // Jars, resin and mould hold their tiles: they don't move at all.
     if (stuck(ta) || stuck(tb)) {
       ui('refuse');
       return this.drawCursor();
@@ -406,6 +408,18 @@ export class GameScene extends Phaser.Scene {
           }
           this.refreshNeeds();
         },
+      });
+    } else if (step.melted.length + step.scrubbed.length > 0) {
+      // A Pestle on a resin or mould tile with nothing beside it to gather: the coat or fuzz comes off in place.
+      let freeing: Phaser.GameObjects.Image[] = [];
+      this.queue.push({
+        ms: CLEAR_MS,
+        start: () => {
+          freeing = [...step.melted, ...step.scrubbed].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
+          if (step.melted.length > 0) sfx('sizzle');
+          if (step.scrubbed.length > 0) sfx('scrub');
+        },
+        step: (k) => freeing.forEach((s) => shown(s, settings.reduceMotion ? 1 : 1 + 0.25 * Math.sin(Math.PI * k))),
       });
     }
     if (step.spread) {
@@ -722,6 +736,7 @@ export class GameScene extends Phaser.Scene {
             : '';
     if (line) items.push(this.add.text(666, 196, line, ink(13, RUST, 'italic bold')).setOrigin(0, 0.5));
     this.rows = Object.keys(o.needs) as Kind[];
+    this.rowNeeds = { ...o.needs };
     const second = o.second ? Object.keys(o.second.needs) : [];
     this.rows.forEach((kind, i) => {
       const y = this.rowY(i);
@@ -770,7 +785,7 @@ export class GameScene extends Phaser.Scene {
   private refreshNeeds() {
     this.bars.clear();
     this.rows.forEach((kind, i) => {
-      const n = this.state.current.needs[kind] ?? 0;
+      const n = this.rowNeeds[kind] ?? 0;
       const have = Math.min(this.shown[kind] ?? 0, n);
       const y = this.rowY(i);
       const done = have >= n;
@@ -1097,13 +1112,13 @@ export class GameScene extends Phaser.Scene {
       const need = o.exam.stars === 3 ? STARS_3 : STARS_2;
       if (!s.passed) {
         playSting(SONG, 'fail');
-        this.showResult(t('examFailed'), t('examFailedText', { moves: s.moves, stars: o.exam.stars, need }), t('noSeal'), this.examRetry(), s.orderStars);
+        this.showResult(t('examFailed'), t('examFailedText', { n: s.moves, stars: o.exam.stars, need }), t('noSeal'), this.examRetry(), s.orderStars);
         return;
       }
       const rank = t(s.seals === EXAMS.length ? 'allSeals' : 'seal', { seals: s.seals, exams: EXAMS.length });
       sfx('stamp');
       playSting(SONG, 'rank');
-      this.showResult(t('examPassed'), t('earned', { price: o.price, bonus: s.earned - o.price, moves: s.moves }), rank, this.orderChoice(), s.orderStars);
+      this.showResult(t('examPassed'), t('earned', { price: o.price, bonus: s.earned - o.price, n: s.moves }), rank, this.orderChoice(), s.orderStars);
       return;
     }
     const before = rankOf(s.stars - s.orderStars);
@@ -1122,7 +1137,7 @@ export class GameScene extends Phaser.Scene {
             ? t('royalStars', { n: s.stars, title: royalTitle })
             : t('everyRecipe', { n: s.stars });
     const kept = Object.entries(s.toPantry).map(([k, n]) => t(KIND_COUNTS[k as Kind], { n }));
-    const lines = [t('earned', { price: o.price, bonus: s.earned - o.price, moves: s.moves })];
+    const lines = [t('earned', { price: o.price, bonus: s.earned - o.price, n: s.moves })];
     if (s.speedBonus > 0) lines.push(t('speedBonus', { n: s.speedBonus, potion: t(POTION_NAMES[s.served[0]]) }));
     if (kept.length > 0) lines.push(t('keptInPantry', { list: kept.join(', ') }));
     const title = o.last ? t('crownFilled') : o.stages ? t('royalFilled') : o.second ? t('twinFilled') : t('sold', { potion: t(POTION_NAMES[o.potion]) });

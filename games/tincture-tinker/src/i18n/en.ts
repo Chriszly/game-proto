@@ -121,11 +121,14 @@ const en = {
   workbench: 'Workbench',
   herbalist: 'Herbalist',
   examFailed: 'Examination failed',
-  examFailedText: 'Sold with {moves} moves left: the guild wanted {stars} stars ({need}+ moves left).',
+  examFailedText: {
+    one: 'Sold with {n} move left: the guild wanted {stars} stars ({need}+ moves left).',
+    other: 'Sold with {n} moves left: the guild wanted {stars} stars ({need}+ moves left).',
+  },
   examPassed: 'Examination passed!',
   allSeals: 'Every guild seal earned: {seals} of {exams}',
   seal: 'Guild seal {seals} of {exams}',
-  earned: '+{price} coins, +{bonus} for {moves} moves left',
+  earned: { one: '+{price} coins, +{bonus} for {n} move left', other: '+{price} coins, +{bonus} for {n} moves left' },
   speedBonus: '+{n} for serving the {potion} first',
   keptInPantry: '{list} kept in the pantry',
   crownedRank: '{title}! {n} stars in all',
@@ -139,7 +142,7 @@ const en = {
   sold: '{potion} sold!',
 
   // The herbalist and the workbench
-  coinsToSpend: '{n} coins to spend',
+  coinsToSpend: { one: '{n} coin to spend', other: '{n} coins to spend' },
   buyFor: 'Buy for {cost}',
   buyHerb: 'Buy for {cost}',
   full: 'Full',

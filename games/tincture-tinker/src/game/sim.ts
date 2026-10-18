@@ -7,6 +7,7 @@ import {
   findMatches,
   inBoard,
   matchesAt,
+  neighbours,
   ROWS,
   shuffle,
   special,
@@ -190,6 +191,8 @@ function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Ste
     s.stars += s.orderStars;
     s.sold++;
     s.order++;
+    // A rich pick is for one order: the next one is modest until the result card picks again.
+    s.rich = false;
     if (s.current.last) s.royal = true;
   } else if (s.moves === 0) {
     s.phase = 'failed';
@@ -226,7 +229,8 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
     for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (inBoard({ row: a.row + dr, col: a.col + dc })) swept.add(key({ row: a.row + dr, col: a.col + dc }));
   }
   for (const i of swept) hit.add(i);
-  s.fired += [...hit].filter((i) => tile(i).catalyst).length;
+  // Only the Catalysts that fired count, not ones another special swept up.
+  s.fired += [...firing].filter((i) => tile(i).catalyst).length;
   s.bloomsFired += areas.length;
 
   // An L or T of one kind leaves a Bloom where its lines cross; a run of four or more, a Catalyst.
@@ -270,12 +274,9 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
   // Mould is scrubbed off instead of its tile being gathered, whether hit or next to a match.
   const touched = new Set([...hit, ...brewed.map(key), ...melted.map(key)]);
   const scrubbed: (Cell & Tile)[] = [];
-  const near = (i: number) => {
-    const { row, col } = cell(i);
-    return [{ row: row - 1, col }, { row: row + 1, col }, { row, col: col - 1 }, { row, col: col + 1 }];
-  };
+  const near = (i: number) => neighbours(cell(i));
   for (let i = 0; i < ROWS * COLS; i++) {
-    if (!tile(i).mould || !(hit.has(i) || near(i).some((c) => inBoard(c) && touched.has(key(c))))) continue;
+    if (!tile(i).mould || !(hit.has(i) || near(i).some((c) => touched.has(key(c))))) continue;
     hit.delete(i);
     next[cell(i).row][cell(i).col] = { ...tile(i), mould: false };
     scrubbed.push({ ...cell(i), ...next[cell(i).row][cell(i).col] });
@@ -285,7 +286,7 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
   // A match next to a corked jar opens it, and its ingredient is gathered too.
   for (let i = 0; i < ROWS * COLS; i++) {
     if (!tile(i).jar || hit.has(i)) continue;
-    if (near(i).some((c) => inBoard(c) && touched.has(key(c)))) hit.add(i);
+    if (near(i).some((c) => touched.has(key(c)))) hit.add(i);
   }
   s.opened += [...hit].filter((i) => tile(i).jar).length;
 
@@ -332,7 +333,7 @@ export function stir(s: GameState): boolean {
 }
 
 /**
- * Sift: every tile in `row` but its specials, jars and resin is replaced by a new one, with no match
+ * Sift: every tile in `row` but its specials, jars, resin and mould is replaced by a new one, with no match
  * made and a move left on the board. Returns the tiles taken out, or null if it can't be bought.
  */
 export function sift(s: GameState, row: number): Tile[] | null {
