@@ -1,6 +1,14 @@
-// Where things sit on the 960x540 screen. The map itself is drawn in world pixels and scrolls.
+// Where things sit on the screen. The positions below are for the designed 960x540 view; `fitLayout`
+// moves them once at start for the view the screen's shape picked (`setupScaling` with `fill`): bars
+// stretch to its width and keep to its top and bottom, the minimap, chips and red's Nexus keep to its
+// right, and the pick screen, shop and end panel stay centred. The map is in world pixels and scrolls.
 
+/** The designed size of the game. */
 export const VIEW = { w: 960, h: 540 };
+/** The view the game shows, at least `VIEW` and wider or taller to fill the screen (`fitLayout`). */
+export const SCREEN = { w: VIEW.w, h: VIEW.h };
+/** Where the designed 960x540 rectangle sits in the middle of the view (the pick screen and panels). */
+export const FRAME = { x: 0, y: 0 };
 export const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 export const TOP_BAR = { x: 0, y: 0, w: VIEW.w, h: 34 };
@@ -33,7 +41,7 @@ export function upgradeCard(i: number, n = 2) {
 
 /** The item actives (D, H and the ward on V), three buttons under the shop button. */
 export function activeButton(i: number) {
-  return { x: SHOP_BUTTON.x + i * 33, y: 492, w: 30, h: 38 };
+  return { x: SHOP_BUTTON.x + i * 33, y: SHOP_BUTTON.y + 64, w: 30, h: 38 };
 }
 
 /** The recall button in the top bar, right of the clock; while the champion is dead it is the buy back button. */
@@ -50,7 +58,7 @@ export function shopRow(i: number) {
 
 /** The empowered-minion chips at the top right, under the top bar, one per team with the buff. */
 export function buffChip(i: number) {
-  return { x: VIEW.w - 222, y: 40 + i * 24, w: 212, h: 20 };
+  return { x: SCREEN.w - 222, y: 40 + i * 24, w: 212, h: 20 };
 }
 
 /** The ten champion cards on the pick screen, in two rows of five. */
@@ -59,13 +67,37 @@ export function pickCard(i: number) {
   const total = 5 * PICK_CARD.w + 4 * PICK_CARD.gap;
   const col = i % 5;
   const row = Math.floor(i / 5);
-  return { x: (VIEW.w - total) / 2 + col * (PICK_CARD.w + PICK_CARD.gap), y: PICK_CARD.y + row * (PICK_CARD.h + PICK_CARD.gap), w: PICK_CARD.w, h: PICK_CARD.h };
+  return { x: (SCREEN.w - total) / 2 + col * (PICK_CARD.w + PICK_CARD.gap), y: FRAME.y + PICK_CARD.y + row * (PICK_CARD.h + PICK_CARD.gap), w: PICK_CARD.w, h: PICK_CARD.h };
 }
 /** The buffs the player's champion carries, as chips in a row above the portrait. */
 export function buffStrip(i: number) {
-  return { x: 12 + i * 92, y: 388, w: 88, h: 18 };
+  return { x: 12 + i * 92, y: PORTRAIT.y - 32, w: 88, h: 18 };
 }
 
 /** The panel and button shown when a match is won or lost. */
 export const END_PANEL = { x: 280, y: 150, w: 400, h: 200 };
 export const PLAY_AGAIN = { x: 380, y: 290, w: 200, h: 44 };
+
+/**
+ * Lays the screen out for a view of `w` x `h` (at least 960x540), once at start. At 960x540 nothing
+ * moves; wider or taller, the bottom bar and what is in it keep to the bottom, the minimap to the
+ * bottom right, the recall button by the centred clock, and the panels stay in the middle.
+ */
+export function fitLayout(w: number, h: number) {
+  const dx = w - VIEW.w, dy = h - VIEW.h;
+  SCREEN.w = w;
+  SCREEN.h = h;
+  FRAME.x = dx / 2;
+  FRAME.y = dy / 2;
+  TOP_BAR.w = w;
+  Object.assign(BOTTOM_BAR, { y: 412 + dy, w });
+  PORTRAIT.y = 420 + dy;
+  ABILITY_BOX.y = 428 + dy;
+  SHOP_BUTTON.y = 428 + dy;
+  UPGRADE_PANEL.y = 420 + dy;
+  Object.assign(MINIMAP, { x: 826 + dx, y: 420 + dy });
+  RECALL_BUTTON.x = 530 + dx / 2;
+  Object.assign(SHOP_PANEL, { x: 100 + dx / 2, y: 38 + dy / 2 });
+  Object.assign(END_PANEL, { x: 280 + dx / 2, y: 150 + dy / 2 });
+  Object.assign(PLAY_AGAIN, { x: 380 + dx / 2, y: 290 + dy / 2 });
+}
