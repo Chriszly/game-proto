@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { splitHudCamera, viewPoint } from '../../../../shared/scaling';
+import { splitHudCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
 import { HEROES, HERO_IDS, isKnight, schemeOf, type HeroId } from '../game/heroes';
 import { HERO_R, RUN_MS, clock, freshState, statsOf, type GameState } from '../game/state';
 import { choose, inRingGap, phalanxSpots, shieldHalf, startRun, suppressorHalf, suppressorLength } from '../game/sim';
@@ -19,7 +19,7 @@ import { SoundCues } from '../audio/cues';
 import { sfx } from '../audio/sfx';
 import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader, unlockPanel } from '../ui/panels';
 import {
-  BOSS_BAR, CENTER, CREDITS_TAG, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, VIEW, XP_BAR, inside,
+  BOSS_BAR, CENTER, CREDITS_TAG, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, SCREEN, FRAME, XP_BAR, fitLayout, inside,
 } from './layout';
 
 /** A pool of images for one kind of thing on the field, reused frame to frame. */
@@ -115,6 +115,10 @@ export class GameScene extends Phaser.Scene {
     this.unlocking = [];
     this.progress = loadProgress();
     this.cues = new SoundCues();
+    // The view takes the screen's shape: pin the HUD to its edges and centre the panels in it.
+    const view = viewSize(this);
+    const frame = viewFrame(this);
+    fitLayout(view.width, view.height, frame.x, frame.y);
     // The world camera follows the hero; the HUD (scroll factor 0) gets a fixed camera.
     splitHudCamera(this);
     this.ground = this.add.graphics().setDepth(DEPTH.ground);
@@ -381,6 +385,7 @@ export class GameScene extends Phaser.Scene {
     else if (s.phase === 'trader') this.panel = trader(this, s);
     else if (s.phase === 'event') this.panel = eventPanel(this, s);
     else if (s.phase === 'won' || s.phase === 'lost') this.panel = endScreen(this, s, this.progress);
+    this.panel?.place(FRAME.x, FRAME.y);
     this.shown = this.panelKey();
     this.walking = false;
     this.stick = null;
@@ -409,10 +414,10 @@ export class GameScene extends Phaser.Scene {
     const g = this.ground;
     g.clear();
     const def = PLANETS[planet];
-    const x0 = cx - VIEW.w / 2 - 40;
-    const y0 = cy - VIEW.h / 2 - 40;
-    const x1 = cx + VIEW.w / 2 + 40;
-    const y1 = cy + VIEW.h / 2 + 40;
+    const x0 = cx - SCREEN.w / 2 - 40;
+    const y0 = cy - SCREEN.h / 2 - 40;
+    const x1 = cx + SCREEN.w / 2 + 40;
+    const y1 = cy + SCREEN.h / 2 + 40;
     if (def.id !== 'dune') g.fillStyle(hex(def.ground.field), 1).fillRect(x0, y0, x1 - x0, y1 - y0);
     const step = 48;
     g.lineStyle(1, hex(def.ground.grid), 0.07);

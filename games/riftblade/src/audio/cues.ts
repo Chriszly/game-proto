@@ -1,7 +1,7 @@
 import { playMusic, playSting, stopMusic, ui, type Song } from '../../../../shared/audio';
 import { HEROES, isKnight, type HeroId } from '../game/heroes';
 import type { BoltColor, Bomb, GameState, Hazard } from '../game/state';
-import { VIEW } from '../scenes/layout';
+import { SCREEN } from '../scenes/layout';
 import { MENU_SONG, PLANET_SONGS, STINGS } from './music';
 import { sfx, type SfxName } from './sfx';
 
@@ -120,7 +120,7 @@ export class SoundCues {
   private field(s: GameState, play: (name: SfxName, pitch?: number, volume?: number) => void) {
     const p = s.player;
     const fresh = (id: number) => id >= this.lastId;
-    const seen = (x: number, y: number) => Math.abs(x - p.x) < VIEW.w / 2 + 40 && Math.abs(y - p.y) < VIEW.h / 2 + 40;
+    const seen = (x: number, y: number) => Math.abs(x - p.x) < SCREEN.w / 2 + 40 && Math.abs(y - p.y) < SCREEN.h / 2 + 40;
     for (const b of s.bullets) {
       if (!fresh(b.id)) continue;
       if (!b.hostile) play(boltSound(b.color, b.spin));

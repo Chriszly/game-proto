@@ -15,7 +15,7 @@ import { t } from '../i18n';
 import { C, hex } from '../art/glow';
 import { portraitKey } from '../art/sprites';
 import {
-  AGAIN, CONTINUE, DEPTH, FIGHT, FONT, HERO_DETAIL, LEAVE, MAP, REROLL, UNLOCK, VIEW, eventOptionRect, heroCardRect, levelCardRect, mapNodeRect,
+  AGAIN, CONTINUE, DEPTH, FIGHT, FONT, HERO_DETAIL, LEAVE, MAP, REROLL, SCREEN, UNLOCK, VIEW, eventOptionRect, heroCardRect, levelCardRect, mapNodeRect,
   mapNodeSpot, tradeCardRect, type Rect,
 } from '../scenes/layout';
 
@@ -31,6 +31,10 @@ export class Panel {
   objects: Obj[] = [];
   spots: Spot[] = [];
   private frames: { g: Phaser.GameObjects.Graphics; rect: Rect; color: string; fill: string }[] = [];
+  /** Objects drawn over the whole view (the dimming, the stars), which `place` leaves where they are. */
+  private backdrop = new Set<Obj>();
+  /** How far `place` moved the panel from its designed 960x540 layout. */
+  private offset = { x: 0, y: 0 };
 
   constructor(private scene: Phaser.Scene) {}
 
@@ -56,8 +60,31 @@ export class Panel {
 
   dim(alpha = 0.72) {
     const g = this.scene.add.graphics();
-    g.fillStyle(hex(C.night), alpha).fillRect(0, 0, VIEW.w, VIEW.h);
+    g.fillStyle(hex(C.night), alpha).fillRect(0, 0, SCREEN.w, SCREEN.h);
+    this.backdrop.add(g);
     return this.add(g);
+  }
+
+  /** Marks an object as drawn over the whole view, so `place` does not move it. */
+  fixed<T extends Obj>(o: T): T {
+    this.backdrop.add(o);
+    return o;
+  }
+
+  /**
+   * Moves the panel, laid out for the designed 960x540 view, by `dx`, `dy` (into the frame in the
+   * middle of a wider or taller view), with its tappable spots. The backdrop stays over the view.
+   */
+  place(dx: number, dy: number) {
+    if (!dx && !dy) return this;
+    for (const o of this.objects) {
+      if (this.backdrop.has(o)) continue;
+      const m = o as unknown as Phaser.GameObjects.Components.Transform;
+      m.setPosition(m.x + dx, m.y + dy);
+    }
+    this.spots = this.spots.map((r) => ({ ...r, x: r.x + dx, y: r.y + dy }));
+    this.offset = { x: this.offset.x + dx, y: this.offset.y + dy };
+    return this;
   }
 
   /** A glowing card frame that brightens while hovered. */
@@ -82,7 +109,8 @@ export class Panel {
   }
 
   /** Highlights the frame under a point on the view. */
-  hover(p: { x: number; y: number }) {
+  hover(v: { x: number; y: number }) {
+    const p = { x: v.x - this.offset.x, y: v.y - this.offset.y };
     this.frames.forEach((f, i) => {
       const hot = p.x >= f.rect.x && p.x <= f.rect.x + f.rect.w && p.y >= f.rect.y && p.y <= f.rect.y + f.rect.h;
       this.drawFrame(i, hot);
@@ -94,6 +122,7 @@ export class Panel {
     this.objects = [];
     this.spots = [];
     this.frames = [];
+    this.backdrop.clear();
   }
 }
 
@@ -317,14 +346,16 @@ export function endScreen(scene: Phaser.Scene, s: GameState, progress: Progress)
   return p;
 }
 
-/** A faint field of stars behind the map, from a fixed pattern. */
+/** A faint field of stars over the whole view behind the map, from a fixed pattern. */
 function stars(p: Panel, scene: Phaser.Scene) {
-  const g = p.add(scene.add.graphics(), 1);
-  for (let i = 0; i < 90; i++) {
+  const g = p.fixed(p.add(scene.add.graphics(), 1));
+  // As many stars per area as on the designed view.
+  const count = Math.round((90 * SCREEN.w * SCREEN.h) / (VIEW.w * VIEW.h));
+  for (let i = 0; i < count; i++) {
     const n = Math.sin(i * 127.1) * 43758.5453;
     const m = Math.sin(i * 311.7) * 24634.6345;
-    const x = (n - Math.floor(n)) * VIEW.w;
-    const y = (m - Math.floor(m)) * VIEW.h;
+    const x = (n - Math.floor(n)) * SCREEN.w;
+    const y = (m - Math.floor(m)) * SCREEN.h;
     g.fillStyle(0xcfe0ff, 0.15 + ((i * 37) % 10) / 25).fillCircle(x, y, i % 7 === 0 ? 1.6 : 1);
   }
   return g;
