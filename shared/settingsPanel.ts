@@ -7,10 +7,15 @@ import { clearAllProgress } from './progress';
  * Builds the hub's Settings panel inside `root` from `SETTING_FIELDS`, so a new setting shows up
  * without touching the page. Changes save at once and apply the next time a game opens, except
  * the language, which the hub switches to at once, and the hub-only settings: `onChange` is called
- * after every change to update the page. Below the settings, a Saved progress row deletes every
- * game's saves, and the panel ends with Restore defaults and Done, which closes the dialog.
+ * after every change to update the page. Below the settings, a Saved progress row deletes the saves
+ * of every game in `games` (their folder names) and calls `onChange` too, and the panel ends with
+ * Restore defaults and Done, which closes the dialog.
  */
-export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Settings) => void = () => {}) {
+export function mountSettingsPanel(
+  root: HTMLElement,
+  onChange: (settings: Settings) => void = () => {},
+  games: string[] = [],
+) {
   let current = loadSettings();
   const set = (patch: Partial<Settings>) => {
     current = { ...current, ...patch };
@@ -32,7 +37,9 @@ export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Setti
   const progressHint = document.createElement('div');
   progressHint.className = 'setting-hint';
   const reset = action('reset-progress', () => {
-    if (confirm(t('resetProgressConfirm'))) clearAllProgress();
+    if (!confirm(t('resetProgressConfirm'))) return;
+    clearAllProgress(games);
+    onChange(current);
   });
   const resetRow = document.createElement('div');
   resetRow.className = 'setting-choices';

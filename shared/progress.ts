@@ -1,5 +1,3 @@
-import { SETTINGS_KEY } from './settings';
-
 /**
  * The games' saved progress, for the hub. Every game keeps its saves in `localStorage` under keys
  * that start with its folder name (`apothecary-save`, `tiny-kingdom-best`), so a game's progress is
@@ -37,10 +35,15 @@ export function clearProgress(game: string) {
   }
 }
 
-/** Deletes every game's progress, keeping the settings. */
-export function clearAllProgress() {
+/**
+ * Deletes the progress of every game in `games` (their folder names) and the recently played
+ * games, keeping the settings. Other keys are left alone: on a host like GitHub Pages other sites
+ * of the same owner share the origin, and so its storage.
+ */
+export function clearAllProgress(games: string[]) {
   try {
-    for (const key of keys()) if (key !== SETTINGS_KEY) localStorage.removeItem(key);
+    for (const key of games.flatMap(progressKeys)) localStorage.removeItem(key);
+    localStorage.removeItem(RECENT_KEY);
   } catch {
     // Storage is blocked, so nothing was saved.
   }

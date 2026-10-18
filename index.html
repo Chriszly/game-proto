@@ -353,7 +353,15 @@
       setLanguage(language());
       translate();
       const dialog = document.getElementById('settings');
-      mountSettingsPanel(dialog.querySelector('.panel'), translate);
+      // Deleting all progress also empties Continue playing.
+      mountSettingsPanel(
+        dialog.querySelector('.panel'),
+        () => {
+          translate();
+          showRecent();
+        },
+        cards.map(folder),
+      );
       document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
       for (const d of [dialog, gameDialog]) {
         d.querySelector('.close').addEventListener('click', () => d.close());
