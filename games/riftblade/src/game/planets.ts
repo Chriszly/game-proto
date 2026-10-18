@@ -15,10 +15,10 @@ export interface PlanetDef {
   name: TextKey;
   /** Who lives there, for the map and the end screen. */
   faction: TextKey;
-  /** The HUD's kill count ("{n} droids"), and the pop when one of its elites comes. */
+  /** The HUD's kill count ("{n} bots"), and the pop when one of its elites comes. */
   foes: TextKey;
   elite: TextKey;
-  /** Droid health, spawn rate and contact damage against the Dune world. */
+  /** Bot health, spawn rate and contact damage against the Dune world. */
   hp: number;
   spawn: number;
   dmg: number;
@@ -110,4 +110,4 @@ export const NODE_INFO: Record<NodeKind, { name: TextKey; text: TextKey; color: 
 export const REST_HEAL = 0.5;
 
 /** The ids of the events the star map can roll. */
-export type EventId = 'droid' | 'cache' | 'shrine' | 'well';
+export type EventId = 'bot' | 'cache' | 'shrine' | 'well';

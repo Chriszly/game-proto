@@ -133,7 +133,7 @@ const en = {
   colonizerCard: 'Build an embroidered empire: gather wood, food and ore, raise buildings and armies, research techs, and destroy the enemy Town Center before it destroys yours.',
   colonizerCover: 'An embroidered Bayeux-tapestry skirmish on linen: a Town Center, houses and archers meeting a raid, with the deeds card for Age III',
   riftbladeCard: 'Fight across four worlds as a blaster soldier or a blade knight: survive five minutes on each, beat its boss, and choose your way on the star map between them; every level-up offers a new skill.',
-  riftbladeCover: 'A neon-glow legionary on a dark desert grid, with a shield arc and a slowing cone, holding off a swarm of glowing scrap droids',
+  riftbladeCover: 'A neon-glow legionary on a dark desert grid, with a shield arc and a slowing cone, holding off a swarm of glowing scrap bots',
   bramblecrestCard: 'Explore an overgrown kingdom by lamplight as a small knight: cut back the thorns, find the tool in the sunken shrine, and hunt for hidden moonstones.',
   bramblecrestCover: 'A small knight in a lamplit village square at night, by a well, a pond and a cottage with glowing windows',
 };

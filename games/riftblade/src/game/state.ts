@@ -7,19 +7,19 @@ import type { TextKey } from '../i18n';
 
 /** Each planet lasts this long before its boss comes, ms. */
 export const RUN_MS = 5 * 60_000;
-/** The most droids on the field at once (the boss not counted). */
+/** The most bots on the field at once (the boss not counted). */
 export const MAX_ENEMIES = 250;
 /** The most lumen shards lying about; past it, new ones merge into old ones. */
 export const MAX_SHARDS = 300;
 /** The hero's body radius and base shard pickup radius, px. */
 export const HERO_R = 13;
 export const PICKUP_R = 60;
-/** How far from the hero new droids appear: just past the corners of the view. */
+/** How far from the hero new bots appear: just past the corners of the view. */
 export const SPAWN_RING = { min: 570, max: 640 };
-/** Droids further than this from the hero are brought back around to the spawn ring. */
+/** Bots further than this from the hero are brought back around to the spawn ring. */
 export const LEASH = 900;
 
-/** Difficulty: droid health and how fast they come. Normal is the game as designed. */
+/** Difficulty: bot health and how fast they come. Normal is the game as designed. */
 export const DIFF = {
   hp: byDifficulty(0.75, 1, 1.35),
   spawn: byDifficulty(0.75, 1, 1.25),
@@ -63,7 +63,7 @@ export const EMBER = { r: 24, ms: 1300, dmg: 6 };
 /** A fallen knight blocks bolts from the front, and dashes (its guard drops while it does). */
 export const KNIGHT = { trigger: 230, aimMs: 550, dashSpeed: 420, dashMs: 420, guardMs: 900, every: 3800, block: 0.25 };
 /** The Grinder Crawler's attacks. */
-export const BOSS = { shellMs: 3500, shells: 5, shellSpeed: 210, shellDmg: 12, spawnMs: 8000, adds: 5, enragedAt: 0.5 };
+export const BOSS = { shellMs: 3500, shells: 5, shellSpeed: 210, shellDmg: 12, spawnMs: 8000, adds: 5, enragedAt: 0.5, alone: 2 };
 
 export interface Enemy {
   id: number;
@@ -116,7 +116,7 @@ export interface Enemy {
 
 /**
  * A bolt's look: a hero's own bolt colour (from its scheme), a drone or escort bolt, a heavy round
- * or a mini rocket; or a hostile one: a droid shell, a slowing glob, a trooper's volley bolt or a
+ * or a mini rocket; or a hostile one: a bot shell, a slowing glob, a trooper's volley bolt or a
  * walker's slug.
  */
 export type BoltColor = HeroId | 'drone' | 'shell' | 'heavy' | 'rocket' | 'glob' | 'volley' | 'slug' | 'fallen';
@@ -128,14 +128,14 @@ export interface Bullet {
   vx: number;
   vy: number;
   dmg: number;
-  /** Droids it can still pass through, and bounces left. */
+  /** Bots it can still pass through, and bounces left. */
   pierce: number;
   bounces: number;
   lifeMs: number;
-  /** A droid's shell (hurts the hero) rather than a hero's bolt. */
+  /** A bot's shell (hurts the hero) rather than a hero's bolt. */
   hostile: boolean;
   color: BoltColor;
-  /** Ids already hit, so a piercing bolt hits each droid once. */
+  /** Ids already hit, so a piercing bolt hits each bot once. */
   hit: number[];
   /** Homing turn rate (rad/s) for mini rockets; 0 for a straight bolt. */
   homing: number;
@@ -224,10 +224,10 @@ export interface Fire {
 }
 
 /**
- * Allies; the escort is the stranded droid of the event, for one planet. The knights': Kael's
- * strafing starfighter, his Squadron Run fighters and droid co-pilot, Oom's spirits and Veyl's
- * puppets. Elara Voss's rebel commandos, speeder bike and medic; Triad-77's rolling shield droids,
- * command droid and spare battle droids (`spare`, for a while).
+ * Allies; the escort is the stranded bot of the event, for one planet. The knights': Kael's
+ * strafing starfighter, his Squadron Run fighters and bot co-pilot, Oom's spirits and Veyl's
+ * puppets. Elara Voss's rebel commandos, speeder bike and medic; Triad-77's rolling shield bots,
+ * command bot and spare battle bots (`spare`, for a while).
  */
 export type AllyKind =
   | 'trooper' | 'legionary' | 'brother' | 'drone' | 'escort' | 'fighter' | 'squadron' | 'copilot' | 'spirit' | 'puppet'
@@ -250,8 +250,8 @@ export interface Ally {
   hit?: number[];
 }
 
-/** One of Triad-77's battle droids: its health (0 while down) and most health, ms until it is rebuilt, where it stands and aims. */
-export interface Droid {
+/** One of Triad-77's battle bots: its health (0 while down) and most health, ms until it is rebuilt, where it stands and aims. */
+export interface Bot {
   hp: number;
   max: number;
   rebuildMs: number;
@@ -421,7 +421,7 @@ export interface GameState {
   pickups: Pickup[];
   hazards: Hazard[];
   pops: Pop[];
-  /** Spawning: fractional droids owed, the next elite and ring wave times. */
+  /** Spawning: fractional bots owed, the next elite and ring wave times. */
   spawnDebt: number;
   nextElite: number;
   waves: number[];
@@ -434,7 +434,7 @@ export interface GameState {
   nodes: NodeKind[];
   offers: (string | null)[];
   event: EventState | null;
-  /** The stranded droid flies with the hero on the next planet. */
+  /** The stranded bot flies with the hero on the next planet. */
   escort: boolean;
   /** Max health kept after the cache's cost (1 = all of it). */
   maxHpMod: number;
@@ -466,8 +466,8 @@ export interface GameState {
   /** Elara Voss's signal flag, and the planet her last Uprising supply drop fell on (-1 none). */
   flag: Flag | null;
   supplyWorld: number;
-  /** Triad-77: its droids, their formation, and scrap gathered from kills (Factory). */
-  droids: Droid[];
+  /** Triad-77: its bots, their formation, and scrap gathered from kills (Factory). */
+  bots: Bot[];
   formation: 'spread' | 'column';
   scrap: number;
 }
@@ -482,7 +482,7 @@ export function freshHero(): Hero {
   };
 }
 
-/** When a ring of droids closes in, on every planet, ms. */
+/** When a ring of bots closes in, on every planet, ms. */
 export const WAVES = [90_000, 180_000, 255_000];
 
 /** The hero select screen: no run yet. */
@@ -545,7 +545,7 @@ export function freshState(): GameState {
     deeds: [],
     flag: null,
     supplyWorld: -1,
-    droids: [],
+    bots: [],
     formation: 'spread',
     scrap: 0,
   };
@@ -606,7 +606,7 @@ export function statsOf(s: GameState): Stats {
     speed: hero.speed * (1 + 0.08 * r('boots')) * k.speed,
     pickup: PICKUP_R * (1 + 0.3 * r('magnet')),
     armour: 0.08 * r('armour') + k.armour,
-    maxHp: s.hero === 'triad' ? droidMax(s) * droidCount(s) : Math.round((hero.maxHp + 10 * r('armour') + k.hp) * s.maxHpMod),
+    maxHp: s.hero === 'triad' ? botMax(s) * botCount(s) : Math.round((hero.maxHp + 10 * r('armour') + k.hp) * s.maxHpMod),
     regen: 0.5 * r('medpack') + k.regen,
     cooldown: 1 - 0.07 * r('overclock'),
     damage: (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)) * k.damage * q.damage,
@@ -624,15 +624,15 @@ export function statsOf(s: GameState): Stats {
   };
 }
 
-/** How many battle droids Triad-77 fields: three, more on the Firing Line, eight with Endless Ranks. */
-export function droidCount(s: GameState) {
+/** How many battle bots Triad-77 fields: three, more on the Firing Line, eight with Endless Ranks. */
+export function botCount(s: GameState) {
   if (s.capstones.includes('endless-ranks')) return 8;
   const fl = s.ranks['firing-line'] ?? 0;
   return 3 + (fl >= 2 ? 1 : 0) + (fl >= 4 ? 1 : 0);
 }
 
-/** Each of Triad-77's droids' health: a third of the hero's, and a third of each armour tier's. */
-export function droidMax(s: GameState) {
+/** Each of Triad-77's bots' health: a third of the hero's, and a third of each armour tier's. */
+export function botMax(s: GameState) {
   return Math.round(((HEROES.triad.maxHp + 10 * (s.ranks.armour ?? 0)) / 3) * s.maxHpMod);
 }
 

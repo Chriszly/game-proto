@@ -7,7 +7,7 @@ const en: HowToPlay = {
   controls: [
     { input: 'WASD / arrow keys, or hold the mouse on the field', action: 'Walk (toward where you hold)' },
     { input: 'Touch: put a finger down anywhere and drag', action: 'A steering stick appears under it; walk the way you drag' },
-    { input: 'Nothing', action: 'Your weapon fires, or your blade strikes, on its own' },
+    { input: 'Nothing', action: 'Your weapon fires at the nearest foe, or your blade strikes, on its own' },
     { input: 'Space, or the round button bottom right', action: 'Signature move, when charged' },
     { input: 'Tap a hero, or 1-9, 0, - and =; then Fight, or Enter', action: 'Choose a hero and start' },
     { input: 'Tap a card, or 1 / 2 / 3 (4 for a fourth card)', action: 'Choose an upgrade, a star map node, an offer or an answer' },
@@ -15,10 +15,10 @@ const en: HowToPlay = {
     { input: '4 / Enter at the trader', action: 'Reroll the offers / leave' },
   ],
   loop: [
-    'Pick a hero: Legionary TR-9 at first; the other soldiers, the blade knights, a rebel commander and a trio of battle droids join as you unlock them.',
+    'Pick a hero: Legionary TR-9 at first; the other soldiers, the blade knights, a rebel commander and a trio of battle bots join as you unlock them.',
     'Keep moving: foes come at you from every side, and your weapon shoots them down.',
     'Walk over the green lumen shards they drop to fill the XP bar. Each level-up pauses the run on three cards (four for Elara Voss).',
-    'At 5:00 the planet\'s boss comes. Beat it, and your hero, level and kit carry on to the next world.',
+    'At 5:00 the planet\'s boss comes, and no more foes arrive apart from those it calls itself; once it stands alone, it takes double damage. Beat it, and your hero, level and kit carry on to the next world.',
     'Between worlds, choose a node on the star map: a trader, an elite fight, a rest or an event.',
   ],
   tips: [
@@ -37,7 +37,7 @@ const de: HowToPlay = {
   controls: [
     { input: 'WASD / Pfeiltasten, oder die Maus auf dem Feld halten', action: 'Laufen (dorthin, wo du hältst)' },
     { input: 'Touch: einen Finger irgendwo aufsetzen und ziehen', action: 'Darunter erscheint ein Steuerknüppel; lauf in die Richtung, in die du ziehst' },
-    { input: 'Nichts', action: 'Deine Waffe feuert, oder deine Klinge schlägt zu, von selbst' },
+    { input: 'Nichts', action: 'Deine Waffe feuert auf den nächsten Gegner, oder deine Klinge schlägt zu, von selbst' },
     { input: 'Leertaste, oder der runde Knopf unten rechts', action: 'Spezialangriff, wenn aufgeladen' },
     { input: 'Einen Helden antippen, oder 1-9, 0, - und =; dann Kämpfen, oder Enter', action: 'Einen Helden wählen und loslegen' },
     { input: 'Karte antippen, oder 1 / 2 / 3 (4 für eine vierte Karte)', action: 'Ein Upgrade, einen Knoten der Sternenkarte, ein Angebot oder eine Antwort wählen' },
@@ -45,10 +45,10 @@ const de: HowToPlay = {
     { input: '4 / Enter beim Händler', action: 'Angebote neu würfeln / gehen' },
   ],
   loop: [
-    'Wähle einen Helden: zuerst Legionär TR-9; die anderen Soldaten, die Klingenritter, eine Rebellenkommandantin und ein Trio Kampfdroiden kommen hinzu, sobald du sie freischaltest.',
+    'Wähle einen Helden: zuerst Legionär TR-9; die anderen Soldaten, die Klingenritter, eine Rebellenkommandantin und ein Trio Kampfbots kommen hinzu, sobald du sie freischaltest.',
     'Bleib in Bewegung: Gegner kommen von allen Seiten, und deine Waffe schießt sie ab.',
     'Lauf über die grünen Lumensplitter, die sie fallen lassen, um die EP-Leiste zu füllen. Jeder Stufenaufstieg hält den Lauf auf drei Karten an (vier bei Elara Voss).',
-    'Bei 5:00 kommt der Boss des Planeten. Besiege ihn, und dein Held, seine Stufe und Ausrüstung ziehen mit zur nächsten Welt.',
+    'Bei 5:00 kommt der Boss des Planeten, und außer denen, die er selbst ruft, kommen keine Gegner mehr; steht er allein, nimmt er doppelten Schaden. Besiege ihn, und dein Held, seine Stufe und Ausrüstung ziehen mit zur nächsten Welt.',
     'Wähle zwischen den Welten einen Knoten auf der Sternenkarte: einen Händler, einen Elitekampf, eine Rast oder ein Ereignis.',
   ],
   tips: [

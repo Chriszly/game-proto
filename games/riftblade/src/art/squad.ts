@@ -1,7 +1,7 @@
 /**
  * Commander Elara Voss and Triad-77 in Glow Vector, drawn from their scheme like the other heroes
  * (facing right), plus their allies: Elara's rebel commandos, medic and speeder bike, Triad-77's
- * single battle droids (standing and fallen), rolling shield droid and command droid. Also the
+ * single battle bots (standing and fallen), rolling shield bot and command bot. Also the
  * drop pod of TR-9's Drop Squad and the dark placeholder of a locked hero card. No red cross
  * anywhere: Elara's medic carries a plain green satchel.
  */
@@ -66,8 +66,8 @@ function elara(ctx: Ctx, x: number, y: number, z: number, bolts: boolean, sch: H
   if (bolts) beam(ctx, x + 56, y + 30, x + 92, y + 30, sch.bolt, 4, 22, z);
 }
 
-/** One skinny battle droid of Triad-77: a long head with a slit eye, a thin body and stick legs, a blaster held out. */
-export function droid(ctx: Ctx, x: number, y: number, z: number, sch: HeroScheme) {
+/** One skinny battle bot of Triad-77: a long head with a slit eye, a thin body and stick legs, a blaster held out. */
+export function bot(ctx: Ctx, x: number, y: number, z: number, sch: HeroScheme) {
   const rim = sch.mark ?? '#8a93a6';
   outline(ctx, () => {
     ctx.moveTo(x - 2, y + 4);
@@ -88,14 +88,14 @@ export function droid(ctx: Ctx, x: number, y: number, z: number, sch: HeroScheme
   ctx.fillRect(x + 14, y - 11, 12, 4);
 }
 
-/** Triad-77 as one unit (the portrait): a droid behind and two in front. */
+/** Triad-77 as one unit (the portrait): a bot behind and two in front. */
 function triad(ctx: Ctx, x: number, y: number, z: number, bolts: boolean, sch: HeroScheme) {
   const k = 1.25;
   for (const [dx, dy] of [[2, -8], [-36, 14], [30, 14]]) {
     ctx.save();
     ctx.translate(x + dx, y + dy);
     ctx.scale(k, k);
-    droid(ctx, 0, 0, z * k, sch);
+    bot(ctx, 0, 0, z * k, sch);
     ctx.restore();
   }
   if (bolts) {
@@ -134,18 +134,18 @@ export function rebel(ctx: Ctx, x: number, y: number, z: number, medic: boolean)
 export function bakeSquad(scene: Phaser.Scene) {
   const tri = schemeOf('triad');
   const elaraSch = schemeOf('elara');
-  paint(scene, 'rb-droid', 34, 40, (ctx) => {
+  paint(scene, 'rb-bot', 34, 40, (ctx) => {
     ctx.scale(0.5, 0.5);
-    droid(ctx, 30, 44, 0.5, tri);
+    bot(ctx, 30, 44, 0.5, tri);
   });
-  // A fallen droid: its parts on the ground, dim.
-  paint(scene, 'rb-droid-down', 34, 24, (ctx) => {
+  // A fallen bot: its parts on the ground, dim.
+  paint(scene, 'rb-bot-down', 34, 24, (ctx) => {
     ctx.globalAlpha = 0.7;
     ctx.save();
     ctx.translate(17, 14);
     ctx.rotate(Math.PI / 2.4);
     ctx.scale(0.45, 0.45);
-    droid(ctx, 0, 0, 0.45, { ...tri, body: '#7c8394' });
+    bot(ctx, 0, 0, 0.45, { ...tri, body: '#7c8394' });
     ctx.restore();
   });
   // Elara's speeder bike, pointing right: a long hull, a rider's head and a glowing drive.
@@ -156,14 +156,14 @@ export function bakeSquad(scene: Phaser.Scene) {
     ctx.fillRect(40, 5, 3, 16);
     shape(ctx, () => ctx.arc(26, 7, 5, 0, Math.PI * 2), '#3f4a2e', elaraSch.accent, 4);
   });
-  // A rolling shield droid: a ball with a pale blue shield plate.
+  // A rolling shield bot: a ball with a pale blue shield plate.
   paint(scene, 'rb-shieldbot', 32, 32, (ctx) => {
     shape(ctx, () => ctx.arc(16, 16, 9, 0, Math.PI * 2), tri.body, '#9fe8ff', 8);
     outline(ctx, () => ctx.arc(16, 16, 13, -1.1, 1.1), '#9fe8ff', 3, 8);
     ctx.fillStyle = '#9fe8ff';
     ctx.fillRect(14, 12, 6, 3);
   });
-  // The command droid: a hovering head with a dish and a wide eye.
+  // The command bot: a hovering head with a dish and a wide eye.
   paint(scene, 'rb-command', 34, 34, (ctx) => {
     outline(ctx, () => {
       ctx.moveTo(17, 10);

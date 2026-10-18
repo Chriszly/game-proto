@@ -3,7 +3,7 @@
 A survivor-style auto-attack roguelike built with [Phaser 4](https://phaser.io), TypeScript and
 Vite, part of the [game hub](../../README.md).
 
-Pick a hero (blaster soldiers, blade knights, a rebel commander or a trio of battle droids) and fight the Rift Crusade across four worlds: the Dune, Swamp, Ice and
+Pick a hero (blaster soldiers, blade knights, a rebel commander or a trio of battle bots) and fight the Rift Crusade across four worlds: the Dune, Swamp, Ice and
 Lava worlds. On each you hold out for five minutes while its faction pours in from every side, then
 beat its boss. You only steer: your weapon fires (or your blade strikes) on its own. Shot-down foes drop lumen shards, and
 every level-up pauses the run on three upgrade cards (four for Elara Voss). Your hero, level and kit carry over from
@@ -37,9 +37,9 @@ foes and bolts.
 
 | Hero | Weapon | Signature | Paths |
 | --- | --- | --- | --- |
-| Captain Rook (slate armour, bronze markings) | Twin pistols: alternating shots at the two nearest droids | **Rally Order**: 5 s of +50% fire rate (12 s) | Gunslinger, Commander, Demolitions |
-| Legionary TR-9 (charcoal armour, orange lenses) | Spread rifle: three wide, inaccurate bolts at the nearest droid. 150 health, slow | **Brace**: 3 s without damage, knocks droids back (13 s) | Suppressor, Riot Shield, Drop Squad |
-| Corporal Bram-17 (sand armour, pink markings) | Carbine: fires the way he walks (a little aim assist); standing still, at the nearest droid | **Frag Out**: a grenade that clears a circle (9 s) | Marksman, Jump Trooper, Brothers in Arms |
+| Captain Rook (slate armour, bronze markings) | Twin pistols: alternating shots at the two nearest bots | **Rally Order**: 5 s of +50% fire rate (12 s) | Gunslinger, Commander, Demolitions |
+| Legionary TR-9 (charcoal armour, orange lenses) | Spread rifle: three wide, inaccurate bolts at the nearest bot. 150 health, slow | **Brace**: 3 s without damage, knocks bots back (13 s) | Suppressor, Riot Shield, Drop Squad |
+| Corporal Bram-17 (sand armour, pink markings) | Carbine: straight bolts at the nearest bot | **Frag Out**: a grenade that clears a circle (9 s) | Marksman, Jump Trooper, Brothers in Arms |
 | Kael Varro (magenta blade) | Slashes in front. Fast and fragile; Temper fills as he kills and drains as he heals | **Leap Strike**: leaps onto the strongest foe and slashes all round (10 s) | Prodigy, Ace Pilot, The Fall (turns him crimson and to the Hollow) |
 | Lord Vharn (turquoise blade) | Throws his blade, which flies out and back. 210 health, armoured, slow | **Grip**: lifts the 5 nearest foes and crushes them (12 s) | Dread, Iron Grip, Life Support |
 | Master Oom (golden blade) | A Current push ripples out around him. Tiny, very fast, 70 health | **Somersault**: a spinning leap that cuts through foes (8 s) | Stillness, Whirlwind, Old Teacher |
@@ -47,8 +47,8 @@ foes and bolts.
 | Regent Veyl (lime lightning) | Forked lightning chains from foe to foe. Little health and slow, huge damage | **Overload**: 3 s of lightning in every direction (12 s) | Storm, Puppet Master, Dark Bargain |
 | Kresh the Twinblade (violet staff blade) | His double-ended staff orbits him. Fast, medium health | **Hunt**: marks the strongest foe and dashes in for triple damage (9 s) | Dervish, Stalker, Rebuilt |
 | Master Joren Vask (royal blue blade) | A fast flurry strikes in four directions around him. **Edge**: every 10th hit is a critical hit | **Breaking Point**: one huge strike that stuns the strongest foe (12 s) | Duelist Form, Breaker, Council Seat |
-| Commander Elara Voss (red) | Precise pistol: always aims at the weakest foe near. 100 health, medium speed. **Hope**: her level-ups offer 4 cards instead of 3 | **Call for Aid**: plants a signal flag, and rebel fighters bombard the area round it (16 s) | Sharpshooter, Rebel Network, Diplomat |
-| Triad-77 (white) | Three skinny battle droids moving as one unit, each shooting the nearest foe its own way (three sides). 40 health per droid; a fallen droid is rebuilt after 10 s, and the run ends only when all are down | **Formation Shift**: toggles Spread (a wide triangle) and Column (stacked, all firing at one foe ahead, triple damage) (2.5 s) | Firing Line, Factory, Uplink |
+| Commander Elara Voss (red) | Precise pistol: always aims at the nearest foe. 100 health, medium speed. **Hope**: her level-ups offer 4 cards instead of 3 | **Call for Aid**: plants a signal flag, and rebel fighters bombard the area round it (16 s) | Sharpshooter, Rebel Network, Diplomat |
+| Triad-77 (white) | Three skinny battle bots moving as one unit, each shooting the foe nearest to it. 40 health per bot; a fallen bot is rebuilt after 10 s, and the run ends only when all are down | **Formation Shift**: toggles Spread (a wide triangle) and Column (stacked, all firing at the nearest foe, triple damage) (2.5 s) | Firing Line, Factory, Uplink |
 
 Only Legionary TR-9 is open from the start. Every other hero unlocks through a deed, which the game
 never shows: a locked card is a dark placeholder with no art or name. When a deed is done, the run
@@ -82,15 +82,17 @@ credits. Your hero, level, abilities and gear carry over. Each world is tougher 
 foes have more health, hit harder and come faster.
 
 - Foes appear just off screen and come at you. More come every minute, and they get tougher; at
-  most 250 are on the field at once. At 1:30, 3:00 and 4:15 a ring of them closes in.
+  most 250 are on the field at once. At 1:30, 3:00 and 4:15 a ring of them closes in. Once the
+  boss appears, no more come: only the foes already on the field and those the boss calls itself.
+  A boss with no other foe left beside it is exposed and takes double damage.
 - From 0:50, an **elite** ringed in gold comes every 50 s. It drops a chest (a free tier of an
   upgrade you hold and some health) and a few **credits**.
 - After a hit you are safe for a moment. Health does not come back on its own without a Medpack.
-- Once a boss is within your weapon's range, aimed weapons fire at it first.
+- Every gun aims at the nearest foe on its own, a boss no differently from the rest.
 
 | World | Faction | Foes | Boss |
 | --- | --- | --- | --- |
-| 1 Dune world | Scrap droids (red and amber) | **Clankers** swarm. **Rollerbombs** stop and glow when close, then rush in a straight line and explode: step aside. | **The Grinder Crawler**: a giant tread tank that fires fans of shells, calls in Clankers, and gets faster below half health |
+| 1 Dune world | Scrap bots (red and amber) | **Clankers** swarm. **Rollerbombs** stop and glow when close, then rush in a straight line and explode: step aside. | **The Grinder Crawler**: a giant tread tank that fires fans of shells, calls in Clankers, and gets faster below half health |
 | 2 Swamp world | Wild beasts (lime) | **Mire rats** run in fast weaving packs. **Spitter toads** stop in range and spit globs that slow you. | **The Bog Mother**: spits fans of globs, spawns packs of young and leaves bog pools that slow you |
 | 3 Ice world | Iron Dominion (periwinkle and white) | **Line troopers** come in squads of five that advance in a line and fire volleys together. **Walker gunners** are slow and fire heavy bursts. | **The Siege Walker**: four legs, shell volleys, artillery barrages that light up the ground before they land, and stomps when you get close |
 | 4 Lava world | Hollow cult (violet and ember) | **Ash acolytes** swarm and burst into embers that burn for a moment. **Fallen knights** block bolts from the front with a shield and dash at you; hit them while their guard is down. **Lava vents** glow, then erupt. | **The Hollow Champion**: fast blade dashes along a line it marks first; below half health it burns and sends out rings of fire with gaps to slip through |
@@ -107,7 +109,7 @@ two or three nodes on the star map (tap it or press its number):
 - **Elite fight**: a 60 s arena with two or three elites of the world just cleared. Beat them all
   for a free tier of your choice (of what you hold) and 20 credits, plus what each elite drops.
 - **Rest**: heal half your max health.
-- **Event**: a choice with a twist, one of: a **stranded droid** (take it along as a turret drone
+- **Event**: a choice with a twist, one of: a **stranded bot** (take it along as a turret drone
   for the next world, or strip it for 20 credits), a **derelict cache** (40 credits, or a random
   gear piece for 15% of your max health), a **shrine of the Current** (give a tier of one ability
   for two tiers of another) or a **lumen well** (a free level-up, or 25 credits).
@@ -133,14 +135,14 @@ nothing is left a Field Ration heals you.
   burning cone), Riot Shield (blocks the front, bashes, reflects), Drop Squad (1-3 squad
   troopers land in drop pods and follow him, supply crates); Marksman (piercing, heavy rounds), Jump Trooper (jet dashes that leave fire,
   homing mini rockets), Brothers in Arms (1-3 brothers who copy every shot); Sharpshooter (critical
-  hits on worn foes, piercing shots, a second pistol on the next weakest foe), Rebel Network (1-3
+  hits on worn foes, piercing shots, a second pistol on the next nearest foe), Rebel Network (1-3
   commandos, a speeder bike that runs foes down, a medic who heals her), Diplomat (the flag raises
   a shield bubble that cuts damage and later heals; foes near the flag are confused and fight each
-  other); Firing Line (faster fire, a 4th and a 5th droid), Factory (faster rebuilding; scrap from
-  kills builds rolling shield droids that catch bolts), Uplink (a command droid links the unit:
-  spinning heads that fire any way, then shared health).
+  other); Firing Line (faster fire, a 4th and a 5th bot), Factory (faster rebuilding; scrap from
+  kills builds rolling shield bots that catch bolts), Uplink (a command bot links the unit:
+  linked aim, each bot on a different foe, then shared health).
 - **Knight paths**: Prodigy (wider slashes, combos, a thrown blade), Ace Pilot (a starfighter
-  strafes, a droid co-pilot repairs), The Fall (full Temper doubles damage, halves healing);
+  strafes, a bot co-pilot repairs), The Fall (full Temper doubles damage, halves healing);
   Dread (a slowing aura, weak foes flee), Iron Grip (Grip takes more foes and throws them), Life
   Support (regrowing armour plates, rage when nearly down); Stillness (standing still charges the
   push, then he throws wreckage), Whirlwind (the Somersault bounces from foe to foe), Old Teacher
@@ -196,12 +198,12 @@ nothing is left a Field Ration heals you.
   | Joren | Royal Fury | Duelist Form + Overclock | Edge every 5th hit, and its crits chain to 2 foes near |
   | Joren | Shattering Blow | Breaker + Magnet Coil | Breaking Point hits every elite near at once |
   | Joren | Master of the Order | Council Seat + Plate Armour | Every 8 s, takes every foe bolt near and fires it back as one blast |
-  | Elara | Never Miss | Sharpshooter + Overclock | Every hit is critical (bosses aside), and each kill fires a free shot at the next weakest foe |
+  | Elara | Never Miss | Sharpshooter + Overclock | Every hit is critical (bosses aside), and each kill fires a free shot at the next nearest foe |
   | Elara | The Uprising | Rebel Network + Medpack | 8 commandos fight with her, and each world starts with a supply drop (a crate of health and a chest) |
   | Elara | Rallying Cry | Diplomat + Plate Armour | The bubble goes with her always; Call for Aid confuses every foe around her |
-  | Triad-77 | Endless Ranks | Firing Line + Overclock | 8 droids, and every 15th kill adds a spare droid for 12 s |
-  | Triad-77 | Assembly Line | Factory + Magnet Coil | Scrap from 20 kills: up to 3 shield droids that send bolts back, then spare droids |
-  | Triad-77 | Hive Signal | Uplink + Servo Boots | Every droid fires a 360° burst on each Formation Shift |
+  | Triad-77 | Endless Ranks | Firing Line + Overclock | 8 bots, and every 15th kill adds a spare bot for 12 s |
+  | Triad-77 | Assembly Line | Factory + Magnet Coil | Scrap from 20 kills: up to 3 shield bots that send bolts back, then spare bots |
+  | Triad-77 | Hive Signal | Uplink + Servo Boots | Every bot fires a 360° burst on each Formation Shift |
 
 - **Crossovers**: a pool skill held with a fitting path gives a bonus: Gunslinger + Ricochet
   Rounds (ricochets seek new targets), Riot Shield + Stun Rounds (shield bashes stun), Brothers in
@@ -211,12 +213,12 @@ nothing is left a Field Ration heals you.
   them twice as far), Bulwark + Blade Throw (deflected bolts ride a thrown blade back), Puppet
   Master + Drain (puppets heal him when they hit), Dervish + Spinning Guard (a double ring), Council
   Seat + Lightning Arc (turned-back bolts chain lightning in royal blue); Rebel Network + Covering
-  Drone (each commando gets a drone of its own), Firing Line + Scatter Shot (every droid fires its
+  Drone (each commando gets a drone of its own), Firing Line + Scatter Shot (every bot fires its
   own cone; otherwise only the first does). A card that completes one shows a link icon.
 
 ![A crossover on offer: Rage completes Kael's The Fall](docs/screenshots/knights-crossover.webp)
 
-![Lord Vharn's Grip lifting a crowd of droids](docs/screenshots/knights-grip.webp)
+![Lord Vharn's Grip lifting a crowd of bots](docs/screenshots/knights-grip.webp)
 
 ![Regent Veyl's Overload](docs/screenshots/knights-lightning.webp)
 
@@ -226,7 +228,7 @@ nothing is left a Field Ration heals you.
 
 ![Elara Voss's flag and bubble under Call for Aid, with her commandos, medic and drones](docs/screenshots/elara-call-for-aid.webp)
 
-![Triad-77 in Spread, linked by its command droid](docs/screenshots/triad.webp)
+![Triad-77 in Spread, linked by its command bot](docs/screenshots/triad.webp)
 
 The longest run, the wins and the furthest world reached per hero, and the heroes unlocked, are
 saved in the browser.
@@ -260,7 +262,7 @@ npx playwright test --project riftblade
   four worlds, their bosses and the star map's numbers), `state.ts` (the state and the numbers),
   `sim.ts` (everything that happens in a fight), `voyage.ts` (between fights: the star map, trader,
   arena, events and the next world) and `save.ts`.
-- `src/art/`: `glow.ts` (painting helpers), `sprites.ts` (the heroes, Scrap droids and pickups),
+- `src/art/`: `glow.ts` (painting helpers), `sprites.ts` (the heroes, Scrap bots and pickups),
   `knights.ts` (the knights, their blades and allies), `squad.ts` (Elara, Triad-77, their allies,
   the drop pod and the locked placeholder) and
   `factions.ts` (the later factions and their bosses), all painted at boot.

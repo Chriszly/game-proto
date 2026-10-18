@@ -133,7 +133,7 @@ const de: Translation<typeof en> = {
   colonizerCard: 'Baue ein gesticktes Reich: Holz, Nahrung und Erz sammeln, Gebäude und Armeen aufstellen, Techniken erforschen und das feindliche Stadtzentrum zerstören, bevor es deins zerstört.',
   colonizerCover: 'Ein gesticktes Gefecht im Stil des Teppichs von Bayeux auf Leinen: ein Stadtzentrum, Häuser und Bogenschützen gegen einen Überfall, mit der Tatenkarte für Zeitalter III',
   riftbladeCard: 'Kämpfe dich als Blastersoldat oder Klingenritter durch vier Welten: Überlebe auf jeder fünf Minuten, besiege ihren Boss und wähle deinen Weg auf der Sternenkarte dazwischen; jeder Stufenaufstieg bietet eine neue Fähigkeit.',
-  riftbladeCover: 'Ein neonleuchtender Legionär auf einem dunklen Wüstengitter, mit Schildbogen und Verlangsamungskegel, gegen einen Schwarm leuchtender Schrottdroiden',
+  riftbladeCover: 'Ein neonleuchtender Legionär auf einem dunklen Wüstengitter, mit Schildbogen und Verlangsamungskegel, gegen einen Schwarm leuchtender Schrottbots',
   bramblecrestCard: 'Erkunde als kleiner Ritter ein überwuchertes Königreich im Laternenlicht: schneide die Dornen zurück, finde das Werkzeug im versunkenen Schrein und suche verborgene Mondsteine.',
   bramblecrestCover: 'Ein kleiner Ritter nachts auf einem laternenbeleuchteten Dorfplatz, an einem Brunnen, einem Teich und einem Häuschen mit leuchtenden Fenstern',
 };

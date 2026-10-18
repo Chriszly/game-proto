@@ -1,15 +1,15 @@
 /**
- * The last two blaster heroes: Commander Elara Voss (a pistol on the weakest foe, a signal flag
- * that calls in a bombardment, and four cards a level-up) and Triad-77 (three battle droids
- * moving as one unit, each shooting its own way). Their weapons, signatures and paths. `sim.ts`
+ * The last two blaster heroes: Commander Elara Voss (a pistol on the nearest foe, a signal flag
+ * that calls in a bombardment, and four cards a level-up) and Triad-77 (three battle bots
+ * moving as one unit, each shooting the foe nearest to it). Their weapons, signatures and paths. `sim.ts`
  * calls in here only for these two, so every other hero's run replays exactly as before. Pure
  * state changes, randomness from Math.random, like the rest of the rules.
  */
 import { t as tr } from '../i18n';
 import { HEROES } from './heroes';
 import { at } from './upgrades';
-import { droidCount, droidMax, type Ally, type Bullet, type Droid, type Enemy, type GameState } from './state';
-import { addBomb, angleDiff, bolt, damage, explode, heal, knock, near, nearest, pop, ready, stats, swarmSpot, volley } from './sim';
+import { botCount, botMax, type Ally, type Bullet, type Bot, type Enemy, type GameState } from './state';
+import { addBomb, bolt, damage, explode, heal, knock, near, nearest, pop, ready, stats, swarmSpot, volley } from './sim';
 
 const rank = (s: GameState, id: string) => s.ranks[id] ?? 0;
 const cap = (s: GameState, id: string) => s.capstones.includes(id);
@@ -19,45 +19,45 @@ const cross = (s: GameState, id: string) => s.crossovers.includes(id);
 export const AID = { flagMs: 6000, longFlagMs: 9000, shells: 12, spread: 160, shellR: 60, shellDmg: 24, every: 380 };
 export const BUBBLE = { r: 110, cut: 0.25, confuseR: 140, confuseMs: 2000, every: 3000 };
 const BIKE = { speed: 560, lifeMs: 1100, r: 22 };
-/** Triad-77's numbers: a fallen droid's rebuild time, how far its droids stand apart, scrap per shield droid. */
+/** Triad-77's numbers: a fallen bot's rebuild time, how far its bots stand apart, scrap per shield bot. */
 export const TRIAD = { rebuildMs: 10_000, gap: 20, colGap: 15, scrap: 40, spareMs: 12_000, spares: 6 };
 
 // ---------------------------------------------------------------------------------------------
-// Starting and Triad-77's droids
+// Starting and Triad-77's bots
 
-/** A run starts: Triad-77 builds its droids. */
+/** A run starts: Triad-77 builds its bots. */
 export function squadStart(s: GameState) {
   if (s.hero === 'triad') syncSquad(s);
 }
 
 /**
- * Brings Triad-77's droids in line with the upgrades (more droids on the Firing Line, more health
- * with armour) and its health with theirs: its health is the sum of its droids'.
+ * Brings Triad-77's bots in line with the upgrades (more bots on the Firing Line, more health
+ * with armour) and its health with theirs: its health is the sum of its bots'.
  */
 export function syncSquad(s: GameState) {
   if (s.hero !== 'triad') return;
   const p = s.player;
-  const max = droidMax(s);
-  const n = droidCount(s);
-  while (s.droids.length < n) s.droids.push({ hp: max, max, rebuildMs: 0, x: p.x, y: p.y, aim: 0 });
-  if (s.droids.length > n) s.droids.length = n;
-  for (const d of s.droids) {
+  const max = botMax(s);
+  const n = botCount(s);
+  while (s.bots.length < n) s.bots.push({ hp: max, max, rebuildMs: 0, x: p.x, y: p.y, aim: 0 });
+  if (s.bots.length > n) s.bots.length = n;
+  for (const d of s.bots) {
     if (d.max !== max) {
       if (d.hp > 0) d.hp = Math.max(1, Math.min(max, d.hp + max - d.max));
       d.max = max;
     }
   }
   p.maxHp = max * n;
-  p.hp = s.droids.reduce((sum, d) => sum + d.hp, 0);
+  p.hp = s.bots.reduce((sum, d) => sum + d.hp, 0);
 }
 
-const alive = (s: GameState) => s.droids.filter((d) => d.hp > 0);
+const alive = (s: GameState) => s.bots.filter((d) => d.hp > 0);
 
-/** Where each droid stands: a wide ring round the unit (Spread) or one behind another (Column). */
-export function droidSpots(s: GameState) {
+/** Where each bot stands: a wide ring round the unit (Spread) or one behind another (Column). */
+export function botSpots(s: GameState) {
   const p = s.player;
-  const n = s.droids.length;
-  return s.droids.map((_, i) => {
+  const n = s.bots.length;
+  return s.bots.map((_, i) => {
     if (s.formation === 'column') {
       const off = ((n - 1) / 2 - i) * TRIAD.colGap;
       return { x: p.x + Math.cos(p.aim) * off, y: p.y + Math.sin(p.aim) * off, dir: p.aim };
@@ -68,14 +68,14 @@ export function droidSpots(s: GameState) {
   });
 }
 
-/** How long a fallen droid takes to be rebuilt, ms. */
+/** How long a fallen bot takes to be rebuilt, ms. */
 export const rebuildTime = (s: GameState) => at([7000, 7000, 5000, 5000, 3500], rank(s, 'factory'), TRIAD.rebuildMs);
 
-/** A hit on Triad-77: the droid nearest where it came from takes it (all of them share it with Uplink). */
-function hurtDroids(s: GameState, taken: number, x?: number, y?: number) {
+/** A hit on Triad-77: the bot nearest where it came from takes it (all of them share it with Uplink). */
+function hurtBots(s: GameState, taken: number, x?: number, y?: number) {
   const up = alive(s);
   if (!up.length) return;
-  const fall = (d: Droid) => {
+  const fall = (d: Bot) => {
     if (d.hp > 0) return;
     d.hp = 0;
     d.rebuildMs = rebuildTime(s);
@@ -100,20 +100,20 @@ function hurtDroids(s: GameState, taken: number, x?: number, y?: number) {
     hit.hp -= taken;
     fall(hit);
   }
-  s.player.hp = s.droids.reduce((sum, d) => sum + Math.max(0, d.hp), 0);
+  s.player.hp = s.bots.reduce((sum, d) => sum + Math.max(0, d.hp), 0);
 }
 
 // ---------------------------------------------------------------------------------------------
 // Hooks from the sim
 
 /**
- * Damage taken, after armour. Returns whether this module dealt with it (Triad-77's droids take
- * it; the run ends only when every droid is down). For Elara Voss the bubble takes some off and
+ * Damage taken, after armour. Returns whether this module dealt with it (Triad-77's bots take
+ * it; the run ends only when every bot is down). For Elara Voss the bubble takes some off and
  * the sim does the rest.
  */
 export function squadHurt(s: GameState, taken: number, x?: number, y?: number) {
   if (s.hero !== 'triad') return false;
-  hurtDroids(s, taken, x, y);
+  hurtBots(s, taken, x, y);
   s.damageTaken += taken;
   s.player.hurtMs = 450;
   if (!alive(s).length) {
@@ -129,7 +129,7 @@ export function hurtFactor(s: GameState) {
   return b && Math.hypot(s.player.x - b.x, s.player.y - b.y) <= b.r ? 1 - BUBBLE.cut : 1;
 }
 
-/** Healing for Triad-77: to the most worn droids first (a fallen one waits to be rebuilt). */
+/** Healing for Triad-77: to the most worn bots first (a fallen one waits to be rebuilt). */
 export function squadHeal(s: GameState, amount: number) {
   if (s.hero !== 'triad') return false;
   let left = amount;
@@ -140,7 +140,7 @@ export function squadHeal(s: GameState, amount: number) {
     d.hp += add;
     left -= add;
   }
-  s.player.hp = s.droids.reduce((sum, d) => sum + d.hp, 0);
+  s.player.hp = s.bots.reduce((sum, d) => sum + d.hp, 0);
   return true;
 }
 
@@ -158,11 +158,11 @@ export function squadCrit(s: GameState, e: Enemy) {
 /** Foes confused by the Diplomat hit their own half as hard as Persuasion's turned foes (as hard at tier 5). */
 export const turnedBonus = (s: GameState) => (s.hero !== 'elara' ? 1 : rank(s, 'diplomat') >= 5 ? 1 : 0.5);
 
-/** A foe falls: Never Miss fires on, Triad-77 gathers scrap and, with Endless Ranks, spare droids. */
+/** A foe falls: Never Miss fires on, Triad-77 gathers scrap and, with Endless Ranks, spare bots. */
 export function squadKill(s: GameState, e: Enemy) {
   const p = s.player;
   if (s.hero === 'elara' && cap(s, 'never-miss') && e.kind !== 'boss') {
-    const t = weakest(s, 1, [e.id])[0];
+    const t = nearest(s, p.x, p.y, 1, HEROES.elara.range, [e.id])[0];
     if (t) bolt(s, p.x, p.y, Math.atan2(t.y - p.y, t.x - p.x), HEROES.elara.damage);
   }
   if (s.hero !== 'triad' || e.kind === 'boss') return;
@@ -180,7 +180,7 @@ export function squadKill(s: GameState, e: Enemy) {
   } else if (cap(s, 'assembly-line')) spare(s, e.x, e.y, TRIAD.spares);
 }
 
-/** A spare battle droid for a while, up to `max` of them. */
+/** A spare battle bot for a while, up to `max` of them. */
 function spare(s: GameState, x: number, y: number, max: number) {
   const have = s.allies.filter((a) => a.kind === 'spare');
   if (have.length >= max) return;
@@ -190,8 +190,8 @@ function spare(s: GameState, x: number, y: number, max: number) {
 const shieldbots = (s: GameState) => (cap(s, 'assembly-line') ? 3 : at([0, 1, 1, 2, 2], rank(s, 'factory'), 0));
 
 /**
- * A foe bolt near Triad-77's rolling shield droids: caught (or sent back, with Assembly Line).
- * Returns null when no shield droid is in the way, else whether the bolt flies on.
+ * A foe bolt near Triad-77's rolling shield bots: caught (or sent back, with Assembly Line).
+ * Returns null when no shield bot is in the way, else whether the bolt flies on.
  */
 export function squadBlock(s: GameState, b: Bullet, reflect: () => boolean) {
   if (s.hero !== 'triad') return null;
@@ -205,17 +205,6 @@ export function squadBlock(s: GameState, b: Bullet, reflect: () => boolean) {
 // ---------------------------------------------------------------------------------------------
 // Weapons
 
-/** The `n` foes with the least health within reach of Elara, worst first (confused ones left out). */
-function weakest(s: GameState, n: number, skip: number[] = []) {
-  const p = s.player;
-  const found: Enemy[] = [];
-  near(s, p.x, p.y, HEROES.elara.range, (e) => {
-    if (e.charmMs <= 0 && !skip.includes(e.id)) found.push(e);
-  });
-  found.sort((a, b) => a.hp - b.hp || a.id - b.id);
-  return found.slice(0, n);
-}
-
 /** The primary weapon of Elara Voss or Triad-77, called each step in place of the soldiers'. */
 export function squadAttack(s: GameState, ms: number, rate: number) {
   const p = s.player;
@@ -224,7 +213,8 @@ export function squadAttack(s: GameState, ms: number, rate: number) {
   if (p.fireMs > 0) return;
   if (s.hero === 'elara') {
     const twin = rank(s, 'sharpshooter') >= 3;
-    const targets = weakest(s, twin ? 2 : 1);
+    // The nearest foe; the second pistol takes the next nearest.
+    const targets = nearest(s, p.x, p.y, twin ? 2 : 1, hero.range);
     if (!targets.length) {
       p.fireMs = 0;
       return;
@@ -243,7 +233,7 @@ export function squadAttack(s: GameState, ms: number, rate: number) {
   triadVolley(s, hero.fireMs, hero.damage, hero.range);
 }
 
-/** Every standing droid fires: at the nearest foe its own way (Spread), or all at one (Column). */
+/** Every standing bot fires at the foe nearest to it (Spread), or all at the unit's nearest (Column). */
 function triadVolley(s: GameState, fireMs: number, dmg: number, range: number) {
   const p = s.player;
   const first = nearest(s, p.x, p.y, 1, range)[0];
@@ -253,39 +243,21 @@ function triadVolley(s: GameState, fireMs: number, dmg: number, range: number) {
   }
   p.fireMs += fireMs;
   p.shots += 1;
-  // A boss in range is always the Column's target.
-  const boss = s.enemies.find((e) => e.kind === 'boss' && e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) - e.r <= range);
-  const focus = boss ?? first;
-  p.aim = Math.atan2(focus.y - p.y, focus.x - p.x);
-  const spots = droidSpots(s);
-  const spin = rank(s, 'uplink') >= 2;
+  p.aim = Math.atan2(first.y - p.y, first.x - p.x);
+  const linked = rank(s, 'uplink') >= 2;
   const cone = cross(s, 'crossfire');
   const taken: number[] = [];
-  s.droids.forEach((d, i) => {
+  s.bots.forEach((d, i) => {
     if (d.hp <= 0) return;
-    let t: Enemy | undefined = focus;
+    let t: Enemy = first;
     if (s.formation === 'spread') {
-      if (spin) {
-        // Spinning heads: each droid takes a different foe, whichever way it is.
-        t = nearest(s, d.x, d.y, 1, range, taken)[0] ?? focus;
-      } else {
-        const dir = spots[i].dir;
-        const half = Math.PI / s.droids.length + 0.3;
-        t = undefined;
-        let best = range;
-        near(s, d.x, d.y, range, (e, dist) => {
-          if (e.charmMs > 0 || dist >= best) return;
-          if (Math.abs(angleDiff(Math.atan2(e.y - d.y, e.x - d.x), dir)) > half) return;
-          best = dist;
-          t = e;
-        });
-        t ??= focus;
-      }
+      // Linked aim (Uplink): each bot takes the nearest foe no other bot has taken.
+      t = nearest(s, d.x, d.y, 1, range, linked ? taken : [])[0] ?? first;
       taken.push(t.id);
     }
     const a = Math.atan2(t.y - d.y, t.x - d.x);
     d.aim = a;
-    // Scatter Shot's side bolts come from the first droid only; with Crossfire from every one.
+    // Scatter Shot's side bolts come from the first bot only; with Crossfire from every one.
     if (i === 0 || cone) volley(s, d.x, d.y, a, dmg);
     else bolt(s, d.x, d.y, a + (Math.random() * 2 - 1) * HEROES.triad.jitter, dmg);
     if (rank(s, 'uplink') >= 5) bolt(s, d.x, d.y, a + 0.09, dmg * 0.6);
@@ -369,21 +341,21 @@ export function squadAbilities(s: GameState, ms: number) {
     }
     return;
   }
-  // Triad-77: droids walk to their spots, fallen ones are rebuilt.
+  // Triad-77: bots walk to their spots, fallen ones are rebuilt.
   syncSquad(s);
-  const spots = droidSpots(s);
+  const spots = botSpots(s);
   const k = Math.min(1, 14 * (ms / 1000));
-  s.droids.forEach((d, i) => {
+  s.bots.forEach((d, i) => {
     d.x += (spots[i].x - d.x) * k;
     d.y += (spots[i].y - d.y) * k;
     if (d.hp > 0) return;
     d.rebuildMs -= ms;
     if (d.rebuildMs > 0) return;
     d.hp = rank(s, 'factory') >= 3 ? d.max : d.max * 0.5;
-    pop(s, tr('droidRebuilt'), HEROES.triad.schemes[0].accent);
+    pop(s, tr('botRebuilt'), HEROES.triad.schemes[0].accent);
     if (rank(s, 'factory') >= 5) explode(s, d.x, d.y, 90, 30, '#eef2ff');
   });
-  p.hp = s.droids.reduce((sum, d) => sum + d.hp, 0);
+  p.hp = s.bots.reduce((sum, d) => sum + d.hp, 0);
 }
 
 /** How many of Elara's and Triad-77's lasting allies the upgrades call for. */
@@ -406,7 +378,7 @@ export function droneSpot(s: GameState, a: Ally, own: number) {
   return c ? { x: c.x + Math.cos(s.time / 300 + a.slot) * 10, y: c.y - 30 } : null;
 }
 
-/** Commandos, the bike, the medic, shield droids, the command droid and spare droids, each step. */
+/** Commandos, the bike, the medic, shield bots, the command bot and spare bots, each step. */
 export function moveSquadAlly(s: GameState, a: Ally, ms: number, count: number) {
   const p = s.player;
   const dt = ms / 1000;
@@ -466,7 +438,7 @@ export function moveSquadAlly(s: GameState, a: Ally, ms: number, count: number) 
     bolt(s, a.x, a.y, a.aim, 9, { pierce: 0, bounces: 0, color: 'triad' });
     return;
   }
-  // A commando (in formation behind Elara, a ring of them with the Uprising) or a spare droid.
+  // A commando (in formation behind Elara, a ring of them with the Uprising) or a spare bot.
   if (a.kind === 'spare') a.lifeMs -= ms;
   const ring = count > 4 || a.kind === 'spare';
   const ang = ring ? (a.slot * Math.PI * 2) / Math.max(1, count) + (a.kind === 'spare' ? s.time / 1500 : 0) : p.facing + Math.PI + (a.slot - (count - 1) / 2) * 0.8;

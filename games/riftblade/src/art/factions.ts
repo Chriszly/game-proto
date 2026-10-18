@@ -1,8 +1,8 @@
 /**
  * The textures of the three later factions and their bosses, in the same Glow Vector style as the
- * Scrap droids: the Swamp world's wild beasts (lime), the Ice world's Iron Dominion (periwinkle and
+ * Scrap bots: the Swamp world's wild beasts (lime), the Ice world's Iron Dominion (periwinkle and
  * white) and the Lava world's Hollow cult (violet and ember gold). All face right; the scene flips
- * them toward the hero. Plus the escort droid, credit chips and the hostile bolts.
+ * them toward the hero. Plus the escort bot, credit chips and the hostile bolts.
  */
 import Phaser from 'phaser';
 import { C, beam, glow, outline, paint, shade, shape, type Ctx } from './glow';
@@ -220,7 +220,7 @@ function champion(ctx: Ctx, w: number, h: number, burning: boolean) {
   }, C.ember, 2, 6);
 }
 
-/** Every texture of the later factions, the escort droid, credits and hostile bolts. */
+/** Every texture of the later factions, the escort bot, credits and hostile bolts. */
 export function bakeFactions(scene: Phaser.Scene) {
   const both = (key: string, size: number, draw: (ctx: Ctx, cx: number, cy: number, k: number, elite: boolean) => void) => {
     paint(scene, key, size, size, (ctx) => draw(ctx, size / 2, size / 2, 1, false));
@@ -248,7 +248,7 @@ export function bakeFactions(scene: Phaser.Scene) {
     shape(ctx, () => ctx.roundRect(8, 5, 18, 10, 5), '#1c2440', C.ironLight, 12);
   });
 
-  // The stranded droid that escorts the hero for a planet: a little turret on a hover ring.
+  // The stranded bot that escorts the hero for a planet: a little turret on a hover ring.
   paint(scene, 'rb-escort', 36, 36, (ctx) => {
     outline(ctx, () => ctx.ellipse(18, 22, 13, 4.5, 0, 0, Math.PI * 2), '#7df9ff', 1.5, 6);
     shape(ctx, () => ctx.roundRect(10, 9, 16, 13, 4), '#132a33', '#e6fbff', 10);

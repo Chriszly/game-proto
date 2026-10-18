@@ -13,12 +13,13 @@ export const HERO_IDS: readonly HeroId[] = [
 ];
 
 /**
- * How a hero's primary attack works: the soldiers' guns pick targets (`nearest-two`, `nearest`,
- * `facing`), Elara's pistol the weakest foe (`weakest`) and Triad-77's droids each their own
- * (`triad`, see `squad.ts`); each knight has an attack of their own (see `blades.ts`).
+ * How a hero's primary attack works. Every gun aims at the nearest foe: Rook's two pistols take
+ * turns at the two nearest (`nearest-two`), the others fire at the nearest (`nearest`; Elara's in
+ * `squad.ts`), and Triad-77's bots each at the foe nearest to it (`triad`, see `squad.ts`); each
+ * knight has an attack of their own (see `blades.ts`).
  */
 export type AimMode =
-  | 'nearest-two' | 'nearest' | 'facing' | 'weakest' | 'triad'
+  | 'nearest-two' | 'nearest' | 'triad'
   | 'slash' | 'throw' | 'ripple' | 'spin' | 'chain' | 'orbit' | 'flurry';
 
 /** A weapon class and a side, each with a pool of skills its heroes draw cards from. */
@@ -132,7 +133,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     schemes: [{ name: 'Sand', body: '#a8946a', accent: '#ff9ad5', bolt: '#ff9ad5' }],
     maxHp: 115,
     speed: 145,
-    aim: 'facing',
+    aim: 'nearest',
     fireMs: 260,
     pellets: 1,
     spread: 0,
@@ -324,7 +325,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     schemes: [{ name: 'Rebel', body: '#5c4a3a', accent: '#ff3b3b', mark: '#e6dac2', bolt: '#ff5a4a' }],
     maxHp: 100,
     speed: 146,
-    aim: 'weakest',
+    aim: 'nearest',
     fireMs: 400,
     pellets: 1,
     spread: 0,
@@ -347,7 +348,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     // The whole unit's body, so foes bump into the formation rather than its middle.
     r: 22,
     schemes: [{ name: 'Bone', body: '#e4e7ee', accent: '#f4f6fb', mark: '#8a93a6', bolt: '#eef2ff' }],
-    // Three droids of 40 health each.
+    // Three bots of 40 health each.
     maxHp: 120,
     speed: 140,
     aim: 'triad',

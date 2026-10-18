@@ -1,7 +1,7 @@
 /**
  * The seven knights in Glow Vector, drawn from their scheme like the soldiers (body = robes or
  * armour, accent = blade and rim, mark = a second colour, bolt = the blade's glow), facing right,
- * plus their thrown blades and the knights' allies: Kael's starfighter and droid co-pilot, Oom's
+ * plus their thrown blades and the knights' allies: Kael's starfighter and bot co-pilot, Oom's
  * spirit pupils and wreckage, and Veyl's puppets.
  */
 import Phaser from 'phaser';
@@ -269,7 +269,7 @@ export function bakeKnights(scene: Phaser.Scene) {
     ctx.fillStyle = INK;
     ctx.fillRect(24, 15, 7, 4);
   });
-  // The droid co-pilot: a little round astromech-style dome.
+  // The bot co-pilot: a little round astromech-style dome.
   paint(scene, 'rb-copilot', 28, 30, (ctx) => {
     shape(ctx, () => ctx.roundRect(7, 12, 14, 14, 3), '#d9dde6', kael.bolt, 6);
     shape(ctx, () => {

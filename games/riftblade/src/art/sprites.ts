@@ -2,7 +2,7 @@
  * Every texture of the game, painted once at boot: the heroes (a game-sized sprite per colour
  * scheme and a big portrait each; the knights are drawn in `knights.ts`, Elara Voss and Triad-77 in
  * `squad.ts`), the soldiers' allies, the
- * Scrap droids and the Grinder Crawler, bolts, shards and pickups. Heroes take their colours from
+ * Scrap bots and the Grinder Crawler, bolts, shards and pickups. Heroes take their colours from
  * their scheme (`schemeOf`), so a new scheme needs no art.
  */
 import Phaser from 'phaser';
@@ -115,7 +115,7 @@ function bakeHero(scene: Phaser.Scene, key: string, id: HeroId, scale: number, b
   });
 }
 
-/** A Clanker: a round scrap droid with a glowing visor bar and little feet. */
+/** A Clanker: a round scrap bot with a glowing visor bar and little feet. */
 function clanker(ctx: Ctx, cx: number, cy: number, r: number, rim: string, elite: boolean) {
   if (elite) outline(ctx, () => ctx.arc(cx, cy, r + 4, 0, Math.PI * 2), C.elite, 2.5, 14);
   shape(ctx, () => ctx.arc(cx, cy, r, 0, Math.PI * 2), '#1a1220', rim, 9);

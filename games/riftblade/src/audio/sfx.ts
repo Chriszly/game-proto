@@ -19,8 +19,8 @@ export const sfx = sounds({
   rocket: { wave: 'noise', freq: 900, to: 2600, length: 0.18, volume: 0.12, gap: 200 },
   /** Elara Voss's blaster. */
   blaster: { wave: 'pulse12', freq: 1700, to: 700, length: 0.07, volume: 0.15, gap: 80, vary: 0.05 },
-  /** Triad-77's droids, and drones. */
-  droidShot: { wave: 'pulse25', freq: 700, to: 280, length: 0.06, volume: 0.13, gap: 80, vary: 0.06 },
+  /** Triad-77's bots, and drones. */
+  botShot: { wave: 'pulse25', freq: 700, to: 280, length: 0.06, volume: 0.13, gap: 80, vary: 0.06 },
   /** Kael's saber, and the knights' other slashes. */
   saber: { wave: 'noise', freq: 5000, to: 1500, length: 0.11, volume: 0.15, gap: 90, vary: 0.08 },
   /** Lord Vharn's thrown blade. */

@@ -17,7 +17,7 @@ function boltSound(color: BoltColor, spin: boolean): SfxName {
   switch (color) {
     case 'heavy': return 'heavy';
     case 'rocket': return 'rocket';
-    case 'drone': case 'triad': return 'droidShot';
+    case 'drone': case 'triad': return 'botShot';
     case 'fallen': return 'saber';
     case 'tr9': return 'carbine';
     case 'bram': return 'spread';
