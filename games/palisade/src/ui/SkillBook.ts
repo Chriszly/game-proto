@@ -3,7 +3,7 @@ import { ui } from '../../../../shared/audio';
 import { iconTexture, relicTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
-import { SKILL_BOOK, UI_DEPTH, VIEW } from '../scenes/layout';
+import { SKILL_BOOK, SEEN, UI_DEPTH, VIEW } from '../scenes/layout';
 import { RELIC_IDS, RELICS, SETS, setComplete, setRelics, type RelicId } from '../game/relics';
 import { BOOK_ORDER, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { drawPanel, makeButton, textStyle } from './panel';
@@ -53,7 +53,7 @@ export class SkillBook {
 
     const p = SKILL_BOOK.panel;
     const dim = scene.add
-      .rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.7)
+      .rectangle(VIEW.w / 2, VIEW.h / 2, SEEN.w, SEEN.h, 0x0e1218, 0.7)
       .setInteractive()
       .on('pointerdown', () => this.setOpen(false));
     const panel = scene.add.graphics();

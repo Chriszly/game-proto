@@ -4,7 +4,7 @@ import { FIGURES, guardTexture } from '../art/characters';
 import { relicTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
-import { LEGACY, UI_DEPTH, VIEW } from '../scenes/layout';
+import { LEGACY, SEEN, UI_DEPTH, VIEW } from '../scenes/layout';
 import { LEGACIES, LEGACY_IDS, canKeep, type Legacy, type LegacyId } from '../game/legacy';
 import { RELICS, type RelicId } from '../game/relics';
 import { drawPanel, makeButton, textStyle } from './panel';
@@ -33,7 +33,7 @@ export class LegacyPanel {
     private scene: Phaser.Scene,
     private onPick: (id: LegacyId) => void,
   ) {
-    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.75).setInteractive();
+    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, SEEN.w, SEEN.h, 0x0e1218, 0.75).setInteractive();
     const g = scene.add.graphics();
     drawPanel(g, VIEW.w / 2 - 440, 90, 880, 380, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
     const title = scene.add.text(VIEW.w / 2, 124, t('retireTitle'), textStyle(26, '#ffcf4a', 5)).setOrigin(0.5);

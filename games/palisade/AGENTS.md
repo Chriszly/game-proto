@@ -202,7 +202,8 @@ seconds without a tap.
 - `src/audio/`: `sfx.ts` (the sound table, `sfx(name)`) and `music.ts` (the songs `MARCH` and
   `BOSS_MARCH`), see Sound.
 - `src/main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `pixelArt: false`, FIT scaling)
-  with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts
+  with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })` (the view takes the screen's
+  shape, see Screens), and puts
   `game` on `window` in the dev build.
 - `src/game/`: the rules in plain TypeScript, with no Phaser imports.
   - `state.ts`: `GameState` and its parts (`Enemy`, `Missile`, `Effect`, `Volley`, `Patch`,
@@ -259,7 +260,8 @@ seconds without a tap.
   `OMEN_CHIP`, `LEGACY`, `MARCH`, `HEAT`, `ROAR_CHIP`,
   `GUARD_HIT`, `HIRE`, `ROAD_CARDS`, `RAIN_HINT`, `STREAK`, `CARDS`,
   `COUNTDOWN`, `AUTO_TOGGLE`, `SKILL_BOOK`, `SPEED`, `BUTTON`, `BARRICADE_BAR`, `BARRICADE_TIP_W`),
-  `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a system font stack).
+  `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a system font stack), and `SEEN` (the part of the world the
+  view shows) with `placeHud`, which sets it and pins the HUD boxes to the view's edges.
 - `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
   over an emptying bar, at `COUNTDOWN`), with the "Auto-pick" checkbox at `AUTO_TOGGLE` beside it.
   Its `autoPick` flag (loaded with `loadAutoPick`, saved through `onAutoPick`) is passed to `tick`;
@@ -302,7 +304,8 @@ seconds without a tap.
   bosses, two walk frames per foe (`foeTexture`; the harpy's beat its wings, from `harpyRig`, with
   no baked shadow), `FIGURES` (each texture's feet origin and height) and the missiles, the mage's
   `magic-bolt` included.
-  `scenery.ts` has the background (painted at double size and scaled down), the HUD bars and the
+  `scenery.ts` has the background (painted at double size and scaled down, at the view's size with
+  the sky, hills, road and verge carried on round the designed scene), the HUD bars (the view's width) and the
   barricade stages 0 to 3 (`BARRICADE_TEX`). `icons.ts` has the upgrade icons (`iconTexture`),
   relic icons (`relicTexture`), the chest, the boss marks (`bossNodeTexture`), the Arrow Rain
   and caltrops buttons, the `caltrop` piece, the road icons (`roadTexture`) and small HUD icons
@@ -491,8 +494,22 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 
 - `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a 4K
   screen, 2 with the canvas renderer) and zooms the one camera to match from its top-left, so the
-  game keeps its 960x540 coordinates. The camera never scrolls, so input reads `pointer.worldX/Y`
-  as before; nothing reads `scene.scale` or `pointer.x/y`.
+  game keeps its 960x540 coordinates. Input reads `pointer.worldX/Y`; nothing reads `scene.scale`
+  or `pointer.x/y`.
+- **Fill:** with `fill` the view is 960x540 or bigger one way (up to 1296 wide or 720 tall),
+  picked once at start. `GameScene.create` takes `viewFrame(this)`, scrolls the camera by minus its
+  x and y (so the designed battlefield sits in the view's middle and the world, the sim included,
+  keeps its coordinates) and calls `placeHud(frame)` in `layout.ts`, which sets `SEEN` (the shown
+  world rect, from `(-frame.x, -frame.y)`) and moves the HUD's layout boxes: the top bar's left
+  items (wave, barricade bar and its tip, Skill book button), `TRACK` (and its marks), `HEAT`,
+  `BOSS_BAR`, `FORTIFY` and `REPAIR` to the top left; `XP_BAR` stretched along the bottom;
+  `SPEED` and `STREAK` to the bottom right; the top bar's foes, slain, coins and best wave to the
+  right (placed in `createHud` from `SEEN`). The hero's column (Aim, Caltrops, Arrow Rain, chips)
+  stays with the hero; banners, cards and panels stay centred on 480,270, the view's middle; every
+  dim overlay is `SEEN`-sized; the Night wave's dark spans `SEEN`. `BootScene` bakes `background`,
+  `hud-top` and `hud-bottom` at `viewSize` with the frame. Foes fade in over their first
+  `SPAWN_FADE` (36) pixels from `SPAWN_X`, so a wide view doesn't show them pop in (off screen at
+  960). At exactly 960x540 the frame is 0,0 and nothing moves, so the playthrough's taps land.
 - `paint` in `lowpoly.ts` paints each texture on a canvas `sharpRes(w, h)` times its shown size
   (drawing code still works in shown pixels; blurs and `shadowBlur` are scaled to match), and
   records that factor per key. Every image showing a painted texture goes through `fit(image,

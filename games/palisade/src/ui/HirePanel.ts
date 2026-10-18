@@ -3,7 +3,7 @@ import { ui } from '../../../../shared/audio';
 import { guardTexture } from '../art/characters';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
-import { HIRE, UI_DEPTH, VIEW } from '../scenes/layout';
+import { HIRE, SEEN, UI_DEPTH, VIEW } from '../scenes/layout';
 import { GUARD_KINDS, GUARDS, MAX_GUARD_LEVEL, guardDamage, trainCost, type GuardKind } from '../game/guards';
 import { GUARD_SLOTS, type Guard } from '../game/state';
 import { drawPanel, textStyle } from './panel';
@@ -26,7 +26,7 @@ export class HirePanel {
     private onTrain: (slot: number) => void,
   ) {
     const dim = scene.add
-      .rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.35)
+      .rectangle(VIEW.w / 2, VIEW.h / 2, SEEN.w, SEEN.h, 0x0e1218, 0.35)
       .setInteractive()
       .on('pointerdown', () => this.close());
     this.body = scene.add.container(0, 0);

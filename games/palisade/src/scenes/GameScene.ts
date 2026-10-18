@@ -51,6 +51,7 @@ import {
   BARRICADE_FRONT,
   FIELD,
   GUARD_SLOTS,
+  SPAWN_X,
   freshProgress,
   newRun,
   progressOf,
@@ -72,13 +73,16 @@ import { chamferPts, drawPanel, makeButton, textStyle } from '../ui/panel';
 import { t } from '../i18n';
 import { SkillBook } from '../ui/SkillBook';
 import { BattleSounds } from './BattleSounds';
-import { AIM, BARRICADE, BARRICADE_BAR, BARRICADE_TIP_W, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, MARCH, OMEN_CHIP, RAIN, RAIN_HINT, REPAIR, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
+import { viewFrame } from '../../../../shared/scaling';
+import { AIM, BARRICADE, BARRICADE_BAR, BARRICADE_TIP_W, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, MARCH, OMEN_CHIP, RAIN, RAIN_HINT, REPAIR, ROAR_CHIP, SEEN, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR, placeHud } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
 /** How long a foe takes for one stride of its walk, in milliseconds. */
 const STRIDE_MS = 360;
 const HP_BAR_W = 32;
+/** How far a foe walks from where it comes on before it is fully seen. */
+const SPAWN_FADE = 36;
 /** Where the aiming arc leaves each button. */
 const ARC_FROM = { rain: { x: RAIN.x + 20, y: RAIN.y - 16 }, caltrops: { x: CALTROPS.x + 16, y: CALTROPS.y - 12 } };
 /** How high a harpy flies over its shadow on the road. */
@@ -220,7 +224,12 @@ export class GameScene extends Phaser.Scene {
     reoffer(this.state, progress.choices);
     saveProgress(progressOf(this.state));
 
-    fit(this.add.image(0, 0, 'background')).setOrigin(0);
+    // The view may be wider or taller than 960x540: the camera keeps the designed battlefield in
+    // its middle, the background is painted over all of it and the HUD is pinned to its edges.
+    const frame = viewFrame(this);
+    placeHud(frame);
+    this.cameras.main.setScroll(-frame.x, -frame.y);
+    fit(this.add.image(SEEN.x, SEEN.y, 'background')).setOrigin(0);
     const hero = FIGURES.hero!;
     this.hero = fit(this.add.image(HERO_FEET.x, HERO_FEET.y, 'hero')).setOrigin(hero.originX, hero.originY).setDepth(HERO_FEET.y);
     this.barricade = fit(this.add.image(BARRICADE.x, BARRICADE.y, 'barricade-0')).setOrigin(0).setDepth(1);
@@ -401,10 +410,11 @@ export class GameScene extends Phaser.Scene {
     const sight = omenEffects(this.state.omen).sight;
     const night = this.nightG.clear();
     if (sight < Infinity && !held(this.state)) {
-      const h = XP_BAR.y - 10 - HUD_HEIGHT;
-      night.fillStyle(0x08101e, 0.3).fillRect(0, HUD_HEIGHT, VIEW.w, h);
+      const top = SEEN.y + HUD_HEIGHT;
+      const h = XP_BAR.y - 10 - top;
+      night.fillStyle(0x08101e, 0.3).fillRect(SEEN.x, top, SEEN.w, h);
       // Strips that overlap towards the right darken it from mid-field on, with a soft edge.
-      for (let i = 0; i < 6; i++) night.fillStyle(0x08101e, 0.16).fillRect(sight + i * 8, HUD_HEIGHT, VIEW.w, h);
+      for (let i = 0; i < 6; i++) night.fillStyle(0x08101e, 0.16).fillRect(sight + i * 8, top, SEEN.x + SEEN.w - sight, h);
     }
     for (const e of this.state.enemies) {
       seen.add(e.id);
@@ -430,6 +440,10 @@ export class GameScene extends Phaser.Scene {
       if (type.flying) this.fx.fillStyle(0x2a1808, 0.22).fillEllipse(e.x + 6, feet + FLY_HEIGHT, 30, 9);
       const fig = FIGURES[key]!;
       fit(sprite.setTexture(key)).setOrigin(fig.originX, fig.originY).setPosition(e.x + lunge, feet + bob).setDepth(feet);
+      // A foe fades in over its first steps, which a view wider than 960 shows (off screen at 960).
+      const fade = Phaser.Math.Clamp((SPAWN_X + type.radius - e.x) / SPAWN_FADE, 0, 1);
+      sprite.setAlpha(fade);
+      this.eliteLabels.get(e.id)?.setAlpha(fade);
       // A hit flashes white, in blinks so a foe under steady fire still shows; with reduced motion
       // the blinks and the burn's flicker hold still.
       if (e.hitMs > 0 && this.blink(50) === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
@@ -544,7 +558,7 @@ export class GameScene extends Phaser.Scene {
         glow.lineStyle(3, FIRE.white, 0.7 * (1 - life)).strokeEllipse(e.x, e.y, r * 2, r * 1.5);
       } else if (e.kind === 'bolt' && e.points) {
         // A jagged bolt down from the sky to the first foe, then on from foe to foe.
-        const path = this.jag([{ x: e.points[0].x - 30, y: HUD_HEIGHT + 10 }, ...e.points], e.id);
+        const path = this.jag([{ x: e.points[0].x - 30, y: SEEN.y + HUD_HEIGHT + 10 }, ...e.points], e.id);
         for (const [width, color, alpha] of [[10, STORM.mid, 0.45], [4, STORM.light, 0.9], [1.5, STORM.white, 1]] as const) {
           glow.lineStyle(width, color, alpha * (1 - life)).strokePoints(path, false);
         }
@@ -751,19 +765,22 @@ export class GameScene extends Phaser.Scene {
   // ---- The HUD: top bar, experience bar, banners and the boss's bars.
 
   private createHud() {
-    fit(this.add.image(0, 0, 'hud-top')).setOrigin(0).setDepth(UI_DEPTH);
-    fit(this.add.image(0, XP_BAR.y - 10, 'hud-bottom')).setOrigin(0).setDepth(UI_DEPTH);
+    fit(this.add.image(SEEN.x, SEEN.y, 'hud-top')).setOrigin(0).setDepth(UI_DEPTH);
+    fit(this.add.image(SEEN.x, XP_BAR.y - 10, 'hud-bottom')).setOrigin(0).setDepth(UI_DEPTH);
     this.hud = this.add.graphics().setDepth(UI_DEPTH);
+    // The top bar's items keep to the view's left and right edges.
+    const left = SEEN.x;
+    const right = SEEN.x + SEEN.w - VIEW.w;
     const top = (x: number, text: string, color = '#e9e4d8', size = 14) =>
-      this.add.text(x, 19, text, textStyle(size, color)).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
-    this.waveText = top(18, '', '#ffcf4a', 20).setStroke('#141820', 3);
-    top(140, t('barricade'));
+      this.add.text(x, SEEN.y + 19, text, textStyle(size, color)).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
+    this.waveText = top(left + 18, '', '#ffcf4a', 20).setStroke('#141820', 3);
+    top(left + 140, t('barricade'));
     this.createBarricadeTip();
-    this.foesText = top(612, '');
-    this.slainText = top(716, '');
-    fit(this.add.image(796, 19, 'hud-coin')).setDepth(UI_DEPTH + 1);
-    this.coinsText = top(808, '', '#ffe07a');
-    this.bestText = top(944, '').setOrigin(1, 0.5);
+    this.foesText = top(right + 612, '');
+    this.slainText = top(right + 716, '');
+    fit(this.add.image(right + 796, SEEN.y + 19, 'hud-coin')).setDepth(UI_DEPTH + 1);
+    this.coinsText = top(right + 808, '', '#ffe07a');
+    this.bestText = top(right + 944, '').setOrigin(1, 0.5);
     // The level rides the left end of the experience bar, clear of the corner buttons (full screen,
     // sound, pause) in the bottom left.
     this.levelText = this.add
@@ -789,13 +806,14 @@ export class GameScene extends Phaser.Scene {
   private createBarricadeTip() {
     const { x, w } = BARRICADE_BAR;
     const bg = this.add.graphics();
-    drawPanel(bg, x - 3, 34, BARRICADE_TIP_W, 70, { c: 6, fill: 0x1e222c, alpha: 0.95, lw: 1.5 });
+    const y = SEEN.y;
+    drawPanel(bg, x - 3, y + 34, BARRICADE_TIP_W, 70, { c: 6, fill: 0x1e222c, alpha: 0.95, lw: 1.5 });
     this.barricadeTipText = this.add
-      .text(x + 7, 41, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', lineSpacing: 3 })
+      .text(x + 7, y + 41, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', lineSpacing: 3 })
       .setOrigin(0);
     this.barricadeTip = this.add.container(0, 0, [bg, this.barricadeTipText]).setDepth(UI_DEPTH + 9).setVisible(false);
     this.add
-      .zone(x - 3, 10, w + 6, 20)
+      .zone(x - 3, y + 10, w + 6, 20)
       .setOrigin(0)
       .setDepth(UI_DEPTH + 1)
       .setInteractive()
@@ -825,13 +843,14 @@ export class GameScene extends Phaser.Scene {
     // The barricade's health in the top bar.
     const { x: bx, w: bw } = BARRICADE_BAR;
     const hp = Phaser.Math.Clamp(s.barricade.hp / s.barricade.max, 0, 1);
-    g.fillStyle(SLATE.dark).fillPoints(chamferPts(bx - 3, 10, bw + 6, 20, 4), true);
-    g.fillStyle(BAR.empty).fillRect(bx, 13, bw, 14);
+    const by = SEEN.y;
+    g.fillStyle(SLATE.dark).fillPoints(chamferPts(bx - 3, by + 10, bw + 6, 20, 4), true);
+    g.fillStyle(BAR.empty).fillRect(bx, by + 13, bw, 14);
     const fw = Math.round(bw * hp);
-    g.fillStyle(BAR.barricade).fillRect(bx, 13, fw, 14);
-    g.fillStyle(BAR.barricadeShine).fillRect(bx, 13, fw, 6);
+    g.fillStyle(BAR.barricade).fillRect(bx, by + 13, fw, 14);
+    g.fillStyle(BAR.barricadeShine).fillRect(bx, by + 13, fw, 6);
     g.lineStyle(1.5, 0x5a3214, 0.35);
-    for (let x = bx + 15; x < bx + fw; x += 22) g.lineBetween(x, 14, x - 4, 26);
+    for (let x = bx + 15; x < bx + fw; x += 22) g.lineBetween(x, by + 14, x - 4, by + 26);
     this.foesText.setText(t('foesLeft', { n: s.toSpawn.length + s.enemies.length }));
     this.slainText.setText(t('slain', { n: s.kills }));
     this.coinsText.setText(String(s.coins));
@@ -1463,7 +1482,7 @@ export class GameScene extends Phaser.Scene {
   private createGameOver() {
     const cx = VIEW.w / 2;
     const cy = VIEW.h / 2;
-    const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x0e1218, 0.7).setInteractive();
+    const dim = this.add.rectangle(cx, cy, SEEN.w, SEEN.h, 0x0e1218, 0.7).setInteractive();
     const panel = this.add.graphics();
     drawPanel(panel, cx - 300, cy - 180, 600, 360, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
     const title = this.add.text(cx, cy - 145, t('fallenTitle'), textStyle(30, '#ff9a7a', 5)).setOrigin(0.5);
@@ -1562,7 +1581,7 @@ export class GameScene extends Phaser.Scene {
 
   /** The victory panel after wave 30: the siege is lifted, the next heat is unlocked. */
   private createWon() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.7).setInteractive();
+    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, SEEN.w, SEEN.h, 0x0e1218, 0.7).setInteractive();
     const panel = this.add.graphics();
     drawPanel(panel, VIEW.w / 2 - 290, VIEW.h / 2 - 150, 580, 300, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
     const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 110, t('wonTitle'), textStyle(30, '#ffcf4a', 5)).setOrigin(0.5);

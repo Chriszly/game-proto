@@ -6,22 +6,33 @@ import { facet, line, mix, ngon, paint, poly, rect, seeded, shade, softShadow, t
 // slate-and-gold top and bottom bars, and the barricade, which breaks up in stages.
 //
 // Everything here is painted in "double" units (1920x1080 for the 960x540 view) and scaled down
-// by half, so the shapes keep their fine facets.
+// by half, so the shapes keep their fine facets. A view bigger than 960x540 (a screen of another
+// shape) gets the background and bars at its own size, with the designed scene at `frame` in its
+// middle and the sky, hills, road and verge carried on round it.
 
 const W = 1920;
 
-export function bakeScenery(scene: Phaser.Scene) {
-  paint(scene, 'background', 960, 540, (ctx) => {
+/** The part of the double-unit scene a background shows: 0..W by 0..1080, or more round it. */
+interface Extent {
+  l: number;
+  r: number;
+  t: number;
+  b: number;
+}
+
+export function bakeScenery(scene: Phaser.Scene, w = 960, h = 540, frame = { x: 0, y: 0 }) {
+  paint(scene, 'background', w, h, (ctx) => {
     ctx.scale(0.5, 0.5);
-    drawBackground(ctx);
+    ctx.translate(frame.x * 2, frame.y * 2);
+    drawBackground(ctx, { l: -frame.x * 2, r: (w - frame.x) * 2, t: -frame.y * 2, b: (h - frame.y) * 2 });
   });
-  paint(scene, 'hud-top', 960, 42, (ctx) => {
+  paint(scene, 'hud-top', w, 42, (ctx) => {
     ctx.scale(0.5, 0.5);
-    slateBar(ctx, 0, 80, 'bottom');
+    slateBar(ctx, 0, 80, 'bottom', w * 2);
   });
-  paint(scene, 'hud-bottom', 960, 36, (ctx) => {
+  paint(scene, 'hud-bottom', w, 36, (ctx) => {
     ctx.scale(0.5, 0.5);
-    slateBar(ctx, 2, 72, 'top');
+    slateBar(ctx, 2, 72, 'top', w * 2);
   });
   for (const stage of [0, 1, 2, 3]) {
     paint(scene, `barricade-${stage}`, BARRICADE_TEX.w, BARRICADE_TEX.h, (ctx) => {
@@ -33,7 +44,7 @@ export function bakeScenery(scene: Phaser.Scene) {
 }
 
 /** A slate bar with faceted bevels and a gold trim on its inner edge. */
-function slateBar(ctx: CanvasRenderingContext2D, y: number, h: number, trim: 'top' | 'bottom') {
+function slateBar(ctx: CanvasRenderingContext2D, y: number, h: number, trim: 'top' | 'bottom', W: number) {
   poly(ctx, rect(0, y, W, h), '#262b36');
   for (let x = 0; x < W; x += 160) {
     poly(ctx, [[x, y], [x + 160, y], [x + 80, y + h / 2]], '#2c3240');
@@ -44,26 +55,29 @@ function slateBar(ctx: CanvasRenderingContext2D, y: number, h: number, trim: 'to
   poly(ctx, rect(0, trim === 'bottom' ? ty : ty + 2, W, 2), '#e5b53a');
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D) {
+function drawBackground(ctx: CanvasRenderingContext2D, E: Extent) {
   // Sky: a triangle mesh from cool blue overhead to warm haze at the horizon.
   let rnd = seeded(4);
   {
     const SP = 120;
     const rows = 7;
-    const cols = 19;
+    // Rows above and columns beside the designed sky for a bigger view.
+    const r0 = -Math.ceil(-E.t / 80);
+    const c0 = -Math.ceil(-E.l / SP);
+    const cols = 19 + Math.ceil((E.r - W) / SP);
     const pts: Pt[][] = [];
-    for (let r = 0; r <= rows; r++) {
+    for (let r = r0; r <= rows; r++) {
       pts.push([]);
-      for (let c = 0; c <= cols; c++) {
-        pts[r].push([c * SP - 120 + (r % 2) * 50 + (rnd() - 0.5) * 50, r * 80 + (rnd() - 0.5) * 30 * (r > 0 && r < rows ? 1 : 0)]);
+      for (let c = c0; c <= cols; c++) {
+        pts[r - r0].push([c * SP - 120 + (((r % 2) + 2) % 2) * 50 + (rnd() - 0.5) * 50, r * 80 + (rnd() - 0.5) * 30 * (r > r0 && r < rows ? 1 : 0)]);
       }
     }
     const skyCol = (y: number) => {
       const t = Math.max(0, Math.min(1, (y - 80) / 380));
       return t < 0.6 ? mix('#6f9fcf', '#a9c9e2', t / 0.6) : mix('#a9c9e2', '#f2d9b4', (t - 0.6) / 0.4);
     };
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows - r0; r++) {
+      for (let c = 0; c < cols - c0; c++) {
         const a = pts[r][c];
         const b = pts[r][c + 1];
         const d = pts[r + 1][c];
@@ -82,7 +96,7 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
   sg.addColorStop(0, 'rgba(255,240,200,0.55)');
   sg.addColorStop(1, 'rgba(255,240,200,0)');
   ctx.fillStyle = sg;
-  ctx.fillRect(0, 0, W, 500);
+  ctx.fillRect(E.l, E.t, E.r - E.l, 500 - E.t);
   ctx.restore();
   const cloud = (x: number, y: number, s: number) => {
     rnd = seeded(Math.round(x));
@@ -96,6 +110,9 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
   cloud(980, 104, 66);
   cloud(1530, 170, 58);
   cloud(1790, 112, 48);
+  // Beyond the designed view, for a wider one.
+  cloud(-210, 128, 52);
+  cloud(2150, 140, 56);
 
   // Mountains: faceted peaks with snow, the far range bluish and the near one darker.
   const range = (peaks: number[][], base: number, col: string, snow: boolean, seed: number) => {
@@ -123,7 +140,9 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
     }
   };
   range([[120, 300, 260], [640, 214, 300], [1010, 300, 220], [1450, 236, 280], [1880, 300, 260]], 470, '#7d92b8', true, 11);
+  range([[-300, 250, 240], [2250, 260, 260]], 470, '#7d92b8', true, 13);
   range([[380, 330, 240], [860, 340, 220], [1230, 330, 200], [1700, 350, 240]], 470, '#5d7a9a', false, 12);
+  range([[-260, 340, 200], [2140, 330, 210]], 470, '#5d7a9a', false, 14);
 
   // The castle on the far hill: blocky prisms in the haze, with a gold pennant.
   {
@@ -152,9 +171,12 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
 
   // Hills and a row of pines.
   rnd = seeded(5);
+  const step = (W + 80) / 40;
+  const i0 = -Math.ceil(-E.l / step);
+  const i1 = 40 + Math.ceil((E.r - W) / step);
   const ridge = (y0: number, amp: number, f: number, ph: number): Pt[] =>
-    [...Array(41).keys()].map((i) => {
-      const x = (i / 40) * (W + 80) - 40;
+    [...Array(i1 - i0 + 1).keys()].map((k) => {
+      const x = (k + i0) * step - 40;
       return [x, y0 + amp * Math.sin(x / f + ph) + amp * 0.4 * Math.sin(x / (f * 0.37) + ph * 2)];
     });
   const hill = (r: Pt[], bottom: number, col: string) => {
@@ -183,10 +205,14 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
     }
   };
   rnd = seeded(8);
-  for (let x = 20; x < W; x += 46 + rnd() * 60) {
+  for (let x = 20; x < E.r; x += 46 + rnd() * 60) {
     const y = 470 + 20 * Math.sin(x / 260 + 0.4) + 10;
     if (x > 1150 && x < 1420) continue;
     pine(x, y + rnd() * 12, 26 + rnd() * 16);
+  }
+  if (E.l < 0) {
+    const r2 = seeded(9);
+    for (let x = -36 - r2() * 30; x > E.l - 30; x -= 46 + r2() * 60) pine(x, 470 + 20 * Math.sin(x / 260 + 0.4) + 10 + r2() * 12, 26 + r2() * 16);
   }
   hill(ridge(500, 8, 200, 1.2), 580, '#6aa84f');
 
@@ -197,16 +223,19 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
     const SP = 64;
     const rows = Math.ceil((bottom - top) / SP) + 3;
     const cols = Math.ceil(W / SP) + 4;
-    const pts: [number, number, number][][] = [];
+    // Columns beside the designed road for a wider view, from a seed of their own.
+    const cl = Math.ceil(-E.l / SP);
+    const cr = Math.ceil((E.r - W) / SP);
+    const pts: [number, number, number][][] = [...Array(rows)].map(() => []);
+    const point = (r: number, c: number) => {
+      const x = (c - 1.5) * SP + (r % 2) * SP * 0.5 + (rnd() - 0.5) * SP * 0.6;
+      const y = top - 24 + r * SP * 0.92 + (rnd() - 0.5) * SP * 0.5;
+      pts[r][c + cl] = [x, y, (rnd() - 0.5) * 18 + 6 * Math.sin(x / 140)];
+    };
     rnd = seeded(17);
-    for (let r = 0; r < rows; r++) {
-      pts.push([]);
-      for (let c = 0; c < cols; c++) {
-        const x = (c - 1.5) * SP + (r % 2) * SP * 0.5 + (rnd() - 0.5) * SP * 0.6;
-        const y = top - 24 + r * SP * 0.92 + (rnd() - 0.5) * SP * 0.5;
-        pts[r].push([x, y, (rnd() - 0.5) * 18 + 6 * Math.sin(x / 140)]);
-      }
-    }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) point(r, c);
+    rnd = seeded(18);
+    for (let r = 0; r < rows; r++) for (let c = -cl; c < cols + cr; c++) if (c < 0 || c >= cols) point(r, c);
     const ramp = ['#5e3f24', '#77522f', '#8d643a', '#a07446', '#b48a58'];
     const tri = (a: number[], b: number[], c: number[]) => {
       const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
@@ -222,10 +251,10 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
     };
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, top, W, bottom - top);
+    ctx.rect(E.l, top, E.r - E.l, bottom - top);
     ctx.clip();
     for (let r = 0; r < rows - 1; r++) {
-      for (let c = 0; c < cols - 1; c++) {
+      for (let c = 0; c < cols + cl + cr - 1; c++) {
         tri(pts[r][c], pts[r][c + 1], pts[r + 1][c + 1]);
         tri(pts[r][c], pts[r + 1][c + 1], pts[r + 1][c]);
       }
@@ -233,7 +262,7 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
     // Two worn ruts.
     ctx.globalAlpha = 0.18;
     for (const y of [700, 880]) {
-      for (let x = -20; x < W; x += 90) {
+      for (let x = -20 - 90 * Math.ceil(-E.l / 90); x < E.r; x += 90) {
         const s = (xx: number) => 6 * Math.sin(xx / 300);
         poly(ctx, [[x, y - 6 + s(x)], [x + 92, y - 4 + s(x + 92)], [x + 92, y + 8 + s(x + 92)], [x, y + 6 + s(x)]], '#3a2414');
       }
@@ -247,19 +276,52 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
       poly(ctx, [[x - s, y + s * 0.3], [x - s * 0.2, y - s * 0.6], [x + s * 0.4, y + s * 0.4]], '#c9b7a0');
       poly(ctx, [[x - s * 0.2, y - s * 0.6], [x + s, y], [x + s * 0.4, y + s * 0.4]], '#7d6a58');
     }
+    // As many again for each stretch of road beyond the designed view.
+    rnd = seeded(24);
+    for (const [x0, x1] of [[E.l, 0], [W, E.r]]) {
+      for (let i = 0; i < Math.round((90 * (x1 - x0)) / W); i++) {
+        const x = x0 + rnd() * (x1 - x0);
+        const y = top + 10 + rnd() * (bottom - top - 20);
+        const s = 4 + rnd() * 7;
+        poly(ctx, [[x - s, y + s * 0.3], [x - s * 0.2, y - s * 0.6], [x + s * 0.4, y + s * 0.4]], '#c9b7a0');
+        poly(ctx, [[x - s * 0.2, y - s * 0.6], [x + s, y], [x + s * 0.4, y + s * 0.4]], '#7d6a58');
+      }
+    }
     ctx.restore();
     // Grass lips over both edges, in toothy triangles, and the verge below the road.
     rnd = seeded(31);
+    const lip = (y0: number, dir: number, x: number) => {
+      const h = 10 + rnd() * 16;
+      const yy = y0 + 4 * Math.sin(x / 90);
+      poly(ctx, [[x, yy - dir * 6], [x + 26, yy - dir * 6], [x + 13 + (rnd() - 0.5) * 8, yy + dir * h]], rnd() < 0.5 ? '#5f9a45' : '#4a8238');
+    };
     for (const [y0, dir] of [[top, 1], [bottom, -1]]) {
-      for (let x = -10; x < W; x += 26) {
-        const h = 10 + rnd() * 16;
-        const yy = y0 + 4 * Math.sin(x / 90);
-        poly(ctx, [[x, yy - dir * 6], [x + 26, yy - dir * 6], [x + 13 + (rnd() - 0.5) * 8, yy + dir * h]], rnd() < 0.5 ? '#5f9a45' : '#4a8238');
-      }
+      for (let x = -10; x < W; x += 26) lip(y0, dir, x);
     }
-    poly(ctx, rect(0, bottom + 4, W, 1080 - bottom - 4), '#3f7432');
+    // The lips and the verge's teeth beyond the designed view, from seeds of their own.
+    rnd = seeded(32);
+    const lipEnd = -10 + 26 * Math.ceil((W + 10) / 26);
+    for (const [y0, dir] of [[top, 1], [bottom, -1]]) {
+      for (let x = -36; x > E.l - 26; x -= 26) lip(y0, dir, x);
+      for (let x = lipEnd; x < E.r; x += 26) lip(y0, dir, x);
+    }
+    poly(ctx, rect(E.l, bottom + 4, E.r - E.l, E.b - bottom - 4), '#3f7432');
+    const tooth = (x: number) => poly(ctx, [[x, bottom + 6], [x + 30, bottom + 6], [x + 15, 1012]], rnd() < 0.5 ? '#4b8a3b' : '#356a2c');
     rnd = seeded(37);
-    for (let x = 0; x < W; x += 30) poly(ctx, [[x, bottom + 6], [x + 30, bottom + 6], [x + 15, 1012]], rnd() < 0.5 ? '#4b8a3b' : '#356a2c');
+    for (let x = 0; x < W; x += 30) tooth(x);
+    rnd = seeded(38);
+    for (let x = -30; x > E.l - 30; x -= 30) tooth(x);
+    for (let x = W; x < E.r; x += 30) tooth(x);
+    // Tufts of grass on the verge below the designed view, for a taller one.
+    rnd = seeded(39);
+    for (let i = 0; i < Math.round(((E.r - E.l) * Math.max(0, E.b - 1080)) / 2400); i++) {
+      const x = E.l + rnd() * (E.r - E.l);
+      const y = 1080 + rnd() * (E.b - 1080);
+      const s = 8 + rnd() * 10;
+      poly(ctx, [[x - s, y], [x - s * 0.3, y - s * 1.4], [x, y]], '#4b8a3b');
+      poly(ctx, [[x - s * 0.4, y], [x + s * 0.2, y - s * 1.8], [x + s * 0.6, y]], '#5f9a45');
+      poly(ctx, [[x, y], [x + s * 0.8, y - s * 1.2], [x + s, y]], '#356a2c');
+    }
   }
 }
 

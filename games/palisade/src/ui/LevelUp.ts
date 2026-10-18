@@ -3,7 +3,7 @@ import { ui } from '../../../../shared/audio';
 import { iconTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
-import { AUTO_TOGGLE, CARDS, COUNTDOWN, UI_DEPTH, VIEW } from '../scenes/layout';
+import { AUTO_TOGGLE, CARDS, COUNTDOWN, SEEN, UI_DEPTH, VIEW } from '../scenes/layout';
 import { UPGRADES, type UpgradeId } from '../game/upgrades';
 import { AUTO_PICK_MS } from '../game/sim';
 import { drawPanel, textStyle } from './panel';
@@ -44,7 +44,7 @@ export class LevelUp {
     public autoPick: boolean,
     private onAutoPick: (on: boolean) => void,
   ) {
-    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.62).setInteractive();
+    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, SEEN.w, SEEN.h, 0x0e1218, 0.62).setInteractive();
     this.title = scene.add.text(VIEW.w / 2, CARDS.y - CARDS.h / 2 - 40, '', textStyle(28, '#ffcf4a', 5)).setOrigin(0.5);
     this.countdown = scene.add.text(VIEW.w / 2, COUNTDOWN.y, '', textStyle(15, '#c9c3b6', 4)).setOrigin(0.5);
     this.timer = scene.add.graphics();
