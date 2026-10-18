@@ -83,7 +83,7 @@ import {
 import { MAP_KEY, MAP_RES, paintMap } from '../art/map';
 import { PoseName } from '../art/models';
 import { byDifficulty, settings } from '../../../../shared/settings';
-import { sharpRes, splitHudCamera, viewPoint } from '../../../../shared/scaling';
+import { sharpRes, splitHudCamera, viewPoint, viewSize } from '../../../../shared/scaling';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { BUSY, SONG, sfx } from '../audio';
@@ -101,11 +101,13 @@ import {
   STREAK_CHIP,
   TOP_BAR,
   UPGRADE_PANEL,
-  VIEW,
+  FRAME,
+  SCREEN,
   abilityBox,
   activeButton,
   buffChip,
   buffStrip,
+  fitLayout,
   pickCard,
   shopRow,
   upgradeCard,
@@ -312,6 +314,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    // The view fills the screen's shape (picked once at start); the HUD keeps to its edges.
+    const view = viewSize(this);
+    fitLayout(view.width, view.height);
     const t0 = performance.now();
     const unitsMs = bakeUnits(this);
     paintMap(this);
@@ -334,7 +339,7 @@ export class GameScene extends Phaser.Scene {
     this.groundG = this.add.graphics().setDepth(1);
     this.topG = this.add.graphics().setDepth(4);
     this.hudG = this.add.graphics().setDepth(10).setScrollFactor(0);
-    this.pickBg = this.add.image(0, 0, 'lb-pick-bg').setOrigin(0, 0).setDisplaySize(VIEW.w, VIEW.h).setScrollFactor(0).setDepth(9);
+    this.pickBg = this.add.image(0, 0, 'lb-pick-bg').setOrigin(0, 0).setDisplaySize(SCREEN.w, SCREEN.h).setScrollFactor(0).setDepth(9);
     this.portrait = this.add.image(0, 0, pickKey('warden'), frameName(2, 'idle')).setScrollFactor(0).setDepth(11).setVisible(false);
     CHAMPIONS.forEach((c, i) => {
       const r = pickCard(i);
@@ -584,9 +589,9 @@ export class GameScene extends Phaser.Scene {
   /** The part of the world in view, in world pixels, where the camera will show it this frame. */
   private viewRect() {
     const mid = this.cameras.main.midPoint;
-    const x = Phaser.Math.Clamp(mid.x - VIEW.w / 2, 0, WORLD.w - VIEW.w);
-    const y = Phaser.Math.Clamp(mid.y - VIEW.h / 2, 0, WORLD.h - VIEW.h);
-    return { x, y, w: VIEW.w, h: VIEW.h };
+    const x = Phaser.Math.Clamp(mid.x - SCREEN.w / 2, 0, WORLD.w - SCREEN.w);
+    const y = Phaser.Math.Clamp(mid.y - SCREEN.h / 2, 0, WORLD.h - SCREEN.h);
+    return { x, y, w: SCREEN.w, h: SCREEN.h };
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer) {
@@ -805,19 +810,19 @@ export class GameScene extends Phaser.Scene {
   /** The pick screen's backdrop: faceted slate, painted once. */
   private paintPickBackdrop() {
     if (this.textures.exists('lb-pick-bg')) return;
-    const res = sharpRes(VIEW.w, VIEW.h);
+    const res = sharpRes(SCREEN.w, SCREEN.h);
     const c = document.createElement('canvas');
-    c.width = Math.round(VIEW.w * res);
-    c.height = Math.round(VIEW.h * res);
+    c.width = Math.round(SCREEN.w * res);
+    c.height = Math.round(SCREEN.h * res);
     const ctx = c.getContext('2d')!;
-    ctx.scale(c.width / VIEW.w, c.height / VIEW.h);
+    ctx.scale(c.width / SCREEN.w, c.height / SCREEN.h);
     let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const cell = 60;
-    for (let y = 0; y < VIEW.h + cell; y += cell) {
-      for (let x = 0; x < VIEW.w + cell; x += cell) {
+    for (let y = 0; y < SCREEN.h + cell; y += cell) {
+      for (let x = 0; x < SCREEN.w + cell; x += cell) {
         for (const half of [0, 1]) {
-          const k = 0.85 + rnd() * 0.3 - (y / VIEW.h) * 0.25;
+          const k = 0.85 + rnd() * 0.3 - (y / SCREEN.h) * 0.25;
           const v = Math.round(36 * k), g = Math.round(44 * k), b = Math.round(60 * k);
           ctx.fillStyle = `rgb(${v},${g},${b})`;
           ctx.strokeStyle = ctx.fillStyle;
@@ -1289,8 +1294,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPick(g: Phaser.GameObjects.Graphics) {
-    this.t('title', VIEW.w / 2, 12, t('gameTitle'), 32, UI.gold, 'center', true);
-    this.t('sub', VIEW.w / 2, 52, t('pickSub'), 12, UI.dim, 'center');
+    this.t('title', SCREEN.w / 2, FRAME.y + 12, t('gameTitle'), 32, UI.gold, 'center', true);
+    this.t('sub', SCREEN.w / 2, FRAME.y + 52, t('pickSub'), 12, UI.dim, 'center');
     CHAMPIONS.forEach((c, i) => {
       const r = pickCard(i);
       const hover = this.hoverPick === i;
@@ -1313,11 +1318,11 @@ export class GameScene extends Phaser.Scene {
     // The champion under the pointer: who they are and what they play like, then why they fight.
     const h = CHAMPIONS[this.hoverPick];
     const line = h && t('pickBlurb', { hero: t(h.hero), title: t(h.title), class: t(h.name), blurb: t(h.blurb) });
-    this.t('pick-blurb', VIEW.w / 2, 444, h ? (h.perk ? t('pickPerk', { line, perk: t(h.perk.desc) }) : line) : t('pickPoint'), 12, h ? h.color : UI.muted, 'center', true);
-    this.t('pick-motive', VIEW.w / 2, 464, h ? t(h.motive) : t('pickSetting'), 12, h ? UI.text : UI.dim, 'center', true);
-    this.t('hint', VIEW.w / 2, 491, t('pickHint1'), 11, UI.dim, 'center');
-    this.t('hint2', VIEW.w / 2, 506, t('pickHint2'), 11, UI.dim, 'center');
-    this.t('hint3', VIEW.w / 2, 521, t('pickHint3'), 11, UI.dim, 'center');
+    this.t('pick-blurb', SCREEN.w / 2, FRAME.y + 444, h ? (h.perk ? t('pickPerk', { line, perk: t(h.perk.desc) }) : line) : t('pickPoint'), 12, h ? h.color : UI.muted, 'center', true);
+    this.t('pick-motive', SCREEN.w / 2, FRAME.y + 464, h ? t(h.motive) : t('pickSetting'), 12, h ? UI.text : UI.dim, 'center', true);
+    this.t('hint', SCREEN.w / 2, FRAME.y + 491, t('pickHint1'), 11, UI.dim, 'center');
+    this.t('hint2', SCREEN.w / 2, FRAME.y + 506, t('pickHint2'), 11, UI.dim, 'center');
+    this.t('hint3', SCREEN.w / 2, FRAME.y + 521, t('pickHint3'), 11, UI.dim, 'center');
   }
 
   private drawPlaying(g: Phaser.GameObjects.Graphics, s: GameState) {
@@ -1357,13 +1362,13 @@ export class GameScene extends Phaser.Scene {
     const nexus = (team: Team) => s.units.find((u) => u.kind === 'nexus' && u.side === team)!;
     const pct = (u: Unit) => Math.max(0, Math.ceil((u.hp / u.maxHp) * 100));
     this.t('nexus-blue', 232, 9, t('blueNexus', { pct: pct(nexus('blue')) }), 14, UI.blue, 'left', true);
-    this.t('nexus-red', VIEW.w - 12, 9, t('redNexus', { pct: pct(nexus('red')) }), 14, UI.red, 'right', true);
+    this.t('nexus-red', SCREEN.w - 12, 9, t('redNexus', { pct: pct(nexus('red')) }), 14, UI.red, 'right', true);
     // The clock in its own sunken box.
-    g.fillStyle(col(UI.edge), 1).fillRect(VIEW.w / 2 - 38, 3, 76, 28);
-    g.fillStyle(col('#1b212d'), 1).fillRect(VIEW.w / 2 - 37, 4, 74, 26);
+    g.fillStyle(col(UI.edge), 1).fillRect(SCREEN.w / 2 - 38, 3, 76, 28);
+    g.fillStyle(col('#1b212d'), 1).fillRect(SCREEN.w / 2 - 37, 4, 74, 26);
     const mins = Math.floor(s.time / 60000);
     const secs = Math.floor((s.time % 60000) / 1000);
-    this.t('clock', VIEW.w / 2, 8, `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`, 16, UI.text, 'center', true);
+    this.t('clock', SCREEN.w / 2, 8, `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`, 16, UI.text, 'center', true);
   }
 
   /** Recall home while alive (filling as it channels); while dead, buy back at a price, or when it is next allowed. */
@@ -1451,12 +1456,12 @@ export class GameScene extends Phaser.Scene {
     if (!n || s.time - n.at > 4000) return;
     const alpha = Math.min(1, (4000 - (s.time - n.at)) / 500);
     const w = Math.min(440, 40 + n.text.length * 6.4);
-    const x = VIEW.w / 2 - w / 2, y = 42;
+    const x = SCREEN.w / 2 - w / 2, y = 42;
     g.fillStyle(col(UI.edge), 0.9 * alpha).fillRect(x - 1, y - 1, w + 2, 24);
     g.fillStyle(col(UI.slateDark), 0.92 * alpha).fillRect(x, y, w, 22);
     g.fillStyle(col(n.color), alpha).fillRect(x, y, 3, 22);
     g.fillStyle(col(n.color), alpha).fillRect(x + w - 3, y, 3, 22);
-    this.t('notice', VIEW.w / 2, y + 4, n.text, 12, UI.text, 'center', true, false, alpha);
+    this.t('notice', SCREEN.w / 2, y + 4, n.text, 12, UI.text, 'center', true, false, alpha);
   }
 
   private drawBottomBar(g: Phaser.GameObjects.Graphics, s: GameState, me: Unit) {
@@ -1721,7 +1726,7 @@ export class GameScene extends Phaser.Scene {
     }
     // The view and the player.
     const v = this.viewRect();
-    g.lineStyle(1, 0xffffff, 0.7).strokeRect(mx(v.x), my(v.y), VIEW.w * k, VIEW.h * k);
+    g.lineStyle(1, 0xffffff, 0.7).strokeRect(mx(v.x), my(v.y), SCREEN.w * k, SCREEN.h * k);
     g.lineStyle(1, 0xffffff, 0.9).strokeCircle(mx(me.x), my(me.y), 5);
     // A gold star on the objective.
     const o = s.objective;
@@ -1788,19 +1793,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawEnd(g: Phaser.GameObjects.Graphics, s: GameState) {
-    g.fillStyle(0x000000, 0.6).fillRect(0, 0, VIEW.w, VIEW.h);
+    g.fillStyle(0x000000, 0.6).fillRect(0, 0, SCREEN.w, SCREEN.h);
     const p = END_PANEL;
     this.panel(g, p.x, p.y, p.w, p.h, UI.slate);
     g.fillStyle(col(UI.gold), 1).fillRect(p.x + 2, p.y + 2, p.w - 4, 3);
     const won = s.winner === 'blue';
     if (watching) {
-      this.t('end-title', VIEW.w / 2, p.y + 22, t(won ? 'blueWins' : 'redWins'), 34, won ? SIDE_COLOR.blue : SIDE_COLOR.red, 'center', true);
-      this.t('end-sub', VIEW.w / 2, p.y + 72, t(won ? 'redNexusFell' : 'blueNexusFell'), 13, UI.dim, 'center');
+      this.t('end-title', SCREEN.w / 2, p.y + 22, t(won ? 'blueWins' : 'redWins'), 34, won ? SIDE_COLOR.blue : SIDE_COLOR.red, 'center', true);
+      this.t('end-sub', SCREEN.w / 2, p.y + 72, t(won ? 'redNexusFell' : 'blueNexusFell'), 13, UI.dim, 'center');
     } else {
-      this.t('end-title', VIEW.w / 2, p.y + 22, t(won ? 'victory' : 'defeat'), 34, won ? UI.green : UI.red, 'center', true);
-      this.t('end-sub', VIEW.w / 2, p.y + 72, t(won ? 'redNexusFell' : 'yourNexusFell'), 13, UI.dim, 'center');
+      this.t('end-title', SCREEN.w / 2, p.y + 22, t(won ? 'victory' : 'defeat'), 34, won ? UI.green : UI.red, 'center', true);
+      this.t('end-sub', SCREEN.w / 2, p.y + 72, t(won ? 'redNexusFell' : 'yourNexusFell'), 13, UI.dim, 'center');
     }
-    this.t('end-stats', VIEW.w / 2, p.y + 94, t('endStats', { kills: t('kills', { n: this.player()?.kills ?? 0 }), deaths: t('deaths', { n: this.player()?.deaths ?? 0 }), objectives: s.objectivesDone, lastHits: s.lastHits, streak: s.bestStreak, beasts: s.beastKills.blue }), 11, UI.muted, 'center');
+    this.t('end-stats', SCREEN.w / 2, p.y + 94, t('endStats', { kills: t('kills', { n: this.player()?.kills ?? 0 }), deaths: t('deaths', { n: this.player()?.deaths ?? 0 }), objectives: s.objectivesDone, lastHits: s.lastHits, streak: s.bestStreak, beasts: s.beastKills.blue }), 11, UI.muted, 'center');
     // A win counts toward the class's mastery, once per match.
     const me = this.player();
     if (!watching && won && me?.champ) {
@@ -1813,7 +1818,7 @@ export class GameScene extends Phaser.Scene {
       const next = MASTERY_WINS[rank];
       const winsLine = t('mastery', { name: me.champ.short, rank, n: wins });
       const line = next ? t('masteryNext', { line: winsLine, rank: rank + 1, n: next }) : t('masteryFull', { line: winsLine });
-      this.t('end-mastery', VIEW.w / 2, p.y + 112, line, 11, UI.gold, 'center', true);
+      this.t('end-mastery', SCREEN.w / 2, p.y + 112, line, 11, UI.gold, 'center', true);
     }
     this.panel(g, PLAY_AGAIN.x, PLAY_AGAIN.y, PLAY_AGAIN.w, PLAY_AGAIN.h, '#4a5876');
     this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, t(watching ? 'watchAnother' : 'playAgain'), 16, UI.text, 'center', true);

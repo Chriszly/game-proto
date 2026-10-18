@@ -267,8 +267,9 @@ File map (`src/`):
 - `audio.ts`: the song (`SONG`) and the sound table (`sfx`, from `shared/audio.ts`), plus `BUSY`,
   the combat sounds a watched match leaves out. See Sound below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, smooth scaling) with
-  `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)`
-  from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
+  `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and
+  `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and in dev builds puts `game` on
+  `window`.
 - `scenes/GameScene.ts`: the pick screen, the match view and input. `create` bakes the art
   (`bakeUnits`, `paintMap`), shows the map as 400 px tiles (only the ones in view are drawn) and
   keeps one image per unit (figure, gold outline, additive hit flash), depth-sorted by the feet's y.
@@ -280,7 +281,10 @@ File map (`src/`):
   `drawProjectile`, `drawZone` and `drawAura`, with small shape helpers. No game rules.
 - `scenes/layout.ts`: screen rectangles for the bars, the objective card, the streak chip, the
   ability boxes, the upgrade panel and cards (`upgradeCard`), the shop, the minimap, the pick cards
-  and the end panel, plus `VIEW` and `FONT` (a system font stack).
+  and the end panel, plus `VIEW` (the designed 960x540), `SCREEN` (the view actually shown),
+  `FRAME` (the designed rectangle's corner in it), `fitLayout` and `FONT` (a system font stack).
+  The rectangles are written for 960x540; `fitLayout(w, h)` moves them once at start for the view
+  (see Screens below).
 - `art/lowpoly.ts`: the software renderer. 3x4 matrices (`T`, `S`, `Rx`, `Ry`, `Rz`, `chain`,
   `swing`), a `Model` with a transform stack (`at`), primitives (`box` with a taper, `prism`,
   `gem`, `ico`, `slab`) whose faces get outward normals from each primitive's centre, and `render`:
@@ -369,6 +373,18 @@ are hit with `viewPoint(pointer)`; world points come from `worldAt` (the main ca
 `getWorldPoint`, not `pointer.worldX`, which the HUD camera on top would give). `viewRect` is the
 part of the world in view this frame (from the camera's `midPoint`, clamped to the world) and
 drives the camera follow, the map tiles drawn and the minimap's view box.
+
+The game fills every screen shape (`setupScaling(game, { fill: true })`): the view is 960x540 at
+least and grows wider or taller to the screen's shape (up to 1296x540 or 960x720), picked once at
+start. `create` calls `fitLayout(viewSize(this))` before anything is drawn, which sets `SCREEN` and
+`FRAME` and moves the layout's rectangles: the top and bottom bars span the view's width, the bottom
+bar and everything in it (portrait, abilities, shop button, actives, upgrade panel, buff strip) keep
+to the bottom edge, the minimap and the buff chips keep to the right edge, the recall button stays
+beside the centred clock, and the pick screen, shop panel and end panel stay centred (the pick
+screen's texts at `FRAME.y` plus their designed y). The world simply shows more of the map, and
+`viewRect`, the pick backdrop, the end screen's dimming and the minimap's view box use `SCREEN`.
+Anything new on the HUD uses `SCREEN` and the layout's rectangles, never `VIEW`, and at exactly
+960x540 nothing moves (the playthrough clicks there).
 
 State model:
 
