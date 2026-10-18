@@ -680,7 +680,8 @@ export class GameScene extends Phaser.Scene {
     if (k.down.isDown) dy += 1;
     const pointer = this.input.activePointer;
     const p = viewPoint(pointer);
-    if (pointer.isDown === false && p.x > 0 && p.x < W && p.y > 0 && p.y < H) {
+    // Only a mouse scrolls at the edge: a finger's last tap leaves the pointer where it lifted.
+    if (pointer.isDown === false && !pointer.wasTouch && p.x > 0 && p.x < W && p.y > 0 && p.y < H) {
       if (p.x < 6) dx -= 1;
       if (p.x > W - 6) dx += 1;
       if (p.y < 6) dy -= 1;
@@ -848,7 +849,8 @@ export class GameScene extends Phaser.Scene {
     const moved = Math.hypot(p.x - start.x, p.y - start.y);
     const additive = p.event.shiftKey;
     if (moved < 5) {
-      const hit = entityAt(this.state, b.x, b.y);
+      // A click picks one's own unit over an enemy standing on it; a tap keeps the nearest, to order an attack on it.
+      const hit = entityAt(this.state, b.x, b.y, p.wasTouch ? undefined : PLAYER);
       // A touch screen has no right click, so a tap gives the orders one would.
       if (p.wasTouch && !watching && this.tapOrder(b.x, b.y, hit)) return;
       if (!hit) {
@@ -871,7 +873,7 @@ export class GameScene extends Phaser.Scene {
       this.panelKey = '';
       return;
     }
-    // Box select: own units inside the box, or the building under it when there are none.
+    // Box select: own units inside the box.
     const x0 = Math.min(a.x, b.x);
     const x1 = Math.max(a.x, b.x);
     const y0 = Math.min(a.y, b.y);
@@ -1329,12 +1331,14 @@ export class GameScene extends Phaser.Scene {
     const own = [...this.state.buildings.values()].filter((x) => x.owner === PLAYER).length;
     const rates = `${p.rates.wood.toFixed(2)}/${p.rates.food.toFixed(2)}`;
     const champion = unitCount(this.state, PLAYER, unitFor(this.faction, 'champion').id);
-    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${this.rallyMode}|${this.rallyBuildings().map((x) => (x.rally ? 1 : 0)).join('')}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${p.edgePending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}|${p.bell}|${rates}|${champion}`;
+    const pop = `${popUsed(this.state, PLAYER)}/${popCap(this.state, PLAYER)}`;
+    return [...this.selected].join(',') + `|${b?.built}|${pop}|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${this.rallyMode}|${this.rallyBuildings().map((x) => (x.rally ? 1 : 0)).join('')}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${p.edgePending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}|${p.bell}|${rates}|${champion}`;
   }
 
   private resourceKey() {
     const r = this.state.players[PLAYER].res;
-    return `${Math.floor(r.wood / 10)}/${Math.floor(r.food / 10)}/${Math.floor(r.ore / 10)}`;
+    // Exact amounts, so a button whose cost is not a round ten lights up as soon as it is affordable.
+    return `${Math.floor(r.wood)}/${Math.floor(r.food)}/${Math.floor(r.ore)}`;
   }
 
   /** What the panel offers for the current selection, as buttons. */

@@ -205,7 +205,7 @@ function plan(s: GameState) {
     act(() => setRally(s, ME, b.id, front.x, front.y));
   }
 
-  // 4. Research at the Academy and the Town Center, in RESEARCH_ORDER.
+  // 4. Research at the Academy and the Town Center, in the temperament's research order (`T.research`).
   for (const b of s.buildings.values()) {
     if (b.owner !== ME || !b.built || b.queue.length > 0) continue;
     if (b.type !== 'academy' && b.type !== 'town') continue;
