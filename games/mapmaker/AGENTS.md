@@ -67,7 +67,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
 - `src/audio.ts`: the sound table `sfx` (`sounds` from `shared/audio.ts`) and the song `SONG`; see
   Sound below.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, smooth art) with `BootScene`
-  then `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts `game` on `window`
+  then `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })`, and puts `game` on `window`
   in dev builds.
 - `src/game/state.ts`: `GameState`, `Tile`, `Find`, `Riddle`, `Clue`, `Ground`, `Commission`, `Feature`, `Rival`,
   `Chart`, `Milestone`, `AtlasPage`, `Phase`, `Point`; `GRID`, `BASE_SUPPLIES`, `PROVISIONS_STEP`,
@@ -347,9 +347,14 @@ has no audio imports.
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout, reduced motion and full screen; Mapmaker uses no camera shake or flash).
-- `setupScaling(game)` from `shared/scaling.ts` draws the canvas at the screen's resolution
-  (`renderScale` canvas pixels per game pixel, every camera zoomed to match) and asks to turn a
-  phone held upright. The camera never scrolls or zooms, so no `scrollingCamera` is needed. Art is
+- `setupScaling(game, { fill: true })` from `shared/scaling.ts` draws the canvas at the screen's
+  resolution (`renderScale` canvas pixels per game pixel, every camera zoomed to match), asks to
+  turn a phone held upright and grows the view to the screen's shape (960x540 up to 1296x540 wide or
+  960x720 tall). The whole layout stays in the 960x540 coordinates of `layout.ts`: `GameScene.create`
+  scrolls the main camera by `-viewFrame(this)` once, which centres the sheet and panel in the view,
+  and `viewRect()` (the whole view in world coordinates, from `viewSize`) sizes the drafting table
+  in `drawSheet` and the overlays' dim. At 960x540 the scroll is 0 and nothing moves. The camera
+  keeps its top-left origin and never follows or zooms, so no `scrollingCamera` is needed. Art is
   painted at `HI` (at least `renderScale`) and texts at `Math.max(2, renderScale)`.
   `e2e/screens.spec.ts` at the root checks the game on five screens.
 - Difficulty scales one number: `BASE_SUPPLIES` in `src/game/state.ts` is `byDifficulty(16, 12, 9)`,
@@ -435,7 +440,8 @@ has no audio imports.
 - Riddle clues only hold if the terrain they name stays put: rivers, roads, landmarks and finds are
   all placed before `makeRiddle` runs.
 - Landmarks fall back to any meadow, forest or beach tile when no tile fits their rule.
-- Read taps through `pointer.worldX/Y` and lay out in game pixels (`VIEW`), never `this.scale`
+- Read taps through `pointer.worldX/Y` (the camera is scrolled to centre the layout) and lay out in
+  game pixels (`VIEW`, with `viewRect()` for anything that covers the whole screen), never `this.scale`
   or `pointer.x/y`, which are canvas pixels once `renderScale` is above 1.
 - The island art is painted once per isle (about a million pixels at HI 2, four million at 4K); keep per-frame work in
   `update` to graphics and texts, and repaint the fog canvas only when tiles are charted.
