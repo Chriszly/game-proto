@@ -418,6 +418,15 @@ each shop as in the one before.
 
 ![A shop's guild, joined, with its upgrades for sale](docs/screenshots/shop-guild.webp)
 
+Every good a shop sells has a **fine window** too: the last quarter of its station's bar is gold,
+and picked up by hand then (step off the work spot and onto the pick-up marker), it comes out
+Fine, with a sparkle on its icon. Customers and households take the fine ones first, and pay half
+again as much for them. From day 4 each shop also has a **contract** of its own, shown under the
+top bar: sell so many of one of its goods today (4 at first, one more for every contract kept, up
+to 12) and its reward goes into the till. A new one comes with every day, for another good.
+
+![The bakery's contract card under the top bar, with two Fine loaves in hand](docs/screenshots/shop-contract.webp)
+
 ![A shop's market: the outfitter's three markers and the study's two lessons](docs/screenshots/town-market.webp)
 
 The till's coins are picked up at the counter, and the map shows what waits in each shop's till.

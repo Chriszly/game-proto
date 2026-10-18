@@ -306,6 +306,10 @@ const en = {
   ale: 'Ale',
   stout: 'Stout',
   brewer: 'Brewer',
+  // A shop's fine goods and contracts
+  fineGood: 'Fine {item}',
+  shopContract: 'Contract: {item} {made}/{need}, {coins}{coin}',
+  shopContractKept: 'Contract kept! +{coins}{coin}',
   // The recipes each shop's study teaches, and their gardens
   orchard: 'Orchard',
   apple: 'Apple',

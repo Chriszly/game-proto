@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { formatNumber } from '../../../../shared/i18n';
-import { playMusic, ui } from '../../../../shared/audio';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { scrollingCamera, splitHudCamera, viewPoint, viewSize } from '../../../../shared/scaling';
 import { SONG, sfx } from '../audio';
 import { pickUpPad, upgradePad, type UpgradeIcon } from '../art/markers';
@@ -12,7 +12,7 @@ import { signTexture } from '../art/ui';
 import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick, type Feedback } from '../game/sim';
-import { MAX_CARRY, SIGN_NAMES, UPGRADES, carryCapacity, gearLevel, harvestReach, payBoost, payment, walkSpeed, type GameState, type Upgrade } from '../game/state';
+import { FINE_SHARE, MAX_CARRY, SIGN_NAMES, UPGRADES, carryCapacity, gearLevel, harvestReach, payBoost, payment, walkSpeed, type GameState, type Upgrade } from '../game/state';
 import {
   BEDS,
   OPEN_GARDENS,
@@ -47,6 +47,9 @@ import {
   type ShopId,
   type ShopState,
   type StationDef,
+  plainGood,
+  sellsGood,
+  type Held,
 } from '../game/town';
 import {
   collectShopTill,
@@ -56,6 +59,7 @@ import {
   goodName,
   payLesson,
   payRecipe,
+  inShopFineWindow,
   payGuildJoin,
   payGuildUpgrade,
   shopPrice,
@@ -102,6 +106,8 @@ const START = { dx: -40, y: 220 };
 /** Widths of a station's "First:" sign and a shelf's price sign, as the apothecary's. */
 const PRIORITY_SIGN_W = 92;
 const PRICE_SIGN_W = 48;
+/** The contract card under the top bar's purse. */
+const CONTRACT_W = 300;
 const SIGN_COLOURS = { cheap: '#2f6a1a', fair: INK, dear: '#8a3a10' };
 
 interface Marker {
@@ -313,7 +319,10 @@ export class ShopScene extends Phaser.Scene {
     this.addMarker(l.drop, 'pad-in', t('drop'), () => this.sounded(dropAtStation(this.state, this.id, def.id), 'drop'));
     this.addMarker(l.work, 'pad-work', t('work'), () => null, () => station().hired.level >= MAX_WORKERS);
     this.workSpots.push({ zone: new Phaser.Geom.Rectangle(l.work.x - 22, l.work.y - 22, 44, 44), at: def.id });
-    this.addMarker(l.pickUp, pickUpPad('sack'), t('pickUp'), () => this.sounded(pickUpFromStation(this.state, this.id, def.id), 'pickUp'));
+    this.addMarker(l.pickUp, pickUpPad('sack'), t('pickUp'), () => {
+      const fine = inShopFineWindow(this.def, station());
+      return this.sounded(pickUpFromStation(this.state, this.id, def.id), fine ? 'fine' : 'pickUp');
+    });
     const icon: UpgradeIcon = i === 0 ? 'refiner' : 'cauldron';
     this.addLevelMarker(l.level, icon, () => station().level, MAX_LEVEL, (lv) => levelCost(this.id, lv), () => payStationLevel(this.state, this.id, def.id), (lv, left) =>
       t('stationLevelCost', { level: lv + 2, coins: formatNumber(left) }),
@@ -329,6 +338,8 @@ export class ShopScene extends Phaser.Scene {
     ins.forEach((good, k) => this.addStock(l.stockIn(k), good, () => station().queue, () => shopMakes(this.shop, this.def, good)));
     outs.forEach((good, k) => this.addStock(l.stockOut(k), good, () => station().output, () => shopMakes(this.shop, this.def, good)));
     const bar = new ProgressBar(this, l.at.x, l.at.y - image.displayHeight / 2 - 12, 64, 0xc8741e, WORLD_UI_DEPTH, 8);
+    // Its last quarter is gold where it makes what the shop sells: picked up then, the good comes out fine.
+    if (def.recipes.some((r) => sellsGood(this.def, r.out))) bar.setZone(1 - FINE_SHARE, 0xe8b830);
     const workers = [0, 1].map((k) => {
       const at = l.workers(k);
       return fit(this.add.image(at.x, at.y, craftsmanTexture(k)).setOrigin(0.5, 1).setDepth(at.y));
@@ -341,11 +352,11 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /** A good standing by a station or on a shelf: its icon and how many there are, while `shown` holds. */
-  private addStock(at: Point, good: GoodId, list: () => GoodId[], shown: () => boolean = () => true) {
+  private addStock(at: Point, good: GoodId, list: () => Held[], shown: () => boolean = () => true) {
     const icon = fit(this.add.image(at.x - 8, at.y, goodTexture(good)), 1.3).setDepth(at.y);
     const text = this.add.text(at.x + 4, at.y, '', COUNT).setOrigin(0, 0.5).setDepth(at.y);
     this.views.push(() => {
-      const n = list().filter((g) => g === good).length;
+      const n = list().filter((g) => plainGood(g) === good).length;
       icon.setAlpha(n > 0 ? 1 : 0.4).setVisible(shown());
       text.setText(`${n}/${shopStorage(this.shop)}`).setVisible(shown());
     });
@@ -726,6 +737,7 @@ export class ShopScene extends Phaser.Scene {
   private createHud() {
     const purse = townTopBar(this, () => this.state, t(this.def.name), { label: t('townMap'), onTap: () => leaveFor(this, this.state, 'Town') });
     this.views.push(purse);
+    this.createContract();
     // The doctor's hands in this shop, at the bottom of the screen; tapping a slot throws its good away.
     const { width, height } = viewSize(this);
     const label = this.add.text(0, height - HANDS_BAR.h / 2 - 4, t('hands'), TOWN_TEXT).setOrigin(0, 0.5);
@@ -766,6 +778,26 @@ export class ShopScene extends Phaser.Scene {
         icon.setVisible(!!hands[i]);
         if (hands[i]) fit(icon.setTexture(goodTexture(hands[i])), 1.5);
       });
+    });
+  }
+
+  /** Today's contract, on a card under the top bar's purse: the good, how many are handed over of how many, and the reward. */
+  private createContract() {
+    const y = TOWN_HUD_H + 20;
+    const card = townCard(this, 12 + CONTRACT_W / 2, y, 'contract', CONTRACT_W, 28).setAlpha(0.72);
+    const icon = fit(this.add.image(28, y, goodTexture('bread')), 1.3);
+    const text = coined(this.add.text(42, y, '', { ...TOWN_TEXT, fontSize: '13px' }).setOrigin(0, 0.5));
+    for (const [i, part] of [card, icon, text].entries()) part.setDepth(TOWN_UI_DEPTH + i * 0.01).setScrollFactor(0);
+    let kept = this.shop.kept;
+    this.views.push(() => {
+      const c = this.shop.contract;
+      for (const part of [card, icon, text]) part.setVisible(!!c);
+      if (!c) return;
+      fit(icon.setTexture(goodTexture(c.good)), 1.3);
+      const done = c.made >= c.need;
+      text.setText(done ? t('shopContractKept', { coins: formatNumber(c.reward) }) : t('shopContract', { item: goodName(c.good), made: c.made, need: c.need, coins: formatNumber(c.reward) }));
+      if (this.shop.kept > kept) playSting(SONG, 'kept');
+      kept = this.shop.kept;
     });
   }
 

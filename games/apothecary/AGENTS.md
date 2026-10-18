@@ -49,7 +49,9 @@ study, shade gardens and a mirrored second production line.
   iron pots) and the Tavern (barley field and hop garden, maltings, oast and brew kettle, ale and
   stout). Each shop also has a third garden and two recipes its study teaches (apple tart and
   fruit cake, lavender soap and scented candle, red cloth and gown with madder and red dye, copper
-  pot and lantern, cider and apple ale). Each shop has a guild of its own too: growth, pixies, storage, prices, slots and customers. With more than three lots the map lays them in two rows of shorter cards (`lot`), and
+  pot and lantern, cider and apple ale). Each shop has a guild of its own too: growth, pixies, storage, prices, slots and customers. Every
+  good a shop sells can come out Fine in the last quarter of its station's work, and from day 4
+  each shop has a daily contract for one of its goods. With more than three lots the map lays them in two rows of shorter cards (`lot`), and
   keeps `CORNER_H` free at the bottom for the corner buttons. Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
   households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
   then houses, manors, which want candles and tapers, mansions, which want blue cloth and cloaks, palaces, which want horseshoes and iron pots, and castles, drawn as battlemented towers, which want ale and stout) and buys it off a shop's shelf (potions
@@ -167,6 +169,11 @@ study, shade gardens and a mirrored second production line.
   `SHOP_GUILD_UPGRADES` for levels and costs, `GUILD_JOIN_COST`, `guildJoinCost`, `guildCost`) feeds
   `shopStorage` (pallets and shelves, in place of `SHOP_STORAGE`), `shopPlaces` (up to
   `MAX_SHOP_PLACES`), `shopGrowth`, `shopRouteSpeed`, `shopPriceBoost` and `shopFootfall`.
+  Fine goods are their own kind, `FineGood` (`<good>-fine`; `fineOf`, `isFineGood`, `plainGood`);
+  `Held` (a good or a fine good) is what `TownState.hands` and `ShopState.shelf` hold. A shop's
+  contract (`ShopState.contract`, a `ShopContract`: `day`, `good`, `need`, `made`, `reward`) starts
+  on `SHOP_CONTRACT_START`; `ShopState.kept` counts the ones kept (it picks the next good and need,
+  up to `MAX_SHOP_CONTRACT`; the reward is `SHOP_CONTRACT_SHARE` of the goods' base price).
 - `src/game/districts.ts`: the households' data, free of Phaser: `Need` (a good or a potion),
   `DISTRICTS`, `HOME_TIERS` (each tier's name and needs), the growth numbers (`START_HOMES`,
   `MAX_HOMES`, `SUPPLY_MS`, `HAPPY_PULL`, `HAPPY`, `UNHAPPY`, `GROW_ROUNDS`), `DistrictState`
@@ -184,6 +191,12 @@ study, shade gardens and a mirrored second production line.
   `cycleShopPriority`, `cycleShopSign`) return `Feedback` like the sim's. `nextRecipe` skips recipes
   not learned yet and takes the station's priority first when it is ready; `runOrders` draws wants by `SIGN_DEMAND`, pays
   `shopPrice` (counter level, guild prices and sign) and runs patience down by `SIGN_PATIENCE`.
+  `serveOne` hands a fine good first, at `FINE_BONUS` times the price, and counts what it hands
+  for the contract (`deliverForShopContract` pays the reward into the till once `made` reaches
+  `need`); `supplyNeed` takes a plain good first. `tickTown` rolls each shop's contract
+  (`shopContractFor`) when the apothecary's contract day changes. `inShopFineWindow(def, station)`
+  is true from `1 - FINE_SHARE` of a sold good's work to its end, and `pickUpFromStation` then takes
+  the work out by hand as its fine good. Drops skip fine goods; `stockShopShelf` stocks both kinds.
 - `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
   `ShopDef` (`gardenLayout`, `bedPosition`, `MARKET` for the outfitter and study, with its recipe marker, between the
   gardens and the first station, `stationLayout` with its `priority` sign, `guildLayout` under the first two stations, `counterLayout` with each
@@ -649,7 +662,8 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
 - The town's scenes play the `calm` part. `ShopScene` plays `swish` + `pluck` for a bed cut,
   `drop`, `pickUp`, `pay`, `cascade` (the till) and `upgrade` at its markers as the apothecary does,
   `toss` for a hands slot, `bubble`, `sell`, `served` and `hmph` from what changed in its shop each
-  frame, and `ui('refuse')` for a marker that takes nothing. `TownScene` plays `ui('click')` for a
+  frame, `fine` for a pick-up in a station's fine window, the `kept` sting when its contract is
+  kept (`createContract`), and `ui('refuse')` for a marker that takes nothing. `TownScene` plays `ui('click')` for a
   lot walked into, `upgrade` for a shop bought and `ui('refuse')` for one the purse can't pay.
 - Not done: no ambience (cauldron bubble loop, rain) and no sound per pixie, as the plan says.
 
