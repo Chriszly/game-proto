@@ -40,6 +40,7 @@ import {
   buy,
   canAfford,
   canCamp,
+  carriesOver,
   chartOf,
   closeAtlas,
   costOf,
@@ -236,6 +237,8 @@ export class GameScene extends Phaser.Scene {
   private lastFrame: number | null = null;
   /** The song part playing, from the phase, the isle kind and the rival. */
   private musicPart = '';
+  /** Whether the sale that completed the Royal Atlas set a new best (a reload shows the best instead). */
+  private newBest = false;
 
   constructor() {
     super('Game');
@@ -307,7 +310,8 @@ export class GameScene extends Phaser.Scene {
       };
       const tile = s.tiles[indexOf(at.x, at.y)];
       const cost = costOf(s, at.x, at.y);
-      if (survey(s, at.x, at.y)) {
+      const passed = survey(s, at.x, at.y);
+      if (passed) {
         saveGame(s);
         const fresh = s.surveyed.slice(before.surveyed);
         // A pen stroke and a blip, lower for the dearer tiles and higher for the free ones.
@@ -316,7 +320,7 @@ export class GameScene extends Phaser.Scene {
         this.announce(at, fresh);
         // One news sound a survey, the most important one (a lookout can turn up several).
         const news = [
-          this.announceFinds(fresh, before.storms, before.known),
+          this.announceFinds(fresh, passed, before.storms, before.known),
           this.announceFeatures(before.features),
           this.announceRival(before.rivalRuins, before.rivalTreasure),
         ].filter((n): n is News => n !== null);
@@ -602,7 +606,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Notices for what the survey turned up: a wreck's stores, an artifact, a storm, the riddle chart. */
-  private announceFinds(fresh: Point[], stormsBefore: number, knewRiddle: boolean): News | null {
+  private announceFinds(fresh: Point[], passed: Point[], stormsBefore: number, knewRiddle: boolean): News | null {
     const s = this.state;
     let news: News | null = null;
     const heard = (n: News) => {
@@ -624,7 +628,7 @@ export class GameScene extends Phaser.Scene {
         say(p, t('caveFound', { n: artifactValue(s) }), true);
         heard('cave');
       }
-      if (find === 'storm' && s.storms.length === stormsBefore) say(p, t('stormOver'));
+      if (find === 'storm' && passed.some((q) => q.x === p.x && q.y === p.y)) say(p, t('stormOver'));
     }
     for (const st of s.storms.slice(stormsBefore)) {
       say(st, t('stormBlocks'));
@@ -920,7 +924,10 @@ export class GameScene extends Phaser.Scene {
       for (const p of s.storms) if (!s.tiles[indexOf(p.x, p.y)].revealed) want.set(`storm:${indexOf(p.x, p.y)}`, { key: 'storm', ...at(p, 0, 0), scale: 1.2 });
     }
     for (const p of s.dug) want.set(`dug:${indexOf(p.x, p.y)}`, { key: 'dug', ...at(p, 0, 6), scale: 0.9 });
-    if (s.riddle?.found) want.set(`treasure`, { key: 'treasure', ...at(s.riddle.at, 0, 4), scale: 0.9 });
+    // The treasure chest marks the player's own find; the rival's leaves a dug tile, once charted.
+    const r = s.riddle;
+    if (r?.found && !r.rival) want.set(`treasure`, { key: 'treasure', ...at(r.at, 0, 4), scale: 0.9 });
+    else if (r?.rival && s.tiles[indexOf(r.at.x, r.at.y)].revealed) want.set(`dug:${indexOf(r.at.x, r.at.y)}`, { key: 'dug', ...at(r.at, 0, 6), scale: 0.9 });
     for (const p of s.camps) want.set(`camp:${indexOf(p.x, p.y)}`, { key: 'camp', ...at(p, 9, -9), scale: 1 });
     // The rival's claims show through the paper, so you know which tiles will sell for half.
     for (const p of s.rival?.claims ?? []) want.set(`claim:${indexOf(p.x, p.y)}`, { key: 'claim', ...at(p, 11, -10), scale: 0.8 });
@@ -1228,7 +1235,7 @@ export class GameScene extends Phaser.Scene {
     second.setX(Math.min(PL + (bw * MILESTONES[1].pct) / 100, room - second.width / 2));
 
     // Turning back early: what the unused supplies would sell back for now.
-    const back = s.phase === 'survey' ? Math.min(s.supplies * SELL_BACK, chart.base) : 0;
+    const back = s.phase === 'survey' ? chart.sellBack : 0;
     const capped = s.phase === 'survey' && back < s.supplies * SELL_BACK;
     p.tag.setVisible(back > 0);
     set(p.tagText, `+${coins(back)}`);
@@ -1311,7 +1318,7 @@ export class GameScene extends Phaser.Scene {
     const com = s.commission;
     if (com) {
       const have = com.done + (chart.counts[com.terrain] ?? 0);
-      const on = chart.bonus > 0 ? `+${chart.bonus}` : com.left > 1 ? t('moreVoyages', { have, need: com.need, n: com.left - 1 }) : t('missed');
+      const on = chart.bonus > 0 ? `+${chart.bonus}` : carriesOver(s, chart) ? t('moreVoyages', { have, need: com.need, n: com.left - 1 }) : t('missed');
       rows.push({ label: t('commissionRow', { text: commissionText(com, 'short') }), value: on, color: chart.bonus > 0 ? GREEN : GREY });
     }
     if (chart.unused > 0) {
@@ -1350,7 +1357,7 @@ export class GameScene extends Phaser.Scene {
       makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, t('sellChart'), () => {
         if (!sellChart(this.state)) return;
         // The chart that completes the Royal Atlas sets a best if it is one.
-        if (this.state.phase === 'atlas' && this.state.royal) saveBest(this.state.royal.voyage);
+        if (this.state.phase === 'atlas' && this.state.royal) this.newBest = saveBest(this.state.royal.voyage);
         saveGame(this.state);
         sfx('coins');
         // The Royal Atlas's fanfare, else a bound page's jingle, else a chime for a milestone.
@@ -1373,8 +1380,8 @@ export class GameScene extends Phaser.Scene {
     const best = loadBest() ?? voyages;
     c.add(this.text(OVERLAY.x, top + 76, t('royalLine'), { size: 13, weight: 600, color: SLATE }).setOrigin(0.5));
     c.add(this.text(OVERLAY.x, top + 112, t('completedIn', { n: voyages }), { size: 22, weight: 900 }).setOrigin(0.5));
-    const record = best >= voyages ? t('newBest') : t('best', { n: best });
-    c.add(this.text(OVERLAY.x, top + 138, record, { size: 11, weight: 700, color: best >= voyages ? MAGENTA : GREY, ls: 1 }).setOrigin(0.5));
+    const record = this.newBest ? t('newBest') : t('best', { n: best });
+    c.add(this.text(OVERLAY.x, top + 138, record, { size: 11, weight: 700, color: this.newBest ? MAGENTA : GREY, ls: 1 }).setOrigin(0.5));
     // One page per kind, in the order the isles come, with the isle that bound it.
     const kinds = Object.keys(KINDS) as IsleKind[];
     const gap = (right - left) / kinds.length;

@@ -143,9 +143,10 @@ export function sightOf(s: GameState, terrain: Terrain) {
  * Surveys the fogged tile (x, y) for its cost: reveals it, walks the surveyor there (or to the
  * shore beside it, for sea), and from hills and peaks also reveals the tiles in sight for free.
  * Finds under the revealed tiles turn up at once. Every `RIVAL_PACE` surveys the rival takes a
- * turn. The voyage ends when nothing more can be done.
+ * turn. The voyage ends when nothing more can be done. Returns false when the tile can't be surveyed,
+ * else the storm finds that found no fogged tile to settle on (they pass).
  */
-export function survey(s: GameState, x: number, y: number) {
+export function survey(s: GameState, x: number, y: number): Point[] | false {
   if (s.phase !== 'survey' || !canSurvey(s, x, y) || !canAfford(s, { x, y })) return false;
   s.supplies -= costOf(s, x, y);
   const tile = tileAt(s, x, y)!;
@@ -174,6 +175,7 @@ export function survey(s: GameState, x: number, y: number) {
   }
   // Each storm settles on the nearest fogged tile within two steps, once the lookout has seen what
   // it can.
+  const passed: Point[] = [];
   for (const p of storms) {
     const near: Point[] = [];
     for (let dy = -2; dy <= 2; dy++) {
@@ -185,6 +187,7 @@ export function survey(s: GameState, x: number, y: number) {
     }
     near.sort((a, b) => dist(a, p) - dist(b, p));
     if (near.length) s.storms.push(near[0]);
+    else passed.push(p);
   }
 
   if (s.rival && ++s.rival.due >= RIVAL_PACE) {
@@ -192,7 +195,7 @@ export function survey(s: GameState, x: number, y: number) {
     rivalTurn(s);
   }
   endIfDone(s);
-  return true;
+  return passed;
 }
 
 /**
@@ -352,6 +355,10 @@ export function returnToPort(s: GameState) {
   s.chart = chartOf(s);
   s.phase = 'chart';
   s.storms = [];
+  // Once this isle is charted in full (storms cleared, so they hide nothing), the next one is
+  // rolled now, so the chart can tell whether a long commission carries over to it, and the sale
+  // lays the board out for it.
+  if (islandCharted(s)) s.next = makeIsland(s.island + 1);
   return true;
 }
 
@@ -419,7 +426,7 @@ export function chartOf(s: GameState): Chart {
 }
 
 /** What the unused supplies sell back for: `SELL_BACK` each, never more than the chart's tiles are worth. */
-export function sellBackOf(s: GameState, base = chartOf(s).base) {
+export function sellBackOf(s: GameState, base: number) {
   return Math.min(s.supplies * SELL_BACK, base);
 }
 
@@ -462,9 +469,11 @@ export function sellChart(s: GameState) {
   s.lastSale = s.chart.total;
   s.milestones += s.chart.milestones;
   if (s.chart.atlas) s.atlas.push({ island: s.island, kind: s.kind, voyages: s.voyage - s.isleStart + 1, tiles: isleProgress(s).total });
+  // A save from before the next isle was rolled at the port rolls it now.
+  if (islandCharted(s)) s.next ??= makeIsland(s.island + 1);
   const c = s.commission;
   if (c) {
-    if (s.chart.bonus > 0 || c.left <= 1) s.commission = null;
+    if (!carriesOver(s, s.chart)) s.commission = null;
     else {
       c.done += s.chart.counts[c.terrain] ?? 0;
       c.left -= 1;
@@ -476,12 +485,7 @@ export function sellChart(s: GameState) {
   s.treasure = 0;
   s.hand = null;
   s.hands = rollHands();
-  // Once this isle is charted in full, the next one is rolled now, so the board is laid out for it.
-  if (islandCharted(s)) s.next = makeIsland(s.island + 1);
   const fog = fogged(s.next?.tiles ?? s.tiles);
-  // A long commission carries over to a new isle only with a voyage left and the fog to fill it.
-  const run = s.commission;
-  if (run && s.next && (run.left <= 1 || (fog[run.terrain] ?? 0) < run.need - run.done)) s.commission = null;
   if (s.commission) s.board = [];
   else {
     s.board = rollBoard(fog);
@@ -491,6 +495,18 @@ export function sellChart(s: GameState) {
   if (royal) s.royal = { voyage: s.voyage };
   s.phase = royal ? 'atlas' : 'harbor';
   return true;
+}
+
+/**
+ * True when the running commission goes on after this chart is sold: it isn't paid, has a voyage
+ * left, and on a new isle (once this one is charted in full) that isle's fog can still fill it.
+ */
+export function carriesOver(s: GameState, chart: Chart) {
+  const c = s.commission;
+  if (!c || chart.bonus > 0 || c.left <= 1) return false;
+  if (!s.next) return true;
+  const done = c.done + (chart.counts[c.terrain] ?? 0);
+  return (fogged(s.next.tiles)[c.terrain] ?? 0) >= c.need - done;
 }
 
 /** Closes the Royal Atlas page and opens the harbor. */

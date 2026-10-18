@@ -118,7 +118,7 @@ function tryIsland(number: number, kind: IsleKind, k: KindInfo): Island | null {
 // Keys of `i18n/en.ts`: the state keeps the key, and the scene shows it with `t`.
 const RIVER_NAMES: TextKey[] = ['otterBrook', 'heronWater', 'millStream', 'alderBurn', 'kestrelRun', 'foxBeck'];
 const ROAD_NAMES: TextKey[] = ['portRoad', 'oldRoad', 'droversWay', 'saltRoad'];
-export const WOOD_NAMES: TextKey[] = ['thornwood', 'ashgrove', 'elderWood', 'blackthorn', 'hazelHolt', 'rookWood'];
+const WOOD_NAMES: TextKey[] = ['thornwood', 'ashgrove', 'elderWood', 'blackthorn', 'hazelHolt', 'rookWood'];
 
 /**
  * Finds the island's features in its terrain: each stretch of river, road or forest joined side to
