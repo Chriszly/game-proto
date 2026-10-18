@@ -39,8 +39,8 @@ export const STREAK_CHIP = { x: 565, y: 8, w: 98, h: 24 };
  * small phone they reach about 165 px in) and of the touch Slide and Jump buttons on the right.
  */
 export const MARGIN = { scrollY: 487, captionX: 458, captionY: 525, captionW: 540 };
-/** The boon cards at a checkpoint, by their centres: two of them, or three after a met dare. The road cards use the two. */
-export const CARDS = { xs: { 2: [330, 630], 3: [205, 480, 755] } as Record<number, number[]>, y: 300, w: 250, h: 260 };
+/** The boon cards at a checkpoint, by their centres: two of them, or three after a met dare (one once only Field Dressing is left). The road cards use the two. */
+export const CARDS = { xs: { 1: [480], 2: [330, 630], 3: [205, 480, 755] } as Record<number, number[]>, y: 300, w: 250, h: 260 };
 export const BUTTON = { w: 180, h: 40 };
 /** The round Slide and Jump buttons in the margin's bottom right, shown on touch screens: their centres and radius. */
 export const ACTION_BUTTONS = { y: 490, r: 40, slideX: 780, jumpX: 890 };

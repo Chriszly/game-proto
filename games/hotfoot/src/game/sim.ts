@@ -313,6 +313,8 @@ export function tick(s: GameState, dt: number) {
     if (r.hurtMs <= 0 && floor - r.h > STEP_UP) hurt(s, 'wall');
     r.h = floor;
     r.vh = Math.max(0, r.vh);
+    // A fall ends the step: nothing is stomped or picked up after it.
+    if (s.phase !== 'running') return;
   }
   const prevH = r.h;
   if (r.h > floor || r.vh > 0) {
@@ -335,6 +337,7 @@ export function tick(s: GameState, dt: number) {
   }
   stomp(s, prevH);
   bossContact(s, prevH);
+  if (s.phase !== 'running') return;
   if (grounded(s)) r.jumps = st.jumps;
   r.slideMs = Math.max(0, r.slideMs - dt);
   r.hurtMs = Math.max(0, r.hurtMs - dt);
@@ -349,6 +352,7 @@ export function tick(s: GameState, dt: number) {
   if (r.hurtMs <= 0 && s.phase === 'running') {
     const hit = s.traps.find((t) => touches(s, t));
     if (hit) hurt(s, hit.kind);
+    if (s.phase !== 'running') return;
   }
   if (rock && s.phase === 'running') {
     if (s.hits > hitsBefore) rock.x += ROCK.hit;
@@ -362,8 +366,9 @@ export function tick(s: GameState, dt: number) {
         rock.x = back - ROCK.start;
       } else rock.x = back;
     }
+    if (s.phase !== 'running') return;
   }
-  if (s.phase === 'running') visitShrines(s);
+  visitShrines(s);
 
   // Coins: picked up on touch, and drawn in from further off with a lodestone.
   const box = runnerBox(s);
@@ -406,9 +411,9 @@ export function tick(s: GameState, dt: number) {
 }
 
 /**
- * Two different boons the knight can still take (three when the stage's dare was met); Field
- * Dressing fills in when few are left. From the second checkpoint, a cursed boon may take the
- * second card. (The first checkpoint draws no curse, so its draws are the same as before curses
+ * Two different boons the knight can still take (three when the stage's dare was met); one Field
+ * Dressing fills in when few are left, so a run that has taken every boon is dealt fewer cards.
+ * From the second checkpoint, a cursed boon may take the second card. (The first checkpoint draws no curse, so its draws are the same as before curses
  * were added.)
  */
 export function rollChoices(s: GameState): BoonId[] {
@@ -416,7 +421,8 @@ export function rollChoices(s: GameState): BoonId[] {
   const picks: BoonId[] = [];
   const want = s.dare?.done ? 3 : 2;
   while (picks.length < want && pool.length > 0) picks.push(pool.splice(Math.floor(rand(s) * pool.length), 1)[0]);
-  while (picks.length < want) picks.push('mend');
+  // One Field Dressing at most: two of the same card would be no choice.
+  if (picks.length < want) picks.push('mend');
   const curses = BOON_IDS.filter((id) => BOONS[id].cursed && canTake(s, id));
   if (s.stage >= CURSE.from && curses.length > 0 && rand(s) < CURSE.chance) picks[1] = curses[Math.floor(rand(s) * curses.length)];
   return picks;
