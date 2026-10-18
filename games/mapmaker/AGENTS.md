@@ -96,7 +96,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `sightOf`, `survey`, `canAct`, `canCamp`, `pitchCamp`, `diggable`, `dig`, `claimed`,
   `valueOf`, `returnToPort`, `featuresDone`, `featureAt`, `artifactValue`, `chartOf`,
   `sellBackOf`, `chartable`, `isleProgress`, `milestonesDue`, `atlasKinds`, `royalComplete`,
-  `sellChart`, `closeAtlas`, `pickCommission`, `isPicked`, `hire`, `buy`, `islandCharted`,
+  `sellChart`, `carriesOver`, `closeAtlas`, `pickCommission`, `isPicked`, `hire`, `buy`, `islandCharted`,
   `setSail`, and the private `reveal` (turns up finds), `landRival` and `rivalTurn`, `fogged`,
   `rollCommission` and `rollBoard` with the `COMMISSIONS` table, and `rollHands`.
 - `src/game/save.ts`: `loadGame` (fills the new fields on older saves, and turns English feature
@@ -152,10 +152,12 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `pointer.worldX/Y`, since `pointer.x/y` are canvas pixels) and passed to
   `survey`, or else to `dig`; the scene slices `state.surveyed` before and after to know which
   tiles the survey charted and calls `announce`, `announceFinds` (notices for wrecks, caves,
-  storms and the riddle chart; a dig gets "Nothing here" or "Treasure!"), `announceFeatures` (a
+  storms (a "storm passes" for each storm find `survey` returns as having no tile to settle on)
+  and the riddle chart; a dig gets "Nothing here" or "Treasure!"), `announceFeatures` (a
   feature charted whole) and `announceRival` (the rival read the riddle or dug the treasure).
   Buttons call `pitchCamp`, `returnToPort`, `sellChart` (then `saveBest` when the Royal Atlas
-  page opens), `closeAtlas`, `newGame` (New atlas), `pickCommission` and `hire` (the harbor's
+  page opens; it returns whether the voyages set a new best, which the page shows, kept in
+  `newBest`, so a reload or a tie shows the best instead), `closeAtlas`, `newGame` (New atlas), `pickCommission` and `hire` (the harbor's
   `card`s), `buy` and `setSail`. Every successful action calls `saveGame`. The theme button
   (`makeThemeButton`, above the overlays' dim) calls `saveTheme` with the other theme and starts
   `Boot`, which bakes the icons again and restarts `Game` from the save, painting everything
@@ -173,7 +175,8 @@ voyages it took and a saved best, then Keep charting or New atlas.
     from `featureAt`), and once the riddle is known a dashed dig square and
     pill on charted ground under the pointer. Cost labels come from a reused pool of texts.
   - `syncMarks` keeps an image per map mark (finds on charted tiles, storms, camps, dug tiles,
-    the treasure, the rival's claims) and adds or removes them as the state changes.
+    the treasure chest for the player's own find, a dug mark on the riddle's tile once charted when
+    the rival dug it, the rival's claims) and adds or removes them as the state changes.
   - `agePopups` floats the value chips of ordinary surveys and the notices.
   - `ageSweep` plays a lookout's viewshed: the dotted ring grows over `RING_MS`, a chip appears on
     each tile as the ring passes, from `GATHER_AT` the chips fly into the magenta tally ("VIEWSHED
@@ -202,7 +205,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
 - Finds turn up in `reveal`, for tapped and lookout tiles alike: a wreck adds `WRECK_SUPPLIES`
   (supplies can pass `maxSupplies`), a cave adds to `artifacts`, a storm settles on the nearest
   fogged chartable tile within two steps after the lookout's reveal (`storms`, cleared by
-  `returnToPort`). Charting a ruins tile sets `riddle.known`.
+  `returnToPort`); `survey` returns the storm finds that found no tile, which pass. Charting a ruins tile sets `riddle.known`.
 - `camps` (the isle's base camps) are pitched on the surveyor's tile by `pitchCamp` for
   `CAMP_COST`; not on the port or sea, not twice. They reset on a new isle.
 - `riddle` (null when no tile could be told apart) holds the hidden tile `at`, its `clues` (each a
@@ -257,15 +260,16 @@ voyages it took and a saved best, then Keep charting or New atlas.
 - `commission` has `terrain`, `need`, `bonus`, `voyages`, `done` (tiles counted on earlier voyages)
   and `left` (voyages left, this one included). `newGame` rolls a one-voyage one (`rollCommission`)
   from terrains the fog still hides enough of (for sea, only unrevealed sea beside land, since open
-  sea can't be surveyed); it can be null. `sellChart` ends it when it paid or `left` was 1, else
+  sea can't be surveyed); it can be null. `sellChart` ends it unless `carriesOver` holds (not paid,
+  `left` above 1 and, on a new isle, that isle's fog can still fill `need - done`), else
   adds the voyage's count to `done` and counts `left` down; with none running it lays out `board`
   (`rollBoard`: up to `BOARD_SIZE` open commissions shuffled, the last made long when at least two
   are open and the fog holds `need * voyages + 1` tiles: two or three voyages for `LONG_PAY` times
   the pay a voyage) and picks `board[0]`; `pickCommission` swaps the pick at the harbor and
-  `isPicked` tells the UI which row it is. When the sale finds the isle charted in full it rolls the
-  next isle into `next` first and works the board out from that isle's fog, keeping a long
-  commission only when it has a voyage left and the new fog can still fill it; `setSail` lands on
-  `next` and clears it. `setSail` rolls a one-voyage commission only when none is set, which only a
+  `isPicked` tells the UI which row it is. When `returnToPort` finds the isle charted in full it rolls
+  the next isle into `next` (so the chart's commission row can say "missed" when it won't carry
+  over, from `carriesOver`), and the sale works the board out from that isle's fog; `setSail` lands
+  on `next` and clears it. `setSail` rolls a one-voyage commission only when none is set, which only a
   save from before `next` can reach.
 - All mutation is in `src/game/sim.ts`. `GameScene` only calls those functions.
 
@@ -280,7 +284,8 @@ before isle kinds and finds get `kind: 'green'` (atlas pages too), no camps, sto
 riddle, and zero artifacts and treasure. Saves from before features, the board, hands, the rival
 and the Royal Atlas get their `features` from `findFeatures`, an empty board and hands, no hand,
 no rival, no `royal`, one-voyage commissions and zeroed new chart fields. Saves from before the
-next isle was rolled at the sale get `next: null`. Saves from before the translations get their
+next isle was rolled get `next: null` (a save in the chart phase from before it was rolled at the
+port rolls it at the sale). Saves from before the translations get their
 feature names turned into keys and their riddle clues into `Clue`s. `mapmaker-best` holds
 the fewest voyages a Royal Atlas took, kept across New atlas. `mapmaker-theme` holds `'light'` or
 `'dark'` once the theme button has been used; until then the device's preference decides. The hub's settings live under the
@@ -290,7 +295,7 @@ shared `hub-settings` key.
 
 - `Math.random` is used only in `src/game/island.ts` (noise lattices, landmark and find spots, the
   riddle's first candidate tile) and in `rollCommission`, `rollBoard` and `rollHands` (called by
-  `sellChart`, which also calls `makeIsland` for the next isle once this one is charted in full). Rivers, the road, features and their
+  `sellChart`; `returnToPort` also calls `makeIsland` for the next isle once this one is charted in full). Rivers, the road, features and their
   names, storms' targets, the rival's every move and the riddle's clues are worked out from the
   tiles, without randomness. The art uses `rng()` and a sine hash; place names come from the island number
   and tile spots.
@@ -395,7 +400,7 @@ has no audio imports.
   harbour's upgrade texts and the chart rows are the tightest spots, so check a new text with
   `?lang=de`.
 - Add a terrain: add it to `Terrain` and `TERRAIN` in `terrain.ts` (and `CHART_ORDER`), give it a
-  height in `ELEV` and a colour in `TINT` in `src/art/map.ts` (the `Record`s force this) and a
+  height in `ELEV` and a colour in `TINTS` (both themes, `light` and `dark`) in `src/art/map.ts` (the `Record`s force this) and a
   symbol in `paintTerrain` and `swatch` (`icons.ts`), place it in `island.ts`, and add it to the
   test's `VALUE` and `COST` and the README table.
 - Add a find: add it to `Find` in `state.ts`, a row in `FINDS` in `island.ts`, its effect in
