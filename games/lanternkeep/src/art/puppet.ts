@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { DISTRICTS, type DistrictId, JAR, type Spot } from '../game/places';
 import type { LanternKind, MothKind, NightKind } from '../game/state';
-import { sharpRes } from '../../../../shared/scaling';
+import { sharpRes, viewFrame, viewSize } from '../../../../shared/scaling';
 import { CALL_TAG, DUSK_BAR as DUSK, GUST_TAG, KIND_TAG, MOVE_CARDS, MOVE_PANEL, NIGHT_PANEL, ORDER, SHOP, SMALL_PANEL } from '../scenes/layout';
 
 export { DUSK };
@@ -20,6 +20,8 @@ export { DUSK };
 export const PI = Math.PI;
 /** Canvas pixels per view pixel for sprites and plaques: 2, or more on a big screen (set by `bakeTextures`). */
 export let RES = 2;
+/** Canvas pixels per view pixel for the HUD bar, which spans the view: RES, or less on a wide view. */
+export let HUD_RES = 2;
 /** Canvas pixels per view pixel for the full-view layers: 1, or more on a big screen. */
 export let BACK_RES = 1;
 /** The black of the card. */
@@ -103,6 +105,15 @@ function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: () 
 
 const W = 960;
 const H = 540;
+/**
+ * The view around the designed 960x540 frame (set by `bakeTextures`): the view is `VW` x `VH`
+ * and the frame sits `FX`, `FY` in from its top-left, so the view spans -FX to W + FX and -FY to
+ * H + FY in the painters' (frame) pixels. The full-view layers paint over all of it.
+ */
+export let FX = 0;
+export let FY = 0;
+let VW = W;
+let VH = H;
 const GROUND = 500;
 const WALL = { x: 40, y: 320, w: 880 };
 const TOWERS = [
@@ -133,7 +144,7 @@ function paintScreen(stops: string[], lamp: number) {
   const sky = ctx.createLinearGradient(0, 40, 0, 540);
   [0, 0.35, 0.62, 0.82, 1].forEach((t, i) => sky.addColorStop(t, stops[i]));
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(-FX, -FY, VW, VH);
   // The lamp behind the screen: a warm hot spot low and centre.
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -141,14 +152,14 @@ function paintScreen(stops: string[], lamp: number) {
   hs.addColorStop(0, `rgba(255,200,120,${lamp})`);
   hs.addColorStop(1, 'rgba(255,200,120,0)');
   ctx.fillStyle = hs;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(-FX, -FY, VW, VH);
   ctx.restore();
   // Paper fibres.
   reseed(9);
   ctx.lineWidth = 0.5;
-  for (let i = 0; i < 900; i++) {
-    const x = rnd() * W;
-    const y = rnd() * H;
+  for (let i = 0; i < Math.round((900 * VW * VH) / (W * H)); i++) {
+    const x = -FX + rnd() * VW;
+    const y = -FY + rnd() * VH;
     const l = 2 + rnd() * 9;
     const a = rnd() * PI;
     ctx.strokeStyle = rnd() < 0.5 ? 'rgba(255,240,220,0.06)' : 'rgba(30,10,30,0.06)';
@@ -164,7 +175,12 @@ function paintHills() {
   ctx.save();
   ctx.filter = 'blur(1.5px)';
   poly(
-    [[0, 440], [60, 410], [140, 430], [230, 396], [330, 424], [460, 400], [560, 420], [700, 392], [820, 418], [900, 404], [960, 420], [960, 540], [0, 540]],
+    [
+      ...(FX > 0 ? ([[-FX, 424], [-FX / 2, 400]] as P[]) : []),
+      [0, 440], [60, 410], [140, 430], [230, 396], [330, 424], [460, 400], [560, 420], [700, 392], [820, 418], [900, 404], [960, 420],
+      ...(FX > 0 ? ([[W + FX / 2, 398], [W + FX, 422]] as P[]) : []),
+      [W + FX, H + FY], [-FX, H + FY],
+    ],
     'rgba(40,20,40,0.55)',
   );
   ctx.restore();
@@ -173,7 +189,7 @@ function paintHills() {
 /** Grass tufts along the ground edge. */
 function paintGrass() {
   reseed(4);
-  for (let x = 0; x < W; x += 6) {
+  for (let x = -FX; x < W + FX; x += 6) {
     const h = 3 + rnd() * 7;
     poly([[x, 501], [x + 2 + rnd() * 2, 500 - h], [x + 5, 501]], INK);
   }
@@ -404,7 +420,7 @@ function paintScenery(id: DistrictId) {
   const path = () => {
     ctx.beginPath();
     card(spots);
-    r(0, GROUND, W, 40);
+    r(-FX, GROUND, VW, H + FY - GROUND);
   };
   // The card sits a hair off the screen, so its edge blooms a soft shadow.
   ctx.save();
@@ -424,9 +440,9 @@ function paintScenery(id: DistrictId) {
 /** Stars punched through the screen, on their own layer so they can come out as night falls. */
 function paintStars() {
   reseed(5);
-  for (let i = 0; i < 55; i++) {
-    const x = rnd() * W;
-    const y = 48 + rnd() * 240;
+  for (let i = 0; i < Math.round((55 * VW * (240 + FY)) / (W * 240)); i++) {
+    const x = -FX + rnd() * VW;
+    const y = 48 - FY + rnd() * (240 + FY);
     const r = 0.5 + rnd() * 1.1;
     glow(x, y, r * 5, '#fff0d0', 0.35);
     dot(x, y, r, 'rgba(255,248,230,0.9)');
@@ -733,8 +749,8 @@ function paintSkyLantern() {
 /** Mist banks drifting across the castle on a foggy night: soft pale bands, full screen at 1x. */
 function paintFog() {
   reseed(21);
-  for (let i = 0; i < 14; i++) {
-    const x = rnd() * W;
+  for (let i = 0; i < Math.round((14 * VW) / W); i++) {
+    const x = -FX + rnd() * VW;
     const y = 160 + rnd() * 330;
     const rx = 140 + rnd() * 160;
     ctx.save();
@@ -936,13 +952,13 @@ function paintCoin() {
 /** The HUD: a black proscenium strip with a scalloped lower edge and the dusk bar's trough. */
 function paintHud() {
   ctx.fillStyle = INK;
-  ctx.fillRect(0, 0, W, 38);
-  for (let x = 0; x < W; x += 12) {
+  ctx.fillRect(-FX, 0, VW, 38);
+  for (let x = -FX; x < W + FX; x += 12) {
     ctx.beginPath();
     ctx.arc(x + 6, 38, 6, 0, PI);
     ctx.fill();
   }
-  for (let x = 0; x < W; x += 12) dot(x + 6, 38, 1.2, 'rgba(255,180,110,0.6)');
+  for (let x = -FX; x < W + FX; x += 12) dot(x + 6, 38, 1.2, 'rgba(255,180,110,0.6)');
   const D = DUSK;
   rrect(D.x, D.y, D.w, D.h, 8);
   ctx.fillStyle = '#2a2040';
@@ -1010,17 +1026,26 @@ function paintSaveTag() {
  * the keep's; the scene bakes another district's the first time the keep moves there.
  */
 export function bakeScenery(scene: Phaser.Scene, id: DistrictId) {
-  bake(scene, `castle-${id}`, W, H, () => paintScenery(id), 0, 0, BACK_RES);
+  bake(scene, `castle-${id}`, VW, VH, () => paintScenery(id), FX, FY, BACK_RES);
 }
 
 /** Bakes every texture the scene uses. */
 export function bakeTextures(scene: Phaser.Scene) {
-  // Sized by the widest texture of each kind, the full-view layers and the HUD bar.
+  // The full-view layers cover the whole view, whatever the screen's shape, with the designed
+  // frame (where the castle stands) in its middle.
+  const view = viewSize(scene);
+  const frame = viewFrame(scene);
+  VW = view.width;
+  VH = view.height;
+  FX = frame.x;
+  FY = frame.y;
+  // Sized by the widest texture of each kind: the sprites and plaques, the HUD bar and the full-view layers.
   RES = sharpRes(W, 48, 2);
-  BACK_RES = sharpRes(W, H, 1);
-  SCREENS.forEach((key, i) => bake(scene, key, W, H, () => paintScreen(SCREEN_STOPS[i], [0.4, 0.35, 0.18][i]), 0, 0, BACK_RES));
+  HUD_RES = sharpRes(VW, 48, 2);
+  BACK_RES = sharpRes(VW, VH, 1);
+  SCREENS.forEach((key, i) => bake(scene, key, VW, VH, () => paintScreen(SCREEN_STOPS[i], [0.4, 0.35, 0.18][i]), FX, FY, BACK_RES));
   bakeScenery(scene, 'keep');
-  bake(scene, 'stars', W, 300, paintStars, 0, 0, BACK_RES);
+  bake(scene, 'stars', VW, 300 + FY, paintStars, FX, FY, BACK_RES);
   bake(scene, 'moon', 100, 100, paintMoon, 50, 50);
   bake(scene, 'glow', 128, 128, () => glow(64, 64, 64, '#ffbe6a', 1), 0, 0, 1);
   bake(scene, 'glow-pale', 128, 128, () => glow(64, 64, 64, '#ffe0a0', 1), 0, 0, 1);
@@ -1044,12 +1069,12 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'sky-lantern', 56, 56, paintSkyLantern, 28, 28);
   // The second jar (LK14), drawn by the scene where JARS puts it; its foot is 22 below the centre.
   bake(scene, 'jar', 48, 56, () => paintJar(0, 0), 24, 28);
-  bake(scene, 'fog', W, H, paintFog, 0, 0, BACK_RES);
-  bake(scene, 'bunting', W, H, paintBunting, 0, 0, BACK_RES);
+  bake(scene, 'fog', VW, VH, paintFog, FX, FY, BACK_RES);
+  bake(scene, 'bunting', VW, VH, paintBunting, FX, FY, BACK_RES);
   for (const kind of ['clear', 'fog', 'feast', 'storm'] as const satisfies readonly NightKind[]) {
     bake(scene, `kind-${kind}`, 32, 32, () => paintKindIcon(kind), 16, 16);
   }
-  bake(scene, 'hud', W, 48, paintHud, 0, 0);
+  bake(scene, 'hud', VW, 48, paintHud, FX, 0, HUD_RES);
   bake(scene, 'dusk-fill', DUSK.w, DUSK.h, paintDuskFill);
   bake(scene, 'dusk-rim', DUSK.w + 2, DUSK.h + 2, paintDuskRim);
   bake(scene, 'sun', 40, 40, () => {

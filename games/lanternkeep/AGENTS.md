@@ -184,7 +184,7 @@ File map (`src/`):
   `musicPart`). See Sound below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
-  `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
+  `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the world, order card, gust, owl and window plaques, HUD and
   panels (night, move, peril, game over, festival) once; `update` ticks the rules, turns `state.events`
@@ -239,15 +239,28 @@ File map (`src/`):
 - `ui/Button.ts`: `makeButton`, the carved card button (texture swap on hover, a `Zone` for taps).
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/audio.ts` (`sounds`, `ui`, `playMusic`, `playSting`), `shared/settings.ts` (`byDifficulty`,
+`shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewSize`, `viewFrame`), `shared/audio.ts` (`sounds`, `ui`, `playMusic`, `playSting`), `shared/settings.ts` (`byDifficulty`,
 `settings`) and `shared/i18n.ts` (`translator`, `byLanguage`, `formatNumber`, `language`,
 `Translation`).
 
 Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
-4K screen) and zooms the one camera to match from its top-left, so the game keeps its 960x540
-coordinates. The camera never scrolls and nothing reads `pointer.x/y` or `this.scale` (every tap
-is a `Zone`), so no `scrollingCamera`, `splitHudCamera` or `viewPoint` is needed; use `viewSize`
-and `viewPoint` if that changes. Texts take `renderScale` as their resolution, so don't set one.
+4K screen) and zooms the one camera to match from its top-left. With `fill: true` the view also
+takes the screen's shape (960x540 at its smallest, up to 1296 wide on an ultrawide or 720 tall on a
+4:3 tablet). The world, the rules and the panels keep their 960x540 coordinates: `GameScene.create`
+scrolls the camera by (-`FX`, -`FY`), so that frame (`viewFrame`) sits in the middle of the view,
+and the scene's `left`, `right`, `top` and `bottom` are the view's edges in world pixels.
+`bakeTextures` reads `viewSize` and `viewFrame` and sets `FX`, `FY` (exported from
+`art/puppet.ts`): the full-view layers (screens, scenery, stars, fog, bunting) are baked at the
+view's size and painted over all of it (the hills, grass, ground strip, paper fibres, stars and fog
+reach into the extra bands), and the `hud` bar spans the view at `HUD_RES`. The HUD's left group
+(night, hearths, coins, cask) and the order card are pinned to the view's left edge, lanterns lit
+and the kind plaque to its right, all under its top; the dusk bar stays in the middle. The dims
+behind panels (`dim`) cover the whole view, and the gust, owl and call plaques, the gust's wind,
+the owl's row line, the rain and the festival's sky lanterns use the view's edges. Bats and the owl
+fade in over the band just outside the frame (`edgeFade`), so they don't pop into sight on a wide
+view. At 960x540 the frame is the whole view and nothing moves. Every tap is a `Zone`, which reads
+the world through the camera, so no `viewPoint` is needed; nothing reads `pointer.x/y` or
+`this.scale`. Texts take `renderScale` as their resolution, so don't set one.
 On a phone held upright a hint asks to turn it. `e2e/screens.spec.ts` at the root opens the game
 on five screens.
 
@@ -408,6 +421,8 @@ scene. Under browser automation nothing plays, so the playthrough is unchanged.
   `MOTH_KINDS`, `LANTERN_SPOTS`, `JAR`, `mothRest`, `gustsFor`, `GUST_WARN_MS` or `CLOSE_CALL`.
 - It saves `playthrough-0-dusk`, `-1-first-lantern`, `-2-gust-shield`, `-3-all-lit` and
   `-4-night` screenshots; copy them into `docs/screenshots/` when the look changes.
+- `docs/screenshots/fill-ultrawide.webp` and `fill-tablet.webp` show the first dusk filling a
+  2560x1080 and a 1024x768 screen.
 - `cover.png` and `docs/screenshots/loop-herald-order.webp`, `loop-gust-shield.webp` and
   `loop-close-call.webp` were staged with a scratch Playwright script against the dev server: it
   sets `state` fields through `window.game` (night 4 at 17 s left, eight lanterns, four moths, a
@@ -496,6 +511,9 @@ scene. Under browser automation nothing plays, so the playthrough is unchanged.
 - `report.festival` is true only on the one nightfall that reaches the festival; `state.festival`
   stays true after, so the panel says the festival was held and later nights never reach it again.
 - A new full-view texture goes through `backdrop` (or `setScale(1 / BACK_RES)`), a new sprite
-  through `sprite` (or `setScale(1 / RES)`), or it shows at the wrong size on a big screen.
+  through `sprite` (or `setScale(1 / RES)`), or it shows at the wrong size on a big screen. Bake a
+  full-view texture at the view's size (`VW` x `VH`, offset by `FX`, `FY`) and paint it over
+  -`FX` to 960 + `FX` and -`FY` to 540 + `FY`, or it leaves an empty band on a screen of another
+  shape. Pin new HUD items to `left`/`right`/`top`, not to 0 or `VIEW.w`.
 - The test forces Phaser's canvas renderer; additive glows (`BlendModes.ADD`) and `setCrop` work
   there, tints do not, so the art swaps textures instead of tinting.

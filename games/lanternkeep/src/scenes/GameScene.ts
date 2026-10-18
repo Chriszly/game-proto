@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { formatNumber, language } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
-import { BACK_RES, bakeScenery, DUSK, INK, INK_HEX, PAD, RES, SCREENS } from '../art/puppet';
+import { BACK_RES, bakeScenery, DUSK, FX, FY, HUD_RES, INK, INK_HEX, PAD, RES, SCREENS } from '../art/puppet';
 import { DISTRICT_IDS, DISTRICTS, type DistrictId, JARS, LANTERN_SPOTS } from '../game/places';
 import { loadBest, loadBestPeril, saveBest, saveBestPeril } from '../game/save';
 import {
@@ -87,6 +87,13 @@ const POPUP_MS = 1200;
 const PANEL_DELAY_MS = 1500;
 
 /** A pay multiplier with two decimals, like 1.25 (1,25 in German). */
+/**
+ * How much of a puppet that flies in from beyond the designed frame (a bat, the owl) shows at `x`:
+ * none where it starts, `margin` outside the frame, and all of it once inside, so it doesn't pop
+ * into sight on a view wider than the frame.
+ */
+const edgeFade = (x: number, margin: number) => Phaser.Math.Clamp(Math.min(x + margin, VIEW.w + margin - x) / margin, 0, 1);
+
 const mult2 = (n: number) => formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type TextOpts = { size: number; color?: string; bold?: boolean; glow?: boolean; stroke?: boolean };
@@ -210,12 +217,33 @@ export class GameScene extends Phaser.Scene {
   private batMarks!: Phaser.GameObjects.Graphics;
   private festival!: Phaser.GameObjects.Container;
   private skyLanterns: Phaser.GameObjects.Image[] = [];
+  /**
+   * The view's edges in world pixels. The world and the panels keep the designed 960x540 frame,
+   * which the camera centres in a view of any shape (scrolled by -FX, -FY), so the view spans
+   * `left` to `right` and `top` to `bottom`; the HUD, the order card and the kind plaque are pinned
+   * to its edges. At 960x540 they are the frame's own edges.
+   */
+  private left = 0;
+  private right: number = VIEW.w;
+  private top = 0;
+  private bottom: number = VIEW.h;
+  /** Where the order card and the kind plaque sit, pinned under the HUD at the view's corners. */
+  private orderAt = { x: ORDER.x, y: ORDER.y };
+  private kindAt = { x: KIND_TAG.x, y: KIND_TAG.y };
 
   constructor() {
     super('Game');
   }
 
   create() {
+    // The designed frame sits in the middle of the view (see `FX`, `FY` in art/puppet.ts).
+    this.cameras.main.setScroll(-FX, -FY);
+    this.left = -FX;
+    this.right = VIEW.w + FX;
+    this.top = -FY;
+    this.bottom = VIEW.h + FY;
+    this.orderAt = { x: ORDER.x - FX, y: ORDER.y - FY };
+    this.kindAt = { x: KIND_TAG.x + FX, y: KIND_TAG.y - FY };
     this.state = newGame(loadBest(), loadBestPeril());
     this.createWorld();
     this.createOrderCard();
@@ -267,7 +295,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A full-view layer painted at BACK_RES, drawn over the whole view from its top-left. */
   private backdrop(key: string) {
-    return this.add.image(0, 0, key).setOrigin(0).setScale(1 / BACK_RES);
+    return this.add.image(this.left, this.top, key).setOrigin(0).setScale(1 / BACK_RES);
   }
 
   private createWorld() {
@@ -303,7 +331,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createKindTag() {
-    const { x, y } = KIND_TAG;
+    const { x, y } = this.kindAt;
     this.add.image(x - PAD, y - PAD, 'kind-tag').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
     this.kindIcon = this.sprite(x + 22, y + 20, 'kind-clear').setDepth(UI_DEPTH);
     this.kindName = this.label(x + 44, y + 14, '', { size: 12.5, bold: true, color: '#ffd08a', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
@@ -311,7 +339,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createOrderCard() {
-    const { x, y, w } = ORDER;
+    const { x, y } = this.orderAt;
+    const { w } = ORDER;
     this.add.image(x - PAD, y - PAD, 'order-card').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
     this.label(x + 42, y + 15, t('heraldsOrder'), { size: 10, bold: true, color: '#ffd08a', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.orderText = this.label(x + 42, y + 29, '', { size: 10.5, glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
@@ -347,27 +376,37 @@ export class GameScene extends Phaser.Scene {
     this.callTag = this.add.container(0, 0, [bg, this.callTitle, this.callNote]).setDepth(8.5).setVisible(false);
   }
 
+  /** The bar across the top of the view: its left group pinned to the left edge, lanterns lit to the right, dusk in the middle. */
   private createHud() {
-    this.add.image(0, 0, 'hud').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
-    this.caskIcon = this.sprite(CASK_HUD.x, CASK_HUD.y, 'cask-full').setDepth(UI_DEPTH);
-    this.caskText = this.label(CASK_HUD.x + 15, CASK_HUD.y, '', { size: 13, bold: true, color: '#ffe4b8' }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
-    this.nightText = this.label(14, 20, '', { size: 18, bold: true, color: '#ffc870', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
-    for (let i = 0; i < LIVES; i++) this.hearths.push(this.sprite(130 + i * 22, 20, 'hearth-lit').setDepth(UI_DEPTH));
-    this.sprite(221, 20, 'coin').setDepth(UI_DEPTH);
-    this.coinsText = this.label(236, 20, '', { size: 18, bold: true, color: '#ffe4b8', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
-    this.duskFill = this.add.image(DUSK.x, DUSK.y, 'dusk-fill').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
-    this.add.image(DUSK.x - 1, DUSK.y - 1, 'dusk-rim').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
-    this.duskSun = this.sprite(DUSK.x, DUSK.y + 8, 'sun').setDepth(UI_DEPTH).setBlendMode(Phaser.BlendModes.ADD);
-    this.duskText = this.label(DUSK.x + DUSK.w / 2 + 14, DUSK.y + 8.5, '', { size: 12, bold: true, color: '#fff3dc', stroke: true })
+    const l = this.left;
+    const y = this.top;
+    this.add.image(l, y, 'hud').setOrigin(0).setScale(1 / HUD_RES).setDepth(UI_DEPTH);
+    this.caskIcon = this.sprite(l + CASK_HUD.x, y + CASK_HUD.y, 'cask-full').setDepth(UI_DEPTH);
+    this.caskText = this.label(l + CASK_HUD.x + 15, y + CASK_HUD.y, '', { size: 13, bold: true, color: '#ffe4b8' }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    this.nightText = this.label(l + 14, y + 20, '', { size: 18, bold: true, color: '#ffc870', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    for (let i = 0; i < LIVES; i++) this.hearths.push(this.sprite(l + 130 + i * 22, y + 20, 'hearth-lit').setDepth(UI_DEPTH));
+    this.sprite(l + 221, y + 20, 'coin').setDepth(UI_DEPTH);
+    this.coinsText = this.label(l + 236, y + 20, '', { size: 18, bold: true, color: '#ffe4b8', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    this.duskFill = this.add.image(DUSK.x, y + DUSK.y, 'dusk-fill').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
+    this.add.image(DUSK.x - 1, y + DUSK.y - 1, 'dusk-rim').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
+    this.duskSun = this.sprite(DUSK.x, y + DUSK.y + 8, 'sun').setDepth(UI_DEPTH).setBlendMode(Phaser.BlendModes.ADD);
+    this.duskText = this.label(DUSK.x + DUSK.w / 2 + 14, y + DUSK.y + 8.5, '', { size: 12, bold: true, color: '#fff3dc', stroke: true })
       .setOrigin(0.5)
       .setDepth(UI_DEPTH + 1);
-    this.needText = this.label(VIEW.w - 14, 20, '', { size: 15, color: '#c9a882' }).setOrigin(1, 0.5).setDepth(UI_DEPTH);
-    this.litText = this.label(VIEW.w - 76, 20, '', { size: 18, bold: true, color: '#ffc870', glow: true }).setOrigin(1, 0.5).setDepth(UI_DEPTH);
+    this.needText = this.label(this.right - 14, y + 20, '', { size: 15, color: '#c9a882' }).setOrigin(1, 0.5).setDepth(UI_DEPTH);
+    this.litText = this.label(this.right - 76, y + 20, '', { size: 18, bold: true, color: '#ffc870', glow: true }).setOrigin(1, 0.5).setDepth(UI_DEPTH);
+  }
+
+  /** A dimming veil over the whole view, under a panel; it takes the taps the panel doesn't. */
+  private dim(alpha: number) {
+    const w = this.right - this.left;
+    const h = this.bottom - this.top;
+    return this.add.rectangle(this.left + w / 2, this.top + h / 2, w, h, 0x000000, alpha).setInteractive();
   }
 
   private createNightPanel() {
     const { x, y, w, h } = NIGHT_PANEL;
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
+    const dim = this.dim(0.35);
     const panel = this.add.image(x - w / 2 - PAD, y - h / 2 - PAD, 'panel').setOrigin(0).setScale(1 / RES);
     this.nightTitle = this.label(x, y - h / 2 + 32, '', { size: 26, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
     this.tallyText = this.label(x, y - h / 2 + 116, '', { size: 13 }).setOrigin(0.5).setAlign('center').setLineSpacing(3);
@@ -404,7 +443,7 @@ export class GameScene extends Phaser.Scene {
   private createMovePanel() {
     const cx = VIEW.w / 2;
     const cy = VIEW.h / 2;
-    const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
+    const dim = this.dim(0.35);
     const panel = this.add.image(cx - MOVE_PANEL.w / 2 - PAD, cy - MOVE_PANEL.h / 2 - PAD, 'panel-move').setOrigin(0).setScale(1 / RES);
     this.moveTitle = this.label(cx, cy - MOVE_PANEL.h / 2 + 32, '', { size: 26, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
     const sub = this.label(cx, cy - MOVE_PANEL.h / 2 + 66, t('moveSub'), {
@@ -438,7 +477,7 @@ export class GameScene extends Phaser.Scene {
   private createPerilPanel() {
     const cx = VIEW.w / 2;
     const cy = VIEW.h / 2;
-    const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
+    const dim = this.dim(0.35);
     const panel = this.add.image(cx - MOVE_PANEL.w / 2 - PAD, cy - MOVE_PANEL.h / 2 - PAD, 'panel-move').setOrigin(0).setScale(1 / RES);
     this.perilTitle = this.label(cx, cy - MOVE_PANEL.h / 2 + 32, '', { size: 26, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
     const sub = this.label(cx, cy - MOVE_PANEL.h / 2 + 68, t('perilSub'), {
@@ -477,7 +516,7 @@ export class GameScene extends Phaser.Scene {
   private createGameOver() {
     const cx = VIEW.w / 2;
     const cy = VIEW.h / 2;
-    const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.6).setInteractive();
+    const dim = this.dim(0.6);
     const panel = this.add.image(cx - SMALL_PANEL.w / 2 - PAD, cy - SMALL_PANEL.h / 2 - PAD, 'panel-small').setOrigin(0).setScale(1 / RES);
     const title = this.label(cx, cy - 76, t('keepDark'), { size: 28, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
     this.gameOverText = this.label(cx, cy - 10, '', { size: 16 }).setOrigin(0.5).setAlign('center');
@@ -489,9 +528,9 @@ export class GameScene extends Phaser.Scene {
   private createFestival() {
     const cx = VIEW.w / 2;
     const cy = VIEW.h / 2;
-    const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
+    const dim = this.dim(0.35);
     for (let k = 0; k < 12; k++) {
-      const sky = this.sprite(40 + ((k * 331) % 880), 0, 'sky-lantern').setScale((0.7 + (k % 3) * 0.2) / RES);
+      const sky = this.sprite(this.left + 40 + ((k * 331) % (this.right - this.left - 80)), 0, 'sky-lantern').setScale((0.7 + (k % 3) * 0.2) / RES);
       this.skyLanterns.push(sky);
     }
     const panel = this.add.image(cx - SMALL_PANEL.w / 2 - PAD, cy - SMALL_PANEL.h / 2 - PAD, 'panel-small').setOrigin(0).setScale(1 / RES);
@@ -574,15 +613,15 @@ export class GameScene extends Phaser.Scene {
     this.kindName.setText(t(kind.name));
     this.kindBlurb.setText(t(kind.blurb));
     const still = settings.reduceMotion;
-    this.fog.setVisible(s.kind === 'fog').setX(still ? 0 : Math.sin(this.clock / 6000) * 30);
+    this.fog.setVisible(s.kind === 'fog').setX(this.left + (still ? 0 : Math.sin(this.clock / 6000) * 30));
     this.bunting.setVisible(s.kind === 'feast');
     const g = this.rain.clear();
     if (s.kind !== 'storm') return;
     // Slanted streaks falling across the screen; reduce motion holds them still.
     const fall = still ? 0 : this.clock * 0.5;
-    for (let k = 0; k < 90; k++) {
-      const x = (k * 137 + fall * 0.4) % (VIEW.w + 40);
-      const y = (((k * 211) % VIEW.h) + fall) % VIEW.h;
+    for (let k = 0; k < Math.round((90 * (this.right - this.left) * (this.bottom - this.top)) / (VIEW.w * VIEW.h)); k++) {
+      const x = this.left + ((k * 137 + fall * 0.4) % (this.right - this.left + 40));
+      const y = this.top + ((((k * 211) % VIEW.h) + fall) % (this.bottom - this.top));
       g.lineStyle(1, 0xc8d4ff, 0.3).lineBetween(x, y, x - 6, y + 15);
     }
   }
@@ -707,7 +746,7 @@ export class GameScene extends Phaser.Scene {
     const T = s.lanterns[gust.target];
     const still = settings.reduceMotion;
     const fromRight = T.x >= VIEW.w / 2;
-    const edge = fromRight ? VIEW.w - 4 : 4;
+    const edge = fromRight ? this.right - 4 : this.left + 4;
     const dir = fromRight ? 1 : -1;
     const curl = (y0: number, bend: number, width: number, alpha: number, phase: number) => {
       const end = new Phaser.Math.Vector2(T.x + 30 * dir, T.y - 4);
@@ -738,13 +777,13 @@ export class GameScene extends Phaser.Scene {
     }
     // The plaque beside it, clear of the order card and the HUD.
     // Beside the lantern on the windward side, or the other side when the screen edge is too near.
-    const right = Math.min(T.x + 38, VIEW.w - 4 - GUST_TAG.w);
-    const left = Math.max(T.x - 38 - GUST_TAG.w, 4);
+    const right = Math.min(T.x + 38, this.right - 4 - GUST_TAG.w);
+    const left = Math.max(T.x - 38 - GUST_TAG.w, this.left + 4);
     let tx = fromRight ? right : left;
     if (fromRight && tx < T.x + 30) tx = left;
     if (!fromRight && tx + GUST_TAG.w > T.x - 30) tx = right;
-    let ty = Math.max(46, T.y - 80);
-    if (tx < ORDER.x + ORDER.w + 6 && ty < ORDER.y + ORDER.h + 6) ty = ORDER.y + ORDER.h + 8;
+    let ty = Math.max(this.top + 46, T.y - 80);
+    if (tx < this.orderAt.x + ORDER.w + 6 && ty < this.orderAt.y + ORDER.h + 6) ty = this.orderAt.y + ORDER.h + 8;
     this.gustTag.setPosition(tx, ty);
     const secs = Math.max(1, Math.ceil((s.duskMs - gust.atMs) / 1000));
     this.gustTitle.setText(t('gustIn', { n: secs }));
@@ -770,7 +809,7 @@ export class GameScene extends Phaser.Scene {
     if (owl.x === null) {
       // A dashed pale line along the row, and a ring round each lantern on it.
       const dash = still ? 0 : (this.clock / 40) % 16;
-      for (let x = -dash; x < VIEW.w; x += 16) g.lineStyle(1.6, 0xffe6c0, 0.7).lineBetween(x, owl.y - 36, Math.min(VIEW.w, x + 9), owl.y - 36);
+      for (let x = this.left - dash; x < this.right; x += 16) g.lineStyle(1.6, 0xffe6c0, 0.7).lineBetween(x, owl.y - 36, Math.min(this.right, x + 9), owl.y - 36);
       for (const i of owl.lanterns) {
         const l = s.lanterns[i];
         const spin = still ? 0 : this.clock / 2000;
@@ -780,9 +819,9 @@ export class GameScene extends Phaser.Scene {
         }
       }
       // The plaque at the right end of the row, under the HUD and clear of the kind plaque.
-      const tx = VIEW.w - 4 - GUST_TAG.w;
-      let ty = Math.max(46, owl.y - 84);
-      if (ty < KIND_TAG.y + KIND_TAG.h + 6) ty = KIND_TAG.y + KIND_TAG.h + 8;
+      const tx = this.right - 4 - GUST_TAG.w;
+      let ty = Math.max(this.top + 46, owl.y - 84);
+      if (ty < this.kindAt.y + KIND_TAG.h + 6) ty = this.kindAt.y + KIND_TAG.h + 8;
       this.owlTag.setPosition(tx, ty);
       const secs = Math.max(1, Math.ceil((s.duskMs - owl.atMs) / 1000));
       this.owlTitle.setText(t('owlIn', { n: secs }));
@@ -791,7 +830,7 @@ export class GameScene extends Phaser.Scene {
     }
     const wingsUp = still || Math.floor(this.clock / 140) % 2 === 0;
     const bob = still ? 0 : Math.sin(this.clock / 180) * 4;
-    this.owl.setTexture(wingsUp ? 'owl-up' : 'owl-down').setPosition(owl.x, owl.y - 30 + bob);
+    this.owl.setTexture(wingsUp ? 'owl-up' : 'owl-down').setPosition(owl.x, owl.y - 30 + bob).setAlpha(edgeFade(owl.x, 40));
   }
 
   /** A window's call: a pulsing ring on the lantern it asks for, and a plaque with the countdown. */
@@ -806,11 +845,12 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(2, 0xffd890, 0.9 * pulse).strokeCircle(l.x, l.y, 33);
     // Beside the lantern, on the side with room, clear of the order card and the kind plaque.
     let tx = l.x + 38;
-    if (tx + CALL_TAG.w > VIEW.w - 4) tx = l.x - 38 - CALL_TAG.w;
-    let ty = Math.max(46, l.y + 30);
-    if (ty + CALL_TAG.h > VIEW.h - 4) ty = l.y - 80;
-    if (tx < ORDER.x + ORDER.w + 6 && ty < ORDER.y + ORDER.h + 6) ty = ORDER.y + ORDER.h + 8;
-    if (tx + CALL_TAG.w > KIND_TAG.x - 6 && ty < KIND_TAG.y + KIND_TAG.h + 6) ty = KIND_TAG.y + KIND_TAG.h + 8;
+    if (tx + CALL_TAG.w > this.right - 4) tx = l.x - 38 - CALL_TAG.w;
+    let ty = Math.max(this.top + 46, l.y + 30);
+    if (ty + CALL_TAG.h > this.bottom - 4) ty = l.y - 80;
+    const { orderAt, kindAt } = this;
+    if (tx < orderAt.x + ORDER.w + 6 && ty < orderAt.y + ORDER.h + 6) ty = orderAt.y + ORDER.h + 8;
+    if (tx + CALL_TAG.w > kindAt.x - 6 && ty < kindAt.y + KIND_TAG.h + 6) ty = kindAt.y + KIND_TAG.h + 8;
     this.callTag.setPosition(tx, ty);
     this.callTitle.setText(t('windowCalls', { n: Math.max(1, Math.ceil(call.msLeft / 1000)) }));
     this.callNote.setText(t('windowNote', { n: callPay(s) }));
@@ -900,6 +940,7 @@ export class GameScene extends Phaser.Scene {
       parts.body
         .setTexture(wingsUp ? 'bat-up' : 'bat-down')
         .setPosition(bat.x, bat.y + bob)
+        .setAlpha(edgeFade(bat.x, 24))
         .setFlipX(bat.task === 'fly' ? lantern.x < bat.x : bat.x < VIEW.w / 2);
       if (bat.task !== 'fly') return;
       // A dotted violet line to the lantern it is after.
@@ -926,7 +967,7 @@ export class GameScene extends Phaser.Scene {
       const on = goal.kind === 'lit' ? !!s.lanterns[goal.lanterns[k]]?.lit : k < done;
       pip.setTexture(on ? 'pip-lit' : 'pip-dark');
     });
-    this.orderProgressText.setX(ORDER.x + 50 + of * 22 + 2);
+    this.orderProgressText.setX(this.orderAt.x + 50 + of * 22 + 2);
     const met = done >= of;
     const line = t(goal.kind === 'lit' ? (met ? 'progressLitMet' : 'progressLit') : goal.kind === 'closeCalls' ? 'progressSaved' : 'progressShielded', { done, of });
     this.orderProgressText.setText(s.phase === 'dusk' ? line : t(s.report?.orderMet ? 'orderKept' : 'orderMissed'));
@@ -997,7 +1038,8 @@ export class GameScene extends Phaser.Scene {
     if (s.phase === 'festival') {
       // Sky lanterns drift up the screen and come round again; reduce motion holds them still.
       const rise = settings.reduceMotion ? 0 : this.clock / 40;
-      this.skyLanterns.forEach((sky, k) => sky.setY(VIEW.h + 30 - ((((k * 97) % (VIEW.h + 60)) + rise * (0.6 + (k % 3) * 0.2)) % (VIEW.h + 60))));
+      const h = this.bottom - this.top;
+      this.skyLanterns.forEach((sky, k) => sky.setY(this.bottom + 30 - ((((k * 97) % (h + 60)) + rise * (0.6 + (k % 3) * 0.2)) % (h + 60))));
     }
     const r = s.report;
     if (s.phase === 'night' && r) {
@@ -1108,7 +1150,7 @@ export class GameScene extends Phaser.Scene {
       const [a, , b] = chainsOf(s)[i].lanterns.map((l) => s.lanterns[l]);
       this.popup((a.x + b.x) / 2, (a.y + b.y) / 2 + 4, t('chainPay', { n: Math.round(CHAIN_BONUS * mult) }), '#ffd890', 15);
     }
-    if (r.orderMet) this.popup(ORDER.x + ORDER.w - 24, ORDER.y + ORDER.h + 14, t('orderPay', { n: this.state.order.reward }), '#ffc870', 15);
+    if (r.orderMet) this.popup(this.orderAt.x + ORDER.w - 24, this.orderAt.y + ORDER.h + 14, t('orderPay', { n: this.state.order.reward }), '#ffc870', 15);
   }
 
   /** The order's text, naming the lanterns of the district the night is played in. */
