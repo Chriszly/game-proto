@@ -139,10 +139,11 @@ export interface Ship {
   crew: number;
   maxCrew: number;
   /**
-   * An enemy sailing round an island that lies between it and the player: which island (an index
-   * into `ISLANDS`) and which way round (1 or -1). Null when the way is clear.
+   * A ship sailing round an island that lies between it and its target: which island (an index
+   * into `ISLANDS`), which way round (1 or -1) and where it is bound (`to`, the target's position
+   * when last planned). Null when the way is clear.
    */
-  detour: { island: number; side: 1 | -1 } | null;
+  detour: { island: number; side: 1 | -1; to: { x: number; y: number } } | null;
   /** A merchantman on the Merchant lane: time left before she gets clean away (0 for every other ship). */
   escapeMs: number;
   /** A prize kept at the harbor as a consort: she sails on into the next waves and draws a wage. */
