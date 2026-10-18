@@ -1,25 +1,33 @@
 import Phaser from 'phaser';
 import { DESKS, GRID, MAX_DESKS, MAX_SLOTS } from '../game/state';
 import { BOARD, CELL_SCALE, DESK, FORGE_BUTTON, FURNACE_WINDOW, HUD_HEIGHT, REPUTATION, VIEW, deskBox, deskScale, slotCentre } from '../scenes/layout';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import { ART, LEAD, PI, bake, ctx, diamond, glass, glow, mix, panel, path, rect, reseed, ring, rnd, type Pt } from './glass';
 
 // The smithy as one great window: a mosaic of glass behind everything, glowing orange round the
 // furnace, cobalt panes under the anvils and amber behind the counter. Painted once into the
 // `background` texture, with the furnace's flame window in two frames (`furnace-0/1`) and the
-// counter's desk frames (`counter-3`, or `counter-4` with the fourth desk) on top.
+// counter's desk frames (`counter-3`, or `counter-4` with the fourth desk) on top. The lancets
+// behind it (`backdrop`) and the top bar (`hudbar`) are painted at the whole view's size, which can
+// be wider or taller than 960x540 (see `setupScaling`'s fill mode), with the lancets lined up with
+// the 960x540 frame in its middle.
 
-const W = VIEW.w * ART;
 /** A point of the view in art units. */
 const a = (n: number) => n * ART;
 
 export function bakeScenery(scene: Phaser.Scene) {
+  const view = viewSize(scene);
+  const frame = viewFrame(scene);
+  bake(scene, 'backdrop', view.width, view.height, () => {
+    ctx.translate(a(frame.x), a(frame.y));
+    lancets(frame.x, frame.y);
+  });
   bake(scene, 'background', VIEW.w, VIEW.h, () => {
-    lancets();
     furnaceStones();
     board();
     reputationPanel();
-    hudBar();
   });
+  bake(scene, 'hudbar', view.width, HUD_HEIGHT + 4, () => hudBar(view.width));
   // The counter's column, from its top left corner, with three desks or four smaller ones.
   const colH = DESKS * DESK.h + (DESKS - 1) * DESK.gap;
   for (const desks of [DESKS, MAX_DESKS]) bake(scene, `counter-${desks}`, DESK.w, colH, () => counter(desks));
@@ -32,18 +40,25 @@ export function bakeScenery(scene: Phaser.Scene) {
   }
 }
 
-/** Gothic lancets: six tall panes of amber, rose and violet glass, each with a dark arched window. */
-function lancets() {
+/**
+ * Gothic lancets: tall panes of amber, rose and violet glass, each with a dark arched window, six
+ * across the 960x540 frame and more past its sides to fill a wider view (`dx` and `dy` are how far
+ * the view reaches past the frame on each side).
+ */
+function lancets(dx: number, dy: number) {
   reseed(3);
   const cols = ['#b8562a', '#d88a3a', '#8a2a3a', '#e0b04a', '#6a2a4a'];
-  for (let i = 0; i < 6; i++) glass(rect(a(i * 160), 0, a(160), a(VIEW.h)), cols[i % 5], { lw: 8, hi: 0.2, lo: 0.2 });
-  for (let i = 0; i < 6; i++) {
+  const first = -Math.ceil(dx / 160);
+  const last = 5 + Math.ceil(dx / 160);
+  const bottom = VIEW.h + dy;
+  for (let i = first; i <= last; i++) glass(rect(a(i * 160), a(-dy), a(160), a(VIEW.h + 2 * dy)), cols[((i % 5) + 5) % 5], { lw: 8, hi: 0.2, lo: 0.2 });
+  for (let i = first; i <= last; i++) {
     const x = i * 160 + 20;
     ctx.beginPath();
-    ctx.moveTo(a(x), a(VIEW.h));
+    ctx.moveTo(a(x), a(bottom));
     ctx.lineTo(a(x), a(200));
     ctx.quadraticCurveTo(a(x + 60), a(60), a(x + 120), a(200));
-    ctx.lineTo(a(x + 120), a(VIEW.h));
+    ctx.lineTo(a(x + 120), a(bottom));
     ctx.closePath();
     ctx.fillStyle = '#2a1a2e';
     ctx.fill();
@@ -181,8 +196,8 @@ function counter(desks: number) {
   }
 }
 
-/** The top bar: a strip of dusk-violet glass, and the coin by the coin count. */
-function hudBar() {
-  glass(rect(-6, -6, W + 12, a(HUD_HEIGHT) + 6), '#221a2e', { flat: true, lw: 6 });
+/** The top bar across the whole view (`w` view pixels): a strip of dusk-violet glass, and the coin by the coin count. */
+function hudBar(w: number) {
+  glass(rect(-6, -6, a(w) + 12, a(HUD_HEIGHT) + 6), '#221a2e', { flat: true, lw: 6 });
   glass(ring(412, 40, 15, 10), '#f0b830', { lw: 3, hi: 0.5 });
 }

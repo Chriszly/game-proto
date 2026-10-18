@@ -1,5 +1,6 @@
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import Phaser from 'phaser';
 import { ADVENTURER, adventurerTexture } from '../art/characters';
 import { SONG, sfx } from '../audio';
@@ -223,20 +224,35 @@ export class GameScene extends Phaser.Scene {
   /** The part of the song playing: calm, a hammer streak's busier groove, or tense while the crown or a charter waits on a choice. */
   private musicPart = '';
 
+  /**
+   * The view's edges in world coordinates. The camera is scrolled so the 960x540 layout of
+   * `layout.ts` sits in `viewFrame`, the middle of a view that can be wider or taller; the top bar
+   * and the corner links are pinned to these edges instead.
+   */
+  private edge = { left: 0, top: 0, right: VIEW.w, bottom: VIEW.h };
+
   constructor() {
     super('Game');
   }
 
+  /** Whether a world point is on the commission banner, which sits in the top bar. */
+  private onBanner(x: number, y: number) {
+    return onBanner(x, y - this.edge.top);
+  }
+
   /** Where the controls are on screen, so the playthrough test can tap and drag like a player. */
   spots() {
+    // In view pixels from the view's top left, which is the world's at 960x540.
+    const { left, top } = this.edge;
+    const at = (p: { x: number; y: number }) => ({ x: p.x - left, y: p.y - top });
     return {
-      forge: { x: FORGE_BUTTON.x, y: FORGE_BUTTON.y },
-      slots: [...Array(MAX_SLOTS).keys()].map((slot) => ({ x: slotCentre(slot).x, y: slotCentre(slot).y - SWORD_LIFT })),
-      desks: [...Array(desksOf(this.state)).keys()].map((d) => deskCentre(d, desksOf(this.state))),
-      banner: { x: BANNER.x + BANNER.w / 2, y: BANNER.y + BANNER.h / 2 },
-      barrel: { x: BARREL.x, y: BARREL.y },
-      row: { x: ROW_BUTTON.x, y: ROW_BUTTON.y },
-      mode: { x: MODE_BUTTON.x, y: MODE_BUTTON.y },
+      forge: at(FORGE_BUTTON),
+      slots: [...Array(MAX_SLOTS).keys()].map((slot) => at({ x: slotCentre(slot).x, y: slotCentre(slot).y - SWORD_LIFT })),
+      desks: [...Array(desksOf(this.state)).keys()].map((d) => at(deskCentre(d, desksOf(this.state)))),
+      banner: { x: BANNER.x + BANNER.w / 2 - left, y: BANNER.y + BANNER.h / 2 },
+      barrel: at(BARREL),
+      row: at(ROW_BUTTON),
+      mode: at(MODE_BUTTON),
     };
   }
 
@@ -252,7 +268,14 @@ export class GameScene extends Phaser.Scene {
     this.held = null;
     this.state = newShop(loadProgress());
 
+    // The layout sits in the middle of the view; the lancets and the top bar span all of it.
+    const frame = viewFrame(this);
+    const view = viewSize(this);
+    this.cameras.main.setScroll(-frame.x, -frame.y);
+    this.edge = { left: -frame.x, top: -frame.y, right: view.width - frame.x, bottom: view.height - frame.y };
+    this.image(this.edge.left, this.edge.top, 'backdrop').setOrigin(0);
     this.image(0, 0, 'background').setOrigin(0);
+    this.image(this.edge.left, this.edge.top, 'hudbar').setOrigin(0);
     this.drawnDesks = 0;
     this.counter = this.image(DESK.x, DESK.y, `counter-${desksOf(this.state)}`).setOrigin(0).setDepth(1);
     this.furnace = this.image(FURNACE_WINDOW.x, FURNACE_WINDOW.y, 'furnace-0').setOrigin(0);
@@ -372,7 +395,7 @@ export class GameScene extends Phaser.Scene {
     if (this.held || this.windowOpen) return;
     // Tapping the banner opens the crown's offer while one waits, or the win window once won.
     if (place === null) {
-      if (!onBanner(p.worldX, p.worldY)) return;
+      if (!this.onBanner(p.worldX, p.worldY)) return;
       if (this.state.choosing) this.chooser.setVisible(true);
       else if (this.state.won) this.win.setVisible(true);
       else return;
@@ -407,12 +430,12 @@ export class GameScene extends Phaser.Scene {
     let done = false;
     const before = this.state.events.length;
     if (place !== null) done = drop(this.state, held.slot, place);
-    else if (onBanner(p.worldX, p.worldY)) done = deliver(this.state, held.slot);
+    else if (this.onBanner(p.worldX, p.worldY)) done = deliver(this.state, held.slot);
     else if (buyer) done = sell(this.state, held.slot, buyer.id);
     if (done) this.save();
     // A move or swap clunks (a merge, gem or repair sounds in drawEvents); a sword the anvil, the
     // crown or the buyer won't take buzzes; one let go anywhere else goes back with a clunk.
-    const tried = place !== null ? place !== held.slot : onBanner(p.worldX, p.worldY) || !!buyer;
+    const tried = place !== null ? place !== held.slot : this.onBanner(p.worldX, p.worldY) || !!buyer;
     if (done ? place !== null && this.state.events.length === before : !tried) sfx('place');
     else if (!done) ui('refuse');
   }
@@ -547,7 +570,7 @@ export class GameScene extends Phaser.Scene {
       } else if (e.kind === 'streak') {
         this.hammerStreak(e.slot, e.streak, e.coins);
       } else if (e.kind === 'delivered') {
-        if (!done) this.float(BANNER.x + BANNER.w / 2, BANNER.y + 80, t('delivered', { sword: t(swordOf(e.tier).name) }), '#ffe7a8');
+        if (!done) this.float(BANNER.x + BANNER.w / 2, this.edge.top + BANNER.y + 80, t('delivered', { sword: t(swordOf(e.tier).name) }), '#ffe7a8');
       } else if (e.kind === 'commission') {
         this.commissionDone(e.reward, e.won);
       } else if (e.kind === 'sold') {
@@ -677,7 +700,7 @@ export class GameScene extends Phaser.Scene {
   /** The banner lights up and the purse and star float off it; the Crown Blade opens the win window. */
   private commissionDone(reward: number, won: boolean) {
     const bx = BANNER.x + BANNER.w / 2;
-    const by = BANNER.y + BANNER.h / 2;
+    const by = this.edge.top + BANNER.y + BANNER.h / 2;
     const halo = this.image(bx, by, 'halo').setDepth(UI_DEPTH + 1).setScale(shown('halo', 2.4), shown('halo', 0.8));
     this.tweens.add({ targets: halo, alpha: 0, delay: 400, duration: 900, onComplete: () => halo.destroy() });
     if (!settings.reduceMotion) this.tweens.add({ targets: this.banner.root, scale: 1.06, duration: 160, yoyo: true });
@@ -689,7 +712,7 @@ export class GameScene extends Phaser.Scene {
   private float(x: number, y: number, message: string, color: string, duration = 1200) {
     const text = this.add.text(x, y, message, textStyle(17, color, 4)).setOrigin(0.5).setDepth(UI_DEPTH + 3);
     // Keep it on screen.
-    text.x = Phaser.Math.Clamp(x, text.width / 2 + 6, VIEW.w - text.width / 2 - 6);
+    text.x = Phaser.Math.Clamp(x, this.edge.left + text.width / 2 + 6, this.edge.right - text.width / 2 - 6);
     this.tweens.add({ targets: text, y: y - 50, alpha: 0, duration, ease: 'Sine.In', onComplete: () => text.destroy() });
   }
 
@@ -915,7 +938,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH + 5)
       .setVisible(false);
     this.perkLink = this.add
-      .text(PERK_LINK.x, PERK_LINK.y, '', { ...textStyle(12, '#ffe27a', 3.5), fontStyle: 'normal' })
+      .text(this.edge.right - (VIEW.w - PERK_LINK.x), this.edge.bottom - (VIEW.h - PERK_LINK.y), '', { ...textStyle(12, '#ffe27a', 3.5), fontStyle: 'normal' })
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });
@@ -1036,18 +1059,21 @@ export class GameScene extends Phaser.Scene {
 
   private createHud() {
     this.hud = this.add.graphics().setDepth(UI_DEPTH);
-    const top = (n: number) => this.add.text(0, 21, '', textStyle(n, '#efe2c4')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
-    this.titleText = top(21).setText(t('title')).setColor('#ffd36a').setX(17);
-    this.coinsText = top(16).setColor('#ffd36a').setX(220);
+    // The top bar is pinned to the view's top: the name and coins to its left edge, the banner in
+    // the middle and the rest to its right edge.
+    const { left, top: y0, right } = this.edge;
+    const top = (n: number) => this.add.text(0, y0 + 21, '', textStyle(n, '#efe2c4')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
+    this.titleText = top(21).setText(t('title')).setColor('#ffd36a').setX(left + 17);
+    this.coinsText = top(16).setColor('#ffd36a').setX(left + 220);
     // Right to left from the corner: the best sword, the swords sold and the guild stars.
-    this.bestText = top(14.5).setOrigin(1, 0.5).setX(VIEW.w - 17);
+    this.bestText = top(14.5).setOrigin(1, 0.5).setX(right - 17);
     this.soldText = top(14.5).setOrigin(1, 0.5);
     this.starsText = top(15).setOrigin(1, 0.5);
-    this.star = this.image(0, 20, 'star').setDepth(UI_DEPTH + 1);
+    this.star = this.image(0, y0 + 20, 'star').setDepth(UI_DEPTH + 1);
     // Tapping the stars opens the guild perks too.
     this.star.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.openPerks());
     this.createBanner();
-    this.bannerFrame = this.image(BANNER.x + BANNER.w / 2, BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
+    this.bannerFrame = this.image(BANNER.x + BANNER.w / 2, y0 + BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
     const r = REPUTATION;
     this.add.text(r.x + 12, r.y + 14, t('reputation'), textStyle(13, '#efe2c4')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
     this.repWord = this.add.text(r.x + r.w - 12, r.y + 14, '', textStyle(12, '#ffe27a')).setOrigin(1, 0.5).setDepth(UI_DEPTH + 1);
@@ -1071,7 +1097,7 @@ export class GameScene extends Phaser.Scene {
     // The container's origin is the banner's centre, so it can pulse in place.
     const items = [this.image(0, 0, 'banner').setOrigin(0), kicker, title, sword, progress, ...pips, reward, star];
     for (const item of items) item.setPosition(item.x - w / 2, item.y - h / 2);
-    const root = this.add.container(x + w / 2, y + h / 2, items).setDepth(UI_DEPTH + 1);
+    const root = this.add.container(x + w / 2, this.edge.top + y + h / 2, items).setDepth(UI_DEPTH + 1);
     this.banner = { root, kicker, title, sword, progress, pips, reward, star };
   }
 
@@ -1141,7 +1167,7 @@ export class GameScene extends Phaser.Scene {
   /** A small button in the corner that throws the board and coins away for a fresh smithy. */
   private createReset() {
     const text = this.add
-      .text(VIEW.w - 17, VIEW.h - 13, t('newSmithy'), { ...textStyle(12, '#fff6e0', 3.5), fontStyle: 'normal' })
+      .text(this.edge.right - 17, this.edge.bottom - 13, t('newSmithy'), { ...textStyle(12, '#fff6e0', 3.5), fontStyle: 'normal' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });
