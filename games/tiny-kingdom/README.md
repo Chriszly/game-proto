@@ -30,7 +30,7 @@ three stars each. Run out of tiles or room and the kingdom is finished.
 | Pick the lumber camp, then tap a wood beside a camp | Clear the wood to grass, spending the camp tile |
 | Tap a market | Open the market trade: give two tiles of one kind for one gift building, once a round |
 | Tap a gift | When the round's goal is reached: take one of the two gifts |
-| Undo last tile | Take back the last placement or merge; once per round |
+| Undo last tile | Take back the last placement, clearing or merge; once per round |
 | Island button (next to the round) | Open the islands card: campaign levels, the island of the day, a random island, or type a number (keypad or keyboard digits, Enter to play, Esc to close) |
 | New kingdom | After the game ends: start again on a new random island |
 
@@ -99,8 +99,10 @@ three stars each. Run out of tiles or room and the kingdom is finished.
 17. **Undo** takes back the last tile placed, wood cleared or merge, once per round. A tile that
     fulfilled a decree or started a new round cannot be taken back.
 18. **The end** comes when the pouch is empty or no tile has room left. If two houses could still
-    merge to make room, the undo button reads "No room: merge houses or finish": merge, or tap it
-    to finish the kingdom. The castle then pays its bonus, and the best final score and the
+    merge, or a lumber camp clear a wood, to make room, the undo button reads "No room: merge houses
+    or finish" (or "No room: clear a wood or finish"): make room, or tap it to finish the kingdom.
+    While the last tile can still be undone, the button stays Undo, so a slip on the last grass
+    cell can be taken back first. The castle then pays its bonus, and the best final score and the
     crowns are saved in the browser.
 
 ![Hovering a cell beside the castle: the house would score 1 from the forest and join the castle's chain](docs/screenshots/playthrough-1-preview.webp)

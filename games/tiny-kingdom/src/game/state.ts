@@ -142,10 +142,19 @@ function fits(grid: Cell[][], col: number, row: number, kind: Building) {
 
 const fitsAnywhere = (grid: Cell[][], kind: Building) => grid.some((cells, row) => cells.some((_, col) => fits(grid, col, row, kind)));
 
+/** Whether some wood stands beside a lumber camp, so a lumber camp tile could clear it, whatever the phase. */
+const woodClearable = (grid: Cell[][]) => grid.some((cells, row) => cells.some((cell, col) => cell === 'forest' && beside(grid, col, row, 'lumber')));
+
+/** Whether a tile of `kind` has a use on `grid`: a cell to go on, or for a lumber camp, a wood to clear. */
+const playable = (grid: Cell[][], kind: Building) => fitsAnywhere(grid, kind) || (kind === 'lumber' && woodClearable(grid));
+
+/** Whether any tile left in the pouch has a use on `grid` (see `playable`). */
+const pouchPlayable = (s: GameState) => BUILDINGS.some((b) => s.pouch[b] > 0 && playable(s.grid, b));
+
 /**
  * Draws the next hand: HAND tiles from the pouch, seeded by the island and the number of draws so
  * far, so a kingdom's hands never touch Math.random and an undone placement redraws the same hand.
- * When no drawn tile has room but one in the pouch has, the first is swapped for one that has.
+ * When no drawn tile has room (or a wood to clear) but one in the pouch has, the first is swapped for one that has.
  */
 function drawHand(s: GameState) {
   const rand = seeded(s.island * 7 + s.draws * 48271 + 11);
@@ -153,8 +162,8 @@ function drawHand(s: GameState) {
   const bag = BUILDINGS.flatMap((b) => Array<Building>(s.pouch[b]).fill(b));
   const hand: Building[] = [];
   while (hand.length < HAND && bag.length) hand.push(bag.splice(Math.floor(rand() * bag.length), 1)[0]);
-  if (hand.length && !hand.some((b) => fitsAnywhere(s.grid, b))) {
-    const fitting = BUILDINGS.filter((b) => s.pouch[b] > 0 && fitsAnywhere(s.grid, b));
+  if (hand.length && !hand.some((b) => playable(s.grid, b))) {
+    const fitting = BUILDINGS.filter((b) => s.pouch[b] > 0 && playable(s.grid, b));
     if (fitting.length) hand[0] = fitting[Math.floor(rand() * fitting.length)];
   }
   s.hand = hand.sort((a, b) => BUILDINGS.indexOf(a) - BUILDINGS.indexOf(b));
@@ -167,7 +176,7 @@ function drawHand(s: GameState) {
  * still refuses. A hand that has room is kept, so a merge is never a free redraw.
  */
 function keepHandPlayable(s: GameState) {
-  if (s.phase === 'playing' && !s.hand.some((b) => fitsAnywhere(s.grid, b)) && anyPlace(s)) drawHand(s);
+  if (s.phase === 'playing' && !s.hand.some((b) => playable(s.grid, b)) && pouchPlayable(s)) drawHand(s);
 }
 
 /** Whether a tile of `kind` is in the hand, ready to place. */
@@ -291,11 +300,6 @@ export function previewPlacement(s: GameState, kind: Building, col: number, row:
   return { gained: boardScore(grid) - boardScore(s.grid) + bonus, base: own.base, links, season: bonus, joins: joinedCount(grid) - joinedCount(s.grid) };
 }
 
-/** What placing `kind` at (col, row) would add to the score, or null where it can't go. */
-export function previewScore(s: GameState, kind: Building, col: number, row: number) {
-  return previewPlacement(s, kind, col, row)?.gained ?? null;
-}
-
 export function select(s: GameState, kind: Building) {
   if (s.phase !== 'playing' || !inHand(s, kind)) return false;
   s.selected = kind;
@@ -341,15 +345,15 @@ function end(s: GameState) {
   s.best = Math.max(s.best, s.score);
 }
 
-/** Ends the kingdom when no tiles are left, or none can go anywhere and no merge would make room. */
+/** Ends the kingdom when no tiles are left, or none can go anywhere and no merge or cleared wood would make room. */
 function checkEnd(s: GameState) {
   const tilesLeft = BUILDINGS.some((b) => s.pouch[b] > 0);
-  if (!tilesLeft || (!anyPlace(s) && !housesCanMerge(s.grid))) end(s);
+  if (!tilesLeft || (!pouchPlayable(s) && !housesCanMerge(s.grid))) end(s);
 }
 
 /**
  * Ends the kingdom by the player's choice when no tile has room left but two houses could still
- * merge to make some. Returns false while a tile can still be placed.
+ * merge, or a lumber camp clear a wood, to make some. Returns false while a tile can still be placed.
  */
 export function finish(s: GameState) {
   if (s.phase !== 'playing' || anyPlace(s)) return false;
@@ -413,8 +417,9 @@ function settle(s: GameState, prior: Snapshot, at: { col: number; row: number },
   // A change that began a round or won a crown is kept: undoing it would hand back what was paid.
   s.undo = newRound || decree ? null : prior;
   // A goal reached carries on to its gift, even with the pouch empty, unless the island is full
-  // and no two houses could merge to make room.
-  if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass')) && !housesCanMerge(s.grid)) s.giftsDue = 0;
+  // and no two houses could merge, nor a lumber camp tile clear a wood, to make room.
+  const clearable = s.pouch.lumber > 0 && woodClearable(s.grid);
+  if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass')) && !housesCanMerge(s.grid) && !clearable) s.giftsDue = 0;
   if (s.phase === 'playing' || s.giftsDue === 0) checkEnd(s);
   return { gained: s.score - prior.score, changes, decree, newRound, season: seasonal, struck };
 }
@@ -492,7 +497,7 @@ export const mergeable = (s: GameState, col: number, row: number) =>
   SIDES.some(([dc, dr]) => canMerge(s, { col, row }, { col: col + dc, row: row + dr }));
 
 /** Whether any two houses on `grid` stand side by side, so they could merge, whatever the phase. */
-const housesCanMerge = (grid: Cell[][]) =>
+export const housesCanMerge = (grid: Cell[][]) =>
   grid.some((cells, row) => cells.some((cell, col) => cell === 'house' && (cells[col + 1] === 'house' || grid[row + 1]?.[col] === 'house')));
 
 /** What merging the house at `from` into the one at `to` would add to the score (it can be negative), or null. */
