@@ -1,4 +1,5 @@
 import type { TextKey } from '../i18n';
+import { createDistricts, type DistrictState } from './districts';
 import type { Upgrade } from './state';
 
 // The town past the apothecary: once the plague is first cured the town grants a charter, and the
@@ -196,9 +197,11 @@ export interface TownState {
   shops: Partial<Record<ShopId, ShopState>>;
   /** What the doctor carries in the town's shops, kept apart from the apothecary's hands. */
   hands: GoodId[];
+  /** The households of each of `DISTRICTS`, in order. */
+  districts: DistrictState[];
 }
 
-export const createTown = (): TownState => ({ shops: {}, hands: [] });
+export const createTown = (): TownState => ({ shops: {}, hands: [], districts: createDistricts() });
 
 const none = (): Upgrade => ({ level: 0, paid: 0 });
 
@@ -225,7 +228,8 @@ export function createShop(id: ShopId): ShopState {
  * their defaults, so saves keep working as shops grow.
  */
 export function normalizeTown(saved: Partial<TownState> | undefined): TownState {
-  const town: TownState = { shops: {}, hands: saved?.hands ?? [] };
+  const districts = createDistricts().map((d, i) => ({ ...d, ...saved?.districts?.[i] }));
+  const town: TownState = { shops: {}, hands: saved?.hands ?? [], districts };
   for (const id of SHOP_IDS) {
     const shop = saved?.shops?.[id];
     if (!shop) continue;

@@ -233,6 +233,20 @@ const en = {
   shopkeeperHired: 'Shopkeeper hired!',
   pixiesFly: 'Pixies hired!',
   coinsPaid: '-{n}{coin}',
+  // The town's districts and their households
+  districts: 'Districts',
+  marketRow: 'Market Row',
+  riverside: 'Riverside',
+  hilltop: 'Hilltop',
+  cottageCount: { one: '{n} cottage', other: '{n} cottages' },
+  houseCount: { one: '{n} house', other: '{n} houses' },
+  happiness: 'Happy {n}%',
+  districtWants: 'Wants:',
+  districtGrowing: 'Growing',
+  districtShort: 'Short of goods',
+  districtSteady: 'Getting by',
+  districtFull: 'As big as it grows',
+  districtLocked: 'Opens once {district} has houses',
 };
 
 export default en;

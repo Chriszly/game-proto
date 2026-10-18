@@ -43,8 +43,11 @@ study, shade gardens and a mirrored second production line.
   stations with drop, work and pick-up markers, and a counter whose shelves customers buy from.
   Stations, the counter and pixie routes have purple markers; their costs grow by `TIER_STEP` (3)
   a tier. The Bakery is the only shop so far (wheat and honeycomb, mill and oven, bread and honey
-  cake). Planned next: households and districts that ask for goods, then the Chandlery, Dye house,
-  Smithy and Tavern.
+  cake). Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
+  households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
+  then houses) and buys it off a shop's shelf (potions off the apothecary's), and happy districts
+  grow homes and then tiers (see `runDistrict`). Planned next: the Chandlery, Dye house, Smithy
+  and Tavern, each adding goods a new manor tier asks for.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
   Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
@@ -139,10 +142,18 @@ study, shade gardens and a mirrored second production line.
   limits (`MAX_LEVEL`, `MAX_WORKERS`, `MAX_SHOPKEEPERS`, `BEDS`, `SHOP_STORAGE`, `SHOP_PLACES`) and
   timings, the state types (`TownState`: `shops`, a `ShopState` per shop bought, and `hands`, the
   doctor's hands in town, kept apart from `carrying`), `createTown`, `normalizeTown` and `townOpen`.
+- `src/game/districts.ts`: the households' data, free of Phaser: `Need` (a good or a potion),
+  `DISTRICTS`, `HOME_TIERS` (each tier's name and needs), the growth numbers (`START_HOMES`,
+  `MAX_HOMES`, `SUPPLY_MS`, `HAPPY_PULL`, `HAPPY`, `UNHAPPY`, `GROW_ROUNDS`), `DistrictState`
+  (`open`, `homes`, `tier`, `happiness`, `growth`, `next`, `rounds`, `short`), `createDistricts`,
+  `districtAsks` (home `h` asks for need `(rounds + h) % needs`) and `districtFull`.
 - `src/game/townSim.ts`: the town's rules. `tickTown(state, dt, working, rand)` grows the beds,
   runs every station (crew: its workers plus the doctor on its work spot), pixie route, counter and
   customers of every shop bought; it calls `rand` only for a shop bought, so a game without one uses
-  the same randomness as before. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
+  the same randomness as before. Once `townOpen`, it also runs each district (`runDistrict`: opening it
+  once the one before has houses, then a supply round every `SUPPLY_MS` through `supplyNeed`, which
+  takes a good off a bought shop's shelf or a potion, plain first, off `state.counter.shelf`, and
+  pays the price into that till). Districts use no randomness. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
   `pickUpFromStation`, `stockShopShelf`, `collectShopTill`, `tossGood`, `payStationLevel`,
   `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`) return `Feedback` like the sim's.
 - `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
@@ -150,6 +161,8 @@ study, shade gardens and a mirrored second production line.
   `routeMs`); Phaser-free, since the sim reads route lengths from it.
 - `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
   (saves, then starts another scene, which loads the save again) and `keepSaving`.
+- `TownScene` lays the lots out in rows of three (`LOT`) with the districts' cards in a row below
+  (`DISTRICT`, `addDistrict`, homes drawn as little houses by `drawHomes`), all centred in the view.
 - `src/scenes/TownScene.ts` (`Town`) and `src/scenes/ShopScene.ts` (`Shop`, started with
   `{ shop }`): both call `loadState` and `catchUp` on create, and run the apothecary with
   `tick(state, dt, null)` (as while away) next to `tickTown`; `GameScene` runs `tickTown(state, dt,
@@ -420,9 +433,9 @@ save or load, 0 in a new game), `reputation` (0 to 100), `regulars` (`face`, `wa
 `relapses`, `cured`, or null before day 5), `signs` (a `PriceSign` per potion, Fair when missing),
 `rival` (`open`, `day`, `potion`, `sold`, `streak`, and `dayShare` once a kept contract ended the day early),
 `seals` (town seals), `wagon` (`day`, `potion`, `crate`, `pay`, `left`, `sold`, or null) and
-`marketPick` (the herb market's good to buy). `town` (`TownState`) holds the shops bought and the
-doctor's hands in town; `loadState` fills it through `normalizeTown`, which merges each shop, station
-and route per key, so new shops and stations load into old saves. The contract may have a `bundle` (`potion`, `need`,
+`marketPick` (the herb market's good to buy). `town` (`TownState`) holds the shops bought, the
+doctor's hands in town and the `districts`; `loadState` fills it through `normalizeTown`, which merges each shop, station
+and route per key and each district by index, so new shops, stations and districts load into old saves. The contract may have a `bundle` (`potion`, `need`,
 `made`); the plague may have `season` and `curedDay`. Each order also has `tip`, its full tip (`maxTip`
 of its size), and may have `asked`, `face`, `regular` and `rush`. `counter.shelf` and `carrying`
 can hold fine potions. A plot may be `blighted` with `blightMs`; a belt item may carry `run`; a

@@ -1,8 +1,10 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { t } from '../i18n';
 import { routeMs } from '../scenes/shopLayout';
+import { DISTRICTS, GROW_ROUNDS, HAPPY, HAPPY_PULL, HOME_TIERS, MAX_HOMES, START_HOMES, SUPPLY_MS, UNHAPPY, districtAsks, type DistrictState, type Need } from './districts';
+import { FINE, type PotionId } from './items';
 import type { Feedback } from './sim';
-import { carryCapacity, speedAt, type GameState, type Upgrade } from './state';
+import { carryCapacity, potionPrice, speedAt, type GameState, type Upgrade } from './state';
 import {
   BEDS,
   COUNTER_PAY,
@@ -230,7 +232,73 @@ export function tickTown(state: GameState, dt: number, working: Working | null, 
     runCounter(shop, dt, here === 'counter');
     runOrders(shop, def, dt, rand);
   }
+  if (townOpen(state.seals)) state.town.districts.forEach((d, i) => runDistrict(state, d, i, dt));
 }
+
+const isGood = (need: Need): need is GoodId => need in GOODS;
+
+/**
+ * Hands one of a need to a household: a good off the shelf of a shop bought that sells it, or a
+ * potion off the apothecary's shelf (a plain one first), paid into that shop's till. False when
+ * nobody has one on the shelf.
+ */
+function supplyNeed(state: GameState, need: Need): boolean {
+  if (isGood(need)) {
+    for (const id of SHOP_IDS) {
+      const shop = state.town.shops[id];
+      const price = SHOPS[id].sells[need];
+      if (!shop || price === undefined || !shop.shelf.includes(need)) continue;
+      shop.shelf.splice(shop.shelf.indexOf(need), 1);
+      shop.till += Math.round(price * (1 + COUNTER_PAY * shop.counter.level.level));
+      return true;
+    }
+    return false;
+  }
+  const shelf = state.counter.shelf;
+  const at = shelf.includes(need) ? shelf.indexOf(need) : shelf.indexOf(FINE[need as PotionId]);
+  if (at < 0) return false;
+  shelf.splice(at, 1);
+  state.counter.till += potionPrice(state, need);
+  return true;
+}
+
+/**
+ * A district's supply round every `SUPPLY_MS`: each home asks for one need and pays for it from the
+ * shelves; happiness moves towards the share supplied, and `GROW_ROUNDS` happy rounds in a row add
+ * a home (or, once full, grow every home into the next tier) while as many unhappy ones take one
+ * away. A closed district opens once the one before it has grown into its second tier.
+ */
+function runDistrict(state: GameState, d: DistrictState, i: number, dt: number) {
+  if (!d.open) {
+    const before = state.town.districts[i - 1];
+    if (before && before.tier > 0) d.open = true;
+    return;
+  }
+  d.next -= dt;
+  while (d.next <= 0) {
+    d.next += SUPPLY_MS;
+    const asks = districtAsks(d);
+    const short = asks.filter((need) => !supplyNeed(state, need));
+    d.short = [...new Set(short)];
+    d.rounds++;
+    const share = asks.length ? 1 - short.length / asks.length : 1;
+    d.happiness = Math.round(d.happiness + (share * 100 - d.happiness) * HAPPY_PULL);
+    if (d.happiness >= HAPPY) d.growth = Math.max(0, d.growth) + 1;
+    else if (d.happiness <= UNHAPPY) d.growth = Math.min(0, d.growth) - 1;
+    else d.growth = 0;
+    if (d.growth >= GROW_ROUNDS) {
+      d.growth = 0;
+      if (d.homes < MAX_HOMES) d.homes++;
+      else if (d.tier < HOME_TIERS.length - 1) d.tier++;
+    } else if (d.growth <= -GROW_ROUNDS) {
+      d.growth = 0;
+      d.homes = Math.max(START_HOMES, d.homes - 1);
+    }
+  }
+}
+
+/** The districts open so far, with their defs. */
+export const openDistricts = (state: GameState) => DISTRICTS.map((def, i) => ({ def, d: state.town.districts[i] })).filter(({ d }) => d.open);
 
 /** Whether anything in the town works without the doctor: a worker, a shopkeeper or a pixie route. */
 export const townAutomated = (state: GameState) =>

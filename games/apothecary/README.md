@@ -368,6 +368,16 @@ before (three times as much a shop) but nothing like the shop itself:
 
 The till's coins are picked up at the counter, and the map shows what waits in each shop's till.
 
+The town's **districts** are what the shops are for. Below the lots, each district's card shows its
+homes, how happy it is and what it wants. Every 30 seconds each home asks for one good, taking turns
+through its district's list, and takes it off the shelf of the shop that sells it (potions from the
+apothecary's shelves), paying the shelf price into that shop's till. Happiness moves halfway towards
+the share it got. Four rounds in a row at 80% or more add a home, up to eight; once full, its
+cottages grow into houses, which want honey cake and Sleeping Tonics as well as bread and Healing
+Draughts. Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
+the town; Riverside opens once Market Row has houses, and Hilltop once Riverside has. The coming
+shops' goods will be what manors ask for.
+
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 
 ![The bakery's yard](docs/screenshots/bakery.webp)
