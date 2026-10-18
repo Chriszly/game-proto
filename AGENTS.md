@@ -191,6 +191,16 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   **Screens** workflow (`.github/workflows/screens.yml`) runs it in one job per game, on a PR only for
   the games whose folder changed (every game when `shared/` or the test changes).
   Give its `index.html` the same `100dvh` and `touch-action: none` styles as Apothecary's.
+  **Fill every screen shape.** A game also takes the screen's shape, with no bars at its sides, by
+  calling `setupScaling(game, { fill: true })` (`grep -l 'fill: true' games/*/src/main.ts` lists the
+  games that do; bring the others over one game per PR). Its view keeps the designed size as its
+  smallest and grows the other way, up to 2.4:1 (a 960x540 game is 960 to 1296 wide and 540 to 720
+  tall), picked once when the game starts. So lay out every scene against `viewSize(scene)`, never
+  the designed size: paint backgrounds and the world over the whole view, pin bars and buttons to the
+  view's edges, centre panels and dialogs in the view, and put a play area that was laid out for the
+  designed size in `viewFrame(scene)`, the designed-size rectangle in the middle of the view. A
+  scrolling world shows more of itself instead. The Screens check then also fails a filling game that
+  leaves bars, and the playthrough, at 960x540, plays as before.
 - **Watch AI.** A game whose AI can play every side supports `?watch` with `shared/watch.ts`: when
   `watching` is set, hand the player's side to the AI and lift the fog, call `mountWatch` once the
   match starts (with each side's name and colour and the match clock), run the sim

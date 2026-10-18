@@ -6,14 +6,16 @@ import { readdirSync, readFileSync } from 'node:fs';
 // held the wrong way. A game is picked up on its own once its `src/main.ts` calls `setupScaling`.
 // `SCREENS_GAME` checks just that game, as the Screens workflow does with one job per changed game.
 const ONLY = process.env.SCREENS_GAME;
-const GAMES = readdirSync('games').filter((name) => {
-  if (ONLY && name !== ONLY) return false;
+const main = (name: string) => {
   try {
-    return readFileSync(`games/${name}/src/main.ts`, 'utf8').includes('setupScaling(game)');
+    return readFileSync(`games/${name}/src/main.ts`, 'utf8');
   } catch {
-    return false;
+    return '';
   }
-});
+};
+const GAMES = readdirSync('games').filter((name) => (!ONLY || name === ONLY) && main(name).includes('setupScaling(game'));
+// A game that takes the screen's shape (`setupScaling(game, { fill: true })`) must leave no bars.
+const FILLS = new Set(GAMES.filter((name) => main(name).includes('fill: true')));
 
 /** The screens checked: CSS size, device pixels per CSS pixel, and whether it is a touch device. */
 const SCREENS = [
@@ -66,6 +68,7 @@ for (const game of GAMES) {
             backing: { width: canvas.width, height: canvas.height },
             shown: { width: box.width * devicePixelRatio, height: box.height * devicePixelRatio },
             filled: Math.max(box.width / innerWidth, box.height / innerHeight),
+            covered: Math.min(box.width / innerWidth, box.height / innerHeight),
             scrolls: document.scrollingElement!.scrollHeight > innerHeight || document.scrollingElement!.scrollWidth > innerWidth,
           };
         });
@@ -74,6 +77,8 @@ for (const game of GAMES) {
         expect(fit.backing.height, `canvas pixels down for ${Math.round(fit.shown.height)} on screen`).toBeGreaterThanOrEqual(0.99 * fit.shown.height);
         // As big as it fits: the view reaches two opposite edges of the screen.
         expect(fit.filled, 'share of the screen the view spans').toBeGreaterThan(0.99);
+        // A filling game spans the whole screen both ways (every screen here is between 4:3 and 2.4:1).
+        if (FILLS.has(game)) expect(fit.covered, 'share of the screen the view covers').toBeGreaterThan(0.98);
         expect(fit.scrolls, 'page scrolls').toBe(false);
       }
       expect(errors, 'page errors').toEqual([]);
