@@ -16,8 +16,8 @@ goal), gusts that blow out a warned lantern unless a moth sits on it, and close-
 pay at once. Every night after the first draws a kind (clear, foggy, feast, stormy), bats come for
 lit lanterns from night 3 and are chased off by tapping them, and lanterns side by side form
 chains that pay when all of them are lit at nightfall. Between nights a panel shows the tally,
-the festival count, the next night's kind and five upgrades (one buys fireflies, which light two
-lanterns a flight) plus the cask's top-up; each night adds a lantern. Ten nights kept reach the
+the festival count, the next night's kind and seven upgrades (one buys fireflies, which light two
+lanterns a flight) plus the Cask and Hearth cards; each night adds a lantern. Ten nights kept reach the
 Great Festival, a win, with endless nights after. From night 2 cottage windows call for a lantern
 (LK8), from night 3 refills draw on a cask of oil (LK9), from night 4 some spots hold a beacon, a
 candle or a bell (LK6), every fifth night the Great Owl sweeps a row (LK7), and at every fifth
@@ -61,7 +61,9 @@ Implemented today:
   until the gust passes.
 - Close calls: a moth that reaches a lit lantern with under `CLOSE_CALL` (15%) of its oil marks a
   close call; when it finishes the refill the game pays `CLOSE_CALL_PAY` (2) coins at once. A
-  lantern a moth sits on (lighting or guarding) burns no oil.
+  lantern a moth sits on (lighting or guarding) burns no oil. A refill never lowers the oil: a
+  moth whose fill is less than the oil left (a fast moth refilling a heavy moth's lantern) leaves
+  it as it is and draws nothing from the cask.
 - Nights without end: `lanternsFor` adds one lantern a night up to the ten in `LANTERN_SPOTS`.
 - Kinds of night (LK1): `NIGHT_KINDS` (`clear`, `fog`, `feast`, `storm`). `drawKind` keeps night
   1 clear and draws later kinds with `Math.random` at the nightfall before (`state.nextKind`), so
@@ -74,7 +76,7 @@ Implemented today:
   it, unless a moth sits on it. `chase(s, id)` sends an idle moth (not a firefly if another is
   idle) with task `chase`; catching the bat makes it flee (`BAT_FLEE` times faster, off the top
   corner) and counts `state.chased`. A chase is never queued.
-- Lantern chains (LK3): `CHAINS` in `places.ts`, four of three lanterns each. `chainsFor(s)` lists
+- Lantern chains (LK3): each district's `chains` in `places.ts`, four of three lanterns each. `chainsFor(s)` lists
   the chains whose lanterns all exist this night (none on night 1), `chainLit` whether one is all
   lit. Each lit at nightfall pays `CHAIN_BONUS` (8).
 - Fireflies (LK4): the `firefly` upgrade (two levels) adds a `firefly` moth after the regular ones.
@@ -82,7 +84,9 @@ Implemented today:
   lighting, `nextHop` takes the oldest unclaimed queued tap or the nearest dark unclaimed lantern
   and it flies on (unless a gust makes it guard).
 - The Great Festival (LK5): the nightfall that brings `kept` to `FESTIVAL_NIGHTS` (10) sets
-  `state.festival`, `report.festival` and phase `'festival'`; `carryOn` moves on to `'night'`.
+  `state.festival`, `report.festival` and phase `'festival'`; `carryOn` moves on with `afterPanels`
+  (`'move'` or `'peril'` in practice, as the festival comes at night 10 or later, and every such
+  nightfall offers curses).
 - Seven upgrades (five of three levels, Firefly of two, Jar of one), bought between nights, plus
   the Cask and Hearth cards. Only the most nights kept and the best peril multiplier persist.
 - Kinds of lantern (LK6): `LANTERN_KINDS` (`plain`, `beacon`, `candle`, `bell`), each with `oil`,
@@ -106,10 +110,12 @@ Implemented today:
   or refills that lantern in time pays `callPay(s)` (`CALL_PAY` 3, double in the market) at once
   and counts `callsKept`; running out pushes a `call` event with `kept` false and costs nothing.
 - Oil cask (LK9): `state.cask` fills, `CASK_START` (3) to `CASK_MAX` (6). From `CASK_NIGHT` (3)
-  (`usesCask(s)`) a refill draws one fill when the moth finishes lighting a lit lantern; `send` on
-  a lit lantern with the cask dry returns false, and a moth that arrives to find it dry pushes a
-  `dry` event and leaves the lantern as it is (no close call). `topUp(s)` in the night phase adds a
-  fill for `CASK_COST` (3); the night panel's sixth card calls it. The HUD shows the cask at
+  (`usesCask(s)`) a refill draws one fill when the moth finishes lighting a lit lantern.
+  `caskSpare(s, except?)` is false once every fill is spoken for by moths already flying to or
+  refilling lit lanterns: `send` on a lit lantern then returns false, a queued refill is dropped
+  (in `tick` and a firefly's `nextHop`), and the scene hides the "Save it" tag and rings. A moth
+  that still arrives to find it dry pushes a `dry` event and leaves the lantern as it is (no close
+  call). `topUp(s)` in the night phase adds a fill for `CASK_COST` (3); the Cask card calls it. The HUD shows the cask at
   `CASK_HUD` (grey before night 3, orange when dry).
 - Districts (LK10): `DISTRICTS` in `places.ts` (`keep`, `docks`, `chapel`, `market`), each with
   ten `spots` (with `name`s for the orders), `chains` and a `rule` (`none`, `seawind`: `wind`
@@ -118,7 +124,7 @@ Implemented today:
   `callPay` double and oil burns `TRADE_BURN` (1.15x)). `state.district` is the current one,
   `nextDistrict` the next; `nightfall` on a night divisible by `MOVE_EVERY` (5) sets `moveDue` and
   phase `'move'` (after `'festival'` if both; `carryOn` goes to `'move'` then), `moveTo(s, id)`
-  picks and goes to `'night'`, and `nextDusk` moves in and builds the lanterns from the district's
+  picks and goes on with `afterPanels` (`'peril'` from night 10, else `'night'`), and `nextDusk` moves in and builds the lanterns from the district's
   spots. `orderFor(night)` gives the night's order; the scene's `describeOrder` shows its text in
   the keep and names the district's spots for a `lit` order elsewhere (`orderLit`). `districtOf(s)`, `chainsOf(s)` and `chainsFor` read the current district.
 - Pick your peril (LK11): `nightfall` on a night with `night + 1 >= PERIL_NIGHT` (11) sets
@@ -200,8 +206,7 @@ File map (`src/`):
   Serif / serif).
 - `game/places.ts`: `JAR`, `JARS` (the gate's jar and the second one), `DISTRICTS` (each district's `spots` in view pixels, in the order
   nights add them, with names, its `chains` and `rule`; the district's and spots' names and the
-  rule's blurb are `TextKey`s, while a chain's `name` is a label for code readers, never shown), `DISTRICT_IDS`, `LANTERN_SPOTS` and
-  `CHAINS` (the keep's) and `mothRest` (30 px apart on a jar's rim).
+  rule's blurb are `TextKey`s, while a chain's `name` is a label for code readers, never shown), `DISTRICT_IDS`, `LANTERN_SPOTS` (the keep's) and `mothRest` (30 px apart on a jar's rim).
 - `game/state.ts`: `GameState`, `Lantern`, `Moth`, `Bat`, `Gust`, `GameEvent`, `Order`,
   `OrderGoal`, `NightReport`, `NightKind`, the balance constants, `MOTH_KINDS`, `KIND_ORDER`,
   `FIREFLY_LANTERNS`, `QUEUE_MAX`, `GUST_WARN_MS`, `gustsFor`, `NIGHT_KINDS`, `drawKind`,
@@ -210,7 +215,7 @@ File map (`src/`):
   `CLOSE_CALL`, `CLOSE_CALL_PAY`, `closeCallPay`, `ORDERS`, `orderFor`, `orderProgress`,
   `UPGRADES`, `stats`, `mothSpeed`, `mothLightMs`, `LANTERN_KINDS`, `lanternKindsFor`,
   `BELL_RANGE`, `stunned`, `lanternPay`, `OWL_*`, `owlsFor`, `threatened`, `CALL_*`, `callsFor`,
-  `callPay`, `CASK_*`, `usesCask`, `MOVE_EVERY`, `VESPERS_*`, `TRADE_BURN`, `TIRED_*`,
+  `callPay`, `CASK_*`, `usesCask`, `caskSpare`, `MOVE_EVERY`, `VESPERS_*`, `TRADE_BURN`, `TIRED_*`,
   `NECTAR_MS`, `restMs`, `HEARTH_COSTS`, `hearthCost`, `PERIL_*`, `CURSES`, `WET_WICK`,
   `THIN_BURN`, `RESTLESS_BATS`, `perilMult`, `required`, `restOf`, `newGame`, `send`, `chase`,
   `swapJar`, `tick`, `nextCost`, `buy`, `rekindle`, `topUp`, `carryOn`, `moveTo`, `takeCurse`,
@@ -226,8 +231,10 @@ File map (`src/`):
   jar, `stars`, `fog`, `bunting`); sprites
   and plaques at `RES` (2, up to about 4.3) and drawn at scale 1 / `RES`. `bakeTextures` sets both
   from `sharpRes` before painting, so read them at run time, never copy them into a constant.
-  Then: `moon`, `glow`/`glow-pale` (additive), `lantern-lit`/`-dark` (origin 36/56 down) and
-  `lantern-<kind>-lit`/`-dark` for the special kinds (`LANTERN_GELS`), `flame`,
+  Then: `moon`, `glow`/`glow-pale` (additive), `lantern-lit`/`-dark` (32x56) and
+  `lantern-<kind>-lit`/`-dark` for the special kinds (32x60, `LANTERN_GELS`), all anchored 36 px
+  down (`lampOriginY(kind)` gives the origin; `setTexture` keeps the old fraction, so the scene
+  sets it again after each swap), `flame`,
   `moth-<kind>-up`/`-down` (`MOTH_LOOK`: size and gel colour), `hud`, `dusk-fill` (cropped to the
   dusk left), `dusk-rim`, `sun`, `hearth-lit`/`-out`, `coin`, `cask-full`/`-empty`, `order-card`,
   `pip-lit`/`-dark`, `gust-tag`, `owl-tag`, `call-tag`, `kind-tag`, `kind-<kind>` (the plaque's
@@ -397,7 +404,7 @@ scene. Under browser automation nothing plays, so the playthrough is unchanged.
 
 - `window.game` in dev builds. The test reads `game.scene.getScene('Game')` and its `state`
   (copied through JSON) and `panelOpen`. `shopButtons`, `nextButton` and `carryOnButton` give the
-  panel buttons in view pixels, for tests that go past the first night; `perilButtons` (the two
+  panel buttons in frame (world) coordinates, which match view pixels only at 960x540, for tests that go past the first night; `perilButtons` (the two
   curse cards, in `state.offer` order when the panel opens) and `goOnButton` the peril panel's.
 - Inputs: it clicks lanterns at their `x`, `y` from state, scaled by the canvas bounding box.
 - The test mirrors these, so change them together: `DUSK_MS` (45 s), the first night's five
@@ -474,7 +481,7 @@ scene. Under browser automation nothing plays, so the playthrough is unchanged.
 - **Add a kind of night**: a row in `NIGHT_KINDS`, its effect in `tick`, `nightfall` or
   `gustsFor`, its emblem in `paintKindIcon` and the list in `bakeTextures`, and any layer in
   `GameScene.drawKind`.
-- **Add or change a chain**: a row in `CHAINS` (lanterns side by side, in the order the cord
+- **Add or change a chain**: a row in the district's `chains` in `places.ts` (lanterns side by side, in the order the cord
   runs; `payout` puts its popup between the first and last).
 - **Retune bats**: `batsFor`, `BAT_SPEED`, `BAT_FLEE` and `BAT_Y` in `state.ts`.
 - **Move or add a lantern spot**: edit `LANTERN_SPOTS`; the castle's merlons skip spots on their
@@ -485,7 +492,7 @@ scene. Under browser automation nothing plays, so the playthrough is unchanged.
   and is added by `makeMoths`.
 - **Change the queue**: `QUEUE_MAX` in `state.ts`; the test asserts the queue contents.
 - **Restyle**: shapes and colours live in `art/puppet.ts`; the texture anchors there must match
-  the scene's placements (the lantern origin, `PAD` for plaques).
+  the scene's placements (`lampOriginY` for the lanterns, `PAD` for plaques).
 
 ## Gotchas
 
@@ -495,8 +502,9 @@ scene. Under browser automation nothing plays, so the playthrough is unchanged.
 - A queued tap is dispatched in `tick` after the moths move and the wind, so the moth that just
   came home (or was released by a passing gust) takes it on the same frame; the queue never holds
   a lantern a moth has already claimed.
-- The gust picks its target when it is warned, not when it hits; if that lantern burns out before
-  then, the gust does nothing. A moth still flying to it (`out`) does not shield it.
+- The gust picks its target when it is warned, not when it hits; if that lantern burns out or is
+  snuffed before then, the gust does nothing (no event, no popup). A moth still flying to it
+  (`out`) does not shield it.
 - Night 1's quota is `ceil(5 * 0.6)` = 3; `requiredFor` rounds up.
 - Night 1 must stay clear with no bats and no chain (every chain has a lantern from night 2 on),
   no window call, free refills and plain lanterns: the playthrough's pay and refills depend on it.

@@ -15,8 +15,8 @@ a candle or a bell, every fifth night the Great Owl sweeps a row, and at every f
 keep can move to the Docks, Chapel Hill or the Market. From night 6 a moth tires after four
 flights. Spend the coins between nights on better wicks, more oil, more and faster moths,
 fireflies, nectar, a second jar, the cask and rekindling a lost hearth. Keep ten nights to reach
-the Great Festival; the nights go on after it, and every nightfall after it offers two curses that
-make the nights harder and pay more.
+the Great Festival; the nights go on after it, and every nightfall from the tenth offers two curses
+that make the nights harder and pay more.
 
 It is played as a shadow-puppet theatre: the keep is black cut card in front of a backlit paper
 screen that turns from saffron to indigo as dusk falls, light shows through its arrow slits and
@@ -30,7 +30,7 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 | --- | --- |
 | Tap or click a lantern | Send an idle moth to light it, or to refill a lit one's oil; with every moth busy, the tap waits in line |
 | Tap or click a bat | Send an idle moth to chase it off |
-| Tap or click a moth resting on a jar | With the second jar bought: send it to rest at the other jar |
+| Tap or click an idle moth on its jar | With the second jar bought: send it to rest at the other jar |
 | Tap or click an upgrade | Between nights: buy its next level, or put a fill in the cask |
 | Tap or click a district | At a fifth nightfall: move the keep there (or stay) |
 | Tap or click a curse | At a nightfall from the tenth: take it (or press Go on to take none) |
@@ -129,7 +129,7 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
     Each Nectar level takes 1.5 seconds off the rest.
 20. **The second jar**: the Jar card (120 coins, once) puts a second moth jar by the east wall.
     Every other moth rests there to start with, so its flights to the east side are shorter. Tap
-    a moth resting on a jar during dusk and it flies over to rest at the other one, from then on.
+    an idle moth on its jar during dusk (not a tired one) and it flies over to rest at the other one, from then on.
 21. **Rekindle a hearth**: between nights the Hearth card lights a hearth that went out, for 40
     coins, then 80, then 120. Three rekindles a game at most.
 22. **Pick your peril**: every nightfall from the tenth (before night 11 on) a panel offers two

@@ -141,8 +141,6 @@ export const DISTRICT_IDS = Object.keys(DISTRICTS) as DistrictId[];
 
 /** The keep's lantern spots, where every game starts: the first night uses the first five. */
 export const LANTERN_SPOTS: readonly Spot[] = DISTRICTS.keep.spots;
-/** The keep's chains. */
-export const CHAINS: readonly Chain[] = DISTRICTS.keep.chains;
 
 /** Where idle moth `i` of the `n` resting at `jar` sits on its rim. */
 export function mothRest(i: number, n: number, jar: { x: number; y: number } = JAR) {
