@@ -11,9 +11,9 @@ export interface Point {
 }
 
 export const SHOP_HUD = 44;
-export const SHOP_WORLD_H = 640;
+export const SHOP_WORLD_H = 720;
 /** The doctor's side of the yard ends here; the counter's front and the street are below it. */
-export const FENCE_Y = 470;
+export const FENCE_Y = 570;
 /** The row the stations stand in. */
 export const LINE_Y = 270;
 const GARDEN_X = 60;
@@ -26,7 +26,7 @@ const HANDS_Y = LINE_Y - 84;
 const COINS_Y = LINE_Y + 104;
 const SHOP_W = 300;
 
-const gardenTop = (g: number) => 100 + g * 190;
+const gardenTop = (g: number) => 90 + g * 160;
 const stationX = (i: number) => STATION_X + i * STATION_GAP;
 const shopLeft = (id: ShopId) => stationX(SHOPS[id].stations.length) - 40;
 
@@ -45,7 +45,8 @@ export function gardenLayout(g: number) {
 
 /**
  * The market between the gardens and the first station: the outfitter's sign with its pack, boots
- * and sickle markers in a row below, and under it the study's sign and desk with its two lessons.
+ * and sickle markers in a row below, and under it the study's sign and desk with its two lessons
+ * and, below them, the marker for the next recipe it teaches.
  */
 export const MARKET = {
   outfitter: { x: 455, y: 100 },
@@ -53,6 +54,7 @@ export const MARKET = {
   study: { x: 455, y: 262 },
   desk: { x: 455, y: 300 },
   lessons: { craftOrder: { x: 400, y: 374 }, priceSigns: { x: 510, y: 374 } },
+  recipe: { x: 455, y: 470 },
 } as const;
 
 /** Where a bed's middle is: beds go row by row, three to a row, gardens one under the other. */
@@ -90,21 +92,23 @@ export function counterLayout(id: ShopId) {
   const left = shopLeft(id);
   const cx = left + SHOP_W / 2;
   const sells = Object.keys(SHOPS[id].sells) as GoodId[];
+  const gap = sells.length > 2 ? 70 : 84;
+  const shelfX = (good: GoodId) => cx + (sells.indexOf(good) - (sells.length - 1) / 2) * gap;
   return {
     floor: { x: left, y: 110, w: SHOP_W, h: FENCE_Y + 40 - 110 },
     sign: { x: cx, y: 96 },
-    shelf: (good: GoodId): Point => ({ x: cx + (sells.indexOf(good) - (sells.length - 1) / 2) * 84, y: 168 }),
+    shelf: (good: GoodId): Point => ({ x: shelfX(good), y: 168 }),
     /** Each shelf's price sign, under its price, once the price signs are learned. */
-    priceSign: (good: GoodId): Point => ({ x: cx + (sells.indexOf(good) - (sells.length - 1) / 2) * 84, y: 246 }),
-    level: { x: cx - 64, y: 292 },
-    hire: { x: cx + 64, y: 292 },
-    drop: { x: cx - 92, y: 372 },
-    work: { x: cx, y: 372 },
-    till: { x: cx + 92, y: 372 },
-    counter: { x: cx, y: 430 },
-    place: (spot: number): Point => ({ x: cx + (spot - (SHOP_PLACES - 1) / 2) * 84, y: 506 }),
+    priceSign: (good: GoodId): Point => ({ x: shelfX(good), y: 246 }),
+    level: { x: cx - 64, y: 330 },
+    hire: { x: cx + 64, y: 330 },
+    drop: { x: cx - 92, y: 452 },
+    work: { x: cx, y: 452 },
+    till: { x: cx + 92, y: 452 },
+    counter: { x: cx, y: 530 },
+    place: (spot: number): Point => ({ x: cx + (spot - (SHOP_PLACES - 1) / 2) * 84, y: 606 }),
     street: (spot: number): Point => ({ x: cx + (spot - (SHOP_PLACES - 1) / 2) * 30, y: SHOP_WORLD_H + 30 }),
-    shopkeeper: { x: cx + 40, y: 408 },
+    shopkeeper: { x: cx + 40, y: 508 },
   };
 }
 

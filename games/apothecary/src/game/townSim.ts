@@ -23,7 +23,12 @@ import {
   SHOP_STORAGE,
   WALK_IN_MS,
   createShop,
+  gardenOpen,
   gearCost,
+  recipeCost,
+  shopKnows,
+  shopMakes,
+  shopSells,
   lessonCost,
   priorityChoices,
   shopSignOf,
@@ -77,8 +82,9 @@ export const shelfRoom = (shop: ShopState, good: GoodId) => count(shop.shelf, go
  * The recipe a station starts next: one whose inputs are in and whose product has room; its
  * priority's when that is ready, otherwise what is shortest of on its pallets and the shelf.
  */
-function nextRecipe(shop: ShopState, def: StationDef, station: StationState) {
+function nextRecipe(shop: ShopState, shopDef: ShopDef, def: StationDef, station: StationState) {
   const ready = def.recipes.filter((r) => {
+    if (!shopKnows(shop, shopDef, r.out)) return false;
     const queue = [...station.queue];
     for (const input of r.inputs) {
       const at = queue.indexOf(input);
@@ -94,14 +100,14 @@ function nextRecipe(shop: ShopState, def: StationDef, station: StationState) {
   return ready.reduce<(typeof ready)[number] | null>((best, r) => (!best || stocked(r.out) < stocked(best.out) ? r : best), null);
 }
 
-function runStation(shop: ShopState, def: StationDef, dt: number, doctor: boolean) {
+function runStation(shop: ShopState, shopDef: ShopDef, def: StationDef, dt: number, doctor: boolean) {
   const station = shop.stations[def.id];
   const crew = station.hired.level + (doctor ? 1 : 0);
   if (crew === 0) return;
   let left = dt * speedAt(station.level.level) * crew;
   while (left > 0) {
     if (!station.work) {
-      const recipe = nextRecipe(shop, def, station);
+      const recipe = nextRecipe(shop, shopDef, def, station);
       if (!recipe) return;
       for (const input of recipe.inputs) station.queue.splice(station.queue.indexOf(input), 1);
       station.work = { out: recipe.out, ms: recipe.ms, progress: 0 };
@@ -127,7 +133,7 @@ function takeForRoute(shop: ShopState, def: ShopDef, route: RouteDef): GoodId | 
   };
   if ('garden' in route.from) {
     const garden = def.gardens[route.from.garden];
-    if (!accepts(garden.good)) return null;
+    if (!gardenOpen(shop, route.from.garden) || !accepts(garden.good)) return null;
     const from = route.from.garden * BEDS;
     for (let b = from; b < from + BEDS; b++) {
       if (shop.beds[b] >= garden.grow) {
@@ -224,7 +230,7 @@ function runOrders(shop: ShopState, def: ShopDef, dt: number, rand: () => number
     return;
   }
   // Drawn from a hat with each good in it as often as its sign draws customers: twice when cheap.
-  const goods = (Object.keys(def.sells) as GoodId[]).flatMap((g) => Array<GoodId>(SIGN_DEMAND[shopSignOf(shop, g)]).fill(g));
+  const goods = shopSells(shop, def).flatMap((g) => Array<GoodId>(SIGN_DEMAND[shopSignOf(shop, g)]).fill(g));
   const size = rand() < 0.35 ? 2 : 1;
   const wants = Array.from({ length: size }, () => goods[Math.floor(rand() * goods.length)]);
   const pay = Object.fromEntries(wants.map((w) => [w, shopPrice(shop, def, w)]));
@@ -244,8 +250,8 @@ export function tickTown(state: GameState, dt: number, working: Working | null, 
     if (!shop) continue;
     const def = SHOPS[id];
     const here = working?.shop === id ? working.at : null;
-    shop.beds.forEach((grown, b) => (shop.beds[b] = Math.min(grown + dt, def.gardens[gardenOfBed(b)].grow)));
-    for (const station of def.stations) runStation(shop, station, dt, here === station.id);
+    shop.beds.forEach((grown, b) => gardenOpen(shop, gardenOfBed(b)) && (shop.beds[b] = Math.min(grown + dt, def.gardens[gardenOfBed(b)].grow)));
+    for (const station of def.stations) runStation(shop, def, station, dt, here === station.id);
     for (const route of def.routes) runRoute(id, shop, def, route, dt);
     runCounter(shop, dt, here === 'counter');
     runOrders(shop, def, dt, rand);
@@ -339,7 +345,7 @@ export function buyShop(state: GameState, id: ShopId): Feedback | null {
 
 export function isRipeBed(state: GameState, id: ShopId, bed: number) {
   const shop = state.town.shops[id];
-  return !!shop && shop.beds[bed] >= SHOPS[id].gardens[gardenOfBed(bed)].grow;
+  return !!shop && gardenOpen(shop, gardenOfBed(bed)) && shop.beds[bed] >= SHOPS[id].gardens[gardenOfBed(bed)].grow;
 }
 
 export function harvestBed(state: GameState, id: ShopId, bed: number): Feedback | null {
@@ -474,12 +480,19 @@ export function payLesson(state: GameState, id: ShopId, lesson: Lesson): Feedbac
   return payLevel(state, upgrade, lessonCost(id, lesson), 1, () => t('learned', { potion: t(lesson) }));
 }
 
+/** Pays towards the next recipe a shop's study teaches. */
+export function payRecipe(state: GameState, id: ShopId): Feedback | null {
+  const recipes = state.town.shops[id]!.recipes;
+  const research = SHOPS[id].research;
+  return payLevel(state, recipes, recipeCost(id, recipes.level), research.length, () => t('learned', { potion: goodName(research[recipes.level - 1]) }));
+}
+
 /** Moves a shop station's priority on: none, then each product it makes, and back to none. */
 export function cycleShopPriority(state: GameState, id: ShopId, station: string): Feedback | null {
   const shop = state.town.shops[id]!;
   const def = SHOPS[id].stations.find((s) => s.id === station)!;
-  if (!shopStudied(shop, 'craftOrder')) return null;
-  const choices: (GoodId | null)[] = [null, ...priorityChoices(def)];
+  const choices: (GoodId | null)[] = [null, ...priorityChoices(def, (g) => shopMakes(shop, SHOPS[id], g))];
+  if (!shopStudied(shop, 'craftOrder') || choices.length === 1) return null;
   const next = choices[(choices.indexOf(shop.priority[station] ?? null) + 1) % choices.length];
   shop.priority[station] = next;
   return [next ? t('firstChoice', { item: goodName(next) }) : t('anyOrder')];

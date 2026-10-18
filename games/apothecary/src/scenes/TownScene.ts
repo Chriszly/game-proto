@@ -11,7 +11,7 @@ import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick } from '../game/sim';
 import type { GameState } from '../game/state';
-import { GOODS, SHOPS, SHOP_IDS, shopCost, type GoodId, type ShopId } from '../game/town';
+import { GOODS, SHOPS, SHOP_IDS, shopCost, shopKnows, type GoodId, type ShopId } from '../game/town';
 import { buyShop, tickTown } from '../game/townSim';
 import { t } from '../i18n';
 import { coined } from '../ui/coins';
@@ -95,7 +95,14 @@ export class TownScene extends Phaser.Scene {
     const makes = lot === 'apothecary' ? t('apothecaryMakes') : t(SHOPS[lot].makes);
     this.add.text(left, y - this.lot.h / 2 + (compact ? 34 : 42), makes, { ...NOTE, wordWrap: { width: LOT.w - 124 } });
     if (lot !== 'apothecary') {
-      (Object.keys(SHOPS[lot].sells) as GoodId[]).forEach((good, i) => fit(this.add.image(left + 8 + i * 22, y + (compact ? 10 : 18), goodTexture(good)), 1.2));
+      // The goods its study still has to teach are shown faint.
+      (Object.keys(SHOPS[lot].sells) as GoodId[]).forEach((good, i) => {
+        const icon = fit(this.add.image(left + 8 + i * 22, y + (compact ? 10 : 18), goodTexture(good)), 1.2);
+        this.views.push(() => {
+          const shop = this.state.town.shops[lot];
+          icon.setAlpha(!SHOPS[lot].research.includes(good) || (shop && shopKnows(shop, SHOPS[lot], good)) ? 1 : 0.35);
+        });
+      });
     }
     const status = coined(this.add.text(left, y + this.lot.h / 2 - 32, '', { ...NOTE, fontStyle: 'bold', color: '#5a2c80' }));
     card.on('pointerdown', () => this.tapLot(lot, card));
