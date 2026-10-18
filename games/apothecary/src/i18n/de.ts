@@ -237,6 +237,19 @@ const de: Translation<typeof en> = {
   shopkeeperHired: 'Ladenhilfe angeheuert!',
   pixiesFly: 'Feen angeheuert!',
   coinsPaid: '-{n}{coin}',
+  districts: 'Viertel',
+  marketRow: 'Marktgasse',
+  riverside: 'Flussufer',
+  hilltop: 'Hügelviertel',
+  cottageCount: { one: '{n} Hütte', other: '{n} Hütten' },
+  houseCount: { one: '{n} Haus', other: '{n} Häuser' },
+  happiness: 'Zufrieden {n}%',
+  districtWants: 'Braucht:',
+  districtGrowing: 'Wächst',
+  districtShort: 'Waren fehlen',
+  districtSteady: 'Kommt zurecht',
+  districtFull: 'Voll ausgebaut',
+  districtLocked: 'Öffnet, sobald {district} Häuser hat',
 };
 
 /** Texts that read the same in German. */
