@@ -150,14 +150,17 @@ How it runs:
   (`moveWyrm`: a switch stop, loading, eating, picking the next stop with `nextStop` once it
   stands on a tile, advancing `progress` by `wyrmSpeed` tiles a second, on each new tile spending
   food and replanning with `planRoute`, stopping on a junction whose switch is set against its
-  move, waiting before a junction the other wyrm holds (`waitForOther`), `arrive`).
+  move, waiting before a junction the other wyrm is on or moving into (`waitForOther`; one that only
+  waits before it doesn't count), `arrive`).
 - **Routes:** `route(s, a, b, from, strict)` is a BFS over (tile, came-from) pairs along `arms`
-  (neighbours on the line that are not cut): it goes straight over a crossing (any way from one it
-  starts on), and only turns back at a station, a dead end or where it starts. Loose, it is the
+  (neighbours on the line that are not cut): it goes straight over a crossing, also one it starts
+  on when `from` is known (any way only with no `from`), and only turns back at a station, a dead
+  end or where it starts with no `from`, so a replan on every tile never turns or reverses the
+  wyrm where the line doesn't allow it. Loose, it is the
   shortest such way. Strict, it also never moves in or out of a junction by its barred arm.
   `planRoute` takes the strict way if there is one, else the loose way (the wyrm then stops to
-  throw switches). `routable` and `dispatch` use loose routes, since the wyrm can always throw
-  switches itself.
+  throw switches). `routable` and `dispatch` use loose routes (from each wyrm's `at` and `from`),
+  since the wyrm can always throw switches itself.
 - **Screens:** `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas
   pixels per game pixel) and zooms the camera, which never scrolls, to match. With `fill` the view
   is 960x540 or bigger in one direction (up to 1296 wide or 720 tall), picked once at start.
@@ -180,7 +183,7 @@ How it runs:
   track or a station already there, so a drag that starts on the line continues from it), or `removeTrack` while
   Remove is on; a `pointerdown` on a junction calls `throwSwitch` instead. Dragging acts once per
   new tile. A `pointerdown` on an open village remembers it (`pressedVillage`), a move to another
-  tile forgets it, and the `pointerup` calls `sendCourier` for it. In `depot` mode a tap on a
+  tile, off the board or off the grid forgets it, and the `pointerup` calls `sendCourier` for it. In `depot` mode a tap on a
   village calls `buyDepot` (and goes back to `auto` once bought); the Depot button toggles it. Order cards call `dispatch`; the upgrade buttons `buyUpgrade`; the charter cards
   `pickCharter`; Remove, Plain and Depot set the scene's `mode` (`auto`, `plain`, `remove` or `depot`), which
   lives in the scene, not the state. Sim functions check the phase and return false when the
@@ -222,7 +225,8 @@ State model (`src/game/state.ts`):
 - `Order.from` and `.to` index into `valley.villages`. `Order.status` runs `waiting` -> `queued`
   (sent; a wyrm is on its way or will be) -> `loading` -> `carrying` -> removed on delivery. A
   late order is removed in any status. `Order.wyrm` is the index of the wyrm that set off for it
-  (null before); `Order.made` marks a workshop's goods.
+  (null before); `Order.made` marks a workshop's goods; `Order.mood` is the sending village's mood
+  when the order was made (its card's mood tag shows it).
 - `Wyrm` has `at` (last tile), `from` (the tile before it, for switches), `path` (tiles still to
   cross), `progress` (0-1 towards `path[0]`), `job` (the stop it is heading for: order id and
   `pickup` or `drop` leg, `feed`, or `visit` with a village for a courier call), `loadMs`, `switchMs`, `food` (0-1), `eatMs` and `waitMs`.
@@ -243,16 +247,17 @@ State model (`src/game/state.ts`):
   `MOOD_GAP_MS + MOOD_GAP_PER_VILLAGE_MS * open villages` (a pickup or a delivery resets it, and a
   village's joining the line); in the festival `tickMoods` does nothing, since every order goes to
   the host. `addOrder` reads `moodOf(s, from)`: pay times `MOOD_PAY[mood]`
-  above zero, time times `MOOD_RUSH` below.
+  above zero, time times `MOOD_RUSH` below, and keeps it as `Order.mood`.
 - Hazards (from `HAZARD_ROUND`): every `HAZARD_EVERY_MS` `tickHazard` picks a track tile that is a
   bridge (washout) or beside a mountain (rockfall), if any, and sets `hazard` with
-  `HAZARD_WARN_MS`. `strikeHazard` waits while a wyrm is on the tile or moving onto it, then takes
+  `HAZARD_WARN_MS`. `strikeHazard` moves an idle wyrm (no job, no path) on the tile one tile off it
+  (`stepOff`), waits while a wyrm is on the tile or moving onto it, then takes
   the track (no refund), cuts each wyrm's `path` short of it and drops its job (`dropJob`: a
   pickup goes back to the front of the queue, cargo stays aboard). Removing the tile first doesn't
   cancel the hazard, and `trackCost` refuses the hazard's tile until it has struck.
 - Charters (from `CHARTER_ROUND`): `nextRound` clears `charter` and sets `charterOffer` to two
   distinct entries of `CHARTERS` (`offerCharters`; a `cargo` charter gets a cargo an open village
-  sends and its `%c` filled in). `pickCharter` sets `charter`. It scales `addOrder`'s pay
+  sends and its `{cargo}` filled in). `pickCharter` sets `charter`. It scales `addOrder`'s pay
   (`charterPay`, only its cargo when it has one) and time, `trackCost` (`track`), the order timer
   (`orders`) and the belly (`fed`).
 - Passengers (from `PASSENGER_ROUND`): `randomOrder` makes an order passengers with
@@ -300,7 +305,8 @@ Randomness and timing:
   valley is the same every run.
 - Art noise uses `seeded` from `src/art/pixelArt.ts`, not `Math.random`.
 - All timing is game time from `tick`; there is no `Date.now`, `setTimeout`, tween or Phaser timer
-  in the rules. The wing flap and the late-order blink read `this.time.now` for looks only.
+  in the rules. The wing flap, the late-order blink and the hazard mark's blink read `this.time.now`
+  for looks only.
 
 Data tables (where to tune):
 
@@ -320,7 +326,7 @@ Data tables (where to tune):
 - Difficulty scales one number: each order's time. `addOrder` in `src/game/sim.ts` multiplies it
   by `byDifficulty(1.5, 1, 0.7)`, so Easy 1.5x, Normal 1x, Hard 0.7x.
 - `settings.reduceMotion` holds the wyrm's wings still and stops the blink of an order's time bar
-  when it is nearly out, in `GameScene`.
+  when it is nearly out and of the hazard's warning mark, in `GameScene`.
 - Keep Normal exactly as designed (multiplier 1): the playthrough runs on Normal.
 - Keep the Wyrmrail row of the difficulty table in the root `README.md` (and the difficulty line in
   this game's `README.md`) in sync with the multipliers.
@@ -448,7 +454,8 @@ starts the music again.
   waits there for the next order. A hazard that cuts a wyrm's way does the same, but its cargo
   stays aboard.
 - `arrive` doesn't check where the wyrm is, so anything that empties a `path` must also clear the
-  `job` (as `failOrder`, `strikeHazard` and `dropJob` do).
+  `job` (as `failOrder`, `strikeHazard` and `dropJob` do), and reset its junction wait and switch
+  stop with `stopWaiting`, or the HUD keeps showing them.
 - `scene.restart()` reruns `create`, which resets the game and bakes a new `valley` texture, but
   `lastFrame` carries over.
 - `tileCenter` positions of villages change every game; anything placed by a village (labels,
