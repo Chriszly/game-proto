@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import { CALM, STINGS, WAVES, sfx } from '../audio';
-import { TREE_FLOWERS, bakeGarden, gardenBg } from '../art/textures';
+import { TREE_FLOWERS, bakeGarden, bakeTable, gardenBg } from '../art/textures';
 import { GARDENS, cellAt, pathPoint } from '../game/board';
 import {
   BLOOM_GOAL,
@@ -132,6 +133,11 @@ type Chip = { bg: Image; text: Text };
 
 export class GameScene extends Phaser.Scene {
   state!: GameState;
+  /**
+   * The designed 960x540 frame in the middle of the view: the camera scrolls so the board, panel
+   * and overlays laid out for it sit there, while the table and the HUD strip fill the whole view.
+   */
+  private frame = new Phaser.Geom.Rectangle(0, 0, 960, 540);
   /** Where the seed cards are, in view pixels; read by the playthrough test. */
   seedButtons: (Rect & { kind: SeedKind })[] = [];
   /** Where the wave button is, in view pixels; read by the playthrough test. */
@@ -209,6 +215,13 @@ export class GameScene extends Phaser.Scene {
     this.shots.clear();
     this.slimes.clear();
 
+    // Everything is laid out in the designed frame, which the camera centres in the view; the
+    // table fills the whole view and the HUD (moved up by the frame's y) sits at its top edge.
+    const view = viewSize(this);
+    const frame = (this.frame = viewFrame(this));
+    this.cameras.main.setScroll(-frame.x, -frame.y);
+    bakeTable(this, view.width, view.height, frame.x, frame.y);
+    this.add.image(-frame.x, -frame.y, 'table').setOrigin(0);
     bakeGarden(this, this.state.garden);
     this.add.image(0, 0, gardenBg(this.state.garden)).setOrigin(0);
     this.sunGfx = this.add.graphics().setDepth(1);
@@ -221,8 +234,11 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y)
       .setVisible(false)
       .setDepth(UI_DEPTH - 31);
+    const hudFrom = this.children.length;
     this.createHud();
+    for (const obj of this.children.list.slice(hudFrom)) (obj as unknown as { y: number }).y -= frame.y;
     this.createPanel();
+    this.waveButton = { x: WAVE_BUTTON.x + frame.x, y: WAVE_BUTTON.y + frame.y, w: WAVE_BUTTON.w, h: WAVE_BUTTON.h };
     this.createMenu();
     this.banner = this.add
       .text(GRID.x + (GRID.cols * GRID.cell) / 2, GRID.y + 36, '', {
@@ -320,6 +336,12 @@ export class GameScene extends Phaser.Scene {
     playMusic(part === 'calm' ? CALM : WAVES, part);
   }
 
+  /** The dark cover behind an overlay, over the whole view, taking the taps behind it. */
+  private dim() {
+    const view = viewSize(this);
+    return this.add.rectangle(-this.frame.x, -this.frame.y, view.width, view.height, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
+  }
+
   /** A pressed clay label: bold text with a light lower edge, as if stamped into the clay. */
   private press(x: number, y: number, text: string, size: number, color: string, origin: [number, number] = [0, 0.5]) {
     return this.add
@@ -334,7 +356,7 @@ export class GameScene extends Phaser.Scene {
     this.tree = this.add.image(heart.x, heart.y, 'tree').setOrigin(65 / 130, 70 / 120).setDepth(heart.y + 32);
     this.treeFlowers = TREE_FLOWERS.map(([dx, dy]) => this.add.image(heart.x + dx, heart.y + dy, 'bud').setDepth(heart.y + 33));
     // The table strip left of the board hides pests until they step onto the garden.
-    this.add.image(0, 0, 'edge').setOrigin(0).setDepth(UI_DEPTH - 40);
+    this.add.image(-this.frame.x, -this.frame.y, 'edge').setOrigin(0).setDepth(UI_DEPTH - 40);
 
     const zone = this.add.zone(GRID.x, GRID.y, GRID.cols * GRID.cell, GRID.rows * GRID.cell).setOrigin(0).setInteractive();
     zone.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = cellAt(p.worldX, p.worldY)));
@@ -495,7 +517,7 @@ export class GameScene extends Phaser.Scene {
       }
       const open = this.add.container(0, 0, face);
       this.cards.push({ kind, rim, card, open, locked });
-      return { kind, x, y, w: SEED_BUTTONS.w, h };
+      return { kind, x: x + this.frame.x, y: y + this.frame.y, w: SEED_BUTTONS.w, h };
     });
 
     this.preview = {
@@ -605,7 +627,7 @@ export class GameScene extends Phaser.Scene {
    */
   private createPicker(mode: 'choose' | 'over' | 'harvest') {
     const s = this.state;
-    const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
+    const dim = this.dim();
     const title = this.add
       .text(VIEW.w / 2, 104, '', { fontFamily: FONT, fontStyle: 'bold', fontSize: '30px', color: '#f2c44a', stroke: '#3a2008', strokeThickness: 6 })
       .setOrigin(0.5);
@@ -697,7 +719,7 @@ export class GameScene extends Phaser.Scene {
     // The wave's banner would show through behind the title; the pick's own banner follows it.
     this.tweens.killTweensOf(this.banner);
     this.banner.setAlpha(0);
-    const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
+    const dim = this.dim();
     const title = this.add
       .text(VIEW.w / 2, 104, t('boonTitle'), { fontFamily: FONT, fontStyle: 'bold', fontSize: '30px', color: '#f2c44a', stroke: '#3a2008', strokeThickness: 6 })
       .setOrigin(0.5);
@@ -1210,7 +1232,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: label, alpha: 0, y: still ? label.y : label.y - 18, delay: 350, duration: 650, onComplete: () => label.destroy() });
     if (still) return;
     const from = { x: pop.x, y: pop.y - 5 };
-    const to = { x: HUD.sap.icon, y: HUD.y };
+    const to = { x: HUD.sap.icon, y: HUD.y - this.frame.y };
     for (let k = 0; k < 3; k++) {
       const drop = this.add.image(from.x, from.y, 'sap').setScale(0.95 - k * 0.15).setDepth(UI_DEPTH - 4);
       this.tweens.addCounter({
