@@ -288,6 +288,22 @@ const en = {
   pot: 'Iron pot',
   smith: 'Smith',
   palaceCount: { one: '{n} palace', other: '{n} palaces' },
+  tavern: 'Tavern',
+  tavernMakes: 'Ale and stout',
+  barleyField: 'Barley field',
+  hopGarden: 'Hop garden',
+  maltings: 'Maltings',
+  oast: 'Oast',
+  kettle: 'Brew kettle',
+  barley: 'Barley',
+  hops: 'Hops',
+  malt: 'Malt',
+  driedHops: 'Dried hops',
+  ale: 'Ale',
+  stout: 'Stout',
+  brewer: 'Brewer',
+  castleCount: { one: '{n} castle', other: '{n} castles' },
+  townCity: 'Every district is full of castles: the town is a city!',
 };
 
 export default en;

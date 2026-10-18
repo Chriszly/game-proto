@@ -27,6 +27,7 @@ export const HOME_TIERS: { name: TextKey; needs: Need[] }[] = [
   { name: 'manorCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper'] },
   { name: 'mansionCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper', 'cloth', 'cloak'] },
   { name: 'palaceCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper', 'cloth', 'cloak', 'horseshoe', 'pot'] },
+  { name: 'castleCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper', 'cloth', 'cloak', 'horseshoe', 'pot', 'ale', 'stout'] },
 ];
 
 /** Homes a district starts with when it opens, and the most it holds. */
@@ -80,3 +81,6 @@ export function districtAsks(district: DistrictState): Need[] {
 
 /** Whether a district has grown as far as it can: every home built at the last tier. */
 export const districtFull = (d: DistrictState) => d.homes >= MAX_HOMES && d.tier >= HOME_TIERS.length - 1;
+
+/** The town's second ending: every district grown as far as it can, and the town is a city. */
+export const townIsCity = (districts: DistrictState[]) => districts.every(districtFull);

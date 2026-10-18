@@ -375,7 +375,7 @@ apothecary's shelves), paying the shelf price into that shop's till. Happiness m
 the share it got. Four rounds in a row at 80% or more add a home, up to eight; once full, its
 cottages grow into houses, which want honey cake and Sleeping Tonics as well as bread and Healing
 Draughts. A full district of houses grows into manors, which also want candles and tapers from the
-chandlery, manors grow into mansions (see the dye house) and mansions into palaces (see the smithy). Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
+chandlery, manors grow into mansions (see the dye house) mansions into palaces (see the smithy) and palaces into castles (see the tavern). Four rounds in a row at 30% or less lose a home again, down to three. Market Row opens with
 the town; Riverside opens once Market Row has houses, and Hilltop once Riverside has.
 
 The second shop is the **chandlery** (10,000 coins). Its beehives give honeycomb, pressed into
@@ -416,6 +416,24 @@ district of mansions grows into palaces, which also want horseshoes and iron pot
 | Pixies: coppice to kiln, ore to bloomery, kiln to bloomery, bloomery to anvil, anvil to the shelves | 4,860, 4,860, 8,100, 8,100, 12,150 |
 
 ![The smithy's anvil and shop](docs/screenshots/smithy.webp)
+
+The fifth shop is the **tavern** (10,000,000 coins). Its barley field gives barley, malted at the
+maltings, and its hop garden gives hops, dried at the oast. The brew kettle makes ale from a malt and
+dried hops (1,944 coins) or stout from two malt and dried hops (3,159). A full district of palaces
+grows into castles, which also want ale and stout.
+
+| Tavern | Cost |
+| --- | --- |
+| Station or counter level | 4,860, 9,720, 19,440, 38,880 |
+| Brewer (2 per station) or shopkeeper (1) | 7,290, then 14,580 |
+| Pixies: barley to maltings, hops to oast, maltings to kettle, oast to kettle, kettle to the shelves | 14,580, 14,580, 24,300, 24,300, 36,450 |
+
+![The tavern's brew kettle and shop](docs/screenshots/tavern.webp)
+
+Once every district is full of castles, the town map says the town has become a city: the
+game's second ending, after the cure of the plague.
+
+![Every district full of castles](docs/screenshots/city.webp)
 
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 
