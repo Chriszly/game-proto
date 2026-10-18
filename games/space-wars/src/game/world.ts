@@ -298,6 +298,8 @@ export interface Effect extends Point {
   x2?: number;
   y2?: number;
   r?: number;
+  /** `rank` marks a rank-up's gold ring, which is no explosion and makes no boom. */
+  kind?: 'rank';
 }
 
 export interface Side {
@@ -1836,11 +1838,11 @@ export class World {
     u.hp = Math.min(u.maxHp, u.hp * k);
     const rank = VETERAN_NAMES[this.rankOf(u) - 1];
     const name = t(rank);
-    this.booms.push({ x: u.x, y: u.y, color: 0xffd36a, life: BOOM_MS, r: 14 });
+    this.booms.push({ x: u.x, y: u.y, color: 0xffd36a, life: BOOM_MS, r: 14, kind: 'rank' });
     if (u.faction === PLAYER) {
       this.pops.push({ x: u.x, y: u.y - 20, text: name.toUpperCase(), color: 0xffd36a, life: POP_MS });
       this.cue('rankUp');
-      this.events.push({ kind: 'notice', text: t(rank === 'rankAce' ? 'rankUpAce' : 'rankUp', { unit: t(this.sides[PLAYER].def.units[u.type].name), rank: name, pct: Math.round(VETERAN_STEP * 100) }),
+      this.events.push({ kind: 'notice', text: t(rank === 'rankAce' ? 'rankUpAce' : 'rankUp', { unit: t(u.flagship ? this.sides[PLAYER].def.flagship.name : this.sides[PLAYER].def.units[u.type].name), rank: name, pct: Math.round(VETERAN_STEP * 100) }),
       });
     }
   }
@@ -1944,7 +1946,8 @@ export class World {
 
   /**
    * Runs the board's countdown while it is up (taking the first card when it runs out), counts the
-   * current contract, fails a convoy that can no longer arrive, and when the contract is met pays its
+   * current contract, fails a convoy that can no longer arrive or a lattice hunt with no Lattice
+   * faction left, and when the contract is met pays its
    * reward and perk, unlocks the flagship after the third, and puts up the board for the next.
    */
   private updateContract(dt: number) {
@@ -1966,6 +1969,9 @@ export class World {
       state.progress += dt / 1000;
     } else if (c.goal === 'convoy' && state.progress + this.units.filter((u) => u.convoy).length < c.target) {
       this.failContract(t('convoyLost'));
+      return;
+    } else if (c.goal === 'lattice' && state.progress < c.target && !this.contractOpen('lattice')) {
+      this.failContract(t('latticeGone'));
       return;
     }
     if (state.progress < c.target) return;

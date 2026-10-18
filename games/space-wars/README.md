@@ -113,7 +113,9 @@ progress made while a contract is current counts.
 
 A kill or a razed building counts for you when your ship or turret landed the last hit. A convoy
 that loses two harvesters fails: the board offers two more contracts for the same rank, and the
-convoy's survivors stay on as harvesters. Those that arrive start mining their new field.
+convoy's survivors stay on as harvesters. Those that arrive start mining their new field. Break a
+Mine Lattice fails the same way once no Veil Syndicate rival is left. While the rivals panel is
+open, the board stands aside; the top bar still counts down.
 
 ![The contract board after the Barracks: Break the raid and Escort the convoy, each with its reward, rank perk and goal, the countdown above them](docs/screenshots/contract.webp)
 

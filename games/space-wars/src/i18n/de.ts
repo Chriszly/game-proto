@@ -240,6 +240,7 @@ const de: Translation<typeof en> = {
   beaconCaptured: 'Relaisfeuer erobert: +{n} Kristall/s, solange deine Schiffe dort sind',
   beaconLost: 'Das Relaisfeuer ist verloren',
   convoyLost: 'der Konvoi ist verloren',
+  latticeGone: 'keine Fraktion mit Minengitter ist mehr übrig',
   contractDone: 'Vertrag erfüllt: +{n} Kristall und Rang {rank}: {perk}',
   flagshipUnlocked: '. Flaggschiff freigeschaltet: baue {name} an deiner Basis',
   contractStarted: 'Vertrag {rank}: {brief}',

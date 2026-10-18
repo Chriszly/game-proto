@@ -2,7 +2,7 @@
 // harder one and keeps one of the contract perks earned in it for every later sector. Saved in the
 // browser under `space-wars-campaign`. No Phaser.
 
-import type { Goal } from './contracts';
+import { contractOf, type Goal } from './contracts';
 import { t, type TextKey } from '../i18n';
 
 /** What makes a sector harder: rival outposts at the start, fewer loose crystal nodes, rival crystal and research. */
@@ -43,7 +43,10 @@ export function loadCampaign(): Campaign {
   try {
     const raw = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null');
     if (raw && typeof raw.unlocked === 'number' && Array.isArray(raw.kept)) {
-      return { unlocked: Math.max(1, Math.min(SECTORS.length, raw.unlocked)), kept: raw.kept.slice(0, SECTORS.length) };
+      // An old or hand-edited save: a whole number of sectors, and only perks of goals the game still knows.
+      const unlocked = Math.max(1, Math.min(SECTORS.length, Math.round(raw.unlocked) || 1));
+      const kept = (raw.kept as unknown[]).slice(0, SECTORS.length).map((g) => (typeof g === 'string' && contractOf(g as Goal) ? (g as Goal) : null));
+      return { unlocked, kept };
     }
   } catch {
     // No storage, or a broken save: start over.

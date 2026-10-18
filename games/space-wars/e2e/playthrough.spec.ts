@@ -95,9 +95,9 @@ function scene(page: Page) {
     boardCards: () => read<{ x: number; y: number; w: number; h: number; goal: string }[]>((s) =>
       JSON.parse(JSON.stringify(s.boardCards)),
     ),
-    /** Where the map camera is scrolled to, in battlefield pixels. */
     /** The ids of the units the player has selected. */
     selected: () => read<number[]>((s) => [...s.selected]),
+    /** Where the map camera is scrolled to, in battlefield pixels. */
     scroll: () => read<{ x: number; y: number }>((s) => ({ x: s.camera.scrollX, y: s.camera.scrollY })),
     /** Where a battlefield point sits in view pixels, from the scene's own conversion. */
     toScreen: (x: number, y: number) =>
@@ -105,13 +105,13 @@ function scene(page: Page) {
         ({ x, y }) => (window as any).game.scene.getScene('Game').toScreen(x, y),
         { x, y },
       ) as Promise<{ x: number; y: number }>,
-    /** Whether a Barracks can go at (x, y) for the player, from the game's own placement rule. */
     /** Whether the player has ever seen a battlefield point, from the fog of war. */
     knows: (x: number, y: number) =>
       page.evaluate(
         ({ x, y }) => (window as any).game.scene.getScene('Game').state.fog.knows({ x, y }) as boolean,
         { x, y },
       ) as Promise<boolean>,
+    /** Whether a Barracks can go at (x, y) for the player, from the game's own placement rule. */
     canPlace: (x: number, y: number) =>
       page.evaluate(
         ({ x, y }) => (window as any).game.scene.getScene('Game').state.placementProblem('barracks', x, y) === null,

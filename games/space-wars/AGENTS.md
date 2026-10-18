@@ -37,7 +37,7 @@ Implemented today:
   give no credit) gets the kill, and at 3 and 8 kills (`VETERAN_RANKS`) it ranks up, Veteran then Ace
   (`VETERAN_NAMES`): +15% damage and hit points per rank (`VETERAN_STEP`), the hull scaled on the
   spot like a hull research level. Gold chevrons above the ship show its rank, the hover label names
-  it, and the player's rank-ups pop a notice.
+  it, and the player's rank-ups pop a notice (naming the flagship by its own name).
 - Repair and fall back (`REPAIR_RANGE`, `REPAIR_RATE`, `World.fallBack`, `sendHome`, `repairSpots`,
   `Unit.repairing`): any ship within 120 px of a finished hub, outpost or Depot of its faction gets
   back 3% of its hit points a second (a green cross beside it). The Fall back button at the right of
@@ -71,7 +71,8 @@ Implemented today:
   it centres the map there and a drag keeps following (in watch mode too); it is hidden on the
   picker.
 - Select the fleet and spread a wing (`World.fleet`, `GameScene.selectFleet`, `ARMY_TAB` in
-  `layout.ts`): a tap on the army count on the top bar, or Q (`keydown-Q`), selects every warship.
+  `layout.ts`): a tap on the army count on the top bar (`World.fleet`'s count, decoys left out), or Q
+  (`keydown-Q`), selects every warship.
   `World.command` sends a wing of two or more on a move to the `RALLY_SPOTS` round the point, so it
   fans out instead of stacking; an attack order is unchanged.
 - Derelict stations (`World.derelicts`, `Derelict`, `updateDerelict`, `DERELICT_DEFS`): three neutral
@@ -179,9 +180,11 @@ Implemented today:
   harvesters fly from the hub to the crystal node nearest 600 px away (420 to 820), the rival
   whose hub is nearest it sends up to 3 warships at them, an arrival starts mining that node, and
   when fewer than the target can still arrive the contract fails: the board opens again for the
-  same rank. `contract.done` lists the goals finished (the campaign keeps a perk from them). The
+  same rank. `lattice` fails the same way once `contractOpen('lattice')` turns false (no living
+  rival with a Mine Lattice faction is left, so none can be razed any more). `contract.done` lists the goals finished (the campaign keeps a perk from them). The
   top bar's pill and the command bar's panel show the current contract or the board's countdown;
-  the board itself is two cards over the map (`GameScene.boardCards`, `drawBoard`).
+  the board itself is two cards over the map (`GameScene.boardCards`, `drawBoard`), hidden while the
+  rivals panel is open.
 - Flagship (`Side.flagship`, `World.buildFlagship`, `updateFlagship`, `flagshipStats`, `Unit.flagship`,
   `Faction.flagship` in `game/factions.ts`): the third contract done (`FLAGSHIP_STEP`) turns the
   player's flagship from `locked` to `ready`. The Flagship button (`FLAGSHIP_BUTTON`, kind `command`)
@@ -242,7 +245,7 @@ Implemented today:
 Missing or rough:
 
 - No pathfinding (units move in straight lines and pass over rocks), no unit
-  collision and no save. No ambient hum under the music, and no per-faction music motif.
+  collision and no save of a battle in progress (only the campaign is saved). No ambient hum under the music, and no per-faction music motif.
 - No edge scrolling: the map scrolls with the keys, a two-finger drag or the minimap.
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
 - Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
@@ -298,7 +301,7 @@ File map (`src/`):
   `sectorText`. No Phaser.
 - `game/arena.ts`: `ARENA` (the 1600 by 1000 battlefield in world pixels), `START_POINTS` (the five
   fixed hub spots, player first), `NODE_AMOUNT`, `NODE_CLEARANCE` and `BUILD_RANGE`.
-- `game/map.ts`: `generateMap(count)` returns a `MapLayout` (homes, nodes, rocks, nebulae, stars,
+- `game/map.ts`: `generateMap(count, loose)` returns a `MapLayout` (homes, nodes, rocks, nebulae, stars,
   derelicts), `beaconNode` (which node is the relay beacon), `DerelictKind` and `DERELICT_KINDS`.
   Uses `Math.random`, plus `localRandom` (exported: the world's board and the scene use it too) for
   the retries that keep nebulae and derelicts clear.
@@ -435,7 +438,7 @@ with the keys, two fingers or the minimap makes no sound:
 | Sound | Where it plays |
 | --- | --- |
 | `laser` | `GameScene.listen`: one per frame at most, from the new beams on screen and in sight, pitched by faction (`LASER_PITCH`) |
-| `boom`, `boomBig` | `listen`: the biggest new wreck, splash or mine ring in sight each frame (`BIG_BOOM` radius 22 and up is big); a rank-up's gold ring is skipped |
+| `boom`, `boomBig` | `listen`: the biggest new wreck, splash or mine ring in sight each frame (`BIG_BOOM` radius 22 and up is big); a rank-up's gold ring (`Effect.kind` `rank`) is skipped |
 | `hubFalls` | cue `hubFalls` (`removeDead`), only when the hub is in sight |
 | `select` | a tap or box that selects ships (`tapMap`, `onUp`), and the army tab or Q selecting the fleet (`selectFleet`; `ui('refuse')` with no warships) |
 | `move`, `attack` | a move or attack order (`tapMap`) |
@@ -480,7 +483,8 @@ follows or uses bounds (`scrollTo` clamps it), so it keeps the top-left origin r
 `e2e/screens.spec.ts` checks the game on five screens.
 
 Save keys: `space-wars-campaign` (`CAMPAIGN_KEY` in `game/campaign.ts`): the sector campaign, as
-`{ unlocked, kept }`. Nothing else is kept between visits; the game reads the hub's settings
+`{ unlocked, kept }`. `loadCampaign` rounds `unlocked` to a whole sector and turns a `kept` goal
+the game no longer knows into `null`, so an old or hand-edited save still loads. Nothing else is kept between visits; the game reads the hub's settings
 (`byDifficulty`, `settings.reduceMotion`, the language through `shared/i18n.ts`) through `shared/`. The playthrough starts with empty
 storage, so it plays sector 1 with no kept perks.
 

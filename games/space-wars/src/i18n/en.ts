@@ -238,6 +238,7 @@ const en = {
   beaconCaptured: 'Relay beacon captured: +{n} crystal a second while your ships hold it',
   beaconLost: 'The relay beacon was lost',
   convoyLost: 'the convoy was lost',
+  latticeGone: 'no faction with a Mine Lattice is left',
   contractDone: 'Contract done: +{n} crystal and Rank {rank}: {perk}',
   flagshipUnlocked: '. Flagship unlocked: build the {name} at your hub',
   contractStarted: 'Contract {rank}: {brief}',
