@@ -1,7 +1,7 @@
 import { BEDS, SHOPS, SHOP_PLACES, type GoodId, type RouteDef, type RouteEnd, type ShopId } from '../game/town';
 
 // Where everything stands in a town shop's yard, worked out from its `ShopDef`: its gardens stacked
-// at the left, its stations in a row along `LINE_Y`, and the shop at the right, open to the street
+// at the left, its market (the outfitter and the study) right of them, its stations in a row along `LINE_Y`, and the shop at the right, open to the street
 // along the bottom. The doctor stays above `FENCE_Y`; customers come up from the street below it to
 // the front of the counter. Phaser-free, since the sim reads the pixie routes' lengths from it.
 
@@ -18,7 +18,7 @@ export const FENCE_Y = 470;
 export const LINE_Y = 270;
 const GARDEN_X = 60;
 const BED = { w: 56, h: 44 };
-const STATION_X = 440;
+const STATION_X = 700;
 const STATION_GAP = 300;
 /** How far a station's drop, work and pick-up markers, and its purple markers, stand from it. */
 const MARKER_GAP = 62;
@@ -43,6 +43,18 @@ export function gardenLayout(g: number) {
   };
 }
 
+/**
+ * The market between the gardens and the first station: the outfitter's sign with its pack, boots
+ * and sickle markers in a row below, and under it the study's sign and desk with its two lessons.
+ */
+export const MARKET = {
+  outfitter: { x: 455, y: 100 },
+  gear: { pack: { x: 365, y: 150 }, boots: { x: 455, y: 150 }, sickle: { x: 545, y: 150 } },
+  study: { x: 455, y: 262 },
+  desk: { x: 455, y: 300 },
+  lessons: { craftOrder: { x: 400, y: 374 }, priceSigns: { x: 510, y: 374 } },
+} as const;
+
 /** Where a bed's middle is: beds go row by row, three to a row, gardens one under the other. */
 export function bedPosition(bed: number): Point {
   const g = Math.floor(bed / BEDS), i = bed % BEDS;
@@ -60,6 +72,8 @@ export function stationLayout(id: ShopId, station: string) {
     work: { x, y: HANDS_Y },
     pickUp: { x: x + MARKER_GAP, y: HANDS_Y },
     label: { x, y: LINE_Y + 46 },
+    /** Its "First:" sign, under its name, once the crafting order is learned. */
+    priority: { x, y: LINE_Y + 72 },
     level: { x: x - MARKER_GAP, y: COINS_Y },
     hire: { x, y: COINS_Y },
     route: { x: x + MARKER_GAP, y: COINS_Y },
@@ -80,8 +94,10 @@ export function counterLayout(id: ShopId) {
     floor: { x: left, y: 110, w: SHOP_W, h: FENCE_Y + 40 - 110 },
     sign: { x: cx, y: 96 },
     shelf: (good: GoodId): Point => ({ x: cx + (sells.indexOf(good) - (sells.length - 1) / 2) * 84, y: 168 }),
-    level: { x: cx - 64, y: 262 },
-    hire: { x: cx + 64, y: 262 },
+    /** Each shelf's price sign, under its price, once the price signs are learned. */
+    priceSign: (good: GoodId): Point => ({ x: cx + (sells.indexOf(good) - (sells.length - 1) / 2) * 84, y: 246 }),
+    level: { x: cx - 64, y: 292 },
+    hire: { x: cx + 64, y: 292 },
     drop: { x: cx - 92, y: 372 },
     work: { x: cx, y: 372 },
     till: { x: cx + 92, y: 372 },

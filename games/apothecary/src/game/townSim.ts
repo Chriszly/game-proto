@@ -4,7 +4,7 @@ import { routeMs } from '../scenes/shopLayout';
 import { DISTRICTS, GROW_ROUNDS, HAPPY, HAPPY_PULL, HOME_TIERS, MAX_HOMES, START_HOMES, SUPPLY_MS, UNHAPPY, districtAsks, type DistrictState, type Need } from './districts';
 import { FINE, type PotionId } from './items';
 import type { Feedback } from './sim';
-import { carryCapacity, payment, potionPrice, speedAt, type GameState, type Upgrade } from './state';
+import { PRICE_SIGNS, SIGN_DEMAND, SIGN_PATIENCE, SIGN_PAY, SIGN_SET, carryCapacity, gearLevel, payment, potionPrice, speedAt, type GameState, type Upgrade } from './state';
 import {
   BEDS,
   COUNTER_PAY,
@@ -23,6 +23,11 @@ import {
   SHOP_STORAGE,
   WALK_IN_MS,
   createShop,
+  gearCost,
+  lessonCost,
+  priorityChoices,
+  shopSignOf,
+  shopStudied,
   gardenOfBed,
   levelCost,
   routeCost,
@@ -31,7 +36,9 @@ import {
   takes,
   townOpen,
   workerCost,
+  type Gear,
   type GoodId,
+  type Lesson,
   type RouteDef,
   type ShopDef,
   type ShopId,
@@ -66,7 +73,10 @@ function inFlight(shop: ShopState, def: ShopDef, to: RouteDef['to'], good: GoodI
 const queueRoom = (shop: ShopState, station: string, good: GoodId) => count(shop.stations[station].queue, good) < SHOP_STORAGE;
 export const shelfRoom = (shop: ShopState, good: GoodId) => count(shop.shelf, good) < SHOP_STORAGE;
 
-/** The recipe a station starts next: one whose inputs are in, whose product has room, shortest of on its pallets and the shelf. */
+/**
+ * The recipe a station starts next: one whose inputs are in and whose product has room; its
+ * priority's when that is ready, otherwise what is shortest of on its pallets and the shelf.
+ */
 function nextRecipe(shop: ShopState, def: StationDef, station: StationState) {
   const ready = def.recipes.filter((r) => {
     const queue = [...station.queue];
@@ -77,6 +87,9 @@ function nextRecipe(shop: ShopState, def: StationDef, station: StationState) {
     }
     return count(station.output, r.out) < SHOP_STORAGE;
   });
+  const first = shopStudied(shop, 'craftOrder') ? shop.priority[def.id] : null;
+  const preferred = first && ready.find((r) => r.out === first);
+  if (preferred) return preferred;
   const stocked = (good: GoodId) => count(station.output, good) + count(shop.shelf, good);
   return ready.reduce<(typeof ready)[number] | null>((best, r) => (!best || stocked(r.out) < stocked(best.out) ? r : best), null);
 }
@@ -155,6 +168,10 @@ function runRoute(id: ShopId, shop: ShopState, def: ShopDef, route: RouteDef, dt
   state.next = ROUTE_GAP_MS;
 }
 
+/** What a customer pays for a good now: its price, the counter's level and the shelf's sign. */
+export const shopPrice = (shop: ShopState, def: ShopDef, good: GoodId) =>
+  Math.round((def.sells[good] ?? 0) * (1 + COUNTER_PAY * shop.counter.level.level) * SIGN_PAY[shopSignOf(shop, good)]);
+
 /** The orders at the counter, walked in and waiting. */
 export const arrived = (shop: ShopState) => shop.orders.filter((o) => o.walk <= 0);
 
@@ -194,7 +211,8 @@ function runCounter(shop: ShopState, dt: number, doctor: boolean) {
 function runOrders(shop: ShopState, def: ShopDef, dt: number, rand: () => number) {
   for (const order of shop.orders) {
     if (order.walk > 0) order.walk = Math.max(0, order.walk - dt);
-    else order.patience -= dt;
+    // Patience runs out faster while a good it still wants is sold dear.
+    else order.patience -= dt * Math.max(1, ...order.wants.map((w) => SIGN_PATIENCE[shopSignOf(shop, w)]));
   }
   shop.orders = shop.orders.filter((o) => o.patience > 0);
   shop.nextOrderIn -= dt;
@@ -205,11 +223,11 @@ function runOrders(shop: ShopState, def: ShopDef, dt: number, rand: () => number
     shop.nextOrderIn = 1_000;
     return;
   }
-  const goods = Object.keys(def.sells) as GoodId[];
+  // Drawn from a hat with each good in it as often as its sign draws customers: twice when cheap.
+  const goods = (Object.keys(def.sells) as GoodId[]).flatMap((g) => Array<GoodId>(SIGN_DEMAND[shopSignOf(shop, g)]).fill(g));
   const size = rand() < 0.35 ? 2 : 1;
   const wants = Array.from({ length: size }, () => goods[Math.floor(rand() * goods.length)]);
-  const markUp = 1 + COUNTER_PAY * shop.counter.level.level;
-  const pay = Object.fromEntries(wants.map((w) => [w, Math.round((def.sells[w] ?? 0) * markUp)]));
+  const pay = Object.fromEntries(wants.map((w) => [w, shopPrice(shop, def, w)]));
   const patience = SHOP_PATIENCE * byDifficulty(1.5, 1, 0.7);
   shop.orders.push({ id: shop.nextOrderId++, wants, pay, walk: WALK_IN_MS, patience, maxPatience: patience, face: Math.floor(rand() * CUSTOMER_FACES), spot });
   shop.nextOrderIn = 7_000 + rand() * 5_000;
@@ -442,6 +460,38 @@ export function payRoute(state: GameState, id: ShopId, route: string): Feedback 
   if (r.paid < cost) return [t('coinsPaid', { n: coins })];
   r.built = true;
   return [t('pixiesFly')];
+}
+
+/** Pays towards a shop's outfitter's level of the doctor's pack, boots or sickle. */
+export function payGear(state: GameState, id: ShopId, gear: Gear): Feedback | null {
+  const upgrade = state.town.shops[id]!.outfitter[gear];
+  return payLevel(state, upgrade, gearCost(id, gear), 1, () => t('levelUp', { name: t(gear), level: gearLevel(state, gear) + 1 }));
+}
+
+/** Pays towards a lesson at a shop's study. */
+export function payLesson(state: GameState, id: ShopId, lesson: Lesson): Feedback | null {
+  const upgrade = state.town.shops[id]!.study[lesson];
+  return payLevel(state, upgrade, lessonCost(id, lesson), 1, () => t('learned', { potion: t(lesson) }));
+}
+
+/** Moves a shop station's priority on: none, then each product it makes, and back to none. */
+export function cycleShopPriority(state: GameState, id: ShopId, station: string): Feedback | null {
+  const shop = state.town.shops[id]!;
+  const def = SHOPS[id].stations.find((s) => s.id === station)!;
+  if (!shopStudied(shop, 'craftOrder')) return null;
+  const choices: (GoodId | null)[] = [null, ...priorityChoices(def)];
+  const next = choices[(choices.indexOf(shop.priority[station] ?? null) + 1) % choices.length];
+  shop.priority[station] = next;
+  return [next ? t('firstChoice', { item: goodName(next) }) : t('anyOrder')];
+}
+
+/** Moves a shop shelf's price sign on: Fair to Dear, Dear to Cheap, Cheap to Fair. */
+export function cycleShopSign(state: GameState, id: ShopId, good: GoodId): Feedback | null {
+  const shop = state.town.shops[id]!;
+  if (!shopStudied(shop, 'priceSigns')) return null;
+  const next = PRICE_SIGNS[(PRICE_SIGNS.indexOf(shopSignOf(shop, good)) + 1) % PRICE_SIGNS.length];
+  shop.signs[good] = next;
+  return [t(SIGN_SET[next], { potion: goodName(good) })];
 }
 
 /** A good's colour, for bars and crates. */

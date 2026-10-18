@@ -372,6 +372,18 @@ before (three times as much a shop) but nothing like the shop itself:
 | Station or counter level (4 levels: a station works half again as fast a level, the counter sells 15% dearer) | 60, 120, 240, 480 |
 | Baker (2 per station) or shopkeeper (1) | 90, then 180 |
 | Pixies: field to mill, hives to oven, mill to oven, oven to the shelves | 180, 180, 300, 450 |
+| Outfitter: pack, boots, sickle (one level each) | 360, 300, 300 |
+| Study: crafting order, price signs | 120, 180 |
+
+Between its gardens and its first station, every shop has a little market of its own, like the
+apothecary's. Its **outfitter** sells one more level of the doctor's pack, boots and sickle, which
+count everywhere on top of the apothecary's two (so a pack holds up to 11 with every shop's). Its
+**study** teaches that shop's crafting order, which puts a "First:" sign at each station with two
+recipes, and its price signs, which put a Cheap, Fair or Dear sign under each shelf; both work as
+in the apothecary, and until they are learned a station makes what the shelves hold fewest of and
+everything sells at Fair.
+
+![A shop's market: the outfitter's three markers and the study's two lessons](docs/screenshots/town-market.webp)
 
 The till's coins are picked up at the counter, and the map shows what waits in each shop's till.
 
@@ -396,7 +408,7 @@ wick (117). Its prices are three times the bakery's:
 | Chandler (2 per station) or shopkeeper (1) | 270, then 540 |
 | Pixies: hives to press, flax to wheel, press to vat, wheel to vat, vat to the shelves | 540, 540, 900, 900, 1,350 |
 
-![The chandlery's dipping vat and shop](docs/screenshots/chandlery.webp)
+![The chandlery's dipping vat with tapers first, and candles sold dear](docs/screenshots/chandlery.webp)
 
 The third shop is the **dye house** (100,000 coins). Its looms weave two flax into linen, and its
 woad mill grinds woad leaves into blue dye. The dye vat makes blue cloth from a linen and a dye (216
