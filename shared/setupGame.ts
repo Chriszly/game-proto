@@ -14,7 +14,7 @@ const SLACK_MS = 1;
  * Applies the hub's settings that work the same in every game: the frame cap, the FPS readout and
  * reduced motion. Every game calls this right after creating its `Phaser.Game`. Full screen is
  * here too, as a button in the bottom left corner and the F key, in every game, and so is the sound
- * button beside it with the M key (`corner.ts`, which also lays out that row), and so are the
+ * button beside it, which opens the sound menu, with the M key (`corner.ts`, which also lays out that row), and so are the
  * loading, start and pause screens (`startScreen.ts`), with the game's How to play behind a button on
  * the start and pause screens when it passes `howToPlay` (`howToPlay.ts`). It also counts the play
  * on the game's public play counter (`playCount.ts`) and marks it played for the hub's Continue
