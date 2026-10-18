@@ -208,7 +208,8 @@ File map (`src/`):
   Sound below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
-  `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
+  `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and in dev builds puts `game` on
+  `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the board (tile and prop images per cell), the decree banner, the
   panel (island button, castle count, season strip, pouch line, omen strip), the gift card, the
@@ -266,7 +267,7 @@ File map (`src/`):
 
 Shared code it imports (outside the game folder): `shared/audio.ts` (`sounds`, `ui`, `playMusic`,
 `playSting`), `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewPoint`), `shared/settings.ts`
+`shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewSize`, `viewFrame`), `shared/settings.ts`
 (`byDifficulty`, `settings`) and `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`).
 
 How it runs:
@@ -277,14 +278,15 @@ How it runs:
   tap. Phaser's tweens animate the popups (`POPUP_MS`), the decree's "+8" and the round banner
   (`BANNER_MS`), so the only time-dependent part is cosmetic.
 - Input: one interactive zone covers the board. `pointermove` calls `hoverPointer`, which turns
-  the pointer into view pixels with `viewPoint` and calls `hoverAt`, which sets
+  the pointer into layout pixels with `cameras.main.getWorldPoint` and calls `hoverAt`, which sets
   `preview` from `previewPlacement` and redraws the hover; `pointerdown` calls `tapAt`, which maps
   the point to a cell with `cellAt` and calls `merge` (second tap of a merge), picks a house to
   merge, calls `clear` on a wood that `canClear`, opens the trade card on a market while
   `canTrade`, or calls `place`. Each tile button's plaque calls `select`; the gift card's plaques
   and the panel's chips (enabled only while a gift is due) call `takeGift`; the trade card's chips
   pick `tradeGive` / `tradeTake` and its Trade button calls `makeTrade`. The gift and trade cards'
-  dim rectangles over the tray, the game-over and the islands card's dim rectangles swallow taps
+  dim rectangles over the tray, the game-over and the islands card's dim rectangles (`dimmer`,
+  over the whole view) swallow taps
   to the board below. The islands card listens to `keydown` only while it is visible.
 - Rendering is diffed objects, not a per-frame redraw: each cell has a tile image and a prop image
   (depth by row, so roofs and flags overlap the row above) whose textures are swapped by
@@ -358,9 +360,16 @@ Data tables:
   which applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither), and then `setupScaling(game)` from `shared/scaling.ts`, which
   draws the canvas at the screen's resolution (`renderScale` canvas pixels per view pixel, every
-  camera zoomed to match) and asks to turn a phone held upright. The one camera never scrolls, so
-  layout stays in view pixels (`VIEW`); pointers go through `viewPoint`, since `pointer.x/y` are
-  canvas pixels, and the art is baked at `RES` (see Art). `e2e/screens.spec.ts` at the root checks
+  camera zoomed to match) and asks to turn a phone held upright. With `fill: true` the view also
+  takes the screen's shape (960 to 1296 wide, 540 to 720 tall, picked once at start, see
+  `viewSize`). Everything is still laid out for `VIEW` (960x540, in `layout.ts`): `GameScene.create`
+  scrolls the one camera by `-viewFrame(scene)`'s x and y, so the whole layout (board, decree sign,
+  panel, cards, banners) sits in the middle of the view, and the `bg` texture is baked at the view's
+  size (`bakeTextures` reads `viewSize` and `viewFrame`) with the table's planks over all of it and
+  the sign, tray and panel at the frame. The full-view dims (`dimmer`) cover the view, not just
+  `VIEW`. Pointers go through `cameras.main.getWorldPoint` (never `pointer.x/y`, which are canvas
+  pixels), so taps land in layout pixels. At 960x540 the frame is at 0,0 and nothing moves. The art
+  is baked at `RES` (see Art), which `setArtRes` picks for the whole view. `e2e/screens.spec.ts` at the root checks
   the game on five screens.
 - Difficulty scales the round goals and the campaign's star scores. `goalFor` in `src/game/state.ts` multiplies the
   base goal by `byDifficulty(0.8, 1, 1.2)` (Easy, Normal, Hard) and rounds it, so the goals are
@@ -425,7 +434,8 @@ valid island number. Hovering makes no sound. The game has no `?watch` mode.
   `game.scene.getScene('Game')` and its `state` (copied through JSON), `preview` (`{ col, row,
   gained, base, links, season, joins }` or null), `tileButtons` (`{ kind, x, y, w, h }` per shown
   button), `undoButton` (`{ x, y, w, h }`) and `giftButtons` (`{ gift, x, y, w, h }` while a gift
-  is due), all in view pixels. `mergeFrom` and `islandButton` are public too but the test does not
+  is due), all in layout pixels (the 960x540 layout, which is the view at 960x540; see Hub
+  settings for how it sits in a wider or taller view). `mergeFrom` and `islandButton` are public too but the test does not
   use them.
 - Inputs: it clicks tile buttons, the undo button and a gift button at their centres, moves the
   mouse over cells to check `preview`, and clicks cell centres, scaling view pixels by the canvas
@@ -524,7 +534,10 @@ valid island number. Hovering makes no sound. The game has no `?watch` mode.
 - Show baked textures with `addArt`, never `this.add.image`: a texture is `RES` times its view
   size, so a plain image comes out up to 4 times too big on a big screen. An extra `setScale` on
   one is divided by `RES` (the tile button's tower icon is `0.85 / RES`); containers scale as usual.
-- Read pointers with `viewPoint` (or `worldX/Y`), never `pointer.x/y`, which are canvas pixels.
+- Read pointers with `cameras.main.getWorldPoint(p.x, p.y)` (or `worldX/Y`), never `pointer.x/y`
+  or `viewPoint`: the camera is scrolled to centre the layout, so view pixels are not layout pixels
+  on a wider or taller screen. Anything meant to cover the whole view goes at `-frame.x, -frame.y`
+  with `viewSize`'s size, like `dimmer` and `bg`.
 - `undo` restores the snapshot with `Object.assign`, so any field added to `GameState` must be
   added to `Snapshot` too if an undoable placement changes it. Decree payouts are never undoable
   for that reason (`bonus` and `crowns` are not in the snapshot).
