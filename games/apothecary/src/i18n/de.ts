@@ -263,6 +263,19 @@ const de: Translation<typeof en> = {
   taper: 'Stabkerze',
   chandler: 'Kerzenzieher',
   manorCount: { one: '{n} Gutshaus', other: '{n} Gutshäuser' },
+  dyeHouse: 'Färberei',
+  dyeHouseMakes: 'Blaues Tuch und Umhänge',
+  woadField: 'Waidfeld',
+  loom: 'Webstuhl',
+  grinder: 'Waidmühle',
+  dyeVat: 'Färbebottich',
+  woad: 'Waid',
+  linen: 'Leinen',
+  dye: 'Blaue Farbe',
+  cloth: 'Blaues Tuch',
+  cloak: 'Umhang',
+  dyer: 'Färber',
+  mansionCount: { one: '{n} Herrenhaus', other: '{n} Herrenhäuser' },
 };
 
 /** Texts that read the same in German. */

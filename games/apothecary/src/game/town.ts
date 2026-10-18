@@ -9,7 +9,7 @@ import type { Upgrade } from './state';
 // as the shop before's, while its goods sell for about as much more. Phaser-free, like `state.ts`.
 
 /** What a town shop grows, makes and sells. The apothecary's wheat and flour are painted the same. */
-export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper';
+export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper' | 'woad' | 'linen' | 'dye' | 'cloth' | 'cloak';
 
 export const GOODS: Record<GoodId, { color: number }> = {
   wheat: { color: 0xd9b24a },
@@ -22,10 +22,15 @@ export const GOODS: Record<GoodId, { color: number }> = {
   wick: { color: 0xe8e0c8 },
   candle: { color: 0xf0e2a8 },
   taper: { color: 0xf4e8c0 },
+  woad: { color: 0x6a9a4a },
+  linen: { color: 0xe6dcc0 },
+  dye: { color: 0x3a5aa8 },
+  cloth: { color: 0x4a6ab8 },
+  cloak: { color: 0x34508e },
 };
 
 /** The shops on the town map besides the apothecary, in the order they are bought. */
-export type ShopId = 'bakery' | 'chandlery';
+export type ShopId = 'bakery' | 'chandlery' | 'dyeHouse';
 
 export interface Recipe {
   inputs: GoodId[];
@@ -138,6 +143,38 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     ],
     sells: { candle: 72, taper: 117 },
     worker: 'chandler',
+  },
+  dyeHouse: {
+    id: 'dyeHouse',
+    name: 'dyeHouse',
+    makes: 'dyeHouseMakes',
+    tier: 3,
+    gardens: [
+      { good: 'flax', grow: 26_000, name: 'flaxField' },
+      { good: 'woad', grow: 32_000, name: 'woadField' },
+    ],
+    stations: [
+      { id: 'loom', name: 'loom', texture: 'loom', recipes: [{ inputs: ['flax', 'flax'], out: 'linen', ms: 4_000 }] },
+      { id: 'grinder', name: 'grinder', texture: 'grinder', recipes: [{ inputs: ['woad'], out: 'dye', ms: 3_000 }] },
+      {
+        id: 'dyeVat',
+        name: 'dyeVat',
+        texture: 'dyeVat',
+        recipes: [
+          { inputs: ['linen', 'dye'], out: 'cloth', ms: 6_000 },
+          { inputs: ['linen', 'linen', 'dye'], out: 'cloak', ms: 8_000 },
+        ],
+      },
+    ],
+    routes: [
+      { id: 'flax', from: { garden: 0 }, to: { station: 'loom' }, cost: 60 },
+      { id: 'woad', from: { garden: 1 }, to: { station: 'grinder' }, cost: 60 },
+      { id: 'loom', from: { station: 'loom' }, to: { station: 'dyeVat' }, cost: 100 },
+      { id: 'grinder', from: { station: 'grinder' }, to: { station: 'dyeVat' }, cost: 100 },
+      { id: 'dyeVat', from: { station: 'dyeVat' }, to: 'shelf', cost: 150 },
+    ],
+    sells: { cloth: 216, cloak: 351 },
+    worker: 'dyer',
   },
 };
 export const SHOP_IDS = Object.keys(SHOPS) as ShopId[];

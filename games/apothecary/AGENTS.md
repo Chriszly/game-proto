@@ -43,12 +43,14 @@ study, shade gardens and a mirrored second production line.
   stations with drop, work and pick-up markers, and a counter whose shelves customers buy from.
   Stations, the counter and pixie routes have purple markers; their costs grow by `TIER_STEP` (3)
   a tier. The shops so far are the Bakery (wheat and honeycomb, mill and oven, bread and honey
-  cake) and the Chandlery (honeycomb and flax, wax press, spinning wheel and dipping vat, candles
-  and tapers). Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
+  cake) the Chandlery (honeycomb and flax, wax press, spinning wheel and dipping vat, candles
+  and tapers) and the Dye house (flax and woad, loom, woad mill and dye vat, blue cloth and
+  cloaks). With more than three lots the map lays them in two rows of shorter cards (`lot`), and
+  keeps `CORNER_H` free at the bottom for the corner buttons. Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
   households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
-  then houses, then manors, which want candles and tapers) and buys it off a shop's shelf (potions
+  then houses, manors, which want candles and tapers, and mansions, which want blue cloth and cloaks) and buys it off a shop's shelf (potions
   off the apothecary's), and happy districts grow homes and then tiers (see `runDistrict`). Planned
-  next: the Dye house, Smithy and Tavern, each adding goods that a tier asks for.
+  next: the Smithy and Tavern, each adding goods that a tier asks for.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
   Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
@@ -167,8 +169,8 @@ study, shade gardens and a mirrored second production line.
 - `src/scenes/TownScene.ts` (`Town`) and `src/scenes/ShopScene.ts` (`Shop`, started with
   `{ shop }`): both call `loadState` and `catchUp` on create, and run the apothecary with
   `tick(state, dt, null)` (as while away) next to `tickTown`; `GameScene` runs `tickTown(state, dt,
-  null)` after its own `tick`. `src/art/town.ts` paints the goods, the beds (`bedTexture`: hives, flax), each
-  shop's stations (mill, oven, wax press, spinning wheel, dipping vat), a shop's yard (`bakeYard`)
+  null)` after its own `tick`. `src/art/town.ts` paints the goods, the beds (`bedTexture`: hives, flax, woad), each
+  shop's stations (mill, oven, wax press, spinning wheel, dipping vat, loom, woad mill, dye vat), a shop's yard (`bakeYard`)
   and the lot houses (`bakeTown`, called by `BootScene`).
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
 - `src/scenes/GameScene.ts`: builds the world, markers and HUD, reads input, walks the doctor
