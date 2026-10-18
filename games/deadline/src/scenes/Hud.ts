@@ -4,7 +4,7 @@ import type { ArtStyle } from '../game/save';
 import { formatNumber } from '../../../../shared/i18n';
 // `t` names this HUD's Text objects here, so the translator goes by `tr`.
 import { t as tr, type TextKey } from '../i18n';
-import { GEOM, num, tex } from '../art/paint';
+import { FIELD, GEOM, num, tex } from '../art/paint';
 import { ACID_COLOR, CRATE_COLORS, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 
 // The HUD: the top bar (wave, best wave, kills, stats and the art style switch), the wave progress
@@ -24,6 +24,22 @@ export const FRENZY_PANEL = { x: 384, y: 884, w: 140, h: 50 };
 export const KIT_PANEL = { x: 16, y: 884, w: 140, h: 50 };
 /** The wave condition's chip, under the progress strip at the right; it drops below the boss bar while a boss is up. */
 export const CONDITION_CHIP = { x: VIEW.w - 10, y: HUD_HEIGHT + 32, h: 16, bossDrop: 20 };
+
+/**
+ * Pins the HUD to the edges of the whole view (`FIELD`), which is wider or taller than the road on
+ * a screen of another shape: the switch and the condition chip to the right, the progress strip
+ * across, and the kit and frenzy panels to the bottom corners. At 540x960 nothing moves.
+ */
+function fitHud() {
+  const right = FIELD.x + FIELD.w;
+  STYLE_SWITCH.x = right - (VIEW.w - 432);
+  PROGRESS.x = FIELD.x + 10;
+  PROGRESS.w = FIELD.w - 20;
+  KIT_PANEL.x = FIELD.x + 16;
+  FRENZY_PANEL.x = right - 16 - FRENZY_PANEL.w;
+  KIT_PANEL.y = FRENZY_PANEL.y = FIELD.h - (VIEW.h - 884);
+  CONDITION_CHIP.x = right - 10;
+}
 
 export interface HudData {
   wave: number;
@@ -81,7 +97,8 @@ export class Hud {
   private drawn = '';
 
   constructor(scene: Phaser.Scene) {
-    this.bar = scene.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(HUD_DEPTH);
+    fitHud();
+    this.bar = scene.add.image(FIELD.x, 0, '__DEFAULT').setOrigin(0).setDepth(HUD_DEPTH);
     this.g = scene.add.graphics().setDepth(HUD_DEPTH + 1);
     const text = () => scene.add.text(0, 0, '').setDepth(HUD_DEPTH + 2);
     this.t = {
@@ -220,18 +237,19 @@ export class Hud {
     // Top bar: wave and kills in caption boxes, the best wave on a green chip between them.
     this.font(t.wave, 19, ink, th).setText(tr('wave', { wave: d.wave })).setOrigin(0.5).setPosition(0, 0);
     const ww = Math.max(102, t.wave.width + 18);
-    this.caption(8, 5, ww, 26, '#ffe04a', ink);
-    t.wave.setPosition(8 + ww / 2, 18);
+    const L = FIELD.x, R = FIELD.x + FIELD.w;
+    this.caption(L + 8, 5, ww, 26, '#ffe04a', ink);
+    t.wave.setPosition(L + 8 + ww / 2, 18);
     this.font(t.kills, 17, ink, th).setText(tr('kills', { kills: d.kills })).setOrigin(0.5);
     const kw = Math.max(104, t.kills.width + 18);
-    this.caption(VIEW.w - 8 - kw, 5, kw, 26, '#fff8e8', ink);
-    t.kills.setPosition(VIEW.w - 8 - kw / 2, 18.5);
+    this.caption(R - 8 - kw, 5, kw, 26, '#fff8e8', ink);
+    t.kills.setPosition(R - 8 - kw / 2, 18.5);
     this.font(t.best, 10.5, ink, th).setText(this.bestText(d, ': ')).setOrigin(0.5);
     const bw = t.best.width + 16;
     this.caption(VIEW.w / 2 - bw / 2 - 4, 8, bw, 20, d.newBest ? '#ffd23f' : '#8cd05a', ink);
     t.best.setPosition(VIEW.w / 2 - 4, 18.5);
     // Stats: a colour chip, the name and the number.
-    let x = 12;
+    let x = L + 12;
     this.stats(d).forEach((s, i) => {
       g.fillStyle(num(s.color)).fillRect(x, 38, 9, 9);
       g.lineStyle(1.1, num(ink)).strokeRect(x, 38, 9, 9);
@@ -247,15 +265,16 @@ export class Hud {
     const p = PROGRESS;
     this.caption(p.x, p.y, p.w, p.h, '#fff8e8', ink);
     this.font(t.count, 11, ink, th).setText(`${d.fallen}/${d.total}`).setOrigin(0, 0.5).setPosition(p.x + 8, p.y + p.h / 2);
-    const n = 10, bx = 60, bwid = 320, on = Math.floor((d.fallen / d.total) * n);
+    // The blocks stretch with the strip; the boss note keeps its place at the strip's right end.
+    const skull = p.x + p.w - 126, n = 10, bx = p.x + 50, bwid = skull - 24 - bx, on = Math.floor((d.fallen / d.total) * n);
     for (let i = 0; i < n; i++) {
       const cx = bx + (i * bwid) / n;
       g.fillStyle(num(i < on ? '#ffd23f' : '#d8d0c0')).fillRect(cx + 1, p.y + 5, bwid / n - 3, p.h - 10);
       g.lineStyle(1.1, num(ink)).strokeRect(cx + 1, p.y + 5, bwid / n - 3, p.h - 10);
     }
-    this.skull(404, p.y + p.h / 2, '#f4ecd8', ink, true);
+    this.skull(skull, p.y + p.h / 2, '#f4ecd8', ink, true);
     const note = d.bossWave ? tr('bossWave') : d.bossNext ? tr('bossNext') : tr('bossAt', { wave: d.nextBoss });
-    this.font(t.note, 10, d.bossWave || d.bossNext ? th.warn : '#5a4a6a', th).setText(note).setOrigin(0, 0.5).setPosition(416, p.y + p.h / 2);
+    this.font(t.note, 10, d.bossWave || d.bossNext ? th.warn : '#5a4a6a', th).setText(note).setOrigin(0, 0.5).setPosition(skull + 12, p.y + p.h / 2);
 
     // Frenzy meter.
     const f = FRENZY_PANEL;
@@ -274,12 +293,13 @@ export class Hud {
     const g = this.g, t = this.t, PH = th.text, AMB = th.accent;
     const glow = (c: string) => ({ glow: c, weight: 'bold' });
     const pad = (n: number, w: number) => String(n).padStart(w, '0');
-    this.font(t.wave, 19, PH, th, { ...glow(PH), ls: 1 }).setText(tr('wave', { wave: pad(d.wave, 2) })).setOrigin(0, 0.5).setPosition(14, 18);
-    this.font(t.kills, 17, PH, th, glow(PH)).setText(tr('kills', { kills: pad(d.kills, 3) })).setOrigin(1, 0.5).setPosition(VIEW.w - 14, 18);
+    const L = FIELD.x, R = FIELD.x + FIELD.w;
+    this.font(t.wave, 19, PH, th, { ...glow(PH), ls: 1 }).setText(tr('wave', { wave: pad(d.wave, 2) })).setOrigin(0, 0.5).setPosition(L + 14, 18);
+    this.font(t.kills, 17, PH, th, glow(PH)).setText(tr('kills', { kills: pad(d.kills, 3) })).setOrigin(1, 0.5).setPosition(R - 14, 18);
     this.font(t.best, 11, AMB, th, glow(AMB)).setText(this.bestText(d, ' ')).setOrigin(0.5).setPosition(VIEW.w / 2 - 4, 18.5);
     const bw = t.best.width + 16;
     g.lineStyle(1, num(AMB)).strokeRoundedRect(VIEW.w / 2 - 4 - bw / 2, 9, bw, 18, 2);
-    let x = 14;
+    let x = L + 14;
     this.stats(d).forEach((s, i) => {
       g.fillStyle(num(s.color)).fillRect(x, 39, 6, 6);
       x += 11;
@@ -294,14 +314,14 @@ export class Hud {
     g.fillStyle(num('#020a05'), 0.75).fillRoundedRect(p.x, p.y, p.w, p.h, 3);
     g.lineStyle(1, num(PH), 0.35).strokeRoundedRect(p.x, p.y, p.w, p.h, 3);
     this.font(t.count, 10.5, PH, th, glow(PH)).setText(`${d.fallen}/${d.total}`).setOrigin(0, 0.5).setPosition(p.x + 8, p.y + p.h / 2);
-    const n = Math.min(d.total, 40), bx = 64, bwid = 318, on = Math.floor((d.fallen / d.total) * n);
+    const skull = p.x + p.w - 126, n = Math.min(d.total, 40), bx = p.x + 54, bwid = skull - 22 - bx, on = Math.floor((d.fallen / d.total) * n);
     for (let i = 0; i < n; i++) {
       g.fillStyle(num(i < on ? AMB : PH), i < on ? 1 : 0.16).fillRect(bx + (i * bwid) / n, p.y + 6, bwid / n - 2.5, p.h - 12);
     }
     const warn = d.bossWave || d.bossNext;
-    this.skull(404, p.y + p.h / 2, warn ? th.warn : th.muted, warn ? th.warn : th.muted, false);
+    this.skull(skull, p.y + p.h / 2, warn ? th.warn : th.muted, warn ? th.warn : th.muted, false);
     const note = d.bossWave ? tr('nvBossWave') : d.bossNext ? tr('nvBossNext') : tr('bossAt', { wave: pad(d.nextBoss, 2) });
-    this.font(t.note, 9.5, warn ? th.warn : th.muted, th, glow(warn ? th.warn : th.muted)).setText(note).setOrigin(0, 0.5).setPosition(415, p.y + p.h / 2);
+    this.font(t.note, 9.5, warn ? th.warn : th.muted, th, glow(warn ? th.warn : th.muted)).setText(note).setOrigin(0, 0.5).setPosition(skull + 11, p.y + p.h / 2);
 
     const f = FRENZY_PANEL;
     g.fillStyle(num('#040c06'), 0.72).fillRoundedRect(f.x, f.y, f.w, f.h, 3);

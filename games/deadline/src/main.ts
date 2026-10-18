@@ -6,7 +6,8 @@ import { setupGame } from '../../../shared/setupGame';
 import { howToPlay } from './howToPlay';
 import { setupScaling } from '../../../shared/scaling';
 
-// A portrait battlefield, like a phone held upright; wider screens show it centred.
+// A portrait battlefield, like a phone held upright. It fills the screen's shape (taller on a long
+// phone, wider on a tablet; see FIELD in src/art/paint.ts); a desktop window shows it centred.
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
@@ -21,7 +22,7 @@ const game = new Phaser.Game({
   scene: [BootScene, GameScene],
 });
 setupGame(game, { howToPlay });
-setupScaling(game);
+setupScaling(game, { fill: true });
 
 // Handy for poking at state from the browser console during development.
 if (import.meta.env.DEV) Object.assign(window, { game });

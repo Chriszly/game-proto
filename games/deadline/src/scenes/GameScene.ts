@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
+import { viewSize } from '../../../../shared/scaling';
 import { BOSS_SONG, SONG, sfx } from '../audio';
 import { Backdrop, type BackdropInfo } from '../art/backdrop';
 import { bakeComic } from '../art/comic';
 import { bakeNightVision } from '../art/nightvision';
-import { GEOM, GRAIN_TILE, geomOf, num, tex } from '../art/paint';
+import { FIELD, GEOM, GRAIN_TILE, fitField, geomOf, num, tex } from '../art/paint';
 import { ACID_COLOR, BURN_COLOR, CRATE_COLORS, OPERATION_COLORS, OUTPOST_COLORS, ROLE_COLORS, SHIELD_COLOR, SURVIVOR_COLOR, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 import { Pool } from '../game/pool';
 import {
@@ -479,6 +480,12 @@ export class GameScene extends Phaser.Scene {
     this.overText = [];
     this.skins.clear();
     this.style = loadStyle();
+    // The view takes the screen's shape (`setupScaling` with `fill`): the road stays 540 wide in the
+    // middle of it, with wider shoulders round it or more road behind the squad, and the camera
+    // scrolls so the road keeps its coordinates. Set before the first bake, as the layers fill it.
+    const view = viewSize(this);
+    fitField(view.width, view.height);
+    this.cameras.main.setScroll(FIELD.x, FIELD.y);
     this.bakeStyle(this.style);
     GameScene.backdrop ??= new Backdrop(() => this.game.canvas);
 
@@ -490,10 +497,10 @@ export class GameScene extends Phaser.Scene {
     this.bars = this.add.graphics().setDepth(DEPTH.bars);
     this.marks = this.add.graphics().setDepth(DEPTH.labels);
     // The night-vision feed's scanlines and grain, over the picture but under its amber overlay.
-    this.scan = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay);
-    this.dark = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x05040c, 0.55).setOrigin(0).setDepth(DEPTH.dark).setVisible(false);
-    this.moon = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0xc01a1a, 0.16).setOrigin(0).setDepth(DEPTH.moon).setVisible(false);
-    this.grain = this.add.tileSprite(0, 0, VIEW.w, VIEW.h, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay + 1);
+    this.scan = this.add.image(FIELD.x, FIELD.y, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay);
+    this.dark = this.fieldRect(0x05040c, 0.55).setDepth(DEPTH.dark).setVisible(false);
+    this.moon = this.fieldRect(0xc01a1a, 0.16).setDepth(DEPTH.moon).setVisible(false);
+    this.grain = this.add.tileSprite(FIELD.x, FIELD.y, FIELD.w, FIELD.h, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay + 1);
 
     const text = (depth: number) => this.add.text(0, 0, '').setOrigin(0.5).setDepth(depth).setVisible(false);
     this.enemies = new Pool<Enemy>(
@@ -636,7 +643,7 @@ export class GameScene extends Phaser.Scene {
       const geom = geomOf(name);
       img.setTexture(tex(this.style, name)).setOrigin(geom.ox / geom.w, geom.oy / geom.h);
     }
-    this.scan.setTexture(nv ? tex('nv', 'scan') : '__DEFAULT').setVisible(nv);
+    this.scan.setTexture(nv ? tex('nv', 'scan') : '__DEFAULT').setDisplaySize(FIELD.w, FIELD.h).setVisible(nv);
     if (nv) this.grain.setTexture(tex('nv', 'grain')).setTileScale(GRAIN_TILE / this.grain.frame.width);
     this.grain.setVisible(nv).setAlpha(0.9);
     // In the comic the blast ring is painted on the road under the horde; in night vision it is
@@ -1019,7 +1026,7 @@ export class GameScene extends Phaser.Scene {
       b.prevY = b.y;
       b.x += (b.vx * dt) / 1000;
       b.y -= (b.vy * dt) / 1000;
-      if (b.y < HUD_HEIGHT - 10 || b.x < 0 || b.x > VIEW.w) this.bullets.release(b);
+      if (b.y < HUD_HEIGHT - 10 || b.x < FIELD.x || b.x > FIELD.x + FIELD.w) this.bullets.release(b);
       else b.sprite.setPosition(b.x, b.y);
     }
   }
@@ -1805,13 +1812,14 @@ export class GameScene extends Phaser.Scene {
     this.placeHint.setText(tr(this.style === 'comic' ? 'placeHint' : 'nvPlaceHint')).setVisible(this.state.placing);
     // A boss also gets a big bar along the top of the screen, under the progress strip.
     if (boss) {
-      const y = HUD_HEIGHT + 32;
+      // Across the whole view, like the progress strip above it.
+      const y = HUD_HEIGHT + 32, x = FIELD.x + 40, w = FIELD.w - 80;
       if (comic) {
-        g.fillStyle(num(th.ink)).fillRect(40, y, VIEW.w - 80, 14);
-        g.fillStyle(num('#8a2a6a')).fillRect(42, y + 2, ((VIEW.w - 84) * boss.hp) / boss.maxHp, 10);
+        g.fillStyle(num(th.ink)).fillRect(x, y, w, 14);
+        g.fillStyle(num('#8a2a6a')).fillRect(x + 2, y + 2, ((w - 4) * boss.hp) / boss.maxHp, 10);
       } else {
-        g.lineStyle(1, num(th.warn)).strokeRect(40, y, VIEW.w - 80, 12);
-        g.fillStyle(num(th.warn), 0.85).fillRect(42, y + 2, ((VIEW.w - 84) * boss.hp) / boss.maxHp, 8);
+        g.lineStyle(1, num(th.warn)).strokeRect(x, y, w, 12);
+        g.fillStyle(num(th.warn), 0.85).fillRect(x + 2, y + 2, ((w - 4) * boss.hp) / boss.maxHp, 8);
       }
     }
   }
@@ -1908,10 +1916,31 @@ export class GameScene extends Phaser.Scene {
     this.endAsWin();
   }
 
+  /** A rectangle over the whole view (`FIELD`), for a shade or a tint. */
+  private fieldRect(color: number, alpha: number) {
+    return this.add.rectangle(FIELD.x, FIELD.y, FIELD.w, FIELD.h, color, alpha).setOrigin(0);
+  }
+
+  /**
+   * Moves an overlay, laid out for the 540x960 road, down to the middle of a view taller than that,
+   * with its tap boxes. Its first object, the shade over the whole view, stays put.
+   */
+  private centreOverlay(objs: Phaser.GameObjects.GameObject[], boxes: { y: number }[]) {
+    const dy = Math.round((FIELD.h - VIEW.h) / 2);
+    if (!dy) return;
+    for (const o of objs.slice(1)) (o as unknown as { y: number }).y += dy;
+    for (const b of boxes) b.y += dy;
+  }
+
   private showGameOver() {
+    this.drawGameOver();
+    this.centreOverlay(this.overText, this.shop);
+  }
+
+  private drawGameOver() {
     const th = this.theme(), comic = this.style === 'comic', s = this.state;
     const op = OPERATIONS[s.operation], onOp = s.operation !== 'road';
-    const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.6 : 0.65).setOrigin(0).setDepth(DEPTH.hud + 1);
+    const shade = this.fieldRect(comic ? 0x15121a : 0x000000, comic ? 0.6 : 0.65).setDepth(DEPTH.hud + 1);
     const won = s.extracted;
     const winTitle = onOp ? tr(comic ? 'operationWon' : 'nvOperationWon') : tr(comic ? 'extracted' : 'nvExtracted');
     const title = this.add.text(VIEW.w / 2, 120, won ? winTitle : tr(comic ? 'overrun' : 'nvOverrun')).setOrigin(0.5).setDepth(DEPTH.hud + 2);
@@ -2046,11 +2075,16 @@ export class GameScene extends Phaser.Scene {
 
   /** The supply drop after a boss: three cards to pick one from. */
   private showSupply() {
+    this.drawSupply();
+    this.centreOverlay(this.supplyUi, this.cards);
+  }
+
+  private drawSupply() {
     for (const o of this.supplyUi) o.destroy();
     this.tweens.killTweensOf(this.banner);
     this.banner.setAlpha(0);
     const th = this.theme(), comic = this.style === 'comic';
-    const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setOrigin(0).setDepth(DEPTH.hud + 1);
+    const shade = this.fieldRect(comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setDepth(DEPTH.hud + 1);
     const title = this.add.text(VIEW.w / 2, 300, tr(comic ? 'supplyTitle' : 'nvSupplyTitle'), { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
     if (comic) this.font(title, 34, '#ffe04a', { stroke: th.ink, sw: 8 });
     else this.font(title, 26, th.accent, { glow: th.accent });
@@ -2158,11 +2192,16 @@ export class GameScene extends Phaser.Scene {
 
   /** A survivor reached the sandbags: three cards for the role they take in the squad. */
   private showRoles() {
+    this.drawRoles();
+    this.centreOverlay(this.supplyUi, this.roleCards);
+  }
+
+  private drawRoles() {
     for (const o of this.supplyUi) o.destroy();
     this.tweens.killTweensOf(this.banner);
     this.banner.setAlpha(0);
     const th = this.theme(), comic = this.style === 'comic';
-    const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setOrigin(0).setDepth(DEPTH.hud + 1);
+    const shade = this.fieldRect(comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setDepth(DEPTH.hud + 1);
     const title = this.add.text(VIEW.w / 2, 300, tr(comic ? 'roleTitle' : 'nvRoleTitle'), { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
     if (comic) this.font(title, 32, '#ffe04a', { stroke: th.ink, sw: 8 });
     else this.font(title, 24, th.accent, { glow: th.accent });

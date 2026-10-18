@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { sharpRes } from '../../../../shared/scaling';
 import type { ArtStyle } from '../game/save';
+import { VIEW } from '../game/rules';
 
 // Shared tools for painting textures on 2D canvases, and the size of every sprite. Both art styles
 // paint each sprite into the same box with the same origin, so switching style only swaps textures:
@@ -15,6 +16,31 @@ export const TAU = Math.PI * 2;
  * bigger one (`sharpRes`), then shown scaled down to their box, so they stay sharp.
  */
 export const HI = 2;
+
+/**
+ * The whole view in game pixels, as a rectangle in the road's coordinates. The road is laid out for
+ * the designed 540x960 (`VIEW`); on a screen of another shape the view grows (`setupScaling` with
+ * `fill`), sideways round the road (`x` goes below 0) or downwards behind the squad (`h` grows past
+ * 960), and the camera scrolls by `x` so the road stays in the middle. At 540x960 it is the view.
+ * Set once by `fitField`, before the first texture is baked.
+ */
+export const FIELD = { x: 0, y: 0, w: VIEW.w, h: VIEW.h };
+/** The boxes of the layers painted over the whole view's width (or all of it), kept in step with `FIELD`. */
+const FIELD_BOX = { w: VIEW.w, h: VIEW.h, ox: 0, oy: 0 };
+const HUDBAR_BOX = { w: VIEW.w, h: 56, ox: 0, oy: 0 };
+const SANDBAGS_BOX = { w: VIEW.w, h: 36, ox: 0, oy: 18 };
+
+/** Fits `FIELD` to a view of `w` x `h` game pixels: the road centred across it, at its top. */
+export function fitField(w: number, h: number) {
+  FIELD.x = -Math.round((w - VIEW.w) / 2);
+  FIELD.w = Math.max(w, VIEW.w);
+  FIELD.h = Math.max(h, VIEW.h);
+  for (const box of [FIELD_BOX, HUDBAR_BOX, SANDBAGS_BOX]) {
+    box.w = FIELD.w;
+    box.ox = -FIELD.x;
+  }
+  FIELD_BOX.h = FIELD.h;
+}
 
 /**
  * Each sprite's box in game pixels and where its origin is inside it (the entity's x, y). The
@@ -39,10 +65,10 @@ export const GEOM = {
   blast: { w: 220, h: 220, ox: 110, oy: 110 },
   streak: { w: 92, h: 70, ox: 46, oy: 35 },
   label: { w: 132, h: 24, ox: 66, oy: 0 },
-  sandbags: { w: 540, h: 36, ox: 0, oy: 18 },
-  ground: { w: 540, h: 960, ox: 0, oy: 0 },
+  sandbags: SANDBAGS_BOX,
+  ground: FIELD_BOX,
   sfx: { w: 150, h: 70, ox: 75, oy: 35 },
-  hudbar: { w: 540, h: 56, ox: 0, oy: 0 },
+  hudbar: HUDBAR_BOX,
   ring: { w: 192, h: 192, ox: 96, oy: 96 },
   spitter: { w: 46, h: 62, ox: 23, oy: 34 },
   riot: { w: 56, h: 66, ox: 28, oy: 32 },

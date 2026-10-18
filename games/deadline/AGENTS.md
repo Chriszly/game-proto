@@ -38,8 +38,9 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   a saved best wave, a HUD, a wave banner, health bars, a boss bar and a game over screen.
 - **Two art styles**, switched live in game: a pulp horror comic (default) and a night-vision
   overwatch feed. All art is painted on 2D canvases in code (`src/art/`); there are no image files.
-  On screens wider than the game, a canvas behind it fills the sides with comic panels or an
-  overwatch console.
+  The view takes the screen's shape on a phone or tablet (taller behind the squad, or wider
+  shoulders round the road); on a desktop window wider than the game, a canvas behind it fills the
+  sides with comic panels or an overwatch console.
 - **Progression** within a run is the crates (and the perks three of a kind evolve into), the
   survivors who make it and the boss supply drops: no XP or levels. Stats reset on restart. Between
   runs, scrap (saved) buys starting crates, each kind once, spent at the next run's start, and
@@ -63,6 +64,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
     `HERO.minX..HERO.maxX`, so none stops out of every rifle's reach.
   - Supply drop picks, kit panel items, squad roles and the operation are not shown in the
     wide-screen backdrop.
+  - On a phone, where the game covers the screen, the shared corner buttons (full screen, sound,
+    pause) sit over the kit panel's bottom-left corner.
   - Night-vision textures are baked the first time that style is shown, a hitch of about 0.4s
     (measured in headless Chromium) on that first switch; later switches take a frame or so. On a
     big screen the textures are painted finer, and the first switch takes about twice as long.
@@ -93,7 +96,7 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
 - `src/audio.ts`: the sound (`shared/audio.ts`): `SOUNDS` (the sound table), `sfx` (its `play`),
   `SoundName`, and the songs `SONG` and `BOSS_SONG`. See Sound below.
 - `src/main.ts`: creates the `Phaser.Game` (size from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
-  `BootScene` and `GameScene`, calls `setupGame(game)`, and exposes `game` on `window` in the dev
+  `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })`, and exposes `game` on `window` in the dev
   build.
 - `index.html`: the page; `#game` sits above the backdrop canvas (`z-index: 1`).
 - `src/scenes/BootScene.ts`: scene `'Boot'`; starts `'Game'`.
@@ -562,10 +565,21 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
   circles (`radius`). Hits are swept: `hitTargets` tests each bullet's whole move this frame, from
   `prevY` up to `y`, so a long frame can't carry it through a target, and a piercing bullet hits
   the nearest enemies first. Zombies in the drum's column shield it, which is why drums are one hit.
-- Screens: `src/main.ts` calls `setupScaling(game)` from `shared/scaling.ts`, so the canvas has
-  `renderScale` canvas pixels per game pixel (up to 4 on a 4K screen) and the camera is zoomed to
-  match. The camera never scrolls, so layout stays in game pixels (`VIEW`) and taps read
-  `pointer.worldX/Y`. Texts take `renderScale` as their resolution (don't set one). `bake` paints
+- Screens: `src/main.ts` calls `setupScaling(game, { fill: true })` from `shared/scaling.ts`, so
+  the canvas has `renderScale` canvas pixels per game pixel (up to 4 on a 4K screen) and the camera
+  is zoomed to match, and the view takes the screen's shape: 540 wide and up to 1296 tall on a long
+  phone, up to 720 wide and 960 tall on a 3:4 tablet (a desktop window, turned the other way round,
+  keeps 540x960 and the backdrop). The road and every rule stay laid out for `VIEW` (540x960):
+  `create` calls `fitField(viewSize)` (`src/art/paint.ts`), which sets `FIELD`, the whole view in
+  the road's coordinates (centred across it, `FIELD.x` going below 0; any extra height below the
+  sandbags, behind the squad), and scrolls the camera to `FIELD.x, FIELD.y`, so taps still read
+  `pointer.worldX/Y`. The ground, sandbags, HUD bar and night-vision scan layer are painted over
+  `FIELD` (their `GEOM` boxes follow it), the blackout, blood moon, grain and overlay shades cover
+  it, `fitHud` in `Hud.ts` pins the top bar's ends, the style switch and condition chip to its
+  right edge, stretches the progress strip and boss bar across it and puts the kit and frenzy
+  panels in its bottom corners, and `centreOverlay` moves the supply drop, role pick and game over
+  (and their tap boxes) down to the middle of a taller view. At 540x960 `FIELD` is the view and
+  nothing moves. Bullets are dropped once they leave `FIELD`. Texts take `renderScale` as their resolution (don't set one). `bake` paints
   at `sharpRes`: full-screen textures (`FULL_SCREEN` in `paint.ts`) at 1x on a screen that needs no
   scaling and at most 2x, sprites at `HI` (2x) and at most 4x, since painting, and night vision's
   per-pixel pass, slows with the square of it. On a phone held sideways a hint asks to turn it
