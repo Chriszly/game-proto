@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ui } from '../../../../shared/audio';
+import { formatNumber } from '../../../../shared/i18n';
 import { guardTexture } from '../art/characters';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
@@ -58,7 +59,7 @@ export class HirePanel {
     // A little pointer towards the slot.
     g.fillStyle(GOLD.mid).fillTriangle(left, cy - 8, left - 10, cy, left, cy + 8);
     const coinIcon = fit(scene.add.image(left + HIRE.w - 70, top + 22, 'hud-coin'));
-    const coinText = scene.add.text(left + HIRE.w - 58, top + 22, String(coins), textStyle(14, '#ffe07a')).setOrigin(0, 0.5);
+    const coinText = scene.add.text(left + HIRE.w - 58, top + 22, formatNumber(coins), textStyle(14, '#ffe07a')).setOrigin(0, 0.5);
     const title = scene.add
       .text(left + 18, top + 22, guard ? t('guardLevel', { guard: t(GUARDS[guard.kind].name), level: guard.level }) : t('hireTitle'), textStyle(17, '#ffcf4a', 3))
       .setOrigin(0, 0.5);
@@ -109,7 +110,7 @@ export class HirePanel {
     const color = button.afford ? '#ffe7a0' : '#7a8294';
     const caption = scene.add.text(bx, by - 8, button.caption, textStyle(13, color)).setOrigin(0.5);
     const coinIcon = fit(scene.add.image(bx - 12, by + 9, 'hud-coin'), 0.75).setAlpha(button.afford ? 1 : 0.5);
-    const cost = scene.add.text(bx - 3, by + 9, String(button.cost), textStyle(12, color)).setOrigin(0, 0.5);
+    const cost = scene.add.text(bx - 3, by + 9, formatNumber(button.cost), textStyle(12, color)).setOrigin(0, 0.5);
     const hit = scene.add.zone(bx, by, 80, 40);
     if (button.afford) {
       hit
