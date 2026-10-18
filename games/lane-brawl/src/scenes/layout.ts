@@ -61,7 +61,7 @@ export function buffChip(i: number) {
   return { x: SCREEN.w - 222, y: 40 + i * 24, w: 212, h: 20 };
 }
 
-/** The ten champion cards on the pick screen, in two rows of five. */
+/** The fifteen champion cards on the pick screen, in three rows of five. */
 export const PICK_CARD = { w: 168, h: 114, gap: 8, y: 76 };
 export function pickCard(i: number) {
   const total = 5 * PICK_CARD.w + 4 * PICK_CARD.gap;
