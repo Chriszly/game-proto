@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { splitHudCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
 import { HEROES, HERO_IDS, isKnight, schemeOf, type HeroId } from '../game/heroes';
-import { HERO_R, RUN_MS, clock, freshState, statsOf, type GameState } from '../game/state';
+import { HERO_R, POWER_UPS, RUN_MS, clock, freshState, isStructure, statsOf, type GameState, type PowerUp } from '../game/state';
 import { choose, inRingGap, phalanxSpots, shieldHalf, startRun, suppressorHalf, suppressorLength } from '../game/sim';
 import { bladeColor, dreadRadius, heroVariant, orbitBlades } from '../game/blades';
 import { bubble, rebuildTime } from '../game/squad';
@@ -15,11 +15,13 @@ import { heroKey } from '../art/sprites';
 import { t } from '../i18n';
 import { bladeKey } from '../art/knights';
 import { ui } from '../../../../shared/audio';
+import { OBJ_COLOR, drawObjectiveGround, drawPowerUp, drawStructure, objectiveTarget } from './objectiveArt';
+import { objectiveHint, objectiveName, OBJ_MISC } from '../game/objectives';
 import { SoundCues } from '../audio/cues';
 import { sfx } from '../audio/sfx';
 import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader, unlockPanel } from '../ui/panels';
 import {
-  BOSS_BAR, CENTER, CREDITS_TAG, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, SCREEN, FRAME, XP_BAR, fitLayout, inside,
+  BOSS_BAR, CENTER, CREDITS_TAG, OBJECTIVE_HUD, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, SCREEN, FRAME, XP_BAR, fitLayout, inside,
 } from './layout';
 
 /** A pool of images for one kind of thing on the field, reused frame to frame. */
@@ -41,7 +43,7 @@ class Pool {
       this.items.push(im);
     } else {
       if (im.texture.key !== key) im.setTexture(key);
-      im.setPosition(x, y).setVisible(true).setRotation(0).setScale(1).setAlpha(1).setFlipX(false).setOrigin(0.5);
+      im.setPosition(x, y).setVisible(true).setRotation(0).setScale(1).setAlpha(1).setFlipX(false).setOrigin(0.5).clearTint();
     }
     this.used += 1;
     return im;
@@ -56,10 +58,10 @@ class Pool {
 const ALLY_KEYS: Record<GameState['allies'][number]['kind'], string> = {
   trooper: 'rb-trooper', legionary: 'rb-legionary', brother: 'rb-brother', escort: 'rb-escort', drone: 'rb-drone',
   fighter: 'rb-fighter', squadron: 'rb-fighter', copilot: 'rb-copilot', spirit: 'rb-spirit', puppet: 'rb-puppet',
-  commando: 'rb-commando', bike: 'rb-bike', medic: 'rb-medic', shieldbot: 'rb-shieldbot', command: 'rb-command', spare: 'rb-bot',
+  commando: 'rb-commando', bike: 'rb-bike', medic: 'rb-medic', shieldbot: 'rb-shieldbot', command: 'rb-command', spare: 'rb-bot', thawed: 'rb-trooper',
 };
 /** Allies drawn from the hero art (small soldiers), placed by its origin. */
-const HERO_LIKE: readonly GameState['allies'][number]['kind'][] = ['trooper', 'legionary', 'brother', 'commando', 'medic'];
+const HERO_LIKE: readonly GameState['allies'][number]['kind'][] = ['trooper', 'legionary', 'brother', 'commando', 'medic', 'thawed'];
 
 /** The hero art's centre within its texture (see HERO_BOX in sprites.ts). */
 const HERO_ORIGIN = { x: 0.5, y: 52 / 120 };
@@ -95,6 +97,8 @@ export class GameScene extends Phaser.Scene {
   private pools!: Record<'pickups' | 'enemies' | 'allies' | 'bolts', Pool>;
   private hero!: Phaser.GameObjects.Image;
   private popTexts: Phaser.GameObjects.Text[] = [];
+  /** The side objective's two HUD lines, made when the first objective starts. */
+  private objTexts: { name: Phaser.GameObjects.Text; hint: Phaser.GameObjects.Text } | null = null;
   private texts!: Record<'timer' | 'level' | 'planet' | 'credits' | 'hp' | 'kit' | 'sig' | 'sigKey' | 'boss', Phaser.GameObjects.Text>;
 
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -612,6 +616,10 @@ export class GameScene extends Phaser.Scene {
         u.fillStyle(color, 0.08 + 0.16 * prog).fillCircle(h.x, h.y, h.r * prog);
       }
     }
+    // The side objective: its zone, spots, structures and the pilgrim; power-ups on the ground.
+    drawObjectiveGround(u, s, still);
+    for (const e of s.enemies) if (isStructure(e.kind)) drawStructure(u, e, s.time, still);
+    for (const k of s.pickups) if (POWER_UPS.includes(k.kind as PowerUp)) drawPowerUp(u, k, s.time, still);
     // The knights: Vharn's Dread aura, Corvin's platform, foes turned to the hero's side.
     const dread = dreadRadius(s);
     if (dread > 0) {
@@ -657,7 +665,20 @@ export class GameScene extends Phaser.Scene {
     // Pickups and shards.
     const pk = this.pools.pickups;
     for (const sh of s.shards) pk.next(sh.value >= 5 ? 'rb-shard-big' : 'rb-shard', sh.x, sh.y);
-    for (const k of s.pickups) pk.next(k.kind === 'chest' ? 'rb-chest' : k.kind === 'credits' ? 'rb-credits' : 'rb-medkit', k.x, k.y);
+    for (const k of s.pickups) {
+      if (POWER_UPS.includes(k.kind as PowerUp)) continue;
+      pk.next(k.kind === 'chest' ? 'rb-chest' : k.kind === 'credits' ? 'rb-credits' : 'rb-medkit', k.x, k.y);
+    }
+    // The objective's props: the wreck Oom lifts, the escorted bot, the frozen troopers.
+    const ob = s.objective;
+    if (ob?.id === 'lift') pk.next('rb-wreck', ob.x, ob.y - 16 * Math.min(1, ob.done / ob.goal)).setScale(1.6);
+    if (ob?.id === 'escort' && ob.ward) pk.next('rb-escort', ob.ward.x, ob.ward.y).setScale(1.2);
+    if (ob?.id === 'thaw') {
+      for (const q of ob.points) {
+        if (q.ms > OBJ_MISC.standMs.thaw) continue;
+        pk.next('rb-trooper', q.x, q.y).setOrigin(HERO_ORIGIN.x, HERO_ORIGIN.y).setTint(0x9fd8ff).setAlpha(0.85);
+      }
+    }
     for (const b of s.bombs) {
       if (b.kind === 'charge') pk.next('rb-charge', b.x, b.y);
       else if (b.kind === 'grenade' || b.kind === 'frag') {
@@ -679,6 +700,7 @@ export class GameScene extends Phaser.Scene {
     const en = this.pools.enemies;
     const bossId = PLANETS[s.planet].boss;
     for (const e of s.enemies) {
+      if (isStructure(e.kind)) continue;
       let key = `rb-${e.kind}${e.elite ? '-elite' : ''}`;
       if (e.kind === 'boss') key = bossId === 'grinder' ? 'rb-boss' : `rb-boss-${bossId}${e.phase2 ? '-burning' : ''}`;
       else if (e.kind === 'rollerbomb') key = `rb-roller${e.elite ? '-elite' : ''}${e.mode !== 'walk' ? '-armed' : ''}`;
@@ -804,7 +826,8 @@ export class GameScene extends Phaser.Scene {
       const t = 1 - b.ms / b.maxMs;
       const r = b.r * (0.35 + 0.65 * Math.min(1, t * 1.6));
       const c = hex(b.color);
-      o.fillStyle(c, 0.16 * (1 - t)).fillCircle(b.x, b.y, r);
+      // A bomb's screen-wide flash is left out with reduced motion; its ring stays.
+      if (!(still && b.r >= 500)) o.fillStyle(c, 0.16 * (1 - t)).fillCircle(b.x, b.y, r);
       o.lineStyle(8, c, 0.18 * (1 - t)).strokeCircle(b.x, b.y, r);
       o.lineStyle(2.5, c, 0.9 * (1 - t)).strokeCircle(b.x, b.y, r);
     }
@@ -901,7 +924,11 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     const playing = s.hero !== null;
     for (const t of Object.values(this.texts)) t.setVisible(playing);
-    if (!playing) return;
+    if (!playing) {
+      this.objTexts?.name.setVisible(false);
+      this.objTexts?.hint.setVisible(false);
+      return;
+    }
     const p = s.player;
     const sch = schemeOf(s.hero!);
     // XP across the top.
@@ -926,6 +953,10 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(hex(sch.accent), 0.9).fillRect(HP_BAR.x, HP_BAR.y, HP_BAR.w * Math.min(1, p.barrier / p.maxHp), 4);
       extra += `   ·   ${t('hudBarrier', { n: Math.ceil(p.barrier) })}`;
     }
+    // Power-ups running.
+    if (s.lureMs > 0) extra += `   ·   ${t('buffLure', { n: Math.ceil(s.lureMs / 1000) })}`;
+    if (s.overdriveMs > 0) extra += `   ·   ${t('buffOverdrive', { n: Math.ceil(s.overdriveMs / 1000) })}`;
+    if (s.shieldHits > 0) extra += `   ·   ${t('buffShield', { n: s.shieldHits })}`;
     this.texts.hp.setText(`${Math.ceil(p.hp)} / ${p.maxHp}   ·   ${t(PLANETS[s.planet].foes, { n: s.kills })}${extra}`);
     // The kit held.
     const lines = Object.entries(s.ranks).map(([id, rank]) => {
@@ -951,6 +982,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(hex(C.boss), 1).fillRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w * Math.max(0, boss.hp / boss.maxHp), BOSS_BAR.h);
       g.lineStyle(1, hex(C.boss), 0.6).strokeRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);
     }
+    this.drawObjectiveHud(s);
     // The signature button: a ring that fills as it charges.
     const hero = HEROES[s.hero!];
     const accent = hex(sch.accent);
@@ -978,6 +1010,58 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(accent, 0.7).fillCircle(kx, ky, STICK.knob);
       g.lineStyle(2, 0xffffff, 0.6).strokeCircle(kx, ky, STICK.knob);
     }
+  }
+
+  /** The side objective: its name, progress and time left under the clock, its hint, and an arrow at the edge toward it. */
+  private drawObjectiveHud(s: GameState) {
+    const o = s.objective;
+    const on = !!o && s.phase === 'run';
+    this.objTexts?.name.setVisible(on);
+    this.objTexts?.hint.setVisible(on);
+    if (!o || !on) return;
+    // Made when the first objective comes: a text makes a texture, and Phaser draws on Math.random
+    // for its id, which would shift the seeded first minute the playthrough plays.
+    this.objTexts ??= {
+      name: this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '14px', color: '#7fe3ff', fontStyle: 'bold' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
+      hint: this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '11.5px', color: C.muted }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
+    };
+    const { name, hint } = this.objTexts;
+    name.setPosition(OBJECTIVE_HUD.x, OBJECTIVE_HUD.y);
+    hint.setPosition(OBJECTIVE_HUD.x, OBJECTIVE_HUD.y + 19);
+    const g = this.hud;
+    const timed = ['defend', 'dropzone', 'lift', 'pilgrim', 'zone'].includes(o.id);
+    let progress = timed
+      ? t('objSeconds', { n: Math.floor(o.done / 1000), of: Math.round(o.goal / 1000) })
+      : o.goal > 1 && o.id !== 'unbroken'
+        ? t('objCount', { n: Math.min(o.done, o.goal), of: o.goal })
+        : '';
+    if (o.ward) progress = [progress, t('objHealth', { n: Math.max(0, Math.round((100 * o.ward.hp) / o.ward.maxHp)) })].filter(Boolean).join('  ·  ');
+    if (o.id === 'unbroken') progress = t('objCount', { n: Math.round(Math.max(0, s.damageTaken - o.base)), of: o.goal });
+    const parts = [t(objectiveName(o.id)), progress, t('objTime', { n: Math.max(0, Math.ceil(o.ms / 1000)) })].filter(Boolean);
+    name.setText(parts.join('   ·   '));
+    hint.setText(t(objectiveHint(o.id), { n: o.goal }));
+    const w = Math.max(name.width, hint.width) + 24;
+    g.fillStyle(0x070b16, 0.6).fillRoundedRect(OBJECTIVE_HUD.x - w / 2, OBJECTIVE_HUD.y - 4, w, 46, 8);
+    g.fillStyle(OBJ_COLOR, 0.8).fillRect(OBJECTIVE_HUD.x - w / 2 + 8, OBJECTIVE_HUD.y + 37, (w - 16) * Math.max(0, o.ms / o.maxMs), 2);
+    // The arrow at the screen's edge when the marker is off screen.
+    const to = objectiveTarget(s);
+    if (!to) return;
+    const dx = to.x - s.player.x;
+    const dy = to.y - s.player.y;
+    const hw = SCREEN.w / 2 - 36;
+    // Clear of the objective's lines at the top and the signature button's corner.
+    const hh = SCREEN.h / 2 - (dy < 0 ? 110 : 60);
+    if (Math.abs(dx) < hw && Math.abs(dy) < hh) return;
+    const k = Math.min(hw / Math.max(1, Math.abs(dx)), hh / Math.max(1, Math.abs(dy)));
+    const ax = CENTER.x + dx * k;
+    const ay = CENTER.y + dy * k;
+    const a = Math.atan2(dy, dx);
+    const tip = (d: number, off: number) => [ax + Math.cos(a + off) * d, ay + Math.sin(a + off) * d] as const;
+    const [x1, y1] = tip(14, 0);
+    const [x2, y2] = tip(10, 2.4);
+    const [x3, y3] = tip(10, -2.4);
+    g.fillStyle(0x070b16, 0.6).fillCircle(ax, ay, 16);
+    g.fillStyle(OBJ_COLOR, 0.95).fillTriangle(x1, y1, x2, y2, x3, y3);
   }
 
   /** The hero's position on screen (always the middle of the view), for the test. */

@@ -25,8 +25,17 @@ export const DIFF = {
   spawn: byDifficulty(0.75, 1, 1.25),
 };
 
-/** A swarm kind of one of the four factions, or the planet's boss (see `BOSSES` in planets.ts). */
-export type EnemyKind = FoeKind | 'boss';
+/**
+ * Things a side objective puts on the field to break: relay beacons, spore nests, a scrap
+ * crawler's cache and a monolith. They stand still, deal no harm and drop nothing; every attack
+ * hits them like a foe (see `objectives.ts`).
+ */
+export type StructureKind = 'beacon' | 'nest' | 'cache' | 'monolith';
+export const STRUCTURES: readonly StructureKind[] = ['beacon', 'nest', 'cache', 'monolith'];
+export const isStructure = (kind: EnemyKind): kind is StructureKind => (STRUCTURES as readonly string[]).includes(kind);
+
+/** A swarm kind of one of the four factions, the planet's boss (see `BOSSES` in planets.ts) or a structure. */
+export type EnemyKind = FoeKind | 'boss' | StructureKind;
 
 export interface EnemySpec {
   r: number;
@@ -46,6 +55,10 @@ export const ENEMY: Record<EnemyKind, EnemySpec> = {
   acolyte: { r: 10, hp: 9, speed: 74, dmg: 6, xp: 1 },
   knight: { r: 15, hp: 55, speed: 56, dmg: 12, xp: 4 },
   boss: { r: 58, hp: 2600, speed: 42, dmg: 22, xp: 0 },
+  beacon: { r: 16, hp: 110, speed: 0, dmg: 0, xp: 0 },
+  nest: { r: 17, hp: 80, speed: 0, dmg: 0, xp: 0 },
+  cache: { r: 30, hp: 520, speed: 0, dmg: 0, xp: 0 },
+  monolith: { r: 26, hp: 700, speed: 0, dmg: 0, xp: 0 },
 };
 /** An elite has this many times the health and is this much bigger; it drops a chest. */
 export const ELITE = { hp: 9, size: 1.6, speed: 0.85, xp: 10, every: 50_000, first: 50_000 };
@@ -231,7 +244,7 @@ export interface Fire {
  */
 export type AllyKind =
   | 'trooper' | 'legionary' | 'brother' | 'drone' | 'escort' | 'fighter' | 'squadron' | 'copilot' | 'spirit' | 'puppet'
-  | 'commando' | 'bike' | 'medic' | 'shieldbot' | 'command' | 'spare';
+  | 'commando' | 'bike' | 'medic' | 'shieldbot' | 'command' | 'spare' | 'thawed';
 
 export interface Ally {
   id: number;
@@ -268,9 +281,27 @@ export interface Flag {
   maxMs: number;
 }
 
+/** Power-ups: dropped now and then by foes after a world's first minute, each with its own effect. */
+export type PowerUp = 'bomb' | 'magnet' | 'lure' | 'overdrive' | 'shield' | 'freeze' | 'cache';
+export const POWER_UPS: readonly PowerUp[] = ['bomb', 'magnet', 'lure', 'overdrive', 'shield', 'freeze', 'cache'];
+/**
+ * Power-up numbers: the drop chance per kill (once `fromMs` of a world has passed, at most `max`
+ * lying about, each gone after `lifeMs`), an elite's chance, the weight of each kind, and their
+ * effects (bomb: share of a foe's health, a boss's; lure: pickup range factor; overdrive: fire
+ * rate factor; shield: hits; cache: credits).
+ */
+export const POWER = {
+  chance: 0.003, eliteChance: 0.5, fromMs: 60_000, max: 3, lifeMs: 25_000,
+  weights: { bomb: 3, magnet: 3, lure: 2, overdrive: 2, shield: 2, freeze: 2, cache: 2 } as Record<PowerUp, number>,
+  bombShare: 0.65, bombBoss: 0.04, bombR: 620,
+  lureMs: 30_000, lure: 2.2, overdriveMs: 10_000, overdrive: 1.5, shieldHits: 3, freezeMs: 5000, cacheCredits: 20,
+};
+
 export interface Pickup {
   id: number;
-  kind: 'medkit' | 'chest' | 'credits';
+  kind: 'medkit' | 'chest' | 'credits' | PowerUp;
+  /** Ms a power-up has left on the ground (0 for the others, which stay). */
+  ms?: number;
   x: number;
   y: number;
   heal: number;
@@ -466,6 +497,20 @@ export interface GameState {
   /** Elara Voss's signal flag, and the planet her last Uprising supply drop fell on (-1 none). */
   flag: Flag | null;
   supplyWorld: number;
+  /** The side objective under way, when the next one starts (ms of world time), how many this world has had, and the shared ones seen this run. */
+  objective: Objective | null;
+  objectiveAt: number;
+  objectiveSlot: number;
+  sharedSeen: ObjectiveId[];
+  objectivesDone: number;
+  /** Hits dealt this run (some hero objectives count them). */
+  hits: number;
+  /** Power-ups running: ms of Lure and Overdrive left, hits the shield still blocks. */
+  lureMs: number;
+  overdriveMs: number;
+  shieldHits: number;
+  /** Power-ups picked up this run. */
+  powerUps: number;
   /** Triad-77: its bots, their formation, and scrap gathered from kills (Factory). */
   bots: Bot[];
   formation: 'spread' | 'column';
@@ -545,6 +590,16 @@ export function freshState(): GameState {
     deeds: [],
     flag: null,
     supplyWorld: -1,
+    objective: null,
+    objectiveAt: OBJECTIVE_AT[0],
+    objectiveSlot: 0,
+    sharedSeen: [],
+    objectivesDone: 0,
+    hits: 0,
+    lureMs: 0,
+    overdriveMs: 0,
+    shieldHits: 0,
+    powerUps: 0,
     bots: [],
     formation: 'spread',
     scrap: 0,
@@ -595,6 +650,7 @@ export function statsOf(s: GameState): Stats {
   const cross = (id: string) => s.crossovers.includes(id);
   let fireRate = 1 + at([0.1, 0.2, 0.3, 0.4, 0.55], r('reload'), 0) + (r('gunslinger') >= 1 ? 0.15 : 0);
   if (cap('twin-storm')) fireRate += 0.3;
+  const overdrive = s.overdriveMs > 0 ? POWER.overdrive : 1;
   let pierce = at([1, 1, 2, 2, 3], r('overcharge'), 0) + at([1, 1, 3, 3, 5], r('marksman'), 0);
   if (cap('longshot')) pierce = 999;
   const bounces = at([1, 2, 2, 3, 4], r('ricochet'), 0) + (r('gunslinger') >= 2 ? 1 : 0) + (r('gunslinger') >= 5 ? 1 : 0);
@@ -604,7 +660,7 @@ export function statsOf(s: GameState): Stats {
   if (pierce < 999) pierce += q.pierce;
   return {
     speed: hero.speed * (1 + 0.08 * r('boots')) * k.speed,
-    pickup: PICKUP_R * (1 + 0.3 * r('magnet')),
+    pickup: PICKUP_R * (1 + 0.3 * r('magnet')) * (s.lureMs > 0 ? POWER.lure : 1),
     armour: 0.08 * r('armour') + k.armour,
     maxHp: s.hero === 'triad' ? botMax(s) * botCount(s) : Math.round((hero.maxHp + 10 * r('armour') + k.hp) * s.maxHpMod),
     regen: 0.5 * r('medpack') + k.regen,
@@ -612,7 +668,7 @@ export function statsOf(s: GameState): Stats {
     damage: (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)) * k.damage * q.damage,
     xp: 1 + 0.1 * r('lens'),
     crit: 0.06 * r('chip') + k.crit,
-    fireRate,
+    fireRate: fireRate * overdrive,
     pierce,
     bounces,
     seek: cross('seeking-ricochets'),
@@ -723,4 +779,54 @@ export function refreshUnlocks(s: GameState) {
 export function clock(ms: number) {
   const sec = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Side objectives (see objectives.ts)
+
+/**
+ * Side objectives: four shared by every world, one per world and one per hero. Each world has
+ * three, one after the other: a shared one at 1:00, the world's own at 2:15 and the hero's own at
+ * 3:30, each with a time limit, and none once the boss is up.
+ */
+export type ObjectiveId =
+  | 'defend' | 'escort' | 'beacons' | 'zone'
+  | 'cache' | 'nests' | 'thaw' | 'seal'
+  | 'quickdraw' | 'dropzone' | 'recon' | 'duel' | 'unbroken' | 'lift' | 'pilgrim' | 'storm' | 'bloodtrail' | 'monolith'
+  | 'signal' | 'salvage';
+export const SHARED_OBJECTIVES: readonly ObjectiveId[] = ['defend', 'escort', 'beacons', 'zone'];
+export const WORLD_OBJECTIVES: readonly ObjectiveId[] = ['cache', 'nests', 'thaw', 'seal'];
+export const HERO_OBJECTIVES: Record<HeroId, ObjectiveId> = {
+  rook: 'quickdraw', tr9: 'dropzone', bram: 'recon', kael: 'duel', vharn: 'unbroken', oom: 'lift', corvin: 'pilgrim',
+  veyl: 'storm', kresh: 'bloodtrail', joren: 'monolith', elara: 'signal', triad: 'salvage',
+};
+/** When each of a world's three objectives starts (ms of world time). */
+export const OBJECTIVE_AT = [60_000, 135_000, 210_000] as const;
+
+export interface Objective {
+  id: ObjectiveId;
+  /** Where its marker is (the zone, the cache, the bot to escort), and the zone's radius (0: no marker). */
+  x: number;
+  y: number;
+  r: number;
+  /** Ms left, and the time limit. */
+  ms: number;
+  maxMs: number;
+  /** Progress toward `goal` (held ms, a count, points reached), and a count at the start (kills, hits). */
+  done: number;
+  goal: number;
+  base: number;
+  /** A count it watches for changes (signatures used, damage taken). */
+  seen: number;
+  /** Spots to reach or stand at (recon, salvage, frozen troopers, vents), with ms stood there so far. */
+  points: { x: number; y: number; ms: number }[];
+  /** A bot to escort or a pilgrim to keep safe: where it is and its health. */
+  ward: { x: number; y: number; hp: number; maxHp: number } | null;
+  /** The escorted bot's goal. */
+  toX: number;
+  toY: number;
+  /** A timer for what it does now and then (foes pushing in, vents erupting). */
+  tickMs: number;
+  /** The structures or the marked elite it put on the field (foe ids). */
+  ids: number[];
 }

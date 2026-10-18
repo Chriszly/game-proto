@@ -264,7 +264,7 @@ export function levelUp(scene: Phaser.Scene, s: GameState) {
   const p = new Panel(scene);
   p.dim(0.6);
   const reward = s.rewardPicks > 0;
-  p.text(VIEW.w / 2, 70, reward ? t('arenaReward') : t('levelTitle', { n: s.level }), 30, reward ? C.elite : C.shard, { bold: true, origin: [0.5, 0], glow: true });
+  p.text(VIEW.w / 2, 70, reward ? t(s.after === 'run' ? 'objectiveReward' : 'arenaReward') : t('levelTitle', { n: s.level }), 30, reward ? C.elite : C.shard, { bold: true, origin: [0.5, 0], glow: true });
   const choices = s.choices ?? [];
   p.text(VIEW.w / 2, 108, `${reward ? t('freeTier') : t('chooseUpgrade')}  ·  ${t(choices.length > 3 ? 'tapCard4' : 'tapCard')}`, 14, C.muted, { origin: [0.5, 0] });
   choices.forEach((id, i) => {

@@ -99,6 +99,69 @@ foes have more health, hit harder and come faster.
 
 ![The Bog Mother on the Swamp world](docs/screenshots/swamp.webp)
 
+### Side objectives
+
+Each world brings three side objectives, one after the other: one shared by every world at 1:00,
+the world's own at 2:15 and your hero's own at 3:30. The HUD shows its name, progress and time
+left under the clock, with a line on what to do; an arrow at the screen's edge points to its
+marker when it is off screen. Finish it in time for credits, a level or a free upgrade card. A
+failed one just ends; the next comes at its time. None run in the elite arena, and one still
+under way when the boss comes is called off.
+
+| Objective | Where | What to do | Reward |
+| --- | --- | --- | --- |
+| Defend the position | Every world | Stay 15 s in a ring while foes push in (40 s) | Upgrade card |
+| Escort the stranded bot | Every world | Stay near the bot, which only rolls on while you are close, until it reaches its goal; foes touching it wear it down (60 s) | 30 credits |
+| Destroy the relay beacons | Every world | Break 3 beacons (45 s) | A level |
+| Survive the shrinking zone | Every world | Stay inside a zone that closes in for 30 s; 4 s outside fails it | 25 credits |
+| Raid the scrap crawler cache | Dune world | Break the cache; an elite guards it (50 s) | 45 credits |
+| Purge the spore nests | Swamp world | Break 4 nests, which breed mire rats while they stand (50 s) | Upgrade card |
+| Thaw the frozen squad | Ice world | Stand by each of 3 frozen troopers for 1.5 s; each one freed fights beside you for 40 s (60 s) | A level |
+| Seal the lava vents | Lava world | Stand on each of 3 vents for 1.5 s while the open ones erupt (50 s) | Upgrade card |
+| Quick draw | Captain Rook | Down 70 foes (30 s) | 30 credits |
+| Hold the drop zone | Legionary TR-9 | Stay 8 s in a small drop zone while foes push in hard (35 s) | Upgrade card |
+| Recon run | Corporal Bram-17 | Reach 4 markers far apart (40 s) | 30 credits |
+| Duel | Kael Varro | Beat a marked elite (40 s) | Upgrade card |
+| Unbroken | Lord Vharn | Take no more than 60 damage for 40 s | A level |
+| Lift the wreck | Master Oom | Stand by a wreck for 4 s; it then crashes down on the foes around it (40 s) | 25 credits |
+| Shelter the pilgrim | Elder Corvin Hale | Keep foes off a pilgrim for 30 s | Upgrade card |
+| Living storm | Regent Veyl | Land 220 hits (25 s) | A level |
+| Bloodtrail | Kresh the Twinblade | Down 30 foes in a row without being hit (60 s) | Upgrade card |
+| Shatter the monolith | Master Joren Vask | Break a monolith (35 s) | Upgrade card |
+| Signal the fleet | Commander Elara Voss | Use Call for Aid inside a marked ring (45 s) | 40 credits |
+| Salvage run | Triad-77 | Stand at each of 3 scrap piles for 1.2 s (45 s) | 35 credits |
+
+The shared one is drawn from those not seen yet this run. Beacons, nests, the cache and the
+monolith take hits like foes (your weapon aims at them when they are the nearest), but do no harm
+and drop nothing.
+
+![Defend the position: the ring fills as you hold it](docs/screenshots/objective-defend.webp)
+
+![Purge the spore nests on the Swamp world](docs/screenshots/objective-nests.webp)
+
+![Elder Corvin Hale shelters the pilgrim](docs/screenshots/objective-pilgrim.webp)
+
+### Power-ups
+
+From a world's first minute on, a fallen foe now and then drops a power-up (an elite does half of
+the time); at most 3 lie about at once, each for 25 s, blinking in its last seconds. Walk over one
+to use it:
+
+| Power-up | Sign | Effect |
+| --- | --- | --- |
+| Bomb | Amber bomb | Every foe on screen loses 65% of its health (a boss 4%) |
+| Magnet | Horseshoe | Every lumen shard on the field flies to you |
+| Lure | Rings | Pickup range ×2.2 for 30 s |
+| Overdrive | Double chevron | Attacks 50% faster for 10 s |
+| Shield | Shield | Blocks the next 3 hits |
+| Freeze | Snowflake | Every foe but the boss stands still for 5 s |
+| Credit cache | Coins | 20 credits |
+
+Lure, Overdrive and the shield show their time or hits left beside your health. Power-ups left
+lying when a world is cleared are lost.
+
+![The seven power-ups](docs/screenshots/power-ups.webp)
+
 ### The star map
 
 After a boss falls, you collect what is lying about, earn credits for the clear and choose one of
@@ -245,7 +308,8 @@ npm run dev   # then open http://localhost:5173/games/riftblade/
 hero select screen it checks the twelve cards (all but Legionary TR-9 locked on a fresh save),
 taps a locked card (no Fight button), then TR-9 and Fight, walks him in a wide circle by holding
 the mouse down at a point that turns around him, takes the first card at the first level-up and
-checks the upgrade was taken, fires Brace from its button and plays on to the one-minute mark.
+checks the upgrade was taken, fires Brace from its button and plays on to the one-minute mark. Side
+objectives and power-ups only begin at 1:00, so they leave that first minute as it was.
 
 ```sh
 npx playwright test --project riftblade
@@ -261,10 +325,11 @@ npx playwright test --project riftblade
   `upgrades.ts` (paths, pool, gear, capstones, crossovers and the card roll), `planets.ts` (the
   four worlds, their bosses and the star map's numbers), `state.ts` (the state and the numbers),
   `sim.ts` (everything that happens in a fight), `voyage.ts` (between fights: the star map, trader,
-  arena, events and the next world) and `save.ts`.
+  arena, events and the next world), `objectives.ts` (the side objectives) and `save.ts`.
 - `src/art/`: `glow.ts` (painting helpers), `sprites.ts` (the heroes, Scrap bots and pickups),
   `knights.ts` (the knights, their blades and allies), `squad.ts` (Elara, Triad-77, their allies,
   the drop pod and the locked placeholder) and
   `factions.ts` (the later factions and their bosses), all painted at boot.
-- `src/scenes/`: `BootScene.ts`, `GameScene.ts` (input, camera and drawing) and `layout.ts`.
+- `src/scenes/`: `BootScene.ts`, `GameScene.ts` (input, camera and drawing), `objectiveArt.ts`
+  (the objectives and power-ups, drawn in code) and `layout.ts`.
 - `src/ui/panels.ts`: the hero select, level-up, new hero, star map, trader, event and end screens.

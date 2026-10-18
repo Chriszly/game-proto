@@ -6,8 +6,8 @@
 import { HEROES, isKnight, type HeroId } from './heroes';
 import {
   BOSS, DIFF, ELITE, EMBER, ENEMY, HERO_R, KNIGHT, LEASH, LINE, MAX_ENEMIES, MAX_SHARDS, RATS, ROLLER, RUN_MS,
-  SPAWN_RING, TOAD, WALKER, freshHero, freshState, refreshUnlocks, statsOf, xpFor,
-  type AllyKind, type BoltColor, type Bomb, type Bullet, type Enemy, type EnemyKind, type GameState, type Hazard, type Pickup, type Stats,
+  POWER, POWER_UPS, SPAWN_RING, TOAD, WALKER, freshHero, freshState, isStructure, refreshUnlocks, statsOf, xpFor,
+  type AllyKind, type PowerUp, type BoltColor, type Bomb, type Bullet, type Enemy, type EnemyKind, type GameState, type Hazard, type Pickup, type Stats,
 } from './state';
 import {
   contactMod, crush, dashEnd, dashSweep, foeMod, healFactor, knightAbilities, knightAllies, knightAttack, knightGuard,
@@ -20,7 +20,8 @@ import {
 import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, cardCount, rewardChoices, rollChoices } from './upgrades';
 import { ARENA_MS, BOG, BOSSES, CHAMPION, CREDITS, PLANETS, SIEGE, VENT, type FoeKind } from './planets';
 // `t` is a common local name here (targets, time), so the translator goes by `tr`.
-import { t as tr } from '../i18n';
+import { t as tr, type TextKey } from '../i18n';
+import { cancelObjective, objectives } from './objectives';
 
 /** What the player is doing this frame: a move direction (length up to 1) and the signature key. */
 export interface Input {
@@ -36,7 +37,7 @@ const MAX_FRAME_MS = 100;
 /** After a hit the hero takes no damage for this long, ms. */
 export const HURT_GRACE_MS = 450;
 /** Colours of the blast rings. */
-const BLAST = { wreck: '#ffd23f', hero: '#ffb347', bot: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
+const BLAST = { bomb: '#9fe8ff', wreck: '#ffd23f', hero: '#ffb347', bot: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
 
 /** The stats for this frame, computed once per tick, and whether the hero is a knight (or Elara Voss or Triad-77). */
 let st: Stats = statsOf(freshState());
@@ -150,10 +151,8 @@ export function tick(s: GameState, dtMs: number, input: Input) {
     for (const f of s.zaps) f.ms -= dt;
     s.zaps = s.zaps.filter((f) => f.ms > 0);
   }
-  if (s.phase === 'run' && s.pendingLevels > 0) {
-    s.phase = 'levelup';
-    s.choices = rollChoices(s.hero!, s.ranks, cardCount(s.hero!));
-  }
+  // Level-ups, and free picks won by an objective.
+  if (s.phase === 'run' && (s.pendingLevels > 0 || s.rewardPicks > 0)) nextPick(s);
 }
 
 function step(s: GameState, ms: number, input: Input) {
@@ -163,6 +162,9 @@ function step(s: GameState, ms: number, input: Input) {
   buildGrid(s);
   moveHero(s, ms, input);
   director(s, ms);
+  objectives(s, ms);
+  if (s.lureMs > 0) s.lureMs -= ms;
+  if (s.overdriveMs > 0) s.overdriveMs -= ms;
   primary(s, ms);
   abilities(s, ms);
   if (knight) knightAbilities(s, ms);
@@ -341,6 +343,13 @@ function untouchable(s: GameState) {
 function hurtHero(s: GameState, dmg: number, x?: number, y?: number) {
   if (untouchable(s) || s.phase !== 'run') return;
   const p = s.player;
+  // A Shield power-up takes the hit.
+  if (s.shieldHits > 0) {
+    s.shieldHits -= 1;
+    p.hurtMs = HURT_GRACE_MS;
+    s.blasts.push({ id: s.nextId++, x: p.x, y: p.y, r: 34, ms: 260, maxMs: 260, color: BLAST.shield });
+    return;
+  }
   if (knight) {
     // Foresight: a chance to dodge; a barrier takes what it can first.
     if (st.dodge > 0 && Math.random() < st.dodge) {
@@ -723,7 +732,7 @@ function moveAllies(s: GameState, ms: number) {
   const rally = s.hero === 'rook' && p.sigActiveMs > 0 ? 1.5 : 1;
   const counts: Record<AllyKind, number> = {
     trooper: 0, legionary: 0, brother: 0, drone: 0, escort: 0, fighter: 0, squadron: 0, copilot: 0, spirit: 0, puppet: 0,
-    commando: 0, bike: 0, medic: 0, shieldbot: 0, command: 0, spare: 0,
+    commando: 0, bike: 0, medic: 0, shieldbot: 0, command: 0, spare: 0, thawed: 0,
   };
   for (const a of s.allies) counts[a.kind] += 1;
   for (const a of s.allies) {
@@ -735,6 +744,8 @@ function moveAllies(s: GameState, ms: number) {
       moveSquadAlly(s, a, ms, counts[a.kind]);
       continue;
     }
+    // Troopers thawed out on the Ice world fight for a while.
+    if (a.kind === 'thawed') a.lifeMs -= ms;
     {
       // Troopers and brothers keep formation behind the hero; drones circle.
       const n = counts[a.kind];
@@ -751,7 +762,7 @@ function moveAllies(s: GameState, ms: number) {
     if (a.kind === 'brother') continue;
     a.cdMs -= ms * (a.kind === 'trooper' ? rally : 1);
     if (a.cdMs > 0) continue;
-    const range = a.kind === 'trooper' || a.kind === 'legionary' || a.kind === 'escort' ? 340 : 300;
+    const range = a.kind === 'trooper' || a.kind === 'legionary' || a.kind === 'escort' || a.kind === 'thawed' ? 340 : 300;
     const t = nearest(s, a.x, a.y, 1, range)[0];
     if (!t) {
       a.cdMs = 0;
@@ -766,6 +777,9 @@ function moveAllies(s: GameState, ms: number) {
       bolt(s, a.x, a.y, ang, dmg, { ...plain, color: 'rook' });
       if (cm >= 4) bolt(s, a.x, a.y, ang + 0.05, dmg, { ...plain, color: 'rook' });
       a.cdMs = 900 * (cm >= 2 ? 0.75 : 1);
+    } else if (a.kind === 'thawed') {
+      bolt(s, a.x, a.y, ang, 9 + 4 * s.planet, { ...plain, color: 'rook' });
+      a.cdMs = 700;
     } else if (a.kind === 'legionary') {
       bolt(s, a.x, a.y, ang, 7 * ((s.ranks['drop-doctrine'] ?? 0) >= 4 ? 1.6 : 1), { ...plain, color: 'tr9' });
       a.cdMs = 900;
@@ -784,7 +798,7 @@ function moveAllies(s: GameState, ms: number) {
 const KNIGHT_ALLIES: readonly AllyKind[] = ['fighter', 'squadron', 'copilot', 'spirit', 'puppet'];
 const SQUAD_ALLIES: readonly AllyKind[] = ['commando', 'bike', 'medic', 'shieldbot', 'command', 'spare'];
 /** Allies that last a while and are gone at the end of a fight. */
-export const SHORT_LIVED: readonly AllyKind[] = ['fighter', 'puppet', 'bike', 'spare'];
+export const SHORT_LIVED: readonly AllyKind[] = ['fighter', 'puppet', 'bike', 'spare', 'thawed'];
 
 // ---------------------------------------------------------------------------------------------
 // The bots
@@ -823,7 +837,7 @@ export function spawnRate(t: number) {
 }
 
 /** Spawns one group of the planet's swarm on the ring (at most `room`); returns how many came. */
-function spawnGroup(s: GameState, t: number, room: number) {
+export function spawnGroup(s: GameState, t: number, room: number) {
   const id = PLANETS[s.planet].id;
   const spot = ringPoint(s);
   if (id === 'dune') {
@@ -912,6 +926,7 @@ function director(s: GameState, ms: number) {
   }
   if (!s.bossSpawned && !s.arena && s.time >= RUN_MS) {
     s.bossSpawned = true;
+    cancelObjective(s);
     const spot = ringPoint(s, s.player.facing);
     const e = spawnAt(s, 'boss', spot.x, spot.y);
     if (planet.boss === 'bogmother') {
@@ -938,7 +953,7 @@ function director(s: GameState, ms: number) {
 }
 
 export function knock(e: Enemy, fromX: number, fromY: number, power: number) {
-  if (e.kind === 'boss') return;
+  if (e.kind === 'boss' || isStructure(e.kind)) return;
   const a = Math.atan2(e.y - fromY, e.x - fromX);
   e.kx = Math.cos(a) * power;
   e.ky = Math.sin(a) * power;
@@ -957,7 +972,7 @@ function shoot(s: GameState, x: number, y: number, angle: number, speed: number,
 }
 
 /** Something on the ground: a warning (`warnMs`) then a blast, or a lasting pool or ring. */
-function addHazard(s: GameState, kind: Hazard['kind'], x: number, y: number, r: number, warnMs: number, ms: number, dmg: number, angle = 0) {
+export function addHazard(s: GameState, kind: Hazard['kind'], x: number, y: number, r: number, warnMs: number, ms: number, dmg: number, angle = 0) {
   if (s.hazards.length > 90) s.hazards.shift();
   s.hazards.push({ id: s.nextId++, kind, x, y, r, warnMs, ms, maxMs: ms, dmg, angle, hit: false });
 }
@@ -970,6 +985,14 @@ function moveEnemies(s: GameState, ms: number) {
   const harm = PLANETS[s.planet].dmg;
   for (const e of s.enemies) {
     if (e.hp <= 0) continue;
+    // A structure stands where it was built and does nothing.
+    if (isStructure(e.kind)) {
+      e.flashMs = Math.max(0, e.flashMs - ms);
+      e.x = e.aimX;
+      e.y = e.aimY;
+      e.charmMs = e.gripMs = e.stunMs = 0;
+      continue;
+    }
     e.hitMs -= ms;
     e.flashMs = Math.max(0, e.flashMs - ms);
     e.bashMs = Math.max(0, e.bashMs - ms);
@@ -1340,6 +1363,7 @@ export function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
   else if (o.crit || (!o.noCrit && st.crit > 0 && Math.random() < st.crit)) dmg *= 2;
   e.hp -= dmg;
   e.flashMs = 90;
+  s.hits += 1;
   if (o.slow && st.slowPct > 0) {
     e.slowPct = Math.max(e.slowPct, st.slowPct);
     e.slowMs = Math.max(e.slowMs, st.slowMs);
@@ -1350,6 +1374,11 @@ export function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
 
 function kill(s: GameState, e: Enemy) {
   e.hp = 0;
+  // A structure breaks: no kill, no shard (its objective counts it).
+  if (isStructure(e.kind)) {
+    s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: e.r * 2.2, ms: 420, maxMs: 420, color: BLAST.shell });
+    return;
+  }
   s.kills += 1;
   if (knight) onKill(s, e);
   if (squad) squadKill(s, e);
@@ -1367,6 +1396,7 @@ function kill(s: GameState, e: Enemy) {
   }
   const value = e.elite ? ELITE.xp : ENEMY[e.kind].xp;
   dropShard(s, e.x, e.y, value);
+  dropPowerUp(s, e);
   if (e.elite) {
     s.elitesKilled += 1;
     // Arena elites pay in credits and the free pick at the end; others drop a chest too.
@@ -1381,6 +1411,16 @@ function kill(s: GameState, e: Enemy) {
   }
   // An ash acolyte bursts into embers.
   if (e.kind === 'acolyte') addHazard(s, 'ember', e.x, e.y, EMBER.r * (e.elite ? 1.6 : 1), 0, EMBER.ms, EMBER.dmg * PLANETS[s.planet].dmg);
+}
+
+/** Now and then a power-up, after a world's first minute (so the first minute's draws are as before). */
+function dropPowerUp(s: GameState, e: Enemy) {
+  if (s.time < POWER.fromMs || s.arena) return;
+  if (Math.random() >= (e.elite ? POWER.eliteChance : POWER.chance)) return;
+  if (s.pickups.filter((k) => POWER_UPS.includes(k.kind as PowerUp)).length >= POWER.max) return;
+  let roll = Math.random() * POWER_UPS.reduce((n, k) => n + POWER.weights[k], 0);
+  const kind = POWER_UPS.find((k) => (roll -= POWER.weights[k]) < 0) ?? 'bomb';
+  s.pickups.push({ id: s.nextId++, kind, x: e.x - 16, y: e.y - 8, heal: 0, value: 0, ms: POWER.lifeMs });
 }
 
 function dropShard(s: GameState, x: number, y: number, value: number) {
@@ -1630,6 +1670,10 @@ function pickups(s: GameState, ms: number) {
   }
   s.shards = keep;
   s.pickups = s.pickups.filter((k) => {
+    if (k.ms !== undefined && k.ms > 0) {
+      k.ms -= ms;
+      if (k.ms <= 0) return false;
+    }
     const d = Math.hypot(p.x - k.x, p.y - k.y);
     // Credits are pulled in like shards.
     if (k.kind === 'credits' && d < reach && d > 1) {
@@ -1644,6 +1688,10 @@ function pickups(s: GameState, ms: number) {
 }
 
 function take(s: GameState, k: Pickup) {
+  if (POWER_UPS.includes(k.kind as PowerUp)) {
+    powerUp(s, k.kind as PowerUp);
+    return;
+  }
   if (k.kind === 'medkit') {
     heal(s, k.heal);
     pop(s, tr('plusHealth', { n: k.heal }), '#7dffa0');
@@ -1658,12 +1706,42 @@ export function collectAll(s: GameState) {
   st = statsOf(s);
   for (const sh of s.shards) gainXp(s, sh.value);
   s.shards = [];
-  for (const k of s.pickups) take(s, k);
+  // Power-ups left lying are lost; the rest is taken.
+  for (const k of s.pickups) if (!POWER_UPS.includes(k.kind as PowerUp)) take(s, k);
   s.pickups = [];
 }
 
-function gainXp(s: GameState, value: number) {
-  s.xp += value * st.xp;
+/** A power-up picked up. */
+function powerUp(s: GameState, kind: PowerUp) {
+  const p = s.player;
+  s.powerUps += 1;
+  const n = { bomb: 0, magnet: 0, lure: POWER.lureMs / 1000, overdrive: POWER.overdriveMs / 1000, shield: POWER.shieldHits, freeze: POWER.freezeMs / 1000, cache: POWER.cacheCredits }[kind];
+  pop(s, tr(`pu_${kind}` as TextKey, { n }), '#7fe3ff');
+  if (kind === 'bomb') {
+    // Every foe on screen takes most of its health; a boss a little.
+    for (const e of s.enemies) {
+      if (e.hp <= 0 || e.charmMs > 0 || isStructure(e.kind)) continue;
+      if (Math.abs(e.x - p.x) > POWER.bombR || Math.abs(e.y - p.y) > POWER.bombR * 0.6) continue;
+      e.hp -= e.maxHp * (e.kind === 'boss' ? POWER.bombBoss : POWER.bombShare);
+      e.flashMs = 90;
+      if (e.hp <= 0) kill(s, e);
+    }
+    s.blasts.push({ id: s.nextId++, x: p.x, y: p.y, r: POWER.bombR, ms: 600, maxMs: 600, color: BLAST.bomb });
+  } else if (kind === 'magnet') {
+    for (const sh of s.shards) sh.pulled = true;
+  } else if (kind === 'lure') s.lureMs = POWER.lureMs;
+  else if (kind === 'overdrive') s.overdriveMs = POWER.overdriveMs;
+  else if (kind === 'shield') s.shieldHits = POWER.shieldHits;
+  else if (kind === 'freeze') {
+    for (const e of s.enemies) if (e.kind !== 'boss' && !isStructure(e.kind)) e.stunMs = Math.max(e.stunMs, POWER.freezeMs);
+  } else {
+    s.credits += POWER.cacheCredits;
+  }
+}
+
+/** XP gained (times the hero's XP bonus, unless `raw`). */
+export function gainXp(s: GameState, value: number, raw = false) {
+  s.xp += value * (raw ? 1 : st.xp);
   while (s.xp >= s.xpNext) {
     s.xp -= s.xpNext;
     s.level += 1;

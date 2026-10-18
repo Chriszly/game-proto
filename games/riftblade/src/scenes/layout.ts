@@ -27,6 +27,8 @@ export const LEVEL = { x: VIEW.w - 16, y: 22 };
 export const PLANET_TAG = { x: VIEW.w - 16, y: 44 };
 export const CREDITS_TAG = { x: VIEW.w - 16, y: 63 };
 export const BOSS_BAR = { x: VIEW.w / 2 - 160, y: 56, w: 320, h: 10 };
+/** The side objective's lines under the clock (where the boss bar goes; the two never show together). */
+export const OBJECTIVE_HUD = { x: VIEW.w / 2, y: 52 };
 /** The round signature button, bottom right. */
 export const SIG_BUTTON = { x: VIEW.w - 70, y: VIEW.h - 70, r: 42 };
 /** The floating touch stick: rim radius (full speed there), knob radius and dead zone. */
@@ -103,6 +105,7 @@ export function fitLayout(w: number, h: number, fx: number, fy: number) {
   PLANET_TAG.x = w - 16;
   CREDITS_TAG.x = w - 16;
   BOSS_BAR.x = w / 2 - BOSS_BAR.w / 2;
+  OBJECTIVE_HUD.x = w / 2;
   Object.assign(SIG_BUTTON, { x: w - 70, y: h - 70 });
 }
 
