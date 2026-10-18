@@ -69,6 +69,7 @@ import {
   UPGRADES,
   RESEARCH_ORDER,
   researched,
+  studied,
   shadeGrown,
   carryCapacity,
   craftsmanCost,
@@ -120,6 +121,8 @@ import {
   plagueStage,
   rivalUndercuts,
   signOf,
+  payBoost,
+  payment,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
@@ -309,9 +312,9 @@ interface Marker {
 /** A whole percentage or price change with its sign, such as +20 or -15, in the player's language. */
 const signed = (n: number) => `${n > 0 ? '+' : ''}${formatNumber(n)}`;
 
-/** A purple level marker's icon: the station for a station's level, otherwise the upgrade's own. */
+/** A purple level marker's icon: the station for a station's level, the study's book for its lessons, otherwise the upgrade's own. */
 const upgradeIcon = (id: UpgradeId): UpgradeIcon =>
-  id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id;
+  id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id === 'craftOrder' || id === 'priceSigns' ? 'research' : id;
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
@@ -340,6 +343,9 @@ export class GameScene extends Phaser.Scene {
   private nextMarkerAt = 0;
   /** Since when the doctor has stood still, by `this.time.now`, or null while walking. */
   private stillSince: number | null = null;
+  /** The marker the doctor's feet are on, and since when: paying speeds up the longer they stay. */
+  private lastMarker?: Marker;
+  private markerSince = 0;
   /** The purple marker that last refused to take coins, so its buzz plays once until the doctor steps off. */
   private refusedMarker: Marker | null = null;
   /** Plot centres, in plot order, for finding ripe plants within the doctor's reach. */
@@ -609,10 +615,14 @@ export class GameScene extends Phaser.Scene {
       ui('click');
       cyclePriority(this.state, id);
     });
+    // It stands once the study has taught the crafting order.
     this.views.push(() => {
+      const shown = studied(this.state, 'craftOrder');
+      sign.setVisible(shown);
+      caption.setVisible(shown);
       const first = this.state.priority[id];
-      any.setVisible(!first);
-      icon.setVisible(!!first);
+      any.setVisible(shown && !first);
+      icon.setVisible(shown && !!first);
       if (first) icon.setTexture(itemTexture(first));
     });
   }
@@ -1149,6 +1159,19 @@ export class GameScene extends Phaser.Scene {
       (level, left) => t('learnCost', { potion: itemName(RESEARCH_ORDER[level]), coins: left }),
       () => unlocked(this.state, 'level-research'),
     );
+    for (const id of ['craftOrder', 'priceSigns'] as const) {
+      this.addLevelMarker(
+        STUDY[id],
+        'research',
+        () => this.state.upgrades[id],
+        UPGRADES[id].max,
+        (level) => upgradeCost(id, level),
+        () => payUpgrade(this.state, id),
+        (_level, left) => t('learnCost', { potion: t(UPGRADES[id].name), coins: left }),
+        () => unlocked(this.state, `level-${id}`),
+        MARKET_CAPTION,
+      );
+    }
   }
 
   private createShopfront() {
@@ -1169,10 +1192,12 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       const { shelf } = this.state.counter;
       const known = POTIONS.filter((p) => researched(this.state, p));
-      if (known.join() !== row) {
-        row = known.join();
+      // The price signs stand once the study has taught them.
+      const priced = studied(this.state, 'priceSigns');
+      if (`${known.join()}${priced}` !== row) {
+        row = `${known.join()}${priced}`;
         shelves.forEach((s, i) => s.setVisible(known.includes(POTIONS[i])));
-        signs.forEach((show, i) => show(known.includes(POTIONS[i])));
+        signs.forEach((show, i) => show(priced && known.includes(POTIONS[i])));
         // The test reads the shelves standing, in POTIONS order.
         this.pallets.counter!.in = shelves.filter((_, i) => known.includes(POTIONS[i]));
       }
@@ -1253,7 +1278,8 @@ export class GameScene extends Phaser.Scene {
       if (this.pinching()) return;
       if (this.closePanels()) return;
       ui('click');
-      this.showFeedback(cycleSign(this.state, potion));
+      const feedback = cycleSign(this.state, potion);
+      if (feedback) this.showFeedback(feedback);
     });
     const COLOURS = { cheap: '#2f6a1a', fair: INK, dear: '#8a3a10' };
     this.views.push(() => {
@@ -2321,6 +2347,10 @@ export class GameScene extends Phaser.Scene {
     const under = (m: Marker) => m.zone.contains(this.feetX(), this.feetY());
     for (const m of this.markers) if (m.paused && !under(m)) m.paused = false;
     const marker = this.markers.find((m) => m.shown() && under(m));
+    if (marker !== this.lastMarker) {
+      this.lastMarker = marker;
+      this.markerSince = this.time.now;
+    }
     const moving = this.player.body!.velocity.lengthSq() > 0;
     if (moving) this.stillSince = null;
     else this.stillSince ??= this.time.now;
@@ -2328,7 +2358,10 @@ export class GameScene extends Phaser.Scene {
     if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
     if (marker.pays && (this.stillSince === null || this.time.now - this.stillSince < STILL_MS)) return;
     this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
+    // The longer the doctor stays on a purple marker, the more each payment takes.
+    if (marker.pays) payment.boost = payBoost(this.time.now - Math.max(this.stillSince!, this.markerSince) - STILL_MS);
     const feedback = marker.act();
+    payment.boost = 1;
     if (feedback) this.showFeedback(feedback);
     // A purple marker that takes nothing (no coins, or the herb market with nothing to trade) buzzes once a visit.
     else if (marker.pays && !this.refusedMarker) {

@@ -180,7 +180,7 @@ export interface Upgrade {
  * much every pallet and shelf holds, the shop's prices, an extra order slot and how often customers
  * come in.
  */
-export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'storage' | 'prices' | 'slots' | 'customers' | 'research' | 'herbalist';
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'storage' | 'prices' | 'slots' | 'customers' | 'research' | 'craftOrder' | 'priceSigns' | 'herbalist';
 export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
 export const GUILD_UPGRADES = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers', 'herbalist'] as const;
 
@@ -204,10 +204,24 @@ export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: Text
   herbalist: { max: 1, cost: 60, name: 'herbalist' },
   // Each level learns the next recipe in RESEARCH_ORDER.
   research: { max: 4, cost: 30, name: 'study' },
+  // Also at the study: learning to choose what each table and cauldron makes first, and to price
+  // each shelf with its sign.
+  craftOrder: { max: 1, cost: 40, name: 'craftOrder' },
+  priceSigns: { max: 1, cost: 60, name: 'priceSigns' },
 };
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
 export const upgradeCost = (id: UpgradeId, level: number) => UPGRADES[id].cost * 2 ** level;
+
+/**
+ * How hard a purple marker pays: each payment is `boost` times its usual size. The scenes raise it
+ * the longer the doctor stands on the marker (`payBoost`) and set it back to 1 after paying.
+ */
+export const payment = { boost: 1 };
+/** Paying speeds up the longer the doctor stays on a marker: twice as much a step for every `PAY_DOUBLE_MS`, up to `MAX_PAY_BOOST`. */
+export const PAY_DOUBLE_MS = 1_000;
+export const MAX_PAY_BOOST = 64;
+export const payBoost = (heldMs: number) => Math.min(MAX_PAY_BOOST, 2 ** Math.floor(Math.max(0, heldMs) / PAY_DOUBLE_MS));
 
 /** Every station a craftsman can be hired for. */
 export const STATIONS: StationId[] = ['refiner', 'cauldron', 'refiner2', 'cauldron2', 'counter'];
@@ -334,6 +348,8 @@ export const RESEARCH_ORDER: readonly PotionId[] = ['vigourTonic', 'shadowElixir
 /** Whether the apothecary can brew a potion: known from the start, or learned at the study. */
 export const researched = (state: GameState, potion: PotionId) =>
   KNOWN_RECIPES.includes(potion) || RESEARCH_ORDER.indexOf(potion) < state.upgrades.research.level;
+/** Whether the study has taught the crafting order (the tables' and cauldrons' "First:" signs) or the shelves' price signs. */
+export const studied = (state: GameState, id: 'craftOrder' | 'priceSigns') => state.upgrades[id].level > 0;
 /** The potions brewed with nightshade, which customers ask for only once a shade garden grows it. */
 export const NEEDS_NIGHTSHADE: readonly PotionId[] = ['shadowElixir', 'moonlightSalve', 'witchsBrew'];
 /**
@@ -518,6 +534,8 @@ export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
   'level-customers': 'level-prices',
   'level-slots': 'level-customers',
   'level-research': 'belt-garden',
+  'level-craftOrder': 'belt-garden',
+  'level-priceSigns': 'belt-garden',
   'level-herbalist': 'level-growth',
 };
 
@@ -746,7 +764,7 @@ export const SIGN_DEMAND: Record<PriceSign, number> = { cheap: 2, fair: 1, dear:
 export const SIGN_REPUTATION: Record<PriceSign, number> = { cheap: 2, fair: 0, dear: 0 };
 export const SIGN_PATIENCE: Record<PriceSign, number> = { cheap: 1, fair: 1, dear: 1.5 };
 /** The sign on a potion's shelf: Fair unless changed. */
-export const signOf = (state: GameState, potion: PotionId): PriceSign => state.signs[potion] ?? 'fair';
+export const signOf = (state: GameState, potion: PotionId): PriceSign => (studied(state, 'priceSigns') && state.signs[potion]) || 'fair';
 /** How fast an order's patience runs out: faster while any potion it still wants is sold dear. */
 export const patienceRate = (state: GameState, order: Order) => Math.max(1, ...order.wants.map((p) => SIGN_PATIENCE[signOf(state, p)]));
 

@@ -70,6 +70,8 @@ import {
   nudgeReputation,
   orderable,
   researched,
+  studied,
+  payment,
   RESEARCH_ORDER,
   BLIGHT_DAY,
   BLIGHT_EVERY_MS,
@@ -792,12 +794,12 @@ export function pickUpFromCauldron(state: GameState, id: CauldronId = 'cauldron'
 }
 
 const UPGRADE_STEP = 5;
-/** Pays a handful of coins towards `cost`; once it is fully paid, `complete` says what was bought. */
+/** Pays a handful of coins towards `cost` (more the longer the doctor stays, see `payment`); once it is fully paid, `complete` says what was bought. */
 function pay(state: GameState, toward: { paid: number }, cost: number, complete: () => string): Feedback {
-  const coins = Math.min(UPGRADE_STEP, state.coins, cost - toward.paid);
+  const coins = Math.min(UPGRADE_STEP * payment.boost, state.coins, cost - toward.paid);
   state.coins -= coins;
   toward.paid += coins;
-  return toward.paid < cost ? [`-${coins} coins`] : [complete()];
+  return toward.paid < cost ? [t('coinsPaid', { n: coins })] : [complete()];
 }
 
 /** Pays towards the next of something bought in levels, going up once fully paid. */
@@ -818,7 +820,9 @@ export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
   const done = () =>
     id === 'research'
       ? t('learned', { potion: itemName(RESEARCH_ORDER[upgrade.level - 1]) })
-      : t('levelUp', { name: t(UPGRADES[id].name), level: upgrade.level + 1 });
+      : id === 'craftOrder' || id === 'priceSigns'
+        ? t('learned', { potion: t(UPGRADES[id].name) })
+        : t('levelUp', { name: t(UPGRADES[id].name), level: upgrade.level + 1 });
   return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), done);
 }
 
@@ -826,7 +830,8 @@ export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
  * Moves a crafting station's priority on to the next choice: from none (the station's own order) to
  * each plant or potion it makes in turn, and back to none.
  */
-export function cyclePriority(state: GameState, id: CraftingId): Feedback {
+export function cyclePriority(state: GameState, id: CraftingId): Feedback | null {
+  if (!studied(state, 'craftOrder')) return null;
   // A cauldron can put first only the potions the apothecary has learned.
   const potions = POTIONS.filter((p) => researched(state, p));
   const choices: (PlantId | PotionId | null)[] = [null, ...(id === 'refiner' || id === 'refiner2' ? PLANTS : potions)];
@@ -836,7 +841,8 @@ export function cyclePriority(state: GameState, id: CraftingId): Feedback {
 }
 
 /** Moves a shelf's price sign on: Fair to Dear, Dear to Cheap, Cheap to Fair. */
-export function cycleSign(state: GameState, potion: PotionId): Feedback {
+export function cycleSign(state: GameState, potion: PotionId): Feedback | null {
+  if (!studied(state, 'priceSigns')) return null;
   const next = PRICE_SIGNS[(PRICE_SIGNS.indexOf(signOf(state, potion)) + 1) % PRICE_SIGNS.length];
   state.signs[potion] = next;
   return [t(SIGN_SET[next], { potion: itemName(potion) })];

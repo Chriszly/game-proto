@@ -4,7 +4,7 @@ import { routeMs } from '../scenes/shopLayout';
 import { DISTRICTS, GROW_ROUNDS, HAPPY, HAPPY_PULL, HOME_TIERS, MAX_HOMES, START_HOMES, SUPPLY_MS, UNHAPPY, districtAsks, type DistrictState, type Need } from './districts';
 import { FINE, type PotionId } from './items';
 import type { Feedback } from './sim';
-import { carryCapacity, potionPrice, speedAt, type GameState, type Upgrade } from './state';
+import { carryCapacity, payment, potionPrice, speedAt, type GameState, type Upgrade } from './state';
 import {
   BEDS,
   COUNTER_PAY,
@@ -391,10 +391,11 @@ export function tossGood(state: GameState, slot: number): Feedback | null {
 
 /**
  * Pays towards `cost`: about a twelfth of it at a time (at least 5 coins), so even the dearest
- * shop's upgrades fill in a couple of seconds on the marker.
+ * shop's upgrades fill in a couple of seconds on the marker, and more the longer the doctor stays
+ * (see `payment`).
  */
 function payTowards(state: GameState, toward: { paid: number }, cost: number): number {
-  const coins = Math.min(Math.max(5, Math.ceil(cost / 12)), state.coins, cost - toward.paid);
+  const coins = Math.min(Math.max(5, Math.ceil(cost / 12)) * payment.boost, state.coins, cost - toward.paid);
   if (coins <= 0) return 0;
   state.coins -= coins;
   toward.paid += coins;

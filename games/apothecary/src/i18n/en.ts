@@ -56,6 +56,8 @@ const en = {
   customers: 'Customers',
   herbalist: 'Herbalist',
   study: 'Study',
+  craftOrder: 'Crafting order',
+  priceSigns: 'Price signs',
 
   // Pixie routes
   gardenPixies: 'Garden pixies',

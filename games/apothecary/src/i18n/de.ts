@@ -59,6 +59,8 @@ const de: Translation<typeof en> = {
   customers: 'Kundschaft',
   herbalist: 'Kräuterkundige',
   study: 'Studierstube',
+  craftOrder: 'Reihenfolge',
+  priceSigns: 'Preisschilder',
 
   // Pixie routes
   gardenPixies: 'Gartenfeen',

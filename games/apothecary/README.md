@@ -36,7 +36,7 @@ bigger than the screen, so the camera follows the doctor.
 | Tap a slot in the hands bar (bottom of the screen) | Throw that item away; a small bin on each full slot shows it |
 | Tap a waiting customer's order bubble | With the doctor inside the shop, hand them everything they want that is on the shelf |
 | Cogwheel (top bar) | Open the settings |
-| Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there, with what it gives beside the arrow (a sack at a refining table, an empty bottle at a cauldron, a coin at the till). Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; its caption shows the coins still to pay |
+| Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there, with what it gives beside the arrow (a sack at a refining table, an empty bottle at a cauldron, a coin at the till). Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; the longer you stay, the faster it pays (twice as fast every second); its caption shows the coins still to pay |
 
 ![The floating touch stick under a steering finger](docs/screenshots/touch-stick.webp)
 
@@ -89,7 +89,13 @@ and its caption names the next recipe. Customers only ask for potions the apothe
 and a cauldron only brews those. The Recipes panel lists every recipe, the ones still to learn
 faded with "Study" in place of their price.
 
-![The study, with the Vigour Tonic for sale](docs/screenshots/study.webp)
+The study also teaches two crafts, each its own lesson with its own purple marker either side of
+the desk, for sale with the recipes: the **crafting order** (40 coins), which puts up the "First:"
+signs at the tables and cauldrons (see **Priority**), and the **price signs** (60 coins), which put
+up the Cheap, Fair and Dear signs at the shelves (see **Price signs**). Until then a station makes
+things in its own order and every potion sells at Fair.
+
+![The study, with the crafting order, the Vigour Tonic and the price signs for sale](docs/screenshots/study.webp)
 
 **The shade garden** grows nightshade, for the Shadow Elixir, the Moonlight Salve and the Witch's
 Brew. It stands at the top of the market, on the left, and is planted on its
@@ -136,7 +142,7 @@ pixies pick from whatever each garden grows, flying it in from that garden.
 
 ![The wheat field replanted with mandrakes, growing from seed](docs/screenshots/replant.webp)
 
-**Price signs**: each shelf has a sign beside it, Fair at first. Tap it to go Dear, then Cheap,
+**Price signs**: once the study has taught them, each shelf has a sign beside it, Fair at first. Tap it to go Dear, then Cheap,
 then Fair again. A Dear potion sells for 40% more, but a customer waiting for one loses patience
 half again as fast (and so tips less). A Cheap one sells for 25% less, is asked for twice as
 often and raises the reputation by 2 more for each one sold. The cut under each shelf counts the
@@ -252,7 +258,8 @@ at once, and the second makes that twice as fast and also brings the coins from 
 
 ![Two craftsmen at each station, each table and cauldron working two pipes](docs/screenshots/second-pipe.webp)
 
-**Priority**: each refining table and cauldron has a small "First:" sign by its name. Tap it to
+**Priority**: once the study has taught the crafting order, each refining table and cauldron has a
+small "First:" sign by its name. Tap it to
 choose what the station makes first whenever it can: wheat, mandrake or nightshade at a table, a
 any potion learned at a cauldron, or "any" to leave it to the station (a table takes
 plants in the order they came, a table makes what its out pallets hold fewest of and a cauldron
@@ -266,7 +273,7 @@ than wait.
 purchase puts the next one out, in this order: refining table level 2, pack 2, cauldron level 2, a
 craftsman at the counter, then the garden's pixies. From the garden's pixies on it branches out:
 boots, sickle, the counter's upgrade, craftsmen at the table and cauldron, the table's pixies, the
-shade garden, the study, and entry to the guild (50 coins), which puts the guild's growth, pixies,
+shade garden, the study and its two crafts, and entry to the guild (50 coins), which puts the guild's growth, pixies,
 storage and prices upgrades up for sale. The cauldron's pixies follow the table's, the land follows the
 cauldron's pixies, customers follows prices and the extra slot follows customers. The second line's things are for sale once their
 station stands.

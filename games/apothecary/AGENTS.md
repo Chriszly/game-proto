@@ -20,13 +20,13 @@ study, shade gardens and a mirrored second production line.
   shop in the middle that faces the street at the bottom and that the doctor enters by a north door, station upgrades (5 levels), outfitter and
   guild upgrades, two craftsmen per station (the second opens a second pipe at a table or
   cauldron; craftsmen rock to and fro while their pipe works), a priority choice per crafting
-  station, six pixie routes (belts) with one lane per item kind, six potions of which two are
+  station once the study has taught the crafting order, six pixie routes (belts) with one lane per item kind, six potions of which two are
   known from the start and four are learned at the study, one shop shelf per potion learned, the
   expansion, a row of order cards always on screen, weather drawn over the yard,
   a Recipes panel and a Settings panel, a daily contract card, tips that shrink while a customer
   waits (a coin ring on each order bubble), and an autopilot that plays the time away (up to 2h)
   on load and shows a "While you were away" chip. Progress autosaves to localStorage.
-- Round two: a price sign on each shelf (Cheap, Fair, Dear), blight on the beds from day 3 and the
+- Round two: a price sign on each shelf (Cheap, Fair, Dear) once the study has taught them, blight on the beds from day 3 and the
   guild's herbalist against it, replanting a garden from its sign, a rival shop across the street
   from day 4 that undercuts one potion a day and closes after ten days outsold, and the plague
   from day 5, three stages on a card under the town card, ending in the Panacea: brewing it cures
@@ -109,7 +109,8 @@ study, shade gardens and a mirrored second production line.
   rules (`TIP_SHARE`, `maxTip`, `tipLeft`, `tipNow`) and the contract (`Contract`, `DAY_MS`,
   `MAX_CONTRACT`, `contractFor`). Also the gardens (`GARDENS`, `GARDEN_LINE`, `SHADE_GARDEN`,
   `SHADE_COST`, `gardenBuilt`, `shadeGrown`, `orderable`), the study (`KNOWN_RECIPES`,
-  `RESEARCH_ORDER`, `researched`; its level is the `research` upgrade), the fine window (`FINE_SHARE`,
+  `RESEARCH_ORDER`, `researched`; its level is the `research` upgrade; `studied` says whether its
+  `craftOrder` and `priceSigns` lessons, one-level upgrades, are learned), the fine window (`FINE_SHARE`,
   `FINE_BONUS`, `inFineWindow`), reputation and regulars (`START_REPUTATION`,
   `REPUTATION_SERVED`, `REPUTATION_WALKED_OFF`, `reputationFactor`, `nudgeReputation`,
   `REGULAR_TIP_LEFT`, `MAX_REGULARS`, `REGULAR_CHANCE`, `REGULAR_BONUS`), the weather (`Weather`,
@@ -292,7 +293,11 @@ study, shade gardens and a mirrored second production line.
   `shown`). `standOnMarkers` runs the first shown marker under the feet once every
   `MARKER_INTERVAL_MS` (200); each call moves one item or pays at most 5 coins (`UPGRADE_STEP`).
   Purple markers (`pays`) take coins only once the doctor's body has stood still for `STILL_MS`
-  (400, tracked in `stillSince`), so walking over one buys nothing; their captions show the coins
+  (400, tracked in `stillSince`), so walking over one buys nothing. The longer the doctor then stays
+  on the same marker (`lastMarker`, `markerSince`), the more each payment takes: the scene sets
+  `payment.boost` (`state.ts`) to `payBoost(held)`, doubling every `PAY_DOUBLE_MS` (1s) up to
+  `MAX_PAY_BOOST` (64), around `act` and back to 1 after; `pay` in `sim.ts` and `payTowards` in
+  `townSim.ts` multiply their step by it, and `ShopScene` does the same; their captions show the coins
   still to pay (cost minus `paid`), with no bar.
   A level marker sets `paused` after a level completes until the doctor steps off, and is hidden
   (marker and caption) once its last level is bought. Each purple marker gets the `UpgradeIcon` of
@@ -318,7 +323,7 @@ study, shade gardens and a mirrored second production line.
   feeder) and join the main run at `join`. Each cauldron belt runs on its own into its side of the
   shop. `payBelt` loads matching goods from the
   doctor's hands, unless `doneByHand` says the other line's twin is still by hand.
-- Priority: `addPrioritySign` puts a tappable "First:" sign at `PRIORITY_SIGNS[id]` by each
+- Priority: once `studied(state, 'craftOrder')`, `addPrioritySign` shows a tappable "First:" sign at `PRIORITY_SIGNS[id]` by each
   table's and cauldron's label; a tap calls `cyclePriority` (none, then each plant, or each
   researched potion, in `PLANTS`/`POTIONS` order) and stops propagation so the doctor doesn't walk. The sign shows the
   item's icon, or "any".
@@ -338,7 +343,11 @@ study, shade gardens and a mirrored second production line.
   what the test reads.
 - Study: `createStudy` puts the desk (an obstacle) under its sign at `STUDY` and a level marker for
   the `research` upgrade, captioned with the next recipe in `RESEARCH_ORDER`; it unlocks with the
-  garden belt. `payUpgrade` says "Learned <potion>!". `startBrew` skips recipes not `researched`,
+  garden belt. Either side of the desk, `STUDY.craftOrder` and `STUDY.priceSigns` sell the
+  `craftOrder` (40) and `priceSigns` (60) lessons, also unlocked by the garden belt, which show the
+  priority signs and the price signs; until learned, `cyclePriority` and `cycleSign` do nothing and
+  `signOf` reads Fair. `loadState` grants either lesson to an older save already using it.
+  `payUpgrade` says "Learned <potion>!". `startBrew` skips recipes not `researched`,
   `orderable` leaves them out of orders, and `RecipeBook` fades them with "Study" for a price.
 - Orders: `createOrderStrip` shows a `chip` card per order (`ORDER_STRIP`, up to
   `MAX_ORDER_SLOTS`) under the top bar on the left, with the wants still owed and, once at the
@@ -373,7 +382,7 @@ study, shade gardens and a mirrored second production line.
   nearest first, one per `HARVEST_INTERVAL_MS` (150). Blighted plots in reach are cleared first
   (`clearBlight`, hands full or not), and the sickle spins for them too.
 - Price signs: `addPriceSign` puts a tappable small sign beside each shelf at `shelfSignPosition(i)`,
-  shown with the shelf; a tap calls `cycleSign` and stops propagation. `serveFromShelf` scales a
+  shown with the shelf once `studied(state, 'priceSigns')`; a tap calls `cycleSign` and stops propagation. `serveFromShelf` scales a
   potion's pay by `SIGN_PAY`, adds `SIGN_REPUTATION` and takes the rival's `RIVAL_CUT` off a plain
   one the rival undercuts (a fine one beats it); `tick` drains patience by `patienceRate` (dear
   wants); `newOrder` draws from a hat with each potion in it `SIGN_DEMAND` times (all signs Fair
