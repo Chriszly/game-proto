@@ -157,6 +157,7 @@ const en = {
   missed: 'Missed at the last checkpoint: {boon}.',
   shopPending: 'The next ordinary run starts with {boon}.',
   shopReach: 'Reach a checkpoint to be offered a boon for sale.',
+  shopNoneLeft: 'The last checkpoint had no boon left to offer for sale.',
   shopNotForSale: '{boon} is not for sale.',
   shopTooDear: '{boon} is for sale for {price} coins; you have {n}.',
   shopBuy: 'Start the next run with {boon} for {price} coins.',

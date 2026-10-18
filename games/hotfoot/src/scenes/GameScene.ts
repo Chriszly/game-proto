@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { viewPoint } from '../../../../shared/scaling';
-import { formatDate } from '../../../../shared/i18n';
+import { formatDate, formatNumber } from '../../../../shared/i18n';
 import { ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
 import { SoundCues } from '../audio/cues';
@@ -213,11 +213,18 @@ export class GameScene extends Phaser.Scene {
       else slide(this.state);
     });
     const keys = this.input.keyboard;
-    keys?.on('keydown-SPACE', () => jump(this.state));
-    keys?.on('keydown-UP', () => jump(this.state));
-    keys?.on('keydown-W', () => jump(this.state));
-    keys?.on('keydown-DOWN', () => slide(this.state));
-    keys?.on('keydown-S', () => slide(this.state));
+    // A held key's auto-repeat is not another press: it would fire the Second Leap or keep the
+    // knight sliding.
+    const press = (act: (s: GameState) => void) => (e: KeyboardEvent) => {
+      if (!e.repeat) act(this.state);
+    };
+    keys?.on('keydown-SPACE', press(jump));
+    keys?.on('keydown-UP', press(jump));
+    keys?.on('keydown-W', press(jump));
+    keys?.on('keydown-DOWN', press(slide));
+    keys?.on('keydown-S', press(slide));
+    // Back from the shared pause, the first frame starts the clock again rather than catching up.
+    this.events.on(Phaser.Scenes.Events.RESUME, () => (this.lastFrame = null));
   }
 
   update(time: number) {
@@ -286,7 +293,7 @@ export class GameScene extends Phaser.Scene {
     let line: string;
     let canBuy = false;
     if (s.pending) line = t('shopPending', { boon: t(BOONS[s.pending].name) });
-    else if (!s.missed) line = t('shopReach');
+    else if (!s.missed) line = t(s.banners.length > 0 ? 'shopNoneLeft' : 'shopReach');
     else if (!forSale(s.missed)) line = t('shopNotForSale', { boon: missedName });
     else if (s.bank < BOON_PRICE) line = t('shopTooDear', { boon: missedName, price: BOON_PRICE, n: s.bank });
     else {
@@ -431,23 +438,24 @@ export class GameScene extends Phaser.Scene {
     else sprite.setX(this.sx(t.x));
     if (t.kind === 'flames') {
       const burn = flameOf(this.state, t);
-      sprite.setTexture(burn === 'lit' ? `flames-lit${Math.floor(this.clock / 90) % 2}` : `flames-${burn}`);
+      sprite.setTexture(burn === 'lit' ? `flames-lit${settings.reduceMotion ? 0 : Math.floor(this.clock / 90) % 2}` : `flames-${burn}`);
     } else if (t.kind === 'goblin') {
       // Steps in time with its walk, and faces the way it is going.
       const moving = t.vx !== 0 && this.state.phase === 'running';
       sprite.setTexture(`goblin-${moving ? Math.floor(t.x / 10) & 1 : 0}`).setFlipX(t.vx > 0);
     } else if (t.kind === 'bat') {
-      // Flaps, bobbing a little; the bob is only for show, the bat's box stays put.
-      const flap = Math.floor(this.clock / 110 + t.id) % 2;
-      sprite.setTexture(`bat-${flap}`).setY(GROUND_Y - t.h - 10 + (flap ? 2 : -2));
+      // Flaps, bobbing a little; the bob is only for show, the bat's box stays put. Held still
+      // with reduced motion.
+      const flap = settings.reduceMotion ? 0 : Math.floor(this.clock / 110 + t.id) % 2;
+      sprite.setTexture(`bat-${flap}`).setY(GROUND_Y - t.h - 10 + (settings.reduceMotion ? 0 : flap ? 2 : -2));
     } else if (t.kind === 'barrel') {
       // Rolls towards the knight: it turns by how far it has rolled.
       sprite.setRotation(t.x / 13);
     } else if (t.kind === 'axe') {
       sprite.setRotation(-t.x / 9);
     } else if (t.kind === 'fire') {
-      // The fire flickers as it rolls.
-      sprite.setTexture(`fire-${Math.floor(this.clock / 80) % 2}`);
+      // The fire flickers as it rolls (held still with reduced motion).
+      sprite.setTexture(`fire-${settings.reduceMotion ? 0 : Math.floor(this.clock / 80) % 2}`);
     } else if (t.kind === 'tail') {
       // The tail lash whips a little up and down as it flies.
       sprite.setY(GROUND_Y - t.h - 9 + (settings.reduceMotion ? 0 : Math.sin(this.clock / 60) * 3));
@@ -713,7 +721,7 @@ export class GameScene extends Phaser.Scene {
     this.hearts.forEach((h, i) => h.setVisible(i < max).setTexture(i < s.hearts ? 'heart-full' : 'heart-empty'));
     this.stageText.setText(t('stageRest', { n: s.stage }));
     this.distText.setText(t('metres', { n: metres(s.distance) }));
-    this.coinText.setText(`${s.coins}`);
+    this.coinText.setText(formatNumber(s.coins));
     const best = t('best', { n: s.best });
     if (this.bestText.text !== best) this.fitBest(best);
 
@@ -785,7 +793,7 @@ export class GameScene extends Phaser.Scene {
     this.dareTag.setVisible(!!dare);
     this.dareText.setVisible(!!dare);
     if (dare) {
-      const progress = dare.done ? t('dareMet') : dare.failed ? t('dareLost') : dare.kind === 'nohit' ? t('dareSoFar') : dare.kind === 'streak' ? `x${dare.progress}` : `${dare.progress}/${dare.goal}`;
+      const progress = dare.done ? t('dareMet') : dare.failed ? t('dareLost') : dare.kind === 'nohit' ? t('dareSoFar') : dare.kind === 'streak' ? `x${dare.progress}` : `${formatNumber(dare.progress)}/${formatNumber(dare.goal)}`;
       const words = t('dareTag', { dare: dareText(dare), progress });
       if (this.dareText.text !== words) this.dareText.setText(words);
       this.dareText.setColor(dare.done ? '#2f7a4a' : dare.failed ? C.iron : C.madder);

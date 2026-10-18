@@ -157,6 +157,7 @@ const de: Translation<typeof en> = {
   missed: 'Am letzten Rastplatz verpasst: {boon}.',
   shopPending: 'Der nächste normale Lauf beginnt mit {boon}.',
   shopReach: 'Erreiche einen Rastplatz, damit dir eine Gabe zum Kauf angeboten wird.',
+  shopNoneLeft: 'Am letzten Rastplatz war keine Gabe mehr übrig, die du kaufen könntest.',
   shopNotForSale: '{boon} ist nicht käuflich.',
   shopTooDear: '{boon} gibt es für {price} Münzen; du hast {n}.',
   shopBuy: 'Beginne den nächsten Lauf mit {boon} für {price} Münzen.',
