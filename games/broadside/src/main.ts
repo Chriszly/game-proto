@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
-import { VIEW } from './scenes/layout';
+import { DESIGN } from './scenes/layout';
 import { setupGame } from '../../../shared/setupGame';
 import { howToPlay } from './howToPlay';
 import { setupScaling } from '../../../shared/scaling';
@@ -9,8 +9,8 @@ import { setupScaling } from '../../../shared/scaling';
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: VIEW.w,
-  height: VIEW.h,
+  width: DESIGN.w,
+  height: DESIGN.h,
   backgroundColor: '#ead9b2',
   pixelArt: false,
   // Two thumbs at once on a phone: one on the helm, one on a fire control.
@@ -22,7 +22,7 @@ const game = new Phaser.Game({
   scene: [BootScene, GameScene],
 });
 setupGame(game, { howToPlay });
-setupScaling(game);
+setupScaling(game, { fill: true });
 
 // Handy for poking at state from the browser console during development, and read by the
 // playthrough test.

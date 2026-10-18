@@ -137,10 +137,10 @@ File map (all under `src/`, plus the shared files it imports):
   `ENEMIES` (`name`, and `called` for a ship named mid-sentence, lower case in English),
   `BOUNTIES` (`desc`, filled with `vars(s)`) and `ISLANDS`; `windFrom` returns a compass point's
   key (`windW`). The scene, `Harbor` and `art.ts` show them with `t`, and game logic compares ids only.
-- `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`, three active
+- `main.ts`: creates the `Phaser.Game` (960x540 from `DESIGN`, `Scale.FIT`, `pixelArt: false`, three active
   pointers for two-thumb play) with `BootScene` and `GameScene`, calls `setupGame(game)` and
-  `setupScaling(game)` (`shared/scaling.ts`) and exposes `window.game` in dev builds.
-- `scenes/BootScene.ts`: calls `bakeAll` and starts `Game`.
+  `setupScaling(game, { fill: true })` (`shared/scaling.ts`) and exposes `window.game` in dev builds.
+- `scenes/BootScene.ts`: calls `fitLayout` with `viewSize`, then `bakeAll`, and starts `Game`.
 - `scenes/GameScene.ts`: owns the run's `state`, reads input (`readInput`), calls `tick` each
   frame and draws everything (HUD, order card, helm wheels and fire controls with their charge
   rings, wakes, detour courses, effects, firing arcs, harbor and game-over overlays).
@@ -148,7 +148,7 @@ File map (all under `src/`, plus the shared files it imports):
   (`shared/audio.ts`). See "Sound" below.
 - `scenes/soundCues.ts`: `SoundCues`, which compares the state before and after each `tick` and
   plays the sounds and music for what changed, so `game/` stays free of audio.
-- `scenes/layout.ts`: `VIEW`, `HUD_HEIGHT`, the `HELM` wheel centres (high enough to clear the
+- `scenes/layout.ts`: `DESIGN` (960x540), `VIEW` (the real view, set by `fitLayout`), `fitLayout`, `BANNER` (the wave banner's heights), `HUD_HEIGHT`, the `HELM` wheel centres (high enough to clear the
   shared corner buttons at the bottom left), the `FIRE` control centres,
   `ORDER_CARD`, `BOUNTY` (the bounty line's left edge), `CONVOY` (the convoy's line under it), the
   `HARBOR` panel and row geometry (with `loadY` for the loading buttons), `COURSE` (the two course
@@ -427,8 +427,18 @@ Data tables, where to tune:
   per game pixel and the main camera is zoomed to match from its top-left corner, so `setScroll`
   still names the screen's top-left in the sea (kept as `topLeft`, since `worldView` lags a
   frame) and HUD objects at scroll factor 0 stay where they are placed, with no second camera.
-  Texts are drawn at `Math.max(2, renderScale)`. Lay out in the 960x540 `VIEW`, never from
-  `this.scale` or `pointer.x/y`, which are canvas pixels. `e2e/screens.spec.ts` at the root opens
+  Texts are drawn at `Math.max(2, renderScale)`. The game fills the screen's shape (`fill: true`):
+  the view is 960x540 or wider (up to 1296) or taller (up to 720), picked once at start.
+  `BootScene` reads `viewSize` and calls `fitLayout(w, h)`, which sets `VIEW` to it and moves the
+  `layout.ts` constants from their designed values: the top bar, order card, bounty, convoy line
+  and scuttle button stay at the top left, the wind rose and the starboard helm and fire control
+  follow the right edge, both helms and fire controls the bottom edge, and the banner and the
+  harbor, draft and end panels stay centred (moved by half the growth). The frame and top bar are
+  then baked at `VIEW`'s size, the dims cover `VIEW`, the camera centres the ship in `VIEW` and the
+  edge pointers use its edges; the wrapping sea simply shows more of itself. At 960x540 nothing
+  moves. Lay out with `VIEW` and the `layout.ts` constants (never the designed numbers, and never
+  `this.scale` or `pointer.x/y`, which are canvas pixels); a new screen-fixed element gets its
+  designed spot in `layout.ts` and a line in `fitLayout`. `e2e/screens.spec.ts` at the root opens
   the game on five screens.
   It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither).

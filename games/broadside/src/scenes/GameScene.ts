@@ -38,7 +38,7 @@ import { HAVEN_WAVE } from '../game/waves';
 import { Harbor, type HarborAction } from '../ui/Harbor';
 import { fitWidth, pinToScreen } from '../ui/screen';
 import { SoundCues } from './soundCues';
-import { BOUNTY, CONVOY, FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
+import { BANNER, BOUNTY, CONVOY, FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -849,7 +849,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH - 5)
       .setScrollFactor(0);
     this.bannerTitle = this.add
-      .text(VIEW.w / 2, 168, '', textStyle(44, '#2b2118', 'bold', '#f0e2c0', 7))
+      .text(VIEW.w / 2, BANNER.title, '', textStyle(44, '#2b2118', 'bold', '#f0e2c0', 7))
       .setOrigin(0.5)
       .setDepth(UI_DEPTH + 2)
       .setScrollFactor(0);
@@ -860,7 +860,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH - 4)
       .setScrollFactor(0);
     this.bannerSub = this.add
-      .text(VIEW.w / 2, 212, t('sailsSub'), textStyle(22, '#6a4410', 'bold italic', '#f0e2c0', 6))
+      .text(VIEW.w / 2, BANNER.sub, t('sailsSub'), textStyle(22, '#6a4410', 'bold italic', '#f0e2c0', 6))
       .setOrigin(0.5)
       .setDepth(UI_DEPTH + 2)
       .setScrollFactor(0);
