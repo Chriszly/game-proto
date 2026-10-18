@@ -187,7 +187,7 @@ File map (`src/`):
   keys. Every text on screen goes through `t`, and a new one gets its German entry (and a US one
   if its spelling differs) in the same PR.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene` and
-  `GameScene`, calls `setupGame(game)` and then `setupScaling(game)` from `shared/scaling.ts`, and
+  `GameScene`, calls `setupGame(game)` and then `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and
   exposes `game` on window in dev builds.
 - `game/state.ts`: types (`GameState`, `Order`, `Adventurer`, `Returning`, `GameEvent`,
   `Progress`, `Fit`, `Trait`, `Market`), board (`GRID`, `SLOTS`, `MAX_SLOTS`, `BARREL`, `anvilsOf`,
@@ -238,8 +238,9 @@ File map (`src/`):
   `sharpRes` canvas pixels per view pixel, and adds it with `textures.addCanvas`), `fit` and
   `shown` (the scale that shows a baked texture at its size in view pixels), `glass` (a gradient, mottled piece in lead), `panel`,
   `glowFrame`, `glow`, `paint`, `label`, shape helpers and the seeded `rnd`.
-  `art/scenery.ts`: `background` (Voronoi mosaic wall, furnace stones, all twenty board panes and
-  anvils, the reputation pane, top bar), `furnace-0/1` and the counter frames `counter-3` and
+  `art/scenery.ts`: `backdrop` (the lancets, painted at the whole view's size and lined up with the
+  960x540 frame in its middle), `background` (960x540: furnace stones, all twenty board panes and
+  anvils, the reputation pane), `hudbar` (the top bar with its coin, at the view's width), `furnace-0/1` and the counter frames `counter-3` and
   `counter-4`. `art/swords.ts`: `sword-<tier>`, `sword-<tier>-gem` (a gem on the guard) and their
   `-worn` (battered) and `-master` (Masterwork) twins, `shield-<tier>`, the loose `gem`,
   `drawSword`, `drawShield`, `drawGem`, `itemTexture`, `shieldTexture`, `swordScale`.
@@ -385,8 +386,18 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
 ### Screens
 
 - `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a 4K
-  screen, 2 with the canvas renderer) and zooms the camera to match from its top-left corner. The
-  camera never scrolls, so the layout in `layout.ts` stays in 960x540 game pixels.
+  screen, 2 with the canvas renderer) and zooms the camera to match from its top-left corner.
+- The game fills every screen shape (`setupScaling(game, { fill: true })`): the view is 960x540 at
+  its smallest and grows wider (up to 1296) or taller (up to 720), picked once at start. The layout
+  in `layout.ts` stays in 960x540 world pixels: `create` scrolls the main camera by
+  `-viewFrame(this)` so that layout sits in the middle of the view, and `edge` holds the view's
+  edges in world coordinates. The `backdrop` lancets fill the whole view; the top bar (`hudbar`, the
+  name and coins on the left, the banner in the middle, sold/best/stars on the right) is pinned to
+  `edge.top` and the left and right edges, and "New smithy" and the perk link to the bottom-right
+  corner. Hit tests read `pointer.worldX/Y`; the banner's goes through `this.onBanner`, which takes
+  `edge.top` off. `spots()` returns view pixels (world minus `edge`), the same as world at
+  960x540. A new thing in the top bar or a view corner takes its place from `edge`; anything else
+  follows `layout.ts`.
 - Every texture is baked at `sharpRes` canvas pixels per view pixel, so an image showing one must
   be sized with `fit(image, scale)` (in `GameScene`, `this.image(x, y, key, scale)`), and a tween
   on its `scale` targets `shown(key, scale)`. A bare `this.add.image` or `setScale` draws the art
