@@ -5,7 +5,7 @@
 
 import Phaser from 'phaser';
 import { paint } from '../art/paint';
-import { VIEW } from './layout';
+import { viewSize } from '../../../../shared/scaling';
 
 export interface Light {
   x: number;
@@ -18,19 +18,22 @@ export interface Light {
   power: number;
 }
 
+/** The night's canvases are this wide; their height follows the view's shape, so lights stay round. */
 const W = 320;
-const H = 180;
 
 export class NightLight {
   private dark: Phaser.Textures.CanvasTexture;
   private glow: Phaser.Textures.CanvasTexture;
+  private H: number;
 
   constructor(scene: Phaser.Scene) {
+    const view = viewSize(scene);
+    const H = (this.H = Math.round((W * view.height) / view.width));
     for (const key of ['night-dark', 'night-glow']) if (scene.textures.exists(key)) scene.textures.remove(key);
     this.dark = scene.textures.createCanvas('night-dark', W, H)!;
     this.glow = scene.textures.createCanvas('night-glow', W, H)!;
-    scene.add.image(0, 0, 'night-dark').setOrigin(0).setScrollFactor(0).setDisplaySize(VIEW.w, VIEW.h).setDepth(9000);
-    scene.add.image(0, 0, 'night-glow').setOrigin(0).setScrollFactor(0).setDisplaySize(VIEW.w, VIEW.h).setDepth(9001).setBlendMode(Phaser.BlendModes.ADD);
+    scene.add.image(0, 0, 'night-dark').setOrigin(0).setScrollFactor(0).setDisplaySize(view.width, view.height).setDepth(9000);
+    scene.add.image(0, 0, 'night-glow').setOrigin(0).setScrollFactor(0).setDisplaySize(view.width, view.height).setDepth(9001).setBlendMode(Phaser.BlendModes.ADD);
     // The miniature's haze: the near and far edges of the view fade into the night.
     paint(scene, 'haze', 8, 270, (c) => {
       const g = c.createLinearGradient(0, 0, 0, 270);
@@ -41,13 +44,14 @@ export class NightLight {
       c.fillStyle = g;
       c.fillRect(0, 0, 8, 270);
     }, 1);
-    scene.add.image(0, 0, 'haze').setOrigin(0).setScrollFactor(0).setDisplaySize(VIEW.w, VIEW.h).setDepth(9002);
+    scene.add.image(0, 0, 'haze').setOrigin(0).setScrollFactor(0).setDisplaySize(view.width, view.height).setDepth(9002);
   }
 
   /** Redraws the night for the part of the world in `view`. */
   draw(view: Phaser.Geom.Rectangle, lights: Light[], darkness: number) {
     // The camera has no size until its first frame.
     if (!(view.width > 0 && view.height > 0)) return;
+    const H = this.H;
     const sx = W / view.width;
     const sy = H / view.height;
     const d = this.dark.context;

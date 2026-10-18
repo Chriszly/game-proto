@@ -10,7 +10,7 @@ import { advance, CHAPTER_ONE_STONES, clearSave, give, hasFlag, load, MAX_SEEDS,
 import { talk, type TalkEffect } from '../game/talk';
 import { t, type TextKey } from '../i18n';
 import { settings } from '../../../../shared/settings';
-import { scrollingCamera, splitHudCamera, viewPoint } from '../../../../shared/scaling';
+import { renderScale, scrollingCamera, splitHudCamera, viewPoint, viewSize } from '../../../../shared/scaling';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { sfx } from '../audio/sounds';
 import { BOSS, DEEP, STINGS, VILLAGE, WILDS } from '../audio/music';
@@ -216,6 +216,9 @@ export class GameScene extends Phaser.Scene {
     this.world.push(this.ground);
     const cam = this.cameras.main;
     cam.setBounds(0, 0, map.w * TILE, map.h * TILE);
+    // A view wider or taller than the map (the Fen on an ultrawide) zooms in just enough to fill.
+    const view = viewSize(this);
+    cam.setZoom(renderScale * Math.max(1, view.width / (map.w * TILE), view.height / (map.h * TILE)));
     cam.setBackgroundColor(DUNGEONS.has(id) ? '#05050a' : '#0b1020');
     this.glows = [];
 
@@ -1898,10 +1901,11 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- for the playthrough test
 
-  /** Where a point in the world is on the 960x540 screen. */
+  /** Where a point in the world is on the screen, in view pixels. */
   screenOf(x: number, y: number) {
     const v = this.cameras.main.worldView;
-    return { x: x - v.x, y: y - v.y };
+    const k = viewSize(this).width / v.width;
+    return { x: (x - v.x) * k, y: (y - v.y) * k };
   }
 
   /** Where to tap to reach a person or a chest, in the world. */

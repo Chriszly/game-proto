@@ -109,7 +109,16 @@ All in code through `shared/audio.ts` (no audio files), in `src/audio/`:
 ## Architecture
 
 - `src/main.ts` creates the game (960x540, `Phaser.AUTO`), calls `setupGame(game, { howToPlay })`
-  and `setupScaling(game)`, and exposes `window.game` in dev builds.
+  and `setupScaling(game, { fill: true })`, and exposes `window.game` in dev builds.
+- Fill mode: the view takes the screen's shape (960 to 1296 wide, 540 to 720 tall; read it with
+  `viewSize`), so lay nothing out against `VIEW`. The world camera just shows more of the map; a
+  map smaller than the view (the Fen on an ultrawide) is zoomed in by `enterMap` just enough to
+  fill it. The night's canvases take the view's shape (320 wide) and are stretched over all of it.
+  In the HUD the hearts plate is pinned top left, the journal line top right, the touch buttons
+  keep their distance from the bottom-right corner (`Hud.btn`, used by `buttonAt` too), the place
+  name, toasts and the talk box are centred (the box on the bottom edge), and the end card is
+  laid out for 960x540 inside `viewFrame` with its shade over the whole view. At 960x540 nothing
+  moves.
 - `src/audio/`: the songs and the sound table (see Sound).
 - `src/howToPlay.ts`: the How to play text in British English and German, picked with `byLanguage`
   (US English uses the British one, since no word in it is spelled differently).
@@ -162,7 +171,7 @@ hidden places. `load` fills in fields a save from an older version lacks (`items
 - `window.game.scene.getScene('Game')` gives `state` (the `GameState`), `dialog` (`{ speaker,
   lines, i }` or null), `route` (the steps left of a tap's walk, or null), `target`, `foes` and
   `boss`, `wraith` and `bombs`; `spot('npc' | 'chest', id)` is where to tap a person or chest in the world and
-  `screenOf(x, y)` turns a world point into view pixels.
+  `screenOf(x, y)` turns a world point into view pixels (allowing for the camera's zoom).
 - `e2e/playthrough.spec.ts` taps the elder, taps through her lines, taps the `blade` chest, taps
   the elder again, walks to the street below the gate (`STREET`) and taps the gate's thorns
   (`GATE`). Mirrored there, so change them together: the elder's, the chest's and the gate's
