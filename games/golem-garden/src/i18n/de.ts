@@ -96,6 +96,7 @@ const de: Translation<typeof en> = {
   squashEvery: 'alle zerquetschen',
   waveComing: 'Welle {n} …',
   stillComing: 'kommt noch',
+  squashQueen: 'Königin lebt noch',
   gardenLost: 'Garten verloren',
 
   // Golem menu chips

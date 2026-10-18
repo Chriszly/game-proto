@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
+import { formatNumber } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
 import { viewFrame, viewSize } from '../../../../shared/scaling';
 import { CALM, STINGS, WAVES, sfx } from '../audio';
@@ -67,6 +68,7 @@ import {
   nextWave,
   picksForm,
   plant,
+  queenOnPath,
   regrow,
   regrowPrice,
   seedCost,
@@ -174,6 +176,8 @@ export class GameScene extends Phaser.Scene {
   private cards: { kind: SeedKind; rim: Image; card: Image; open: Phaser.GameObjects.Container; locked?: Phaser.GameObjects.Container }[] = [];
   private lockPips!: Phaser.GameObjects.Graphics;
   private preview!: { title: Text; icons: Record<PestKind, Image>; counts: Record<PestKind, Text> };
+  /** The wave (and twist) the preview last showed, so it is only counted and laid out again when it changes. */
+  private previewKey = '';
   private hint!: Text;
   private waveBg!: Image;
   private waveText!: Text;
@@ -207,6 +211,7 @@ export class GameScene extends Phaser.Scene {
     this.formMenu = false;
     this.picker = null;
     this.boonBox = null;
+    this.previewKey = '';
     this.cards = [];
     this.treeFlowers = [];
     this.golems.clear();
@@ -271,6 +276,8 @@ export class GameScene extends Phaser.Scene {
     this.tickSounds(before);
     if (s.heart < heart) this.heartHit();
     if (s.wave > wave) this.waveDone(wave, bloom, false);
+    // The music changes first, so a sting ducks the song that plays on under it.
+    this.syncMusic();
     if (s.harvest && !harvest) {
       playSting(STINGS, `harvest${s.harvest}`);
       this.showPicker('harvest');
@@ -279,7 +286,6 @@ export class GameScene extends Phaser.Scene {
       playSting(STINGS, 'lose');
       this.showPicker('over');
     }
-    this.syncMusic();
     // The boon pick waits for the harvest screen to close.
     if (s.offer.length && !this.picker && !this.boonBox) this.showBoons();
     for (const pop of s.pops) this.sapPop(pop);
@@ -466,6 +472,8 @@ export class GameScene extends Phaser.Scene {
         if (select(this.state, kind)) sfx('select');
         else ui('refuse');
         this.moving = null;
+        this.picked = null;
+        this.formMenu = false;
         this.refresh();
       });
       const left = x - SEED_BUTTONS.w / 2;
@@ -477,7 +485,7 @@ export class GameScene extends Phaser.Scene {
           this.add.image(left + 28, y + 15, 'hedge').setOrigin(0.5, 54 / 64).setScale(0.5),
           this.press(left + 55, y - 9, t(HEDGE.name), 10.5, ink),
           this.add.image(left + 62, y + 6, 'sap').setScale(0.5),
-          this.press(left + 70, y + 7, String(HEDGE.cost), 12, ink),
+          this.press(left + 70, y + 7, formatNumber(HEDGE.cost), 12, ink),
         ];
       } else {
         const info = GOLEM_INFO[kind];
@@ -494,14 +502,14 @@ export class GameScene extends Phaser.Scene {
               this.press(left + 61, y - 21, first, 14, ink),
               this.press(left + 61, y - 6, second, 14, ink),
               this.add.image(left + 68, y + 11, 'sap').setScale(0.62),
-              this.press(left + 78, y + 12, String(info.cost), 14, ink),
+              this.press(left + 78, y + 12, formatNumber(info.cost), 14, ink),
               this.press(left + 61, y + 27, t(info.blurb), 9, '#7a5a34'),
             ]
           : [
               icon,
               this.press(left + 55, y - 15, t(info.name), 10.5, ink),
               this.add.image(left + 62, y - 1, 'sap').setScale(0.5),
-              this.press(left + 70, y, String(info.cost), 12, ink),
+              this.press(left + 70, y, formatNumber(info.cost), 12, ink),
               this.press(left + 55, y + 14, t(info.blurb), 9, '#7a5a34'),
             ];
         if (info.locked) {
@@ -845,9 +853,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.hud.wave.setText(t('waveTag', { n: s.wave }));
     this.hud.waveSub.setText(s.harvest ? t('harvested', { stars: this.starText(s.harvest) }) : t(s.thorny ? 'laurelAt' : 'harvestAt', { wave: HARVEST_WAVE }));
-    this.hud.heart.setText(String(s.heart));
+    this.hud.heart.setText(formatNumber(s.heart));
     this.hud.regrow.setVisible(canRegrow(s));
-    this.hud.sap.setText(String(s.sap));
+    this.hud.sap.setText(formatNumber(s.sap));
     this.hud.best.setText(t('best', { n: s.best }));
     this.hud.stars.setText(`${totalStars(s)} ★`);
     const full = s.bloom >= BLOOM_GOAL;
@@ -888,6 +896,8 @@ export class GameScene extends Phaser.Scene {
           ? [t('callWave', { n }), t('earlyBonus', { n: EARLY_BONUS })]
           : s.phase === 'wave' && s.wave === HARVEST_WAVE && s.queue.length === 0
             ? [t('harvestWave'), t('squashEvery')]
+            : s.phase === 'wave' && s.queue.length === 0 && queenOnPath(s)
+            ? [t('waveComing', { n: s.wave }), t('squashQueen')]
             : s.phase === 'wave'
             ? [t('waveComing', { n: s.wave }), t('stillComing')]
             : [t('gardenLost'), ''];
@@ -903,7 +913,11 @@ export class GameScene extends Phaser.Scene {
   /** The next wave's preview: its pests and how many of each, and the Queen Slug in the title. */
   private refreshPreview() {
     const n = nextWave(this.state);
-    const counts = waveCounts(n, twistOf(this.state));
+    const twist = twistOf(this.state);
+    const key = `${n},${twist}`;
+    if (key === this.previewKey) return;
+    this.previewKey = key;
+    const counts = waveCounts(n, twist);
     const boss = counts.queen > 0;
     this.preview.title.setText(t(boss ? 'previewQueen' : 'previewNext', { n })).setColor(boss ? '#ffd27a' : '#fbefd6');
     const kinds = PREVIEW_PESTS.filter((kind) => counts[kind] > 0);

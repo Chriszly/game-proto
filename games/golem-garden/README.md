@@ -131,15 +131,16 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
     wave button turns into "Call wave N now, +15 early". Tapping it counts the current wave as done
     at once (its clearing bonus and its bud) plus 15 sap, and the next wave starts coming in while
     the last pests are still walking. Wave 30, the harvest, can't be called early: its stars wait for
-    its last pest. The card above the button previews the next wave's pests,
+    its last pest. Nor can a wave while its Queen Slug is on the path. The card above the button previews the next wave's pests,
     counted from the game's own wave list (in two rows once there are more than three kinds, with
     the Queen Slug named in its title), so you can weigh the sap against the crowd.
 15. **Sap you can see.** A squashed pest leaves an orange splat and a "+N" pop, and its sap
     droplets fly in an arc to the sap counter, which glows as they land. With reduced motion on (hub
     Settings) the splat and "+N" stay put and fade, without the flying droplets or the glow.
 
-16. **Boons after each boss.** Clearing a Queen Slug wave (10, 20, 30 and on) stops the garden
-    until you take one of three boons, which lasts until you plant another garden. The offers
+16. **Boons after each boss.** Squashing the Queen Slug (waves 10, 20, 30 and on) stops the garden,
+    once her wave is cleared, until you take one of three boons, which lasts until you plant
+    another garden (a queen who gets through to the Heartwood leaves no boons). The offers
     alternate between two sets of three, and a boon taken twice counts twice:
 
     | Boon | What it does |
