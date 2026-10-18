@@ -1,15 +1,18 @@
 import Phaser from 'phaser';
-import type { GoodId, ShopId } from '../game/town';
+import { SHOPS, isFineGood, type GoodId, type Held, type ShopId } from '../game/town';
 import { counterLayout, gardenLayout, shopWorld, FENCE_Y, SHOP_HUD } from '../scenes/shopLayout';
 import { plantTexture } from './garden';
 import { itemTexture } from './items';
-import { WASH, both, chance, ellPts, hatch, ink, paint, paper, rectPts, rr, shadow, wash, type Ctx, type Pt } from './paint';
+import { WASH, both, chance, ellPts, hatch, ink, paint, paper, rectPts, rr, shadow, sparkle, wash, type Ctx, type Pt } from './paint';
 
 // The town's art, in the same ink and watercolour as the apothecary's: the town shops' goods, the
 // bakery's mill, oven and beehives, each shop yard's painted ground, and the houses on the town map.
 
 /** A good's icon: the apothecary's own for wheat and flour, the town's for the rest. 16x16 as shown. */
-export const goodTexture = (good: GoodId) => (good === 'wheat' || good === 'flour' ? itemTexture(good) : `good-${good}`);
+export const goodTexture = (held: Held): string => {
+  if (isFineGood(held)) return `good-${held}`;
+  return held === 'wheat' || held === 'flour' ? itemTexture(held) : `good-${held}`;
+};
 /** A beehive bed's skep, from empty to full of honey. */
 export const hiveTexture = (stage: number) => `hive-${stage}`;
 export const yardTexture = (shop: ShopId) => `yard-${shop}`;
@@ -728,6 +731,16 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, 'maltings', 88, 60, drawMaltings, 3);
   paint(scene, 'oast', 72, 68, drawOast, 3);
   paint(scene, 'kettle', 88, 64, drawKettle, 3);
+  // Each good a shop sells, fine: its icon with a gold sparkle, like the apothecary's fine potions.
+  for (const id of Object.keys(SHOPS) as ShopId[]) {
+    for (const good of Object.keys(SHOPS[id].sells) as GoodId[]) {
+      const plain = scene.textures.get(goodTexture(good)).getSourceImage() as CanvasImageSource;
+      paint(scene, goodTexture(`${good}-fine`), 16, 16, (c) => {
+        c.drawImage(plain, 0, 0, 16, 16);
+        sparkle(c, 13, 3.2, 3);
+      }, 4);
+    }
+  }
   paint(scene, lotTexture('apothecary'), 96, 84, (c) =>
     drawLot(c, '#5e6e46', '#d8c8a2', (s) => {
       // A green bottle on the sign.

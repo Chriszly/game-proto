@@ -4,7 +4,7 @@ import { routeMs } from '../scenes/shopLayout';
 import { DISTRICTS, GROW_ROUNDS, HAPPY, HAPPY_PULL, HOME_TIERS, MAX_HOMES, START_HOMES, SUPPLY_MS, UNHAPPY, districtAsks, type DistrictState, type Need } from './districts';
 import { FINE, type PotionId } from './items';
 import type { Feedback } from './sim';
-import { PRICE_SIGNS, SIGN_DEMAND, SIGN_PATIENCE, SIGN_PAY, SIGN_SET, carryCapacity, gearLevel, payment, potionPrice, speedAt, UPGRADES, type GameState, type Upgrade } from './state';
+import { FINE_BONUS, FINE_SHARE, PRICE_SIGNS, SIGN_DEMAND, SIGN_PATIENCE, SIGN_PAY, SIGN_SET, carryCapacity, gearLevel, payment, potionPrice, speedAt, UPGRADES, type GameState, type Upgrade } from './state';
 import {
   BEDS,
   COUNTER_PAY,
@@ -27,6 +27,14 @@ import {
   guildJoinCost,
   shopFootfall,
   shopGrowth,
+  fineOf,
+  isFineGood,
+  plainGood,
+  MAX_SHOP_CONTRACT,
+  SHOP_CONTRACT_SHARE,
+  SHOP_CONTRACT_START,
+  type Held,
+  type ShopContract,
   shopKnows,
   shopMakes,
   shopPlaces,
@@ -68,9 +76,11 @@ export interface Working {
   at: string | 'counter' | null;
 }
 
-export const goodName = (good: GoodId) => t(good);
+export const goodName = (held: Held) => (isFineGood(held) ? t('fineGood', { item: t(plainGood(held)) }) : t(held));
 
-const count = (list: GoodId[], good: GoodId) => list.reduce((n, g) => n + (g === good ? 1 : 0), 0);
+const count = <T>(list: T[], good: T) => list.reduce((n, g) => n + (g === good ? 1 : 0), 0);
+/** How many of a good a shelf or the hands hold, plain and fine together. */
+const countBoth = (list: Held[], good: GoodId) => list.reduce((n, h) => n + (plainGood(h) === good ? 1 : 0), 0);
 
 /** Goods of one kind on their way to a station's queue or the shelf, so a route doesn't overfill it. */
 function inFlight(shop: ShopState, def: ShopDef, to: RouteDef['to'], good: GoodId) {
@@ -83,7 +93,7 @@ function inFlight(shop: ShopState, def: ShopDef, to: RouteDef['to'], good: GoodI
 }
 
 const queueRoom = (shop: ShopState, station: string, good: GoodId) => count(shop.stations[station].queue, good) < shopStorage(shop);
-export const shelfRoom = (shop: ShopState, good: GoodId) => count(shop.shelf, good) < shopStorage(shop);
+export const shelfRoom = (shop: ShopState, good: GoodId) => countBoth(shop.shelf, good) < shopStorage(shop);
 
 /**
  * The recipe a station starts next: one whose inputs are in and whose product has room; its
@@ -103,7 +113,7 @@ function nextRecipe(shop: ShopState, shopDef: ShopDef, def: StationDef, station:
   const first = shopStudied(shop, 'craftOrder') ? shop.priority[def.id] : null;
   const preferred = first && ready.find((r) => r.out === first);
   if (preferred) return preferred;
-  const stocked = (good: GoodId) => count(station.output, good) + count(shop.shelf, good);
+  const stocked = (good: GoodId) => count(station.output, good) + countBoth(shop.shelf, good);
   return ready.reduce<(typeof ready)[number] | null>((best, r) => (!best || stocked(r.out) < stocked(best.out) ? r : best), null);
 }
 
@@ -134,7 +144,7 @@ function runStation(shop: ShopState, shopDef: ShopDef, def: StationDef, dt: numb
 /** Takes one good for a route from its source, or null when there is nothing it can carry. */
 function takeForRoute(shop: ShopState, def: ShopDef, route: RouteDef): GoodId | null {
   const accepts = (good: GoodId) => {
-    if (route.to === 'shelf') return sellsGood(def, good) && count(shop.shelf, good) + inFlight(shop, def, 'shelf', good) < shopStorage(shop);
+    if (route.to === 'shelf') return sellsGood(def, good) && countBoth(shop.shelf, good) + inFlight(shop, def, 'shelf', good) < shopStorage(shop);
     const station = def.stations.find((s) => s.id === (route.to as { station: string }).station)!;
     return takes(station, good) && count(shop.stations[station.id].queue, good) + inFlight(shop, def, route.to, good) < shopStorage(shop);
   };
@@ -188,15 +198,44 @@ export const shopPrice = (shop: ShopState, def: ShopDef, good: GoodId) =>
 /** The orders at the counter, walked in and waiting. */
 export const arrived = (shop: ShopState) => shop.orders.filter((o) => o.walk <= 0);
 
-/** Hands one good from the shelf to the first customer at the counter who wants one; returns whether it did. */
+/** Where a good stands on a shelf, `first` (fine or plain) before the other, or -1. */
+function shelfIndex(shelf: Held[], good: GoodId, fineFirst: boolean) {
+  const [a, b] = fineFirst ? [fineOf(good), good] : [good, fineOf(good)];
+  return shelf.includes(a) ? shelf.indexOf(a) : shelf.indexOf(b);
+}
+
+/** Counts a good handed over at the counter towards the shop's contract, paying its reward into the till once met. */
+function deliverForShopContract(shop: ShopState, good: GoodId) {
+  const c = shop.contract;
+  if (!c || c.good !== good || c.made >= c.need) return;
+  c.made++;
+  if (c.made < c.need) return;
+  shop.till += c.reward;
+  shop.kept++;
+}
+
+/** Today's contract at a shop: the goods it sells taking turns by the day, one more wanted for each kept. */
+function shopContractFor(shop: ShopState, def: ShopDef, day: number): ShopContract {
+  const goods = shopSells(shop, def);
+  const good = goods[(day + shop.kept) % goods.length];
+  const need = Math.min(MAX_SHOP_CONTRACT, SHOP_CONTRACT_START + shop.kept);
+  const reward = Math.max(5, Math.round(((def.sells[good] ?? 0) * need * SHOP_CONTRACT_SHARE) / 5) * 5);
+  return { day, good, need, made: 0, reward };
+}
+
+/**
+ * Hands one good from the shelf to the first customer at the counter who wants one, a fine one
+ * first, which pays `FINE_BONUS` times as much; returns whether it did.
+ */
 function serveOne(shop: ShopState) {
   for (const order of arrived(shop)) {
-    const want = order.wants.find((w) => shop.shelf.includes(w));
+    const want = order.wants.find((w) => shelfIndex(shop.shelf, w, true) >= 0);
     if (!want) continue;
-    shop.shelf.splice(shop.shelf.indexOf(want), 1);
+    const [held] = shop.shelf.splice(shelfIndex(shop.shelf, want, true), 1);
     order.wants.splice(order.wants.indexOf(want), 1);
-    shop.till += order.pay[want] ?? 0;
+    shop.till += Math.round((order.pay[want] ?? 0) * (isFineGood(held) ? FINE_BONUS : 1));
     shop.sold++;
+    deliverForShopContract(shop, want);
     if (order.wants.length === 0) shop.orders.splice(shop.orders.indexOf(order), 1);
     return true;
   }
@@ -257,6 +296,7 @@ export function tickTown(state: GameState, dt: number, working: Working | null, 
     if (!shop) continue;
     const def = SHOPS[id];
     const here = working?.shop === id ? working.at : null;
+    if (shop.contract?.day !== state.contract.day) shop.contract = shopContractFor(shop, def, state.contract.day);
     shop.beds.forEach((grown, b) => gardenOpen(shop, gardenOfBed(b)) && (shop.beds[b] = Math.min(grown + dt * shopGrowth(shop), def.gardens[gardenOfBed(b)].grow)));
     for (const station of def.stations) runStation(shop, def, station, dt, here === station.id);
     for (const route of def.routes) runRoute(id, shop, def, route, dt);
@@ -278,9 +318,10 @@ function supplyNeed(state: GameState, need: Need): boolean {
     for (const id of SHOP_IDS) {
       const shop = state.town.shops[id];
       const price = SHOPS[id].sells[need];
-      if (!shop || price === undefined || !shop.shelf.includes(need)) continue;
-      shop.shelf.splice(shop.shelf.indexOf(need), 1);
-      shop.till += Math.round(price * (1 + COUNTER_PAY * shop.counter.level.level) * shopPriceBoost(shop));
+      const at = shop ? shelfIndex(shop.shelf, need, false) : -1;
+      if (!shop || price === undefined || at < 0) continue;
+      const [held] = shop.shelf.splice(at, 1);
+      shop.till += Math.round(price * (1 + COUNTER_PAY * shop.counter.level.level) * shopPriceBoost(shop) * (isFineGood(held) ? FINE_BONUS : 1));
       return true;
     }
     return false;
@@ -371,7 +412,7 @@ export function dropAtStation(state: GameState, id: ShopId, station: string): Fe
   const hands = state.town.hands;
   for (let i = hands.length - 1; i >= 0; i--) {
     const good = hands[i];
-    if (!takes(def, good) || !queueRoom(shop, station, good)) continue;
+    if (isFineGood(good) || !takes(def, good) || !queueRoom(shop, station, good)) continue;
     hands.splice(i, 1);
     shop.stations[station].queue.push(good);
     return [t('handedOver', { item: goodName(good) })];
@@ -379,12 +420,29 @@ export function dropAtStation(state: GameState, id: ShopId, station: string): Fe
   return null;
 }
 
-/** Picks one good off a station's out pallets: the kind the hands hold fewest of, then the one most waiting. */
+/** Whether a station's work is in its fine window: a good the shop sells, in the last `FINE_SHARE` of it. */
+export function inShopFineWindow(def: ShopDef, station: StationState) {
+  const work = station.work;
+  return !!work && sellsGood(def, work.out) && work.progress >= work.ms * (1 - FINE_SHARE) && work.progress < work.ms;
+}
+
+/**
+ * Picks one good off a station: the work in its fine window first, taken out as a fine good, else
+ * one off its out pallets, the kind the hands hold fewest of, then the one most waiting.
+ */
 export function pickUpFromStation(state: GameState, id: ShopId, station: string): Feedback | null {
-  const output = state.town.shops[id]!.stations[station].output;
-  if (output.length === 0 || freeHands(state) === 0) return null;
+  const s = state.town.shops[id]!.stations[station];
+  const output = s.output;
+  if (freeHands(state) === 0) return null;
   const hands = state.town.hands;
-  const kinds = [...new Set(output)].sort((a, b) => count(hands, a) - count(hands, b) || count(output, b) - count(output, a));
+  if (inShopFineWindow(SHOPS[id], s)) {
+    const fine = fineOf(s.work!.out);
+    s.work = null;
+    hands.push(fine);
+    return [t('gainedFine', { item: goodName(fine) })];
+  }
+  if (output.length === 0) return null;
+  const kinds = [...new Set(output)].sort((a, b) => countBoth(hands, a) - countBoth(hands, b) || count(output, b) - count(output, a));
   output.splice(output.indexOf(kinds[0]), 1);
   hands.push(kinds[0]);
   return [t('gained', { item: goodName(kinds[0]) })];
@@ -396,7 +454,7 @@ export function stockShopShelf(state: GameState, id: ShopId): Feedback | null {
   const hands = state.town.hands;
   for (let i = hands.length - 1; i >= 0; i--) {
     const good = hands[i];
-    if (!sellsGood(SHOPS[id], good) || !shelfRoom(shop, good)) continue;
+    if (!sellsGood(SHOPS[id], plainGood(good)) || !shelfRoom(shop, plainGood(good))) continue;
     hands.splice(i, 1);
     shop.shelf.push(good);
     return [t('handedOver', { item: goodName(good) })];
@@ -528,4 +586,4 @@ export function cycleShopSign(state: GameState, id: ShopId, good: GoodId): Feedb
 }
 
 /** A good's colour, for bars and crates. */
-export const goodColor = (good: GoodId) => GOODS[good].color;
+export const goodColor = (held: Held) => GOODS[plainGood(held)].color;

@@ -309,6 +309,10 @@ const de: Translation<typeof en> = {
   ale: 'Bier',
   stout: 'Starkbier',
   brewer: 'Brauer',
+  // A shop's fine goods and contracts
+  fineGood: '{item} (fein)',
+  shopContract: 'Auftrag: {item} {made}/{need}, {coins}{coin}',
+  shopContractKept: 'Auftrag erfüllt! +{coins}{coin}',
   // The recipes each shop's study teaches, and their gardens
   orchard: 'Obstgarten',
   apple: 'Apfel',

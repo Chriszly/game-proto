@@ -407,6 +407,35 @@ export interface RouteState {
   next: number;
 }
 
+/**
+ * A fine good: a shop's product taken off its station by hand in the last `FINE_SHARE` of its
+ * work, like the apothecary's fine potions, worth `FINE_BONUS` times as much. It goes on the same
+ * shelf as its plain good and is sold first.
+ */
+export type FineGood = `${GoodId}-fine`;
+/** What the doctor's hands and a shop's shelf hold: a good, or a fine one. */
+export type Held = GoodId | FineGood;
+export const fineOf = (good: GoodId): FineGood => `${good}-fine`;
+export const isFineGood = (held: Held): held is FineGood => held.endsWith('-fine');
+export const plainGood = (held: Held): GoodId => (isFineGood(held) ? held.slice(0, -'-fine'.length) : held) as GoodId;
+
+/**
+ * A shop's contract for the day: `need` of one good it sells handed over at its counter before
+ * the apothecary's day (`GameState.contract.day`) ends, for `reward` coins into its till.
+ */
+export interface ShopContract {
+  day: number;
+  good: GoodId;
+  need: number;
+  made: number;
+  reward: number;
+}
+/** A shop's contracts ask for this many, one more for each kept, up to `MAX_SHOP_CONTRACT`. */
+export const SHOP_CONTRACT_START = 4;
+export const MAX_SHOP_CONTRACT = 12;
+/** A contract pays this share of what its goods sell for at their base price. */
+export const SHOP_CONTRACT_SHARE = 0.45;
+
 export interface ShopOrder {
   id: number;
   wants: GoodId[];
@@ -425,7 +454,7 @@ export interface ShopState {
   beds: number[];
   stations: Record<string, StationState>;
   routes: Record<string, RouteState>;
-  shelf: GoodId[];
+  shelf: Held[];
   till: number;
   /** How far a shopkeeper is with handing over the next good, towards `SHOP_SERVE_MS`. */
   serving: number;
@@ -447,12 +476,15 @@ export interface ShopState {
   priority: Record<string, GoodId | null>;
   /** Each shelf's price sign once the price signs are learned; Fair unless set. */
   signs: Partial<Record<GoodId, PriceSign>>;
+  /** Today's contract, or null before its first day; `kept` counts those kept, ever. */
+  contract: ShopContract | null;
+  kept: number;
 }
 
 export interface TownState {
   shops: Partial<Record<ShopId, ShopState>>;
   /** What the doctor carries in the town's shops, kept apart from the apothecary's hands. */
-  hands: GoodId[];
+  hands: Held[];
   /** The households of each of `DISTRICTS`, in order. */
   districts: DistrictState[];
 }
@@ -482,6 +514,8 @@ export function createShop(id: ShopId): ShopState {
     guild: { join: none(), growth: none(), belts: none(), storage: none(), prices: none(), slots: none(), customers: none() },
     priority: Object.fromEntries(def.stations.map((s) => [s.id, null])),
     signs: {},
+    contract: null,
+    kept: 0,
   };
 }
 
