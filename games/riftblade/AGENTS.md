@@ -47,7 +47,8 @@ between them.
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`) with `BootScene` then
-  `GameScene`, calls `setupGame(game, { howToPlay })` and `setupScaling(game)`, and puts `game` on
+  `GameScene`, calls `setupGame(game, { howToPlay })` and `setupScaling(game, { fill: true })` (the
+  view takes the screen's shape, 960x540 at the smallest, see Layout below), and puts `game` on
   `window` in dev builds.
 - `src/howToPlay.ts`: the How to play text in British English (which US English shares) and
   German, picked with `byLanguage`; update both when controls or the first round change.
@@ -152,7 +153,8 @@ between them.
 - `src/art/knights.ts`: `drawKnight` (the knights, from their scheme; `drawHero` hands knights to
   it) and `bakeKnights`: the blades (`bladeKey`, `rb-blade-<id>`), `rb-fighter`, `rb-copilot`,
   `rb-spirit`, `rb-puppet`, `rb-wreck`, `rb-ship` and `rb-bolt-fallen`.
-- `src/scenes/layout.ts`: `VIEW`, `CENTER`, HUD places (`XP_BAR`, `HP_BAR`, `KIT`, `TIMER`,
+- `src/scenes/layout.ts`: `VIEW` (the designed 960x540), `SCREEN` (the real view), `FRAME` (where
+  the designed rectangle sits in it), `fitLayout`, `CENTER`, HUD places (`XP_BAR`, `HP_BAR`, `KIT`, `TIMER`,
   `LEVEL`, `PLANET_TAG`, `CREDITS_TAG`, `BOSS_BAR`, `SIG_BUTTON`, `STICK`), card rectangles
   (`heroCardRect` for the 6x2 grid, `levelCardRect` with `LEVEL_CARD4` for four cards, `UNLOCK` and
   `CONTINUE` for the new hero panel, `mapNodeRect` / `mapNodeSpot`, `tradeCardRect`, `REROLL`,
@@ -169,6 +171,21 @@ between them.
   button; a locked hero shows only `rb-locked`), `unlockPanel` (the new hero, with a `continue`
   spot), `levelUp` (also the arena reward; three or four cards whose lines flow down; pool labels
   from `POOL_NAMES`, `linkIcon` for crossovers), `starMap`, `trader`, `eventPanel`, `endScreen`.
+
+### Layout on every screen shape
+
+The game fills the screen (`setupScaling(game, { fill: true })`): the view is 960x540 grown to the
+screen's shape, from 960x720 (4:3) to 1296x540 (2.4:1). `GameScene.create` calls
+`fitLayout(viewSize, viewFrame)` once, before the HUD is made: it sets `SCREEN` and `FRAME`, puts
+`CENTER` (the hero) in the middle of the view, stretches `XP_BAR` across the top, keeps `TIMER`
+and `BOSS_BAR` centred, pins `LEVEL`, `PLANET_TAG` and `CREDITS_TAG` to the right edge and
+`SIG_BUTTON` to the bottom right corner (`HP_BAR` and `KIT` stay top left). The ground and the
+sound cues' "on screen" test use `SCREEN`, so the endless field just shows more of itself (the
+rules, the spawn ring included, are unchanged). Panels are still laid out in designed 960x540
+coordinates (`VIEW` and the card rectangles); `syncPanel` then calls `Panel.place(FRAME.x,
+FRAME.y)`, which moves every object and spot into the frame, except the backdrop (`dim` and
+`stars`, marked with `Panel.fixed`), which covers the whole `SCREEN`. `hover` takes the offset
+off. At exactly 960x540 the frame is at 0,0 and nothing moves.
 
 ### Flow
 
@@ -262,11 +279,12 @@ free of audio) or from the scene's input handler.
 ## Testing hooks
 
 - `window.game.scene.getScene('Game').state`: the `GameState`.
-- `.panel.spots`: the cards of the panel showing (`id` is a `HeroId`, `fight`, an upgrade id, a
+- `.panel.spots`: the cards of the panel showing (moved into `FRAME` on a wider or taller view; `id` is a `HeroId`, `fight`, an upgrade id, a
   node kind, `option-0` / `option-1`, `sold`, `reroll`, `leave`, `again` or `continue`), in game
   pixels. A locked hero card has `locked: true`. `.chosen` is the hero picked on the select screen
   (TR-9 at first), `.unlocking` the heroes waiting to be shown.
-- The hero is always at `CENTER` (480, 270) on screen; `SIG_BUTTON` is at (890, 470).
+- The hero is always at `CENTER` (480, 270 at 960x540: the middle of the view) on screen;
+  `SIG_BUTTON` is at (890, 470) at 960x540, 70 px in from the bottom right corner.
 - The playthrough (`e2e/playthrough.spec.ts`) checks the twelve cards (all but TR-9 locked on a
   fresh save), waits out Phaser's start-up easing on the select screen (140 frames; its first 120
   steps are cut short, so a run started during them would play differently depending on load

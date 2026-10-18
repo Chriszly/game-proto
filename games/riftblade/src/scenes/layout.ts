@@ -1,6 +1,15 @@
-/** Screen layout, in game pixels of the 960x540 view. The world itself is open and endless. */
+/**
+ * Screen layout, in game pixels. The game is designed at 960x540 (`VIEW`) and fills the screen's
+ * shape (`setupScaling(game, { fill: true })`): `fitLayout` sets `SCREEN` to the real view and pins
+ * the HUD below to its edges, and the panels (laid out for `VIEW`) are moved into `FRAME`, the
+ * designed-size rectangle in the middle of the view. The world itself is open and endless.
+ */
 
 export const VIEW = { w: 960, h: 540 };
+/** The view the game shows, in game pixels: `VIEW` grown to the screen's shape. */
+export const SCREEN = { w: VIEW.w, h: VIEW.h };
+/** Where the designed 960x540 rectangle sits in the view; the panels are moved there. */
+export const FRAME = { x: 0, y: 0 };
 /** The hero always stands in the middle of the view; the camera follows. */
 export const CENTER = { x: VIEW.w / 2, y: VIEW.h / 2 };
 
@@ -78,6 +87,24 @@ export function eventOptionRect(i: number) {
 
 /** The end screen's "Run again" button. */
 export const AGAIN = { x: VIEW.w / 2 - 110, y: 380, w: 220, h: 50 };
+
+/**
+ * Fits the layout to a view of `w` x `h` with the designed frame at `fx`, `fy`: the XP bar spans
+ * the top, the clock and boss bar stay centred, the level, planet and credits keep to the right
+ * edge and the signature button to the bottom right corner. Called once, before the HUD is made.
+ */
+export function fitLayout(w: number, h: number, fx: number, fy: number) {
+  Object.assign(SCREEN, { w, h });
+  Object.assign(FRAME, { x: fx, y: fy });
+  Object.assign(CENTER, { x: w / 2, y: h / 2 });
+  XP_BAR.w = w;
+  TIMER.x = w / 2;
+  LEVEL.x = w - 16;
+  PLANET_TAG.x = w - 16;
+  CREDITS_TAG.x = w - 16;
+  BOSS_BAR.x = w / 2 - BOSS_BAR.w / 2;
+  Object.assign(SIG_BUTTON, { x: w - 70, y: h - 70 });
+}
 
 /** Draw order. */
 export const DEPTH = { ground: 0, under: 1, pickups: 2, enemies: 3, allies: 4, hero: 5, bolts: 6, over: 7, pops: 8, hud: 20, overlay: 30 };
