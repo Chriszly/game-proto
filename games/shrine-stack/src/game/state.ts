@@ -172,8 +172,8 @@ export interface Drop {
 
 /** Something for the scene to show once: a stone landing or falling, or a tier finished. */
 export type GameEvent =
-  | { type: 'placed'; drop: Drop; cut: { x: number; w: number }[]; favor: number }
-  | { type: 'missed'; drop: Drop }
+  | { type: 'placed'; drop: Drop; stone: Stone; row: number; cut: { x: number; w: number }[]; favor: number }
+  | { type: 'missed'; drop: Drop; tier: number; kind: StoneKind; material: MaterialId }
   | { type: 'tier'; tier: number; balanced: boolean }
   | { type: 'trial'; tier: number; passed: boolean; favor: number }
   | { type: 'rerolled' }
@@ -465,7 +465,7 @@ function land(s: GameState) {
     const d: Drop = { x: m.x, w: m.w, kept: 0, share: 0, perfect: false, missed: true, caught };
     s.lastDrop = d;
     s.chain = 0;
-    s.events.push({ type: 'missed', drop: d });
+    s.events.push({ type: 'missed', drop: d, tier: s.tier, kind: m.kind, material: m.material });
     if (caught) {
       s.grace--;
       s.phase = 'swinging';
@@ -479,14 +479,16 @@ function land(s: GameState) {
   const share = kept / m.w;
   const d: Drop = { x, w: m.w, kept, share, perfect, missed: false, caught: false };
   s.lastDrop = d;
-  s.stones.push({ x, w: kept, tier: s.tier, perfect, kind: m.kind, material: m.material });
+  const stone: Stone = { x, w: kept, tier: s.tier, perfect, kind: m.kind, material: m.material };
+  s.stones.push(stone);
   const favor = stoneFavor(s, perfect, m.kind);
   s.favor += favor;
   s.tierFavor += favor;
   if (share < BALANCE) s.wobbly = true;
   s.inTier++;
   s.chain = perfect ? s.chain + 1 : 0;
-  s.events.push({ type: 'placed', drop: d, cut, favor });
+  // A copy, as the rules may still widen the stone or topple it before the scene draws the event.
+  s.events.push({ type: 'placed', drop: d, stone: { ...stone }, row: s.stones.length - 1, cut, favor });
   s.phase = 'swinging';
   // A chain of perfect drops grows the stone back a little, from the third in a row.
   if (perfect && s.tier >= CHAIN_FROM_TIER && s.chain >= CHAIN_LEN && kept < PLINTH_W) {

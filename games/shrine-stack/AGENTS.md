@@ -188,7 +188,8 @@ How it runs:
   (unless `endless`); otherwise a balanced tier moves to the `blessing` phase, and a wobbly one does too, with an empty
   offer, when favor reaches `CHEAPEST` or from `MATERIAL_FROM_TIER`. Then it spawns the next stone
   from the side opposite the last.
-- Events: the rules push `GameEvent`s (`placed` with the favor it earned, `missed`, `tier`,
+- Events: the rules push `GameEvent`s (`placed` with a copy of the stone, its row and the favor it
+  earned, `missed` with the stone's tier, kind and material, `tier`,
   `trial` (failed mid-tier, or passed with its favor), `rerolled`, `bought`, `toppled` (how many
   stones, the lean and the favor lost), `regrown`, `swapped` (the kind now in hand), `patron`) onto
   `state.events`; the scene drains them each frame in `show`, which draws the new
@@ -253,8 +254,8 @@ from `tick`; tweens are cosmetic only.
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` right after creating the game, which applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become no-ops; the miss shake is
-  the only one here).
+- `src/main.ts` calls `setupGame(game)` right after creating the game, which applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become no-ops; the miss and topple shakes
+  are the only ones here).
 - Difficulty scales one number: the swing speed. `speedFor` multiplies `BASE_SPEED` by
   `byDifficulty(0.8, 1, 1.25)` (Easy, Normal, Hard). Nothing else changes (the patron's pace is a
   separate factor in `speedFor`).
