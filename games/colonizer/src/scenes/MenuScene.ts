@@ -5,6 +5,7 @@ import { FEET, FRAME, WOOL } from '../art/figures';
 import { hexNum, SERIF, T } from '../art/stitch';
 import { figKey } from './BootScene';
 import { MENU_OPTS } from './layout';
+import { viewFrame } from '../../../../shared/scaling';
 import { playMusic, ui } from '../../../../shared/audio';
 import { COLONY } from '../audio/music';
 
@@ -19,6 +20,9 @@ export class MenuScene extends Phaser.Scene {
   private against: { text: Phaser.GameObjects.Text; id: FactionId }[] = [];
   private opts: { img: Phaser.GameObjects.Image; on: () => boolean }[] = [];
   private optText!: Phaser.GameObjects.Text;
+  /** The menu is laid out for 960x540 and sits in the middle of the view (`viewFrame`). */
+  private ox = 0;
+  private oy = 0;
 
   constructor() {
     super('Menu');
@@ -27,26 +31,30 @@ export class MenuScene extends Phaser.Scene {
   create() {
     playMusic(COLONY, 'calm');
     this.add.image(0, 0, 'backdrop').setOrigin(0, 0);
-    this.add.text(480, 78, t('title').toUpperCase(), { fontFamily: SERIF, fontSize: '46px', fontStyle: 'bold', color: T.red, stroke: T.linen, strokeThickness: 2 }).setOrigin(0.5);
+    const frame = viewFrame(this);
+    this.ox = frame.x;
+    this.oy = frame.y;
+    const { ox, oy } = this;
+    this.add.text(ox + 480, oy + 78, t('title').toUpperCase(), { fontFamily: SERIF, fontSize: '46px', fontStyle: 'bold', color: T.red, stroke: T.linen, strokeThickness: 2 }).setOrigin(0.5);
     this.add
-      .text(480, 120, t('menuIntro'), { fontFamily: SERIF, fontSize: '15px', color: T.ink })
+      .text(ox + 480, oy + 120, t('menuIntro'), { fontFamily: SERIF, fontSize: '15px', color: T.ink })
       .setOrigin(0.5);
 
     this.against = [];
     this.opts = [];
-    FACTION_IDS.forEach((id, i) => this.card(id, 170 + i * 310, 300));
+    FACTION_IDS.forEach((id, i) => this.card(id, ox + 170 + i * 310, oy + 300));
 
     // The map kind and the number of rivals, as two rows of toggles under the cards.
-    const label = (x: number, words: string) => this.add.text(x - 10, MENU_OPTS.y, words, { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: T.red }).setOrigin(1, 0.5);
+    const label = (x: number, words: string) => this.add.text(ox + x - 10, oy + MENU_OPTS.y, words, { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: T.red }).setOrigin(1, 0.5);
     label(MENU_OPTS.kindX, t('mapLabel').toUpperCase());
     MAP_KIND_IDS.forEach((kind, i) => this.option(MENU_OPTS.kindX + i * (MENU_OPTS.w + MENU_OPTS.gap), t(MAP_KINDS[kind].name), () => options.kind === kind, () => (options.kind = kind)));
     label(MENU_OPTS.rivalsX, t('rivalsLabel').toUpperCase());
     ([1, 2] as const).forEach((n, i) => this.option(MENU_OPTS.rivalsX + i * (MENU_OPTS.w + MENU_OPTS.gap), t(n === 1 ? 'oneAi' : 'twoAis'), () => options.rivals === n, () => (options.rivals = n)));
-    this.optText = this.add.text(480, 464, '', { fontFamily: SERIF, fontSize: '12.5px', fontStyle: 'italic', color: T.ink }).setOrigin(0.5);
+    this.optText = this.add.text(ox + 480, oy + 464, '', { fontFamily: SERIF, fontSize: '12.5px', fontStyle: 'italic', color: T.ink }).setOrigin(0.5);
     this.refresh();
 
     this.add
-      .text(480, 488, t('menuControls'), {
+      .text(ox + 480, oy + 488, t('menuControls'), {
         fontFamily: SERIF,
         fontSize: '13px',
         color: T.faded,
@@ -57,9 +65,11 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /** A toggle button: `on` says whether it is the chosen one, `pick` chooses it. */
-  private option(x: number, words: string, on: () => boolean, pick: () => void) {
-    const img = this.add.image(x - 2, MENU_OPTS.y - MENU_OPTS.h / 2 - 2, 'opt-off').setOrigin(0, 0).setInteractive({ useHandCursor: true });
-    this.add.text(x + MENU_OPTS.w / 2, MENU_OPTS.y + 0.5, words.toUpperCase(), { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: T.ink }).setOrigin(0.5);
+  private option(fx: number, words: string, on: () => boolean, pick: () => void) {
+    const x = this.ox + fx;
+    const y = this.oy + MENU_OPTS.y;
+    const img = this.add.image(x - 2, y - MENU_OPTS.h / 2 - 2, 'opt-off').setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    this.add.text(x + MENU_OPTS.w / 2, y + 0.5, words.toUpperCase(), { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: T.ink }).setOrigin(0.5);
     img.on('pointerover', () => !on() && img.setTexture('opt-hot'));
     img.on('pointerout', () => img.setTexture(on() ? 'opt-on' : 'opt-off'));
     img.on('pointerdown', () => {

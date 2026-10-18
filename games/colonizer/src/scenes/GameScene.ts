@@ -90,7 +90,7 @@ import { hexNum, SERIF, T } from '../art/stitch';
 import { buildingKey, figKey, relicKey, TREE_VARIANTS } from './BootScene';
 import { Effects } from './fx';
 import { DeedCard, Minimap, StatusCard, stitchEllipse, stitchLine, Toast, TopBar } from './hud';
-import { BOON, BUTTONS, PANEL_Y, SEL, TOP_H } from './layout';
+import { BOON, BUTTONS, H, PANEL_Y, SEL, TOP_H, W } from './layout';
 import { SoundCues } from './sound';
 import { sfx } from '../audio/sfx';
 import { COLONY } from '../audio/music';
@@ -368,7 +368,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state.winner !== null && !this.endPanel) this.showEnd();
   }
 
-  /** Converts a screen point (in the 960x540 game space) to a world point. */
+  /** Converts a screen point (in game space) to a world point. */
   toWorld(x: number, y: number) {
     const p = this.cameras.main.getWorldPoint(x * renderScale, y * renderScale);
     return { x: p.x / TILE, y: p.y / TILE };
@@ -680,11 +680,11 @@ export class GameScene extends Phaser.Scene {
     if (k.down.isDown) dy += 1;
     const pointer = this.input.activePointer;
     const p = viewPoint(pointer);
-    if (pointer.isDown === false && p.x > 0 && p.x < 960 && p.y > 0 && p.y < 540) {
+    if (pointer.isDown === false && p.x > 0 && p.x < W && p.y > 0 && p.y < H) {
       if (p.x < 6) dx -= 1;
-      if (p.x > 954) dx += 1;
+      if (p.x > W - 6) dx += 1;
       if (p.y < 6) dy -= 1;
-      if (p.y > 534) dy += 1;
+      if (p.y > H - 6) dy += 1;
     }
     cam.setScroll(cam.scrollX + (dx * SCROLL_PX_PER_S * dt) / 1000, cam.scrollY + (dy * SCROLL_PX_PER_S * dt) / 1000);
   }
@@ -748,7 +748,7 @@ export class GameScene extends Phaser.Scene {
   /** Centres the camera on a world tile, allowing for the panel and top bar. */
   private jumpTo(x: number, y: number) {
     sfx('whoosh');
-    this.cameras.main.centerOn(x * TILE, y * TILE + (540 - PANEL_Y - TOP_H) / 2);
+    this.cameras.main.centerOn(x * TILE, y * TILE + (H - PANEL_Y - TOP_H) / 2);
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer) {
@@ -756,7 +756,7 @@ export class GameScene extends Phaser.Scene {
     if (this.endPanel) return void this.scene.start(watching ? 'Game' : 'Menu');
     if (this.mini.contains(p.x, p.y)) {
       const t = this.mini.toTile(p.x, p.y);
-      this.cameras.main.centerOn(t.x * TILE, t.y * TILE + (540 - PANEL_Y - TOP_H) / 2);
+      this.cameras.main.centerOn(t.x * TILE, t.y * TILE + (H - PANEL_Y - TOP_H) / 2);
       return;
     }
     if (this.toast.contains(p.x, p.y)) {
@@ -1127,16 +1127,16 @@ export class GameScene extends Phaser.Scene {
     const g = this.edgeG.clear();
     this.edgeMarks = [];
     const v = this.cameras.main.worldView;
-    const cx = 480;
+    const cx = W / 2;
     const cy = (TOP_H + PANEL_Y) / 2;
     for (const a of this.alerts) {
       const sx = a.x * TILE - v.x;
       const sy = a.y * TILE - v.y;
-      if (sx >= 0 && sx <= 960 && sy >= TOP_H && sy <= PANEL_Y) continue;
+      if (sx >= 0 && sx <= W && sy >= TOP_H && sy <= PANEL_Y) continue;
       // Where the line from the middle of the view to the alert leaves the play area, a little inside.
       const dx = sx - cx;
       const dy = sy - cy;
-      const k = Math.min(Math.abs((480 - 16) / (dx || 1e-6)), Math.abs(((PANEL_Y - TOP_H) / 2 - 16) / (dy || 1e-6)));
+      const k = Math.min(Math.abs((W / 2 - 16) / (dx || 1e-6)), Math.abs(((PANEL_Y - TOP_H) / 2 - 16) / (dy || 1e-6)));
       const mx = cx + dx * k;
       const my = cy + dy * k;
       const rot = Math.atan2(dy, dx);
@@ -1499,27 +1499,27 @@ export class GameScene extends Phaser.Scene {
     }
     const won = this.state.winner === PLAYER;
     playSting(COLONY, won ? 'win' : 'lose');
-    const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
-    const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
-    const title = this.add.text(480, 245, t(won ? 'victory' : 'defeat').toUpperCase(), { ...text(44, won ? T.green : T.red, true) }).setOrigin(0.5).setScrollFactor(0);
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, hexNum(T.linen), 0.72).setScrollFactor(0);
+    const card = this.add.image(W / 2, H / 2, 'card-end').setScrollFactor(0);
+    const title = this.add.text(W / 2, H / 2 + -25, t(won ? 'victory' : 'defeat').toUpperCase(), { ...text(44, won ? T.green : T.red, true) }).setOrigin(0.5).setScrollFactor(0);
     const how =
       this.state.winBy === 'monument'
         ? t(won ? 'endMonumentOwn' : 'endMonumentFoe')
         : t(won ? (this.rival2 ? 'endBothFallen' : 'endFoeFallen') : 'townFallen');
-    const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
-    const sub = this.add.text(480, 312, t('endAgain'), text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
+    const why = this.add.text(W / 2, H / 2 + 14, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
+    const sub = this.add.text(W / 2, H / 2 + 42, t('endAgain'), text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
     this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
   }
   /** The end of a watched match: which faction won and how, and a click starts another. */
   private showWatchEnd() {
     const winner = this.state.players[this.state.winner ?? PLAYER].faction;
     const loser = this.state.winner === PLAYER ? this.aiFaction : this.faction;
-    const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
-    const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
-    const title = this.add.text(480, 245, t('watchWins', { faction: t(FACTIONS[winner].name) }).toUpperCase(), { ...text(34, WOOL[winner].cloth, true) }).setOrigin(0.5).setScrollFactor(0);
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, hexNum(T.linen), 0.72).setScrollFactor(0);
+    const card = this.add.image(W / 2, H / 2, 'card-end').setScrollFactor(0);
+    const title = this.add.text(W / 2, H / 2 + -25, t('watchWins', { faction: t(FACTIONS[winner].name) }).toUpperCase(), { ...text(34, WOOL[winner].cloth, true) }).setOrigin(0.5).setScrollFactor(0);
     const how = this.state.winBy === 'monument' ? t('watchMonument') : this.rival2 ? t('watchBothFallen') : t('watchFallen', { faction: t(FACTIONS[loser].name) });
-    const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
-    const sub = this.add.text(480, 312, t('watchAgain'), text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
+    const why = this.add.text(W / 2, H / 2 + 14, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
+    const sub = this.add.text(W / 2, H / 2 + 42, t('watchAgain'), text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
     this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
   }
 

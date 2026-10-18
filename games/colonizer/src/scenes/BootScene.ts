@@ -4,7 +4,8 @@ import { BUILDINGS, FACTION_IDS, RELICS, UNITS, type BuildingId, type FactionId,
 import { bakeFigureSheet, FRAME, WOOL } from '../art/figures';
 import { bakeBuilding, bakeBush, bakeCache, bakeFogPattern, bakeMine, bakeNeedle, bakePost, bakeRallyFlag, bakeRelic, bakeTree } from '../art/scenery';
 import { bakeBackdrop, bakeButton, bakeCard, bakeIcon, bakePanel, bakeTopBar, type IconKind } from '../art/ui';
-import { BOON, DEED_CARD, MENU_OPTS, STATUS_CARD, TOAST } from './layout';
+import { BOON, DEED_CARD, fitLayout, MENU_OPTS, STATUS_CARD, TOAST } from './layout';
+import { viewSize } from '../../../../shared/scaling';
 import { T } from '../art/stitch';
 
 /**
@@ -27,6 +28,9 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    // The view's shape is picked once at start: fit the HUD to it before anything is painted.
+    const view = viewSize(this);
+    fitLayout(view.width, view.height);
     for (let v = 0; v < TREE_VARIANTS; v++) this.bake(`tree-${v}`, bakeTree(v));
     this.bake('bush', bakeBush());
     this.bake('mine', bakeMine());
