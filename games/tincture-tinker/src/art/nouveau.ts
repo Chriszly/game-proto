@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { Kind } from '../game/kinds';
-import { sharpRes } from '../../../../shared/scaling';
+import { sharpRes, viewSize } from '../../../../shared/scaling';
 import { SERIF, VIEW } from '../scenes/layout';
 
 // The Art Nouveau label toolkit every texture is painted with: flat muted inks with bold sepia
@@ -52,7 +52,8 @@ export let ctx: CanvasRenderingContext2D;
  */
 export function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: () => void) {
   if (scene.textures.exists(key)) return;
-  RES = sharpRes(VIEW.w, VIEW.h);
+  const view = viewSize(scene);
+  RES = sharpRes(Math.max(VIEW.w, view.width), Math.max(VIEW.h, view.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(w * RES);
   canvas.height = Math.ceil(h * RES);
