@@ -1,6 +1,6 @@
 /**
  * The rules of a run: moving, the heroes' weapons and signatures, every upgrade's effect, the
- * droids, pickups and level-ups. Pure state changes, no drawing; randomness comes from Math.random
+ * bots, pickups and level-ups. Pure state changes, no drawing; randomness comes from Math.random
  * and time from the `dt` the scene hands over, so a run replays exactly from the same inputs.
  */
 import { HEROES, isKnight, type HeroId } from './heroes';
@@ -29,14 +29,14 @@ export interface Input {
   signature: boolean;
 }
 
-/** The longest sim step, ms: a longer frame is split so fast bolts don't skip over droids. */
+/** The longest sim step, ms: a longer frame is split so fast bolts don't skip over bots. */
 const STEP_MS = 16;
 /** The longest frame the sim takes at once (a hidden tab or a hitch is cut to this). */
 const MAX_FRAME_MS = 100;
 /** After a hit the hero takes no damage for this long, ms. */
 export const HURT_GRACE_MS = 450;
 /** Colours of the blast rings. */
-const BLAST = { wreck: '#ffd23f', hero: '#ffb347', droid: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
+const BLAST = { wreck: '#ffd23f', hero: '#ffb347', bot: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
 
 /** The stats for this frame, computed once per tick, and whether the hero is a knight (or Elara Voss or Triad-77). */
 let st: Stats = statsOf(freshState());
@@ -186,7 +186,7 @@ function step(s: GameState, ms: number, input: Input) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// A grid of the droids, so bolts and blasts only look at the ones nearby.
+// A grid of the bots, so bolts and blasts only look at the ones nearby.
 
 const CELL = 64;
 let grid = new Map<number, Enemy[]>();
@@ -203,7 +203,7 @@ function buildGrid(s: GameState) {
   }
 }
 
-/** Calls `fn` for each living droid whose body reaches within `r` of a point, the boss included. */
+/** Calls `fn` for each living bot whose body reaches within `r` of a point, the boss included. */
 export function near(s: GameState, x: number, y: number, r: number, fn: (e: Enemy, d: number) => void) {
   const reach = r + 20;
   const x0 = Math.floor((x - reach) / CELL);
@@ -228,7 +228,7 @@ export function near(s: GameState, x: number, y: number, r: number, fn: (e: Enem
   }
 }
 
-/** The `n` living droids nearest a point within `range`, nearest first (foes turned to the hero's side left out). */
+/** The `n` living bots nearest a point within `range`, nearest first (foes turned to the hero's side left out). */
 export function nearest(s: GameState, x: number, y: number, n: number, range: number, skip: number[] = []): Enemy[] {
   const found: { e: Enemy; d: number }[] = [];
   for (const e of s.enemies) {
@@ -246,7 +246,7 @@ export function nearest(s: GameState, x: number, y: number, n: number, range: nu
   return found.map((f) => f.e);
 }
 
-/** A spot in the thickest swarm near the hero: the droid with the most others around it. */
+/** A spot in the thickest swarm near the hero: the bot with the most others around it. */
 export function swarmSpot(s: GameState, range: number) {
   const p = s.player;
   const pool = nearest(s, p.x, p.y, 16, range);
@@ -337,7 +337,7 @@ function untouchable(s: GameState) {
   return (s.hero === 'tr9' && s.player.sigActiveMs > 0) || s.player.dashMs > 0 || s.player.hurtMs > 0;
 }
 
-/** A hit on the hero; `x`, `y` say where it came from (Triad-77's nearest droid takes it). */
+/** A hit on the hero; `x`, `y` say where it came from (Triad-77's nearest bot takes it). */
 function hurtHero(s: GameState, dmg: number, x?: number, y?: number) {
   if (untouchable(s) || s.phase !== 'run') return;
   const p = s.player;
@@ -395,7 +395,7 @@ function signature(s: GameState) {
   else if (s.hero === 'rook') p.sigActiveMs = 5000;
   else if (s.hero === 'tr9') {
     p.sigActiveMs = 3000;
-    // The bracing pulse throws every droid near back.
+    // The bracing pulse throws every bot near back.
     near(s, p.x, p.y, 150, (e) => {
       knock(e, p.x, p.y, 340);
       damage(s, e, 10);
@@ -474,52 +474,8 @@ function primary(s: GameState, ms: number) {
   const hero = HEROES[s.hero!];
   p.fireMs -= ms * fireRate(s);
   if (p.fireMs > 0) return;
-  if (hero.aim === 'facing') {
-    // Bram fires the way he walks; standing still, he turns to the nearest droid.
-    if (!p.moving) {
-      const t = nearest(s, p.x, p.y, 1, hero.range)[0];
-      if (t) p.facing = Math.atan2(t.y - p.y, t.x - p.x);
-    }
-    p.fireMs += hero.fireMs;
-    // A little aim assist: the nearest droid within 35 degrees of the way he faces.
-    let aim = p.facing;
-    let best = hero.range;
-    for (const e of s.enemies) {
-      if (e.hp <= 0) continue;
-      const d = Math.hypot(e.x - p.x, e.y - p.y);
-      if (d < best && Math.abs(angleDiff(Math.atan2(e.y - p.y, e.x - p.x), p.facing)) < 0.6) {
-        best = d;
-        aim = Math.atan2(e.y - p.y, e.x - p.x);
-      }
-    }
-    p.aim = aim;
-    p.shots += 1;
-    const heavyEvery = s.capstones.includes('longshot') ? 2 : (s.ranks.marksman ?? 0) >= 4 ? 4 : 0;
-    const heavy = heavyEvery > 0 && p.shots % heavyEvery === 0;
-    const o: BoltOpts = heavy ? { pierce: 999, color: 'heavy', r: 6 } : {};
-    const dmg = hero.damage * (heavy ? 3 : 1);
-    volley(s, p.x, p.y, aim, dmg, o);
-    // Brothers in Arms: every brother fires the same shot from where he stands.
-    const bro = s.ranks.brothers ?? 0;
-    if (bro > 0) {
-      const pct = at([0.6, 0.8, 0.8, 1, 1], bro, 0);
-      const cone = s.crossovers.includes('shoulder-to-shoulder');
-      for (const a of s.allies) {
-        if (a.kind !== 'brother') continue;
-        a.aim = aim;
-        bolt(s, a.x, a.y, aim, dmg * pct, o);
-        if (cone) {
-          bolt(s, a.x, a.y, aim - 0.22, dmg * pct * 0.7, o);
-          bolt(s, a.x, a.y, aim + 0.22, dmg * pct * 0.7, o);
-        }
-      }
-    }
-    return;
-  }
-  let targets = nearest(s, p.x, p.y, 2, hero.range);
-  // A boss in range is always the first target, so its adds can't screen it off.
-  const boss = targets.length ? s.enemies.find((e) => e.kind === 'boss' && e.hp > 0) : undefined;
-  if (boss && targets[0] !== boss && Math.hypot(boss.x - p.x, boss.y - p.y) - boss.r <= hero.range) targets = [boss, targets[0]];
+  // Every weapon aims at the nearest foe (Rook's second gun at the next nearest).
+  const targets = nearest(s, p.x, p.y, 2, hero.range);
   if (!targets.length) {
     // Nothing in range: hold the shot until something is.
     p.fireMs = 0;
@@ -539,6 +495,31 @@ function primary(s: GameState, ms: number) {
       p.aim = a;
       volley(s, gx, gy, a, hero.damage);
       if ((s.ranks.gunslinger ?? 0) >= 4) volley(s, gx, gy, a + 0.07, hero.damage);
+    }
+  } else if (s.hero === 'bram') {
+    // Bram's carbine: straight bolts at the nearest bot, a heavy round every few with Marksman.
+    const t = targets[0];
+    const aim = Math.atan2(t.y - p.y, t.x - p.x);
+    p.aim = aim;
+    const heavyEvery = s.capstones.includes('longshot') ? 2 : (s.ranks.marksman ?? 0) >= 4 ? 4 : 0;
+    const heavy = heavyEvery > 0 && p.shots % heavyEvery === 0;
+    const o: BoltOpts = heavy ? { pierce: 999, color: 'heavy', r: 6 } : {};
+    const dmg = hero.damage * (heavy ? 3 : 1);
+    volley(s, p.x, p.y, aim, dmg, o);
+    // Brothers in Arms: every brother fires the same shot from where he stands.
+    const bro = s.ranks.brothers ?? 0;
+    if (bro > 0) {
+      const pct = at([0.6, 0.8, 0.8, 1, 1], bro, 0);
+      const cone = s.crossovers.includes('shoulder-to-shoulder');
+      for (const a of s.allies) {
+        if (a.kind !== 'brother') continue;
+        a.aim = aim;
+        bolt(s, a.x, a.y, aim, dmg * pct, o);
+        if (cone) {
+          bolt(s, a.x, a.y, aim - 0.22, dmg * pct * 0.7, o);
+          bolt(s, a.x, a.y, aim + 0.22, dmg * pct * 0.7, o);
+        }
+      }
     }
   } else {
     const t = targets[0];
@@ -789,7 +770,7 @@ function moveAllies(s: GameState, ms: number) {
       bolt(s, a.x, a.y, ang, 7 * ((s.ranks['drop-doctrine'] ?? 0) >= 4 ? 1.6 : 1), { ...plain, color: 'tr9' });
       a.cdMs = 900;
     } else if (a.kind === 'escort') {
-      // The stranded droid: a little turret that keeps up with the planet's toughness.
+      // The stranded bot: a little turret that keeps up with the planet's toughness.
       bolt(s, a.x, a.y, ang, 10 + 6 * s.planet, { ...plain, color: 'drone', speed: 620 });
       a.cdMs = 420;
     } else {
@@ -806,7 +787,7 @@ const SQUAD_ALLIES: readonly AllyKind[] = ['commando', 'bike', 'medic', 'shieldb
 export const SHORT_LIVED: readonly AllyKind[] = ['fighter', 'puppet', 'bike', 'spare'];
 
 // ---------------------------------------------------------------------------------------------
-// The droids
+// The bots
 
 export function spawnAt(s: GameState, kind: EnemyKind, x: number, y: number, elite = false) {
   const planet = PLANETS[s.planet];
@@ -836,7 +817,7 @@ export function ringPoint(s: GameState, angle = Math.random() * Math.PI * 2) {
   return { x: s.player.x + Math.cos(angle) * d, y: s.player.y + Math.sin(angle) * d };
 }
 
-/** Droids per second at a planet time (s), before difficulty and the planet's own pace. */
+/** Bots per second at a planet time (s), before difficulty and the planet's own pace. */
 export function spawnRate(t: number) {
   return 1.4 + t / 75 + (t / 160) ** 2;
 }
@@ -900,10 +881,11 @@ export function spawnElite(s: GameState, angle?: number) {
 function director(s: GameState, ms: number) {
   const planet = PLANETS[s.planet];
   const t = s.time / 1000;
-  const living = s.enemies.length - (s.bossSpawned ? 1 : 0);
-  s.spawnDebt += (spawnRate(t) * DIFF.spawn * planet.spawn * (s.bossSpawned ? 0.35 : 1) * (s.arena ? 0.4 : 1) * ms) / 1000;
+  const living = s.enemies.length;
+  // Once the boss is here, no more foes come: only those already on the field (and the boss's own) are left.
+  if (!s.bossSpawned) s.spawnDebt += (spawnRate(t) * DIFF.spawn * planet.spawn * (s.arena ? 0.4 : 1) * ms) / 1000;
   let made = 0;
-  while (s.spawnDebt >= 1) {
+  while (!s.bossSpawned && s.spawnDebt >= 1) {
     s.spawnDebt -= 1;
     if (living + made >= MAX_ENEMIES) {
       s.spawnDebt = Math.min(s.spawnDebt, 1);
@@ -919,7 +901,7 @@ function director(s: GameState, ms: number) {
     spawnElite(s);
     pop(s, tr(planet.elite), '#ffe066');
   }
-  while (s.waves.length && s.time >= s.waves[0]) {
+  while (!s.bossSpawned && s.waves.length && s.time >= s.waves[0]) {
     s.waves.shift();
     const n = planet.swarm === 'linetrooper' ? 18 : 26;
     for (let i = 0; i < n; i++) {
@@ -963,7 +945,7 @@ export function knock(e: Enemy, fromX: number, fromY: number, power: number) {
   if (e.mode === 'rush') e.mode = 'walk';
 }
 
-/** A hostile bolt from a droid, beast, trooper or boss. */
+/** A hostile bolt from a bot, beast, trooper or boss. */
 function shoot(s: GameState, x: number, y: number, angle: number, speed: number, dmg: number, color: BoltColor, r: number, life = 3800) {
   const b: Bullet = {
     id: s.nextId++, x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
@@ -1135,7 +1117,7 @@ function moveEnemies(s: GameState, ms: number) {
     const fade = Math.exp(-7 * dt);
     e.kx *= fade;
     e.ky *= fade;
-    // Keep apart from the droids around, so a swarm spreads into a crowd rather than a dot.
+    // Keep apart from the bots around, so a swarm spreads into a crowd rather than a dot.
     if (e.kind !== 'boss') {
       const cx = Math.floor(e.x / CELL);
       const cy = Math.floor(e.y / CELL);
@@ -1158,7 +1140,7 @@ function moveEnemies(s: GameState, ms: number) {
         }
       }
     } else {
-      // The boss shoves smaller droids out of its way.
+      // The boss shoves smaller bots out of its way.
       near(s, e.x, e.y, e.r, (o, d) => {
         if (o === e || d === 0) return;
         const push = (e.r + o.r - d) / d;
@@ -1329,13 +1311,13 @@ export function inRingGap(h: Hazard, angle: number) {
   return Math.floor(rel / seg) % 2 === 1;
 }
 
-/** A rollerbomb goes off: on the hero when it touched them, and on every droid around it. */
+/** A rollerbomb goes off: on the hero when it touched them, and on every bot around it. */
 function detonate(s: GameState, e: Enemy, onHero: boolean) {
   e.hp = 0;
   const p = s.player;
   if (onHero || Math.hypot(p.x - e.x, p.y - e.y) < ROLLER.blastR + p.r) hurtHero(s, e.dmg, e.x, e.y);
-  explodeDroids(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
-  s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.droid });
+  explodeBots(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
+  s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.bot });
 }
 
 interface HitOpts {
@@ -1345,11 +1327,13 @@ interface HitOpts {
   crit?: boolean;
 }
 
-/** Hero-side damage to a droid: the Power Cell, crits and Stun Rounds apply. Returns the damage. */
+/** Hero-side damage to a bot: the Power Cell, crits and Stun Rounds apply. Returns the damage. */
 export function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
   if (e.hp <= 0 || e.charmMs > 0) return 0;
   let dmg = base * st.damage;
   if (knight) dmg *= foeMod(s, e);
+  // A boss with no foe left beside it stands exposed.
+  if (e.kind === 'boss' && !s.enemies.some((o2) => o2 !== e && o2.hp > 0 && o2.charmMs <= 0)) dmg *= BOSS.alone;
   // Elara's Sharpshooter makes its own critical hits.
   const sure = squad ? squadCrit(s, e) : 1;
   if (sure > 1) dmg *= sure;
@@ -1390,10 +1374,10 @@ function kill(s: GameState, e: Enemy) {
     const credits = s.arena ? CREDITS.arenaElite : CREDITS.elite;
     s.pickups.push({ id: s.nextId++, kind: 'credits', x: e.x + 18, y: e.y + 6, heal: 0, value: credits });
   }
-  // A rollerbomb shot down still blows up, but only hurts droids.
+  // A rollerbomb shot down still blows up, but only hurts bots.
   if (e.kind === 'rollerbomb') {
-    explodeDroids(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
-    s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.droid });
+    explodeBots(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
+    s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.bot });
   }
   // An ash acolyte bursts into embers.
   if (e.kind === 'acolyte') addHazard(s, 'ember', e.x, e.y, EMBER.r * (e.elite ? 1.6 : 1), 0, EMBER.ms, EMBER.dmg * PLANETS[s.planet].dmg);
@@ -1407,8 +1391,8 @@ function dropShard(s: GameState, x: number, y: number, value: number) {
   s.shards.push({ id: s.nextId++, x, y, value, pulled: false });
 }
 
-/** Damage to every droid near a point, apart from `skip` (no Power Cell: a droid's own blast). */
-function explodeDroids(s: GameState, x: number, y: number, r: number, dmg: number, skip: Enemy | null) {
+/** Damage to every bot near a point, apart from `skip` (no Power Cell: a bot's own blast). */
+function explodeBots(s: GameState, x: number, y: number, r: number, dmg: number, skip: Enemy | null) {
   near(s, x, y, r, (o) => {
     if (o === skip || o.hp <= 0) return;
     o.hp -= dmg;
@@ -1417,7 +1401,7 @@ function explodeDroids(s: GameState, x: number, y: number, r: number, dmg: numbe
   });
 }
 
-/** A hero-side blast: damages and pushes every droid within `r`. */
+/** A hero-side blast: damages and pushes every bot within `r`. */
 export function explode(s: GameState, x: number, y: number, r: number, dmg: number, color: string) {
   near(s, x, y, r, (e) => {
     damage(s, e, dmg);
@@ -1513,7 +1497,7 @@ function moveBullets(s: GameState, ms: number) {
   s.bullets = keep;
 }
 
-/** A droid shell: blocked or reflected by shields, else it hurts the hero. Returns whether it flies on. */
+/** A bot shell: blocked or reflected by shields, else it hurts the hero. Returns whether it flies on. */
 function hostileBolt(s: GameState, b: Bullet, shield: number) {
   const p = s.player;
   const dx = b.x - p.x;
@@ -1530,7 +1514,7 @@ function hostileBolt(s: GameState, b: Bullet, shield: number) {
   }
   // Corvin's Deflect and Joren's Council Seat send bolts back.
   if (knight && knightGuard(s, d, (dmg, color) => reflect(b, dmg, color), () => Math.atan2(b.vy, b.vx))) return true;
-  // Triad-77's rolling shield droids catch bolts.
+  // Triad-77's rolling shield bots catch bolts.
   const caught = squad ? squadBlock(s, b, () => reflect(b, 20, 'triad')) : null;
   if (caught !== null) return caught;
   if (d < p.r + b.r) {
@@ -1597,7 +1581,7 @@ function hazards(s: GameState, ms: number) {
       if (h.warnMs > 0) continue;
       // The warning is over: it goes off.
       if (d < h.r + p.r) hurtHero(s, h.dmg, h.x, h.y);
-      if (h.kind === 'vent') explodeDroids(s, h.x, h.y, h.r, VENT.foeDmg * PLANETS[s.planet].hp, null);
+      if (h.kind === 'vent') explodeBots(s, h.x, h.y, h.r, VENT.foeDmg * PLANETS[s.planet].hp, null);
       const color = h.kind === 'vent' ? BLAST.vent : h.kind === 'shell' ? BLAST.shell : BLAST.stomp;
       s.blasts.push({ id: s.nextId++, x: h.x, y: h.y, r: h.r, ms: 420, maxMs: 420, color });
       h.ms = 0;

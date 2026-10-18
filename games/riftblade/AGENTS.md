@@ -24,15 +24,16 @@ between them.
   Lightning Arc. The shared Gear deck (8 pieces), the 5-ability and 4-gear limits, level-ups with
   three cards (four for Elara, her Hope; at least one of the hero's own paths while any are left,
   the Field Ration as filler), 36 capstones and 13 crossovers (the cards show a link icon); gold-ringed elites with
-  chests and credits, ring waves at 1:30, 3:00 and 4:15 on every planet.
-- Four factions: Scrap droids (Clankers, Rollerbombs; the Grinder Crawler), wild beasts (mire rat
+  chests and credits, ring waves at 1:30, 3:00 and 4:15 on every planet; once the boss appears
+  no new foes spawn but its own adds. Every gun aims at the nearest foe.
+- Four factions: Scrap bots (Clankers, Rollerbombs; the Grinder Crawler), wild beasts (mire rat
   packs, spitter toads with slowing globs; the Bog Mother with globs, young and bog pools), the
   Iron Dominion (line trooper squads firing volleys, walker gunners; the Siege Walker with volleys,
   artillery barrages behind ground warnings and stomps) and the Hollow cult (ash acolytes that
   burst into embers, fallen knights with a frontal shield and dashes; the Hollow Champion with
   marked blade dashes and, below half health, rings of fire with gaps), plus lava vents.
 - Between planets: collecting what is left, credits, the star map with 2-3 nodes (trader, elite
-  arena, rest, event; four events), free arena picks, the escort droid. The hero, level, kit and
+  arena, rest, event; four events), free arena picks, the escort bot. The hero, level, kit and
   allies carry over; the clock resets per planet. Victory after the Lava boss; the end screen
   names the planet reached. Saved longest run, wins and furthest planet per hero, and the heroes
   unlocked.
@@ -66,7 +67,7 @@ between them.
   `schemeOf(id, variant)` returns a scheme (Kael has a second, Fallen, used once he takes The
   Fall), `isKnight`. All hero colours come from here; each hero's accent is unique (Elara's red,
   Triad-77's white). `locked` marks a hero that needs a deed (all but TR-9); Triad-77's `maxHp`
-  is the sum of its three droids' and its `r` the whole unit's.
+  is the sum of its three bots' and its `r` the whole unit's.
 - `src/game/upgrades.ts`: `UPGRADES` (every path, pool skill and gear piece, with five tier lines),
   `MAX_TIER`, `MAX_ABILITIES`, `MAX_GEAR`, `FILLER`, `CAPSTONES`, `CROSSOVERS`, `capstonesOf`,
   `crossoversOf`, `crossoverFor(id, hero)` and `capstoneFor` (card hints), `at` (per-tier tables),
@@ -83,24 +84,27 @@ between them.
   `MAX_ENEMIES`, `MAX_SHARDS`, `ENEMY` for every foe kind, `ELITE`, `ROLLER`, `RATS`, `TOAD`,
   `LINE`, `WALKER`, `EMBER`, `KNIGHT`, `BOSS`, `WAVES`, `SPAWN_RING`, `LEASH`, `PICKUP_R`, `HERO_R`),
   `DIFF` (difficulty), `freshState`, `xpFor`, `statsOf` (the hero's numbers from upgrades and
-  `maxHpMod`, with `squadMods` for Elara and Triad-77), `droidCount` and `droidMax` (Triad-77's
-  droids and their health), `refreshUnlocks` and `clock`. `Droid` and `Flag` are Triad-77's droids
-  (`state.droids`, `formation`, `scrap`) and Elara's signal flag (`state.flag`, `supplyWorld`).
+  `maxHpMod`, with `squadMods` for Elara and Triad-77), `botCount` and `botMax` (Triad-77's
+  bots and their health), `refreshUnlocks` and `clock`. `Bot` and `Flag` are Triad-77's bots
+  (`state.bots`, `formation`, `scrap`) and Elara's signal flag (`state.flag`, `supplyWorld`).
 - `src/game/sim.ts`: the rules of a fight. `startRun`, `choose` / `nextPick` (free picks first,
   then level-ups, then `state.after`), `raise` / `lower` (a tier up or down), `tick` (splits a frame
   into steps of at most 16 ms), and per step: the foe grid (`near`, `nearest`, `swarmSpot`), the
   hero (`moveHero` with slows, `hurtHero` with `HURT_GRACE_MS`, `signature`), weapons (`bolt`,
-  `volley`, `primary`, which aims at a boss in range first), every upgrade (`abilities`, `syncAllies`, `moveAllies` with the escort),
-  foes (`director` with `spawnRate` and `spawnGroup` per faction, `spawnElite`, `moveEnemies` with
+  `volley`, `primary`: every gun at the nearest foe, Rook's second at the next nearest, Bram's
+  heavy rounds and Brothers), every upgrade (`abilities`, `syncAllies`, `moveAllies` with the escort),
+  foes (`director` with `spawnRate` and `spawnGroup` per faction and `spawnElite`, all stopped
+  for good once the boss is up, so only the foes left and the boss's own adds remain; `moveEnemies` with
   each kind's behaviour, `bossAttacks` per boss, `detonate`), hazards (`hazards`, `inRingGap`),
-  damage (`damage` with the knight's guard, `kill`, `explode`), bolts, bombs, fire and pickups
+  damage (`damage` with the knight's guard and `BOSS.alone`, double damage to a boss with no other
+  foe left, `kill`, `explode`), bolts, bombs, fire and pickups
   (`gainXp`, `openChest`, `collectAll`). The arena ends at the end of `step`. Exports
   `suppressorLength`, `suppressorHalf`, `shieldHalf`, `phalanxSpots` and `angleDiff` for drawing,
   and `stats`, `near`, `nearest`, `swarmSpot`, `bolt`, `volley`, `ready`, `knock`, `damage`,
   `explode`, `addBomb`, `heal` and `SHORT_LIVED` (allies gone after a fight) for `blades.ts`,
   `squad.ts` and `voyage.ts`. Knight code runs only when the hero `isKnight`, squad code only for
   Elara and Triad-77, so the soldiers' `Math.random` order is unchanged. `hurtHero` takes where a hit
-  came from (Triad-77's nearest droid takes it). TR-9's Drop Squad troopers (`legionary` allies)
+  came from (Triad-77's nearest bot takes it). TR-9's Drop Squad troopers (`legionary` allies)
   land with a drop pod (an `orbital` bomb) in `syncAllies`. Foes with `charmMs` (Persuasion's
   turned foes and the Diplomat's confused ones) fight other foes in `turned`.
 - `src/game/blades.ts`: everything the knights do, called from `sim.ts`: `knightMods` (their
@@ -114,12 +118,13 @@ between them.
   and Triad-77's numbers). Slashes and lightning are
   `state.slashes` / `state.zaps`, drawn by `GameScene` (lightning jitters from a hash).
 - `src/game/squad.ts`: Elara Voss and Triad-77, called from `sim.ts` like `blades.ts`:
-  `squadAttack` (Elara's pistol on the `weakest` foes; `triadVolley`, each droid at the nearest foe
-  in its own sector in Spread, all at one in Column), `squadSignature` (Call for Aid: the flag and
+  `squadAttack` (Elara's pistol on the nearest foe, the second pistol on the next nearest;
+  `triadVolley`, each bot at the foe nearest to it in Spread (with Uplink 2 each on a different
+  one), all at the unit's nearest in Column), `squadSignature` (Call for Aid: the flag and
   12 `carpet` bombs round it, Diplomat confusion; Formation Shift and Hive Signal's bursts),
-  `squadAbilities` (the flag's bubble and confusion, the bike, the Uprising supply drop; droids
-  walking to `droidSpots` and being rebuilt), `syncSquad` (droids and health in line with the
-  upgrades: the hero's health is the sum of its droids'), allies (`squadAllies`, `moveSquadAlly`:
+  `squadAbilities` (the flag's bubble and confusion, the bike, the Uprising supply drop; bots
+  walking to `botSpots` and being rebuilt), `syncSquad` (bots and health in line with the
+  upgrades: the hero's health is the sum of its bots'), allies (`squadAllies`, `moveSquadAlly`:
   commandos, `bike`, `medic`, `shieldbot`, `command`, `spare`; `droneSpot` for Eyes in the Sky) and
   hooks (`squadHurt`, `hurtFactor`, `squadHeal`, `squadCrit`, `turnedBonus`, `squadKill`,
   `squadBlock`, `bubble`, `rebuildTime`). `AID`, `BUBBLE` and `TRIAD` hold their numbers.
@@ -143,12 +148,12 @@ between them.
 - `src/art/sprites.ts`: `bakeSprites` paints the first textures (keys start `rb-`): the heroes
   (`heroKey`, `portraitKey`, drawn by `drawHero` from the scheme), `rb-trooper`, `rb-brother`,
   `rb-legionary` (TR-9's Drop Squad troopers), `rb-commando`, `rb-medic` (Elara's rebels, drawn by
-  `rebel` in `squad.ts`), the droids (`rb-clanker`, `rb-clanker-elite`, `rb-roller`, `-armed`,
+  `rebel` in `squad.ts`), the bots (`rb-clanker`, `rb-clanker-elite`, `rb-roller`, `-armed`,
   `-elite`, `rb-boss`), bolts (`rb-bolt-<HeroId>`, `-drone`, `-heavy`, `-rocket`, `-shell`),
   shards, `rb-medkit` (a green cross), `rb-chest`, `rb-drone`, `rb-charge`, `rb-grenade`, `rb-crate`, `rb-shadow`.
   Every scheme is baked: `heroKey(id, variant)` is `rb-hero-<id>` or `rb-hero-<id>-<variant>`.
 - `src/art/squad.ts`: `drawSquadHero` (Elara and the Triad-77 portrait; `drawHero` hands them to
-  it), `droid`, `rebel` and `bakeSquad`: `rb-droid`, `rb-droid-down`, `rb-bike`, `rb-shieldbot`,
+  it), `bot`, `rebel` and `bakeSquad`: `rb-bot`, `rb-bot-down`, `rb-bike`, `rb-shieldbot`,
   `rb-command`, `rb-pod` (TR-9's drop pod) and `rb-locked` (the locked hero placeholder).
 - `src/art/knights.ts`: `drawKnight` (the knights, from their scheme; `drawHero` hands knights to
   it) and `bakeKnights`: the blades (`bladeKey`, `rb-blade-<id>`), `rb-fighter`, `rb-copilot`,
@@ -196,7 +201,7 @@ lying about, pays credits and either wins (the Lava boss) or rolls the map nodes
 level-ups first (`after` = `map`). A node opens the trader or an event, starts the arena (`run`
 with `arena` set, ended in `step` by the last elite falling or 60 s, then `cleared` again with a
 free pick if won) or rests; each ends in `travel`, which `nextPlanet` turns into the next planet's
-`run` (clock reset, field cleared, the escort droid added if taken). Run again resets to a fresh
+`run` (clock reset, field cleared, the escort bot added if taken). Run again resets to a fresh
 `select` state.
 
 ### Input
@@ -216,6 +221,10 @@ holds heroes just unlocked, `frame` is not run, the new hero panel shows, and Co
 Space closes it.
 
 ### Save keys
+
+The foes and Triad-77's units are called bots everywhere (texts, ids, textures such as `rb-bot`,
+`state.bots`); they went by another name before, but no save key or stored id ever held it, so old
+saves load unchanged.
 
 - `riftblade-progress`: `{ bestMs, wins: { [heroId]: count }, furthest: { [heroId]: planet 1-4 },
   unlocked: HeroId[] }`. `bestMs` is the whole run's time (`runMs`). Older saves without
@@ -252,7 +261,7 @@ the arena is won), `unlock` (a new hero), `win`, `lose`.
 
 **Effects** (`sfx.ts`), and where they play:
 - Hero bolts by colour (`boltSound`): `pistol` (Rook), `carbine` (TR-9), `spread` (Bram),
-  `blaster` (Elara), `droidShot` (Triad-77, drones), `heavy`, `rocket`, `boomerang` (a spinning
+  `blaster` (Elara), `botShot` (Triad-77, drones), `heavy`, `rocket`, `boomerang` (a spinning
   thrown blade), `saber` (The Fall's wave).
 - Knights' swings, from new `slashes` by aim mode: `saber` (Kael and other slashes), `ripple`
   (Oom), `spinHum` (Corvin), `flurry` with `ping` on every tenth (Joren); `crackle` for new `zaps`
@@ -334,12 +343,12 @@ free of audio) or from the scene's input handler.
 
 ## Gotchas
 
-- Painted textures with a glow halo darken whatever is under them in WebGL; bolts and droids use
+- Painted textures with a glow halo darken whatever is under them in WebGL; bolts and bots use
   `BlendModes.ADD` for that reason. Don't draw filled ellipses in the shared graphics layers (they
   drew stray wedges in WebGL); the hero's shadow is a sprite.
 - Phaser draws on `Math.random` for the id of every texture it makes, so baking more textures at
   boot shifts the seeded sequence the playthrough's run starts with (Rook's run then sees other
-  droids and cards; the rules are unchanged).
+  bots and cards; the rules are unchanged).
 - The playthrough's animation frames sit on a fixed grid of 64 ms (the fake clock's timers can fire
   late on a busy machine), so each step is the same length.
 - The sim uses `Math.random` only for rules; the ground decoration uses its own hash, so drawing
@@ -355,5 +364,5 @@ free of audio) or from the scene's input handler.
   same for Elara's and Triad-77's in `squad.ts`), and their pools are filtered out of a soldier's
   card roll before `Math.random` is used, so a soldier's seeded playthrough plays exactly as before.
 - `squad.ts` imports `sim.ts` like `blades.ts` does; the same rule about load-time values holds.
-- Triad-77's health lives in its droids: `p.hp` is recomputed from `state.droids` each step
+- Triad-77's health lives in its bots: `p.hp` is recomputed from `state.bots` each step
   (`syncSquad`), so anything that changes it must go through `heal` or `hurtHero`.

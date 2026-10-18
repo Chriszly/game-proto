@@ -170,16 +170,16 @@ function cacheGear(s: GameState) {
 }
 
 export function rollEvent(s: GameState): EventState {
-  const ids: EventId[] = ['droid', 'cache', 'well'];
+  const ids: EventId[] = ['bot', 'cache', 'well'];
   const pair = shrinePair(s);
   if (pair) ids.push('shrine');
   const id = ids[Math.floor(Math.random() * ids.length)];
-  if (id === 'droid') {
+  if (id === 'bot') {
     return {
-      id, title: 'droidTitle', text: 'droidText',
+      id, title: 'botTitle', text: 'botText',
       options: [
-        { label: 'droidTake', text: 'droidTakeText' },
-        { label: 'droidStrip', text: 'droidStripText' },
+        { label: 'botTake', text: 'botTakeText' },
+        { label: 'botStrip', text: 'botStripText' },
       ],
     };
   }
@@ -217,10 +217,10 @@ export function chooseEvent(s: GameState, index: number) {
   const ev = s.event;
   if (s.phase !== 'event' || !ev || !ev.options[index]) return;
   const first = index === 0;
-  if (ev.id === 'droid') {
+  if (ev.id === 'bot') {
     if (first) {
       s.escort = true;
-      pop(s, t('droidFollows'), '#7df9ff');
+      pop(s, t('botFollows'), '#7df9ff');
     } else s.credits += 20;
   } else if (ev.id === 'cache') {
     if (first) s.credits += 40;

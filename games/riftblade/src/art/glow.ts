@@ -7,7 +7,7 @@ import { sharpRes } from '../../../../shared/scaling';
 
 export type Ctx = CanvasRenderingContext2D;
 
-/** The palette of the field and the droids. Heroes take their colours from their schemes. */
+/** The palette of the field and the bots. Heroes take their colours from their schemes. */
 export const C = {
   night: '#070b16',
   navy: '#0d1426',

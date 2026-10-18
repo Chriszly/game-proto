@@ -56,7 +56,7 @@ class Pool {
 const ALLY_KEYS: Record<GameState['allies'][number]['kind'], string> = {
   trooper: 'rb-trooper', legionary: 'rb-legionary', brother: 'rb-brother', escort: 'rb-escort', drone: 'rb-drone',
   fighter: 'rb-fighter', squadron: 'rb-fighter', copilot: 'rb-copilot', spirit: 'rb-spirit', puppet: 'rb-puppet',
-  commando: 'rb-commando', bike: 'rb-bike', medic: 'rb-medic', shieldbot: 'rb-shieldbot', command: 'rb-command', spare: 'rb-droid',
+  commando: 'rb-commando', bike: 'rb-bike', medic: 'rb-medic', shieldbot: 'rb-shieldbot', command: 'rb-command', spare: 'rb-bot',
 };
 /** Allies drawn from the hero art (small soldiers), placed by its origin. */
 const HERO_LIKE: readonly GameState['allies'][number]['kind'][] = ['trooper', 'legionary', 'brother', 'commando', 'medic'];
@@ -675,7 +675,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Droids.
+    // Bots.
     const en = this.pools.enemies;
     const bossId = PLANETS[s.planet].boss;
     for (const e of s.enemies) {
@@ -716,11 +716,11 @@ export class GameScene extends Phaser.Scene {
 
     const bob = p.moving && !still ? Math.sin(s.time / 90) * 1.5 : 0;
     if (s.hero === 'triad') {
-      // Triad-77 is its droids: each on its shadow, a fallen one as a wreck with its rebuild ring.
+      // Triad-77 is its bots: each on its shadow, a fallen one as a wreck with its rebuild ring.
       this.hero.setVisible(false);
-      for (const d of s.droids) {
+      for (const d of s.bots) {
         this.pools.pickups.next('rb-shadow', d.x, d.y + 15).setScale(0.55);
-        const im = al.next(d.hp > 0 ? 'rb-droid' : 'rb-droid-down', d.x, d.y + (d.hp > 0 ? bob : 0));
+        const im = al.next(d.hp > 0 ? 'rb-bot' : 'rb-bot-down', d.x, d.y + (d.hp > 0 ? bob : 0));
         im.setFlipX(Math.cos(d.aim) < 0);
         if (d.hp <= 0) {
           const k = Math.max(0, Math.min(1, 1 - d.rebuildMs / rebuildTime(s)));
@@ -730,7 +730,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       // The hero, on its shadow.
       this.pools.pickups.next('rb-shadow', p.x, p.y + 27);
-      const face = s.hero === 'bram' ? p.aim : p.moving ? p.facing : p.aim;
+      const face = p.moving ? p.facing : p.aim;
       const look = heroKey(s.hero!, heroVariant(s));
       if (this.hero.texture.key !== look) this.hero.setTexture(look);
       this.hero.setVisible(true).setPosition(p.x, p.y + bob).setFlipX(Math.cos(face) < 0).setAlpha(p.dashMs > 0 ? 0.6 : 1);
@@ -766,10 +766,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (p.hurtMs > 0) o.lineStyle(2, hex(C.danger), Math.min(1, p.hurtMs / 450) * 0.8).strokeCircle(p.x, p.y, 24);
     if (isKnight(s.hero!)) this.drawKnight(s);
-    // Triad-77's Uplink: thin lines from the command droid to every standing droid.
+    // Triad-77's Uplink: thin lines from the command bot to every standing bot.
     if (s.hero === 'triad') {
       const cmd = s.allies.find((a) => a.kind === 'command');
-      if (cmd) for (const d of s.droids) if (d.hp > 0) o.lineStyle(1, 0x9fe8ff, 0.45).lineBetween(cmd.x, cmd.y, d.x, d.y);
+      if (cmd) for (const d of s.bots) if (d.hp > 0) o.lineStyle(1, 0x9fe8ff, 0.45).lineBetween(cmd.x, cmd.y, d.x, d.y);
     }
     // Slowed: a lime ring at the feet.
     if (p.slowMs > 0) o.lineStyle(2, hex(C.beast), 0.6).strokeCircle(p.x, p.y + 20, 15);
@@ -921,7 +921,7 @@ export class GameScene extends Phaser.Scene {
       const every = s.capstones.includes('royal-fury') ? 5 : 10;
       extra = `   ·   ${t('hudEdge', { n: p.hits % every, of: every })}`;
     }
-    if (s.hero === 'triad') extra = `   ·   ${t('hudDroids', { n: s.droids.filter((d) => d.hp > 0).length, of: s.droids.length })}`;
+    if (s.hero === 'triad') extra = `   ·   ${t('hudBots', { n: s.bots.filter((d) => d.hp > 0).length, of: s.bots.length })}`;
     if (p.barrier > 0) {
       g.fillStyle(hex(sch.accent), 0.9).fillRect(HP_BAR.x, HP_BAR.y, HP_BAR.w * Math.min(1, p.barrier / p.maxHp), 4);
       extra += `   ·   ${t('hudBarrier', { n: Math.ceil(p.barrier) })}`;

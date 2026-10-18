@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 // Legionary TR-9 is open and the eleven other heroes still locked, waits for the game to settle,
 // taps a locked card (no Fight button), then TR-9's card and Fight. Then walks him in a wide circle
 // by holding the mouse down at a point that turns around him, as a thumb on a phone would, while
-// his spread rifle fires on its own. Droids die and drop lumen shards he picks up, the first
+// his spread rifle fires on its own. Bots die and drop lumen shards he picks up, the first
 // level-up pauses the run on three cards, and the test taps the first one and checks the upgrade
 // was taken. It fires the signature move (Brace) from its round button, then plays on to the
 // one-minute mark, taking the first card at each later level-up.
@@ -20,7 +20,7 @@ interface GameState {
   xpNext: number;
   ranks: Record<string, number>;
   choices: string[] | null;
-  /** How many droids and shards are on the field. */
+  /** How many bots and shards are on the field. */
   enemies: number;
   shards: number;
   kills: number;
@@ -64,7 +64,7 @@ function scene(page: Page) {
   const read = <T>(fn: (s: any) => T) =>
     page.evaluate(`(${fn.toString()})(window.game.scene.getScene('Game'))`) as Promise<T>;
   return {
-    /** The state, with only counts of the droids and shards (it is read every frame). */
+    /** The state, with only counts of the bots and shards (it is read every frame). */
     state: () =>
       read<GameState>((s) => {
         const { enemies, shards, player, ranks, choices } = s.state;
@@ -77,7 +77,7 @@ function scene(page: Page) {
 }
 
 test('plays the first minute', async ({ page }, testInfo) => {
-  // A seeded Math.random keeps the droids, drops and cards the same from run to run.
+  // A seeded Math.random keeps the bots, drops and cards the same from run to run.
   await page.addInitScript(() => {
     let seed = 1234567;
     Math.random = () => {
@@ -217,7 +217,7 @@ test('plays the first minute', async ({ page }, testInfo) => {
     held = false;
   }
 
-  // Walk the circle until the first level-up. Droids come; TR-9's rifle shoots them down on its
+  // Walk the circle until the first level-up. Bots come; TR-9's rifle shoots them down on its
   // own, and the shards they drop are picked up on the way.
   let walked = 0;
   const ok = await play(PLAY_MS, async () => {
@@ -231,7 +231,7 @@ test('plays the first minute', async ({ page }, testInfo) => {
   expect(ok, `reached a level-up; state ${JSON.stringify(s)}`).toBe(true);
   expect(s.phase).toBe('levelup');
   expect(walked, 'TR-9 walked away from where he started').toBeGreaterThan(100);
-  expect(s.kills, 'droids shot down').toBeGreaterThan(0);
+  expect(s.kills, 'bots shot down').toBeGreaterThan(0);
   expect(s.level).toBe(2);
   expect(s.player.hp).toBeGreaterThan(0);
 
@@ -292,7 +292,7 @@ test('plays the first minute', async ({ page }, testInfo) => {
   expect(s.level, 'more level-ups on the way').toBeGreaterThan(2);
   expect(Object.values(s.ranks).reduce((a, b) => a + b, 0), 'an upgrade tier for each card taken').toBeGreaterThanOrEqual(levelUps);
   expect(levelUps).toBeGreaterThan(1);
-  expect(s.enemies, 'droids keep coming').toBeGreaterThan(0);
+  expect(s.enemies, 'bots keep coming').toBeGreaterThan(0);
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
