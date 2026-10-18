@@ -2,7 +2,7 @@
  * One match: eight commanders (the player in seat 0 and seven AI rivals), their gold, levels,
  * shops, benches, boards and parts, and the rounds from 1-1 until one commander is left. Fights
  * are run by `battle.ts`; the AI's turns by `ai.ts`. The scene drives the clock (`phaseEnds`) and
- * calls `startFight`, `endFight` and `nextRound` as phases end.
+ * calls `startFight`, `endFight` and `advance` as phases end.
  */
 import { byDifficulty } from '../../../../shared/settings';
 import type { TextKey } from '../i18n';
@@ -51,6 +51,8 @@ export interface Player {
   commander: CommanderDef;
   human: boolean;
   hp: number;
+  /** The health the commander started with, for the bar in the players list. */
+  maxHp: number;
   gold: number;
   level: number;
   xp: number;
@@ -130,7 +132,7 @@ export interface Match {
   result: { outcome: 'win' | 'loss' | 'draw'; damage: number; gold: number } | null;
   /** The player's robots in their last fight, by damage dealt: the damage meter. */
   meter: MeterRow[];
-  /** Fights of other seats this round, for the list on the right. */
+  /** The next robot's `Owned.uid`. */
   nextUid: number;
   roundsPlayed: number;
 }
@@ -152,7 +154,7 @@ export function newMatch(opts: MatchOptions): Match {
     const commander = seat === 0 ? PLAYER_COMMANDERS[opts.commander] : RIVALS[seat - 1];
     players.push({
       seat, name: seat === 0 ? 'you' : commander.name, commander, human: seat === 0 && !opts.watch,
-      hp: seat === 0 ? startHp : 100, gold: ECONOMY.startGold, level: 1, xp: 0, board: {}, bench: Array(BENCH_SLOTS).fill(null),
+      hp: seat === 0 ? startHp : 100, maxHp: seat === 0 ? startHp : 100, gold: ECONOMY.startGold, level: 1, xp: 0, board: {}, bench: Array(BENCH_SLOTS).fill(null),
       shop: [], items: [], augments: [], augmentOffer: null, streak: 0, alive: true, place: 0, scrapTokens: 0, shopLocked: false, lastOpponent: -1, last: null,
     });
   }
@@ -286,7 +288,7 @@ function merge(p: Player, defId: string) {
     for (const o of rest) {
       for (const item of o.items) {
         if (keep.items.length < MAX_ITEMS) keep.items.push(item);
-        else p.items.push(item);
+        else giveItem(p, item);
       }
       removeUnit(p, o);
     }
@@ -302,7 +304,7 @@ export function removeUnit(p: Player, o: Owned) {
 export function sell(p: Player, o: Owned) {
   removeUnit(p, o);
   p.gold += sellValue(o);
-  for (const item of o.items) p.items.push(item);
+  for (const item of o.items) giveItem(p, item);
 }
 
 export type Spot = { where: 'bench'; i: number } | { where: 'board'; col: number; row: number };
@@ -352,8 +354,11 @@ export function equip(p: Player, index: number, o: Owned): boolean {
   return true;
 }
 
-export function giveItem(p: Player, id: string) {
-  if (p.items.length < ITEM_BENCH) p.items.push(id);
+/** Puts a part or item on the player's item bench; returns false (and the item is lost) when its `ITEM_BENCH` slots are full. */
+export function giveItem(p: Player, id: string): boolean {
+  if (p.items.length >= ITEM_BENCH) return false;
+  p.items.push(id);
+  return true;
 }
 
 const randomPart = () => pick(PARTS);
@@ -386,13 +391,13 @@ export function pickAugment(m: Match, p: Player, choice: number) {
 // ---------------------------------------------------------------- rounds
 
 /** Starts the plan phase of the current round: income, XP, a fresh shop, terrain and power cards. */
-export function startPlan(m: Match, planS: number, income = true) {
+export function startPlan(m: Match, planS: number) {
   m.phase = 'plan';
   m.battle = null;
   m.drops = [];
   m.result = null;
   m.phaseEnds = m.time + planS;
-  const first = m.roundsPlayed === 0 || !income;
+  const first = m.roundsPlayed === 0;
   for (const p of m.players) {
     if (!p.alive) continue;
     if (!first) {
@@ -626,7 +631,8 @@ function knockOuts(m: Match) {
 /** Whether the match is over for the player: knocked out, or the last one standing. */
 export function matchOver(m: Match): 'won' | 'lost' | null {
   const me = player(m);
-  if (!me.alive) return 'lost';
+  // When the last commanders all fall in the same round, the best-placed of them wins.
+  if (!me.alive) return me.place === 1 && !m.players.some((p) => p.alive) ? 'won' : 'lost';
   if (m.players.filter((p) => p.alive).length === 1) return 'won';
   return null;
 }
