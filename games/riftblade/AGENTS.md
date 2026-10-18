@@ -71,7 +71,7 @@ between them.
   and each hero's `schemes` (`HeroScheme`: `name`, `body`, `accent`, optional `mark`, `bolt`);
   `schemeOf(id, variant)` returns a scheme (Kael has a second, Fallen, used once he takes The
   Fall), `isKnight`. All hero colours come from here; each hero's accent is unique (Elara's red,
-  Triad-77's white). `locked` marks a hero that needs a deed (all but TR-9); Triad-77's `maxHp`
+  Triad-77's white), except Kael's Fallen scheme, which takes Lord Vharn's colours. `locked` marks a hero that needs a deed (all but TR-9); Triad-77's `maxHp`
   is the sum of its three bots' and its `r` the whole unit's.
 - `src/game/upgrades.ts`: `UPGRADES` (every path, pool skill and gear piece, with five tier lines),
   `MAX_TIER`, `MAX_ABILITIES`, `MAX_GEAR`, `FILLER`, `CAPSTONES`, `CROSSOVERS`, `capstonesOf`,

@@ -249,7 +249,7 @@ const en = {
   theFall2: 'Full Temper: double damage, half healing',
   theFall3: 'Healing no longer drains Temper',
   theFall4: '+15% speed, slashes hit 20% harder',
-  theFall5: 'At full Temper, slashes throw a crimson wave',
+  theFall5: 'At full Temper, slashes throw a teal wave',
   // dread
   dreadName: 'Dread',
   dreadBlurb: 'An aura that slows foes; weak ones flee.',
