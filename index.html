@@ -9,7 +9,8 @@
       :root { color-scheme: dark; }
       [hidden] { display: none !important; }
       html, body { margin: 0; min-height: 100%; background: #1b1410; color: #f1e3c6; }
-      body { font: 16px/1.4 ui-monospace, 'Courier New', monospace; }
+      body { font: 16px/1.4 ui-monospace, 'Courier New', monospace; user-select: none; -webkit-user-select: none; }
+      input, textarea, [contenteditable] { user-select: text; -webkit-user-select: text; }
       main { margin: 0 auto; padding: 32px 16px 48px; }
       h1 { margin: 0 0 4px; font-size: 32px; letter-spacing: 1px; color: #f3c64e; }
       .lede { margin: 0 0 28px; color: #c9b48f; }
