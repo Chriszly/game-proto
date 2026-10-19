@@ -379,9 +379,10 @@ export const recipeCost = (id: ShopId, level: number) => tierCost(id, RECIPE_COS
 /**
  * A shop's guild, joined once for `GUILD_JOIN_COST`, then selling its upgrades like the
  * apothecary's guild: faster beds, faster pixies, more room on every pallet and shelf, dearer
- * prices, another place at the counter and customers coming in more often.
+ * prices, another place at the counter, customers coming in more often and a herbalist who keeps
+ * its beds clear of blight.
  */
-export const SHOP_GUILD = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers'] as const;
+export const SHOP_GUILD = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers', 'herbalist'] as const;
 export type ShopGuild = (typeof SHOP_GUILD)[number];
 /** Each guild upgrade's levels, and its first cost, doubling a level, before the shop's `tierCost`. */
 export const SHOP_GUILD_UPGRADES: Record<ShopGuild, { max: number; cost: number }> = {
@@ -391,6 +392,7 @@ export const SHOP_GUILD_UPGRADES: Record<ShopGuild, { max: number; cost: number 
   prices: { max: 2, cost: 60 },
   slots: { max: 1, cost: 90 },
   customers: { max: 2, cost: 75 },
+  herbalist: { max: 1, cost: 120 },
 };
 export const GUILD_JOIN_COST = 150;
 export const guildJoinCost = (id: ShopId) => tierCost(id, GUILD_JOIN_COST);
@@ -414,6 +416,15 @@ export const CUSTOMER_FACES = 5;
 export const SHOP_SERVE_MS = 1_500;
 /** Each counter level adds this share to what customers pay. */
 export const COUNTER_PAY = 0.15;
+/**
+ * A shop's customers tip like the apothecary's (see `tipLeft`): this share of what their order
+ * pays, shrinking while they wait at the counter.
+ */
+export const SHOP_TIP = 0.25;
+/** What a regular pays on top of a good's price, as a share of it. */
+export const SHOP_REGULAR_BONUS = 0.2;
+/** A market day's crowd, served to the last one, pays this share of what its goods sell for on top, into the till. */
+export const SHOP_RUSH_BONUS = 0.5;
 /** A pixie sets off at most this often on a route. */
 export const ROUTE_GAP_MS = 700;
 /** Pixies fly this many pixels a second. */
@@ -460,6 +471,8 @@ export interface ShopContract {
   need: number;
   made: number;
   reward: number;
+  /** On a bundle day, a second good wanted as well (see `BUNDLE_EVERY`). */
+  bundle?: { good: GoodId; need: number; made: number };
 }
 /** A shop's contracts ask for this many, one more for each kept, up to `MAX_SHOP_CONTRACT`. */
 export const SHOP_CONTRACT_START = 4;
@@ -478,6 +491,35 @@ export interface ShopOrder {
   face: number;
   /** Which place at the counter they stand at, from 0. */
   spot: number;
+  /** The most the customer tips once their order is filled (see `SHOP_TIP`); missing on older orders, which tip nothing. */
+  tip?: number;
+  /** Every good the customer asked for, served or not. */
+  asked?: GoodId[];
+  /** A regular, back for the same goods as last time, paying `SHOP_REGULAR_BONUS` more for each. */
+  regular?: boolean;
+  /** One of a market day's crowd. */
+  rush?: boolean;
+}
+
+/** A customer who left a shop happy and will come back for the same goods. */
+export interface ShopRegular {
+  face: number;
+  wants: GoodId[];
+}
+
+/**
+ * A market day's crowd at a shop: `size` customers come at midday, filling every free place at the
+ * counter while the rest wait in the street (`waiting`) for one. Served to the last one with none
+ * walking off, `bonus` goes into the till.
+ */
+export interface ShopRush {
+  day: number;
+  size: number;
+  waiting: number;
+  served: number;
+  lost: boolean;
+  paid: boolean;
+  bonus: number;
 }
 
 export interface ShopState {
@@ -512,6 +554,14 @@ export interface ShopState {
   kept: number;
   /** The second line: `level` 1 once bought. */
   line2: Upgrade;
+  /** What the street thinks of the shop, 0 to 100, as the apothecary's `reputation`. */
+  reputation: number;
+  /** Customers who left happy, oldest first, up to `MAX_REGULARS`. */
+  regulars: ShopRegular[];
+  /** The last market day's crowd, or null before the first. */
+  rush: ShopRush | null;
+  /** The blighted beds, each with how long since it last spread the blight. */
+  blight: { bed: number; ms: number }[];
 }
 
 export interface TownState {
@@ -544,12 +594,17 @@ export function createShop(id: ShopId): ShopState {
     outfitter: { pack: none(), boots: none(), sickle: none() },
     study: { craftOrder: none(), priceSigns: none() },
     recipes: none(),
-    guild: { join: none(), growth: none(), belts: none(), storage: none(), prices: none(), slots: none(), customers: none() },
+    guild: { join: none(), growth: none(), belts: none(), storage: none(), prices: none(), slots: none(), customers: none(), herbalist: none() },
     priority: Object.fromEntries(shopStations(def).map((s) => [s.id, null])),
     signs: {},
     contract: null,
     kept: 0,
     line2: none(),
+    // In the middle, as the apothecary's `START_REPUTATION`.
+    reputation: 50,
+    regulars: [],
+    rush: null,
+    blight: [],
   };
 }
 
@@ -586,6 +641,20 @@ export const townOpen = (seals: number) => seals > 0;
 
 /** The garden a bed is in. */
 export const gardenOfBed = (bed: number) => Math.floor(bed / BEDS);
+/** Beds a garden row holds. */
+const BED_ROW = 4;
+/** The beds next to a bed in its garden's four by four: above, below, left and right. */
+export const bedNeighbours = (bed: number) => {
+  const slot = bed % BEDS, col = slot % BED_ROW, row = Math.floor(slot / BED_ROW);
+  const near: number[] = [];
+  if (col > 0) near.push(bed - 1);
+  if (col < BED_ROW - 1) near.push(bed + 1);
+  if (row > 0) near.push(bed - BED_ROW);
+  if (row < BEDS / BED_ROW - 1) near.push(bed + BED_ROW);
+  return near;
+};
+/** Whether a shop's bed is blighted. */
+export const isBlightedBed = (shop: ShopState, bed: number) => shop.blight.some((b) => b.bed === bed);
 
 /** Whether a station takes a good: it is an input of one of its recipes. */
 export const takes = (station: StationDef, good: GoodId) => station.recipes.some((r) => r.inputs.includes(good));
@@ -604,6 +673,8 @@ export const shopRouteSpeed = (shop: ShopState) => ROUTE_SPEED * (1 + 0.5 * guil
 export const shopPriceBoost = (shop: ShopState) => 1 + 0.25 * guildLevel(shop, 'prices');
 /** How much more often customers come in: once more as often a level. */
 export const shopFootfall = (shop: ShopState) => 1 + guildLevel(shop, 'customers');
+/** Whether a shop's herbalist keeps its beds clear of blight. */
+export const shopBlightImmune = (shop: ShopState) => guildLevel(shop, 'herbalist') > 0;
 
 /** Whether a shop's study has taught a lesson. */
 export const shopStudied = (shop: ShopState, lesson: Lesson) => shop.study[lesson].level > 0;

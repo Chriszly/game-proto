@@ -4,7 +4,43 @@ import { routeMs } from '../scenes/shopLayout';
 import { DISTRICTS, GROW_ROUNDS, HAPPY, HAPPY_PULL, HOME_TIERS, MAX_HOMES, START_HOMES, SUPPLY_MS, UNHAPPY, districtAsks, type DistrictState, type Need } from './districts';
 import { FINE, type PotionId } from './items';
 import type { Feedback } from './sim';
-import { FINE_BONUS, FINE_SHARE, PRICE_SIGNS, SIGN_DEMAND, SIGN_PATIENCE, SIGN_PAY, SIGN_SET, carryCapacity, gearLevel, payment, potionPrice, speedAt, UPGRADES, type GameState, type Upgrade } from './state';
+import {
+  BLIGHT_DAY,
+  BLIGHT_EVERY_MS,
+  BLIGHT_SPREAD_MS,
+  BOOK_CONTRACT_DAY,
+  BUNDLE_EVERY,
+  DAY_MS,
+  FINE_BONUS,
+  FINE_SHARE,
+  MAX_REGULARS,
+  PRICE_SIGNS,
+  REGULAR_CHANCE,
+  REGULAR_TIP_LEFT,
+  REPUTATION_SERVED,
+  REPUTATION_WALKED_OFF,
+  RUSH_SIZE,
+  SIGN_DEMAND,
+  SIGN_PATIENCE,
+  SIGN_PAY,
+  SIGN_REPUTATION,
+  SIGN_SET,
+  WEATHER,
+  carryCapacity,
+  gearLevel,
+  isMarketDay,
+  payment,
+  potionPrice,
+  reputationFactor,
+  speedAt,
+  stockedPay,
+  tipLeft,
+  tipNow,
+  UPGRADES,
+  weatherFor,
+  type GameState,
+  type Upgrade,
+} from './state';
 import {
   BEDS,
   COUNTER_PAY,
@@ -39,8 +75,15 @@ import {
   MAX_SHOP_CONTRACT,
   SHOP_CONTRACT_SHARE,
   SHOP_CONTRACT_START,
+  SHOP_REGULAR_BONUS,
+  SHOP_RUSH_BONUS,
+  SHOP_TIP,
+  bedNeighbours,
+  isBlightedBed,
+  shopBlightImmune,
   type Held,
   type ShopContract,
+  type ShopOrder,
   shopKnows,
   shopMakes,
   shopPlaces,
@@ -159,7 +202,7 @@ function takeForRoute(shop: ShopState, def: ShopDef, route: RouteDef): GoodId | 
     if (!gardenOpen(shop, route.from.garden) || !accepts(garden.good)) return null;
     const from = route.from.garden * BEDS;
     for (let b = from; b < from + BEDS; b++) {
-      if (shop.beds[b] >= garden.grow) {
+      if (shop.beds[b] >= garden.grow && !isBlightedBed(shop, b)) {
         shop.beds[b] = 0;
         return garden.good;
       }
@@ -210,39 +253,90 @@ function shelfIndex(shelf: Held[], good: GoodId, fineFirst: boolean) {
   return shelf.includes(a) ? shelf.indexOf(a) : shelf.indexOf(b);
 }
 
+/** Whether a good handed over now counts towards a shop's contract: its good, or its bundle's, still short. */
+export const shopContractWants = (c: ShopContract, good: GoodId) => (c.good === good && c.made < c.need) || (c.bundle?.good === good && c.bundle.made < c.bundle.need);
+/** Whether a shop's contract is kept: both its parts met. */
+export const shopContractKept = (c: ShopContract) => c.made >= c.need && (!c.bundle || c.bundle.made >= c.bundle.need);
+
 /** Counts a good handed over at the counter towards the shop's contract, paying its reward into the till once met. */
 function deliverForShopContract(shop: ShopState, good: GoodId) {
   const c = shop.contract;
-  if (!c || c.good !== good || c.made >= c.need) return;
-  c.made++;
-  if (c.made < c.need) return;
+  if (!c || !shopContractWants(c, good)) return;
+  if (c.good === good && c.made < c.need) c.made++;
+  else c.bundle!.made++;
+  if (!shopContractKept(c)) return;
   shop.till += c.reward;
   shop.kept++;
 }
 
-/** Today's contract at a shop: the goods it sells taking turns by the day, one more wanted for each kept. */
+/**
+ * Today's contract at a shop: the goods it sells taking turns by the day, one more wanted for each
+ * kept. On a bundle day, as at the apothecary (every `BUNDLE_EVERY`th from `BOOK_CONTRACT_DAY`), the
+ * goods are split between two of them.
+ */
 function shopContractFor(shop: ShopState, def: ShopDef, day: number): ShopContract {
   const goods = shopSells(shop, def);
-  const good = goods[(day + shop.kept) % goods.length];
-  const need = Math.min(MAX_SHOP_CONTRACT, SHOP_CONTRACT_START + shop.kept);
-  const reward = Math.max(5, Math.round(((def.sells[good] ?? 0) * need * SHOP_CONTRACT_SHARE) / 5) * 5);
-  return { day, good, need, made: 0, reward };
+  const at = (day + shop.kept) % goods.length;
+  const good = goods[at];
+  const total = Math.min(MAX_SHOP_CONTRACT, SHOP_CONTRACT_START + shop.kept);
+  const worth = (g: GoodId, n: number) => (def.sells[g] ?? 0) * n * SHOP_CONTRACT_SHARE;
+  const roundFive = (n: number) => Math.max(5, Math.round(n / 5) * 5);
+  if ((day - BOOK_CONTRACT_DAY) % BUNDLE_EVERY !== 1 || goods.length < 2) return { day, good, need: total, made: 0, reward: roundFive(worth(good, total)) };
+  const second = goods[(at + 1 + (day % (goods.length - 1))) % goods.length];
+  const need = Math.ceil(total / 2), need2 = total - need;
+  return { day, good, need, made: 0, reward: roundFive(worth(good, need) + worth(second, need2)), bundle: { good: second, need: need2, made: 0 } };
 }
+
+/** Changes a shop's reputation by `by`, kept within 0 to 100. */
+const nudge = (shop: ShopState, by: number) => {
+  shop.reputation = Math.max(0, Math.min(100, shop.reputation + by));
+};
+
+/**
+ * A customer leaves a shop served: the street thinks better of it, one served quickly comes back
+ * as a regular, and one of a market day's crowd counts towards the crowd's bonus.
+ */
+function orderFilled(shop: ShopState, order: ShopOrder) {
+  nudge(shop, REPUTATION_SERVED);
+  if (tipLeft(order) >= REGULAR_TIP_LEFT) {
+    if (shop.regulars.length >= MAX_REGULARS) shop.regulars.shift();
+    shop.regulars.push({ face: order.face, wants: order.asked ?? (Object.keys(order.pay) as GoodId[]) });
+  }
+  const rush = shop.rush;
+  if (!order.rush || !rush) return;
+  rush.served++;
+  if (rush.served >= rush.size && !rush.lost && !rush.paid) {
+    rush.paid = true;
+    shop.till += rush.bonus;
+  }
+}
+
+/** What the next one of a good sold off a shop's shelf pays: less past `STOCK_FREE` on the shelf, as at the apothecary. */
+export const shopStockedPay = (shop: ShopState, good: GoodId, pay: number) => stockedPay(pay, countBoth(shop.shelf, good), shopStorage(shop));
 
 /**
  * Hands one good from the shelf to the first customer at the counter who wants one, a fine one
- * first, which pays `FINE_BONUS` times as much; returns whether it did.
+ * first, which pays `FINE_BONUS` times as much, less for each of the good still stocked (the
+ * overstock cut). A customer whose order is filled tips what is left of their tip. Returns whether
+ * it handed one over.
  */
 function serveOne(shop: ShopState) {
   for (const order of arrived(shop)) {
     const want = order.wants.find((w) => shelfIndex(shop.shelf, w, true) >= 0);
     if (!want) continue;
-    const [held] = shop.shelf.splice(shelfIndex(shop.shelf, want, true), 1);
+    const pay = Math.round((order.pay[want] ?? 0) * (isFineGood(shop.shelf[shelfIndex(shop.shelf, want, true)]) ? FINE_BONUS : 1));
+    // The cut counts the goods of the kind on the shelf, this one included.
+    shop.till += shopStockedPay(shop, want, pay);
+    shop.shelf.splice(shelfIndex(shop.shelf, want, true), 1);
     order.wants.splice(order.wants.indexOf(want), 1);
-    shop.till += Math.round((order.pay[want] ?? 0) * (isFineGood(held) ? FINE_BONUS : 1));
     shop.sold++;
+    nudge(shop, SIGN_REPUTATION[shopSignOf(shop, want)]);
     deliverForShopContract(shop, want);
-    if (order.wants.length === 0) shop.orders.splice(shop.orders.indexOf(order), 1);
+    if (order.wants.length === 0) {
+      shop.till += tipNow(order);
+      orderFilled(shop, order);
+      shop.orders.splice(shop.orders.indexOf(order), 1);
+    }
     return true;
   }
   return false;
@@ -266,29 +360,107 @@ function runCounter(shop: ShopState, dt: number, doctor: boolean) {
   }
 }
 
-function runOrders(shop: ShopState, def: ShopDef, dt: number, rand: () => number) {
+/** A free place at a shop's counter, or undefined when every one is taken. */
+function freeSpot(shop: ShopState) {
+  const taken = new Set(shop.orders.map((o) => o.spot));
+  return [...Array(shopPlaces(shop)).keys()].find((s) => !taken.has(s));
+}
+
+/**
+ * A new customer at a shop, for `spot`: now and then (only once there are any, and not with a
+ * market crowd) a regular back for the same goods, paying `SHOP_REGULAR_BONUS` more for each;
+ * otherwise one or two goods drawn from a hat with each good in it as often as its sign draws
+ * customers, twice when cheap. Their tip is `SHOP_TIP` of what the order pays.
+ */
+function newShopOrder(shop: ShopState, def: ShopDef, spot: number, rand: () => number, regulars: boolean): ShopOrder {
+  const goods = shopSells(shop, def);
+  const regular = regulars && shop.regulars.length > 0 && rand() < REGULAR_CHANCE ? shop.regulars.shift()! : null;
+  const theirs = regular?.wants.filter((g) => goods.includes(g)) ?? [];
+  let wants: GoodId[];
+  if (theirs.length > 0) wants = theirs;
+  else {
+    const hat = goods.flatMap((g) => Array<GoodId>(SIGN_DEMAND[shopSignOf(shop, g)]).fill(g));
+    const size = rand() < 0.35 ? 2 : 1;
+    wants = Array.from({ length: size }, () => hat[Math.floor(rand() * hat.length)]);
+  }
+  const back = theirs.length > 0;
+  const pay = Object.fromEntries(wants.map((w) => [w, Math.round(shopPrice(shop, def, w) * (back ? 1 + SHOP_REGULAR_BONUS : 1))]));
+  const patience = SHOP_PATIENCE * byDifficulty(1.5, 1, 0.7);
+  const tip = Math.round(SHOP_TIP * wants.reduce((n, w) => n + (pay[w] ?? 0), 0));
+  const face = back ? regular!.face : Math.floor(rand() * CUSTOMER_FACES);
+  return { id: shop.nextOrderId++, wants, asked: [...wants], pay, walk: WALK_IN_MS, patience, maxPatience: patience, face, spot, tip, ...(back ? { regular: true } : {}) };
+}
+
+function runOrders(shop: ShopState, def: ShopDef, day: number, dt: number, rand: () => number) {
   for (const order of shop.orders) {
     if (order.walk > 0) order.walk = Math.max(0, order.walk - dt);
     // Patience runs out faster while a good it still wants is sold dear.
     else order.patience -= dt * Math.max(1, ...order.wants.map((w) => SIGN_PATIENCE[shopSignOf(shop, w)]));
   }
+  // A customer who runs out of patience walks off, and the street thinks less of the shop; one of a
+  // market crowd walking off loses the crowd's bonus.
+  for (const order of shop.orders) {
+    if (order.patience > 0) continue;
+    nudge(shop, -REPUTATION_WALKED_OFF);
+    if (order.rush && shop.rush) shop.rush.lost = true;
+  }
   shop.orders = shop.orders.filter((o) => o.patience > 0);
+  // The market crowd steps up to every place that comes free, before anyone else.
+  const rush = shop.rush;
+  for (let spot = freeSpot(shop); rush && rush.waiting > 0 && spot !== undefined; spot = freeSpot(shop)) {
+    rush.waiting--;
+    const order = { ...newShopOrder(shop, def, spot, rand, false), rush: true };
+    rush.bonus += Math.round(SHOP_RUSH_BONUS * order.wants.reduce((n, w) => n + (def.sells[w] ?? 0), 0));
+    shop.orders.push(order);
+  }
   shop.nextOrderIn -= dt;
   if (shop.nextOrderIn > 0) return;
-  const taken = new Set(shop.orders.map((o) => o.spot));
-  const spot = [...Array(shopPlaces(shop)).keys()].find((s) => !taken.has(s));
+  const spot = freeSpot(shop);
   if (spot === undefined) {
     shop.nextOrderIn = 1_000;
     return;
   }
-  // Drawn from a hat with each good in it as often as its sign draws customers: twice when cheap.
-  const goods = shopSells(shop, def).flatMap((g) => Array<GoodId>(SIGN_DEMAND[shopSignOf(shop, g)]).fill(g));
-  const size = rand() < 0.35 ? 2 : 1;
-  const wants = Array.from({ length: size }, () => goods[Math.floor(rand() * goods.length)]);
-  const pay = Object.fromEntries(wants.map((w) => [w, shopPrice(shop, def, w)]));
-  const patience = SHOP_PATIENCE * byDifficulty(1.5, 1, 0.7);
-  shop.orders.push({ id: shop.nextOrderId++, wants, pay, walk: WALK_IN_MS, patience, maxPatience: patience, face: Math.floor(rand() * CUSTOMER_FACES), spot });
-  shop.nextOrderIn = (7_000 + rand() * 5_000) / shopFootfall(shop);
+  shop.orders.push(newShopOrder(shop, def, spot, rand, true));
+  // Customers come more often with a good name and on a fair day, as at the apothecary.
+  shop.nextOrderIn = ((7_000 + rand() * 5_000) * reputationFactor(shop.reputation)) / shopFootfall(shop) / WEATHER[weatherFor(day)].customers;
+}
+
+/**
+ * A market day's crowd at midday (`isMarketDay`, as at the apothecary): `RUSH_SIZE` customers, who
+ * take every free place at the counter and wait in the street for the rest. Those still waiting at
+ * dusk go home, and the bonus with them.
+ */
+function runRush(shop: ShopState, day: number, dayLeft: number) {
+  const rush = shop.rush;
+  if (rush && rush.day !== day && rush.waiting > 0) {
+    rush.waiting = 0;
+    rush.lost = true;
+  }
+  if (isMarketDay(day) && dayLeft <= DAY_MS / 2 && rush?.day !== day) shop.rush = { day, size: RUSH_SIZE, waiting: RUSH_SIZE, served: 0, lost: false, paid: false, bonus: 0 };
+}
+
+/**
+ * The blight at a shop, as at the apothecary: on a rainy day from `BLIGHT_DAY` now and then a bed
+ * in a garden that grows is blighted, and every blighted bed blights a neighbour every
+ * `BLIGHT_SPREAD_MS` until the sickle clears it. The shop guild's herbalist keeps every bed clear.
+ * `rand` is only rolled when the blight can strike or spread.
+ */
+function spreadShopBlight(shop: ShopState, day: number, dt: number, rand: () => number) {
+  if (shopBlightImmune(shop)) {
+    shop.blight = [];
+    return;
+  }
+  if (day >= BLIGHT_DAY && weatherFor(day) === 'rain' && rand() < dt / BLIGHT_EVERY_MS) {
+    const clear = shop.beds.map((_, b) => b).filter((b) => gardenOpen(shop, gardenOfBed(b)) && !isBlightedBed(shop, b));
+    if (clear.length > 0) shop.blight.push({ bed: clear[Math.floor(rand() * clear.length)], ms: 0 });
+  }
+  for (const spot of [...shop.blight]) {
+    spot.ms += dt;
+    if (spot.ms < BLIGHT_SPREAD_MS) continue;
+    spot.ms -= BLIGHT_SPREAD_MS;
+    const near = bedNeighbours(spot.bed).filter((b) => !isBlightedBed(shop, b));
+    if (near.length > 0) shop.blight.push({ bed: near[Math.floor(rand() * near.length)], ms: 0 });
+  }
 }
 
 /**
@@ -302,12 +474,18 @@ export function tickTown(state: GameState, dt: number, working: Working | null, 
     if (!shop) continue;
     const def = SHOPS[id];
     const here = working?.shop === id ? working.at : null;
-    if (shop.contract?.day !== state.contract.day) shop.contract = shopContractFor(shop, def, state.contract.day);
-    shop.beds.forEach((grown, b) => gardenOpen(shop, gardenOfBed(b)) && (shop.beds[b] = Math.min(grown + dt * shopGrowth(shop), def.gardens[gardenOfBed(b)].grow)));
+    const day = state.contract.day;
+    if (shop.contract?.day !== day) shop.contract = shopContractFor(shop, def, day);
+    // Beds grow faster in the rain and slower in a drought; a blighted one stands still.
+    const growth = shopGrowth(shop) * WEATHER[weatherFor(day)].growth;
+    const blighted = new Set(shop.blight.map((b) => b.bed));
+    shop.beds.forEach((grown, b) => gardenOpen(shop, gardenOfBed(b)) && !blighted.has(b) && (shop.beds[b] = Math.min(grown + dt * growth, def.gardens[gardenOfBed(b)].grow)));
     for (const station of shopStations(def)) runStation(shop, def, station, dt, here === station.id);
     for (const route of shopRoutes(def)) runRoute(id, shop, def, route, dt);
     runCounter(shop, dt, here === 'counter');
-    runOrders(shop, def, dt, rand);
+    runRush(shop, day, state.contract.dayLeft);
+    runOrders(shop, def, day, dt, rand);
+    spreadShopBlight(shop, day, dt, rand);
   }
   if (townOpen(state.seals)) state.town.districts.forEach((d, i) => runDistrict(state, d, i, dt));
 }
@@ -399,7 +577,16 @@ export function buyShop(state: GameState, id: ShopId): Feedback | null {
 
 export function isRipeBed(state: GameState, id: ShopId, bed: number) {
   const shop = state.town.shops[id];
-  return !!shop && gardenOpen(shop, gardenOfBed(bed)) && shop.beds[bed] >= SHOPS[id].gardens[gardenOfBed(bed)].grow;
+  return !!shop && gardenOpen(shop, gardenOfBed(bed)) && !isBlightedBed(shop, bed) && shop.beds[bed] >= SHOPS[id].gardens[gardenOfBed(bed)].grow;
+}
+
+/** The sickle clears a blighted bed, which then grows again from seed. */
+export function clearShopBlight(state: GameState, id: ShopId, bed: number): Feedback | null {
+  const shop = state.town.shops[id]!;
+  if (!isBlightedBed(shop, bed)) return null;
+  shop.blight = shop.blight.filter((b) => b.bed !== bed);
+  shop.beds[bed] = 0;
+  return [t('blightCleared')];
 }
 
 export function harvestBed(state: GameState, id: ShopId, bed: number): Feedback | null {

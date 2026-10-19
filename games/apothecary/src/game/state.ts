@@ -583,10 +583,12 @@ export const SERVE_MS = 1_500;
 export const TIP_SHARE = 0.6;
 /** A customer's most generous tip: a coin, and two more per potion in their order. */
 export const maxTip = (potions: number) => 1 + 2 * potions;
+/** A customer's order as far as tips go, the apothecary's or a town shop's. */
+type Tipping = Pick<Order, 'patience' | 'maxPatience' | 'tip'>;
 /** How much of its tip an order still pays, from 1 when the customer reaches the counter down to 0. */
-export const tipLeft = (order: Order) => Math.max(0, Math.min(1, 1 - (order.maxPatience - order.patience) / (order.maxPatience * TIP_SHARE)));
+export const tipLeft = (order: Tipping) => Math.max(0, Math.min(1, 1 - (order.maxPatience - order.patience) / (order.maxPatience * TIP_SHARE)));
 /** The tip an order pays if its last potion is handed over now. */
-export const tipNow = (order: Order) => Math.round((order.tip ?? 0) * tipLeft(order));
+export const tipNow = (order: Tipping) => Math.round((order.tip ?? 0) * tipLeft(order));
 
 /** A day lasts four minutes of play, dawn to dusk; the contract rolls over at dusk. */
 export const DAY_MS = 240_000;
