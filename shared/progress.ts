@@ -4,7 +4,7 @@
  * every key that is its name or starts with `<name>-`. The hub also remembers which games were
  * played last (`setupGame` calls `markPlayed`), for its Continue playing row.
  */
-const RECENT_KEY = 'hub-recent';
+export const RECENT_KEY = 'hub-recent';
 
 function keys(): string[] {
   try {

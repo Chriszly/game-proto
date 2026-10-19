@@ -45,7 +45,7 @@
         border: 2px solid #5a3f2a; padding: 6px 12px; box-shadow: 0 3px 0 #0e0a08; }
       .button:hover, .button:focus-visible { border-color: #f3c64e; outline: none; }
       button[aria-pressed="true"], .primary { background: #8f6a24; border-color: #f3c64e; color: #fff6dc; }
-      #open-settings { flex: none; margin-top: 6px; }
+      .header-actions { display: flex; flex: none; gap: 8px; margin-top: 6px; }
       dialog { width: min(620px, calc(100vw - 32px)); box-sizing: border-box; padding: 0; color: inherit;
         background: #2c2018; border: 3px solid #5a3f2a; box-shadow: 0 6px 0 #0e0a08; }
       .panel { position: relative; padding: 20px; }
@@ -74,7 +74,11 @@
           <h1 data-i18n="hubTitle">Game hub</h1>
           <p class="lede" data-i18n="hubLede">Small game prototypes. Pick one to play.</p>
         </div>
-        <button type="button" id="open-settings" data-i18n="settings">Settings</button>
+        <div class="header-actions">
+          <!-- Shown where the hub can be installed as an app; see shared/install.ts. -->
+          <button type="button" id="install-app" data-i18n="installApp" hidden>Install</button>
+          <button type="button" id="open-settings" data-i18n="settings">Settings</button>
+        </div>
       </header>
       <!-- The settings every game reads; the rows come from shared/settings.ts. -->
       <dialog id="settings" aria-labelledby="settings-title">
@@ -89,6 +93,14 @@
         <div class="panel">
           <h2 id="game-settings-title"></h2>
           <p class="lede" id="game-progress"></p>
+          <!-- Export and import just this game's progress, as a file ending in .gh and the game's code (shared/saveCodes.ts). -->
+          <div class="setting">
+            <div class="setting-choices">
+              <button type="button" id="export-game" data-i18n="exportProgress">Export progress</button>
+              <button type="button" id="import-game" data-i18n="importProgress">Import progress</button>
+            </div>
+            <div class="setting-hint" data-i18n="gameFileHint">Export saves this game's progress to a file, to keep or to load with Import on another device.</div>
+          </div>
           <div class="settings-actions">
             <button type="button" id="reset-game" data-i18n="resetGame">Delete this game's progress</button>
             <a class="button primary" id="play-game" href="" data-i18n="play">Play</a>
@@ -262,6 +274,8 @@
       import { clearProgress, hasProgress, recentlyPlayed } from './shared/progress.ts';
       import { loadSettings } from './shared/settings.ts';
       import { language, setLanguage, t, translatePage } from './shared/i18n.ts';
+      import { mountInstallButton, onOpenFile, registerServiceWorker } from './shared/install.ts';
+      import { ALL, askToExport, askToImport, fileEnding, pickFile } from './shared/saveFile.ts';
 
       const games = document.querySelector('.games');
       const cards = [...games.children];
@@ -279,6 +293,7 @@
         const saved = hasProgress(folder(shown));
         document.getElementById('game-progress').textContent = t(saved ? 'gameProgressSaved' : 'gameProgressNone');
         document.getElementById('reset-game').disabled = !saved;
+        document.getElementById('export-game').disabled = !saved;
         document.getElementById('play-game').href = shown.querySelector('a').getAttribute('href');
       };
       for (const card of cards) {
@@ -299,6 +314,14 @@
         showGame();
         showRecent();
       });
+
+      document.getElementById('export-game').addEventListener('click', () => askToExport(folder(shown), []));
+      const importGame = (card, file) =>
+        askToImport(file, folder(card), [], title(card), () => {
+          showGame();
+          showRecent();
+        });
+      document.getElementById('import-game').addEventListener('click', () => pickFile((file) => importGame(shown, file)));
 
       // Continue playing: the last three games played, linked by icon and name.
       const recent = document.querySelector('.recent');
@@ -369,6 +392,22 @@
         d.addEventListener('click', (e) => e.target === d && d.close());
       }
       showPlayCounts(document.querySelectorAll('.game a'));
+      registerServiceWorker();
+      mountInstallButton(document.getElementById('install-app'));
+      // A progress file opened with the installed app imports like the Import buttons: a .gh file
+      // every game's progress, a game's own file (.gh and its code, like .ghap) just that game's.
+      onOpenFile((file) => {
+        if (file.name.endsWith(fileEnding(ALL))) {
+          askToImport(file, ALL, cards.map(folder), '', () => location.reload());
+          return;
+        }
+        const card = cards.find((c) => file.name.endsWith(fileEnding(folder(c))));
+        if (!card) return;
+        shown = card;
+        showGame();
+        gameDialog.showModal();
+        importGame(card, file);
+      });
     </script>
   </body>
 </html>
