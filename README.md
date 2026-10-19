@@ -175,10 +175,3 @@ Every push to main builds the hub and its games and publishes them on GitHub Pag
 [chriszly.github.io/game-proto](https://chriszly.github.io/game-proto/), with the hub as the start
 page (`.github/workflows/deploy.yml`). Paths in the build are relative, so it works under the
 `/game-proto/` subpath.
-
-## Container image
-
-Every push to main also builds the hub and its games into a container image (`Dockerfile`: the
-build served by nginx on port 8080) for arm64 and amd64, and publishes it as
-`ghcr.io/chriszly/game-proto:latest` (and `:sha-<commit>`). Pull requests only check that the
-image builds.
