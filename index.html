@@ -103,6 +103,8 @@
           </div>
           <div class="settings-actions">
             <button type="button" id="reset-game" data-i18n="resetGame">Delete this game's progress</button>
+            <!-- A game installs from its own page, so this opens it with its Install button ready. -->
+            <a class="button" id="install-game" href="" data-i18n="installApp">Install</a>
             <a class="button primary" id="play-game" href="" data-i18n="play">Play</a>
           </div>
           <button type="button" class="close" data-i18n-label="close" aria-label="Close">✕</button>
@@ -295,6 +297,7 @@
         document.getElementById('reset-game').disabled = !saved;
         document.getElementById('export-game').disabled = !saved;
         document.getElementById('play-game').href = shown.querySelector('a').getAttribute('href');
+        document.getElementById('install-game').href = `${shown.querySelector('a').getAttribute('href')}?install`;
       };
       for (const card of cards) {
         const gear = document.createElement('button');
