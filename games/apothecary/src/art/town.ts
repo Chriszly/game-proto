@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { SHOPS, isFineGood, type GoodId, type Held, type ShopId } from '../game/town';
-import { counterLayout, gardenLayout, shopWorld, FENCE_Y, SHOP_HUD } from '../scenes/shopLayout';
+import { counterLayout, shopFence, shopWorld, yardGround } from '../scenes/shopLayout';
 import { plantTexture } from './garden';
 import { itemTexture } from './items';
 import { WASH, both, chance, ellPts, hatch, ink, paint, paper, rectPts, rr, shadow, sparkle, wash, type Ctx, type Pt } from './paint';
@@ -608,13 +608,15 @@ function drawYard(c: Ctx, shop: ShopId) {
   paper(c, 0, 0, w, h);
   wash(c, rectPts(-10, -10, w + 20, h + 20), WASH.grass, { layers: 4, spread: 3, alpha: 0.85, edge: 0 });
   const floor = counterLayout(shop).floor;
-  // The yard's earth, from the gardens to the shop.
-  const yard = rectPts(gardenLayout(0).area.x + 150, SHOP_HUD + 70, floor.x - 170, FENCE_Y - SHOP_HUD - 80, 18);
-  wash(c, yard, WASH.dirt, { layers: 5, spread: 2.5, alpha: 0.85, bloom: 5, cx: w / 2, cy: 240, edge: 3 });
+  const FENCE_Y = shopFence(shop);
+  // The yard's earth, from the gardens to the far end.
+  const ground = yardGround(shop);
+  const yard = rectPts(ground.x, ground.y, ground.w, ground.h, 18);
+  wash(c, yard, WASH.dirt, { layers: 5, spread: 2.5, alpha: 0.85, bloom: 5, cx: w / 2, cy: ground.y + 170, edge: 3 });
   for (let i = 0; i < 260; i++) {
     c.fillStyle = `rgba(42,29,20,${rr(0.15, 0.4)})`;
     c.beginPath();
-    c.arc(rr(gardenLayout(0).area.x + 160, floor.x - 20), rr(SHOP_HUD + 80, FENCE_Y - 20), rr(0.4, 1.1), 0, Math.PI * 2);
+    c.arc(rr(ground.x + 10, ground.x + ground.w - 10), rr(ground.y + 10, ground.y + ground.h - 10), rr(0.4, 1.1), 0, Math.PI * 2);
     c.fill();
   }
   ink(c, yard, { w: 1.5, wob: 0.8 });
@@ -632,6 +634,7 @@ function drawYard(c: Ctx, shop: ShopId) {
   for (let x = 6; x < floor.x - 10; x += 22) both(c, rectPts(x, FENCE_Y + 22, 5, 22, 1), WASH.woodDark, { layers: 1 }, { w: 0.7 });
   both(c, rectPts(0, FENCE_Y + 28, floor.x - 8, 5, 1), WASH.wood, { layers: 1 }, { w: 0.8 });
   for (let x = floor.x + floor.w + 14; x < w; x += 22) both(c, rectPts(x, FENCE_Y + 22, 5, 22, 1), WASH.woodDark, { layers: 1 }, { w: 0.7 });
+  both(c, rectPts(floor.x + floor.w + 8, FENCE_Y + 28, w - floor.x - floor.w - 8, 5, 1), WASH.wood, { layers: 1 }, { w: 0.8 });
 }
 
 /** A town house front: timber and plaster under a roof, with the shop's sign hung out. 96x84 as shown. */

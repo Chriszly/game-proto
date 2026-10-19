@@ -364,10 +364,14 @@ tap it again to walk in; the top bar's button goes back to the map, and the map'
 apothecary. Every shop and the apothecary keep working while you are elsewhere, and while the game
 is closed.
 
-A shop's yard works like the apothecary's: gardens at the left, harvested by walking past them,
-stations in a row with drop, work and pick-up markers, and the shop at the right, where goods
-dropped at the counter go on its shelves and the doctor behind it serves the customers who come
-in from the street. The bakery grows wheat and honeycomb, mills wheat into flour and bakes two flour
+A shop's yard works like the apothecary's: gardens of sixteen beds, four by four, harvested by
+walking past them, stations in a row with drop, work and pick-up markers, and a small storefront at
+the end of the row, where goods dropped outside its back wall go on its shelves and the doctor (or
+up to two shopkeepers) behind the counter serves the customers who come in from the street. Each
+shop lays its yard out its own way: the bakery has its gardens at the left and its storefront at
+the right, the chandlery the other way round, the dye house and the smithy grow their gardens side
+by side along the top (the smithy's mirrored, with its first line along the street), and the
+tavern runs its first line along the street too. The bakery grows wheat and honeycomb, mills wheat into flour and bakes two flour
 into bread (24 coins) or flour and honeycomb into honey cake (39). Every station and the counter
 have their own purple markers for a level, workers and pixies, dearer in each shop than in the one
 before (three times as much a shop) but nothing like the shop itself:
@@ -375,7 +379,7 @@ before (three times as much a shop) but nothing like the shop itself:
 | Bakery | Cost |
 | --- | --- |
 | Station or counter level (4 levels: a station works half again as fast a level, the counter sells 15% dearer) | 60, 120, 240, 480 |
-| Baker (2 per station) or shopkeeper (1) | 90, then 180 |
+| Baker (2 per station) or shopkeeper (2 at the counter) | 90, then 180 |
 | Pixies: field to mill, hives to oven, orchard to oven, mill to oven, oven to the shelves | 180, 180, 180, 300, 450 |
 | Outfitter: pack, boots, sickle (one level each) | 360, 300, 300 |
 | Study: crafting order, price signs | 120, 180 |
@@ -458,10 +462,10 @@ wick (117). Its prices are three times the bakery's:
 | Chandlery | Cost |
 | --- | --- |
 | Station or counter level | 180, 360, 720, 1,440 |
-| Chandler (2 per station) or shopkeeper (1) | 270, then 540 |
+| Chandler (2 per station) or shopkeeper (2 at the counter) | 270, then 540 |
 | Pixies: hives to press, flax to wheel, lavender to vat, press to vat, wheel to vat, vat to the shelves | 540, 540, 540, 900, 900, 1,350 |
 
-![The chandlery's dipping vat with tapers first, and candles sold dear](docs/screenshots/chandlery.webp)
+![The chandlery's yard, mirrored: its storefront at the left, its gardens at the right](docs/screenshots/chandlery.webp)
 
 The third shop is the **dye house** (100,000 coins). Its looms weave two flax into linen, and its
 dye mill grinds woad leaves into blue dye. The dye vat makes blue cloth from a linen and a dye (216
@@ -471,10 +475,10 @@ which also want blue cloth and cloaks.
 | Dye house | Cost |
 | --- | --- |
 | Station or counter level | 540, 1,080, 2,160, 4,320 |
-| Dyer (2 per station) or shopkeeper (1) | 810, then 1,620 |
+| Dyer (2 per station) or shopkeeper (2 at the counter) | 810, then 1,620 |
 | Pixies: flax to loom, woad to mill, madder to mill, loom to vat, mill to vat, vat to the shelves | 1,620, 1,620, 1,620, 2,700, 2,700, 4,050 |
 
-![The dye house's vat and shop](docs/screenshots/dye-house.webp)
+![The dye house's yard, with its gardens side by side along the top](docs/screenshots/dye-house.webp)
 
 The fourth shop is the **smithy** (1,000,000 coins). Its coppice grows timber, burned into charcoal
 at the charcoal kiln, and its ore pit gives iron ore, which the bloomery smelts with charcoal into
@@ -484,10 +488,10 @@ district of mansions grows into palaces, which also want horseshoes and iron pot
 | Smithy | Cost |
 | --- | --- |
 | Station or counter level | 1,620, 3,240, 6,480, 12,960 |
-| Smith (2 per station) or shopkeeper (1) | 2,430, then 4,860 |
+| Smith (2 per station) or shopkeeper (2 at the counter) | 2,430, then 4,860 |
 | Pixies: coppice to kiln, ore to bloomery, copper to anvil, kiln to bloomery, bloomery to anvil, anvil to the shelves | 4,860, 4,860, 4,860, 8,100, 8,100, 12,150 |
 
-![The smithy's anvil and shop](docs/screenshots/smithy.webp)
+![The smithy's yard: gardens along the top, its first line along the street](docs/screenshots/smithy.webp)
 
 The fifth shop is the **tavern** (10,000,000 coins). Its barley field gives barley, malted at the
 maltings, and its hop garden gives hops, dried at the oast. The brew kettle makes ale from a malt and
@@ -497,10 +501,10 @@ grows into castles, which also want ale and stout.
 | Tavern | Cost |
 | --- | --- |
 | Station or counter level | 4,860, 9,720, 19,440, 38,880 |
-| Brewer (2 per station) or shopkeeper (1) | 7,290, then 14,580 |
+| Brewer (2 per station) or shopkeeper (2 at the counter) | 7,290, then 14,580 |
 | Pixies: barley to maltings, hops to oast, orchard to kettle, maltings to kettle, oast to kettle, kettle to the shelves | 14,580, 14,580, 14,580, 24,300, 24,300, 36,450 |
 
-![The tavern's brew kettle and shop](docs/screenshots/tavern.webp)
+![The tavern's yard, its first line along the street](docs/screenshots/tavern.webp)
 
 Once every district is full of castles, the town map says the town has become a city: the
 game's second ending, after the cure of the plague.
@@ -509,7 +513,9 @@ game's second ending, after the cure of the plague.
 
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 
-![The bakery's yard](docs/screenshots/bakery.webp)
+![The bakery's yard: gardens at the left, the storefront at the right](docs/screenshots/bakery.webp)
+
+![The bakery's storefront, with two shopkeepers behind the counter](docs/screenshots/shop-storefront.webp)
 
 You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back and show in the hands bar at the bottom of the screen. Progress is saved in the browser automatically.
 

@@ -86,7 +86,7 @@ import {
 import { t } from '../i18n';
 import { coined } from '../ui/coins';
 import { ProgressBar } from '../ui/ProgressBar';
-import { FENCE_Y, MARKET, SHOP_HUD, guildLayout, line2Layout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
+import { SHOP_HUD, guildLayout, marketLayout, shopFence, line2Layout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
 import { setupZoom } from './zoom';
 import { TOWN_HUD_H, TOWN_TEXT, TOWN_UI_DEPTH, keepSaving, leaveFor, townCard, townTopBar } from './townKit';
 
@@ -110,7 +110,7 @@ const CAPTION = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', stroke
 const CAPTION_PAY = '#5a2c80';
 const COUNT = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
 /** Where the doctor starts in a shop's yard: in front of its first station. */
-const START = { dx: -40, y: 220 };
+const START = { dx: -40, dy: -50 };
 /** Widths of a station's "First:" sign and a shelf's price sign, as the apothecary's. */
 const PRIORITY_SIGN_W = 92;
 const PRICE_SIGN_W = 48;
@@ -180,7 +180,7 @@ export class ShopScene extends Phaser.Scene {
     const world = shopWorld(this.id);
     bakeYard(this, this.id);
     fit(this.add.image(0, 0, yardTexture(this.id)).setOrigin(0).setDepth(-1000));
-    this.physics.world.setBounds(0, SHOP_HUD, world.w, FENCE_Y - SHOP_HUD);
+    this.physics.world.setBounds(0, SHOP_HUD, world.w, shopFence(this.id) - SHOP_HUD);
     this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
     this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
     this.obstacles = this.physics.add.staticGroup();
@@ -212,7 +212,7 @@ export class ShopScene extends Phaser.Scene {
 
   private createGardens() {
     this.def.gardens.forEach((garden, g) => {
-      const layout = gardenLayout(g);
+      const layout = gardenLayout(this.id, g);
       this.sign(layout.sign.x, layout.sign.y, t(garden.name));
       const open = () => gardenOpen(this.shop, g);
       if (g >= OPEN_GARDENS) {
@@ -224,7 +224,7 @@ export class ShopScene extends Phaser.Scene {
         this.views.push(() => locked.setVisible(!open()));
       }
       for (let b = g * BEDS; b < (g + 1) * BEDS; b++) {
-        const at = bedPosition(b);
+        const at = bedPosition(this.id, b);
         fit(this.add.image(at.x, at.y, 'plot')).setDepth(-500);
         const texture = (stage: number) => bedTexture(garden.good, stage);
         const plant = fit(this.add.image(at.x, at.y + 10, texture(2)).setOrigin(0.5, 1).setDepth(at.y));
@@ -244,6 +244,7 @@ export class ShopScene extends Phaser.Scene {
 
   /** The outfitter, with one level each of the doctor's pack, boots and sickle, and the study with its two lessons. */
   private createMarket() {
+    const MARKET = marketLayout(this.id);
     this.sign(MARKET.outfitter.x, MARKET.outfitter.y, t('outfitter'));
     for (const gear of OUTFITTER_GEAR) {
       const get = () => this.shop.outfitter[gear];
@@ -436,8 +437,11 @@ export class ShopScene extends Phaser.Scene {
     this.addLevelMarker(l.hire, 'hire', () => c().hired, MAX_SHOPKEEPERS, (n) => workerCost(this.id, n), () => payShopkeeper(this.state, this.id), (_n, left) =>
       t('hireCost', { coins: formatNumber(left) }),
     );
-    const keeper = fit(this.add.image(l.shopkeeper.x, l.shopkeeper.y, craftsmanTexture(1)).setOrigin(0.5, 1).setDepth(l.shopkeeper.y));
-    this.views.push(() => keeper.setVisible(c().hired.level > 0));
+    const keepers = [0, 1].map((k) => {
+      const at = l.shopkeepers(k);
+      return fit(this.add.image(at.x, at.y, craftsmanTexture(k + 1)).setOrigin(0.5, 1).setDepth(at.y));
+    });
+    this.views.push(() => keepers.forEach((keeper, k) => keeper.setVisible(k < c().hired.level)));
   }
 
   private addRouteMarker(at: Point, route: RouteDef, locked: () => boolean = () => false) {
@@ -634,7 +638,7 @@ export class ShopScene extends Phaser.Scene {
 
   private createPlayer() {
     const first = stationLayout(this.id, this.def.stations[0].id).at;
-    this.player = fit(this.physics.add.sprite(first.x + START.dx, START.y, 'doctor-idle'));
+    this.player = fit(this.physics.add.sprite(first.x + START.dx, first.y + START.dy, 'doctor-idle'));
     const res = resOf('doctor-idle');
     this.player.body!.setSize(30 * res, 15 * res).setOffset(9 * res, 57 * res);
     this.player.setCollideWorldBounds(true);
@@ -740,7 +744,7 @@ export class ShopScene extends Phaser.Scene {
     const reach = this.reach();
     if (this.state.town.hands.length >= carryCapacity(this.state)) return false;
     const near = this.shop.beds
-      .map((_, b) => ({ b, d: centre.distance(new Phaser.Math.Vector2(bedPosition(b).x, bedPosition(b).y)) }))
+      .map((_, b) => ({ b, d: centre.distance(new Phaser.Math.Vector2(bedPosition(this.id, b).x, bedPosition(this.id, b).y)) }))
       .filter(({ b, d }) => d <= reach && isRipeBed(this.state, this.id, b))
       .sort((a, b) => a.d - b.d);
     if (near.length === 0) return false;

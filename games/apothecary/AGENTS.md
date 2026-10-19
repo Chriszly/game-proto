@@ -39,8 +39,9 @@ study, shade gardens and a mirrored second production line.
 - The town (the first of a planned series of PRs): once `state.seals > 0` (`townOpen`) a Town
   button left of Recipes opens the `Town` scene, a map of lot cards: the apothecary and one per shop
   in `SHOPS`. A shop costs `shopCost` (1,000 for the bakery, then ten times more each `tier`) and is
-  walked into as its own `Shop` scene, a yard laid out from its `ShopDef`: gardens, a row of
-  stations with drop, work and pick-up markers, and a counter whose shelves customers buy from.
+  walked into as its own `Shop` scene, a yard laid out from its `ShopDef` and its own `YardPlan`: gardens of 16 beds, a row of
+  stations with drop, work and pick-up markers, and a small storefront whose shelves customers buy
+  from, served by the doctor or up to two shopkeepers.
   Stations, the counter and pixie routes have purple markers; their costs grow by `TIER_STEP` (3)
   a tier. The shops so far are the Bakery (wheat and honeycomb, mill and oven, bread and honey
   cake) the Chandlery (honeycomb and flax, wax press, spinning wheel and dipping vat, candles
@@ -152,7 +153,8 @@ study, shade gardens and a mirrored second production line.
 - `src/game/town.ts`: the town's data, free of Phaser: `GoodId` and `GOODS`, the shop defs
   (`ShopDef`: gardens, stations with recipes, pixie `routes`, `sells` with base prices, `tier`) in
   `SHOPS`, the cost helpers (`shopCost`, `tierCost`, `levelCost`, `workerCost`, `routeCost`), the
-  limits (`MAX_LEVEL`, `MAX_WORKERS`, `MAX_SHOPKEEPERS`, `BEDS`, `SHOP_STORAGE`, `SHOP_PLACES`) and
+  limits (`MAX_LEVEL`, `MAX_WORKERS`, `MAX_SHOPKEEPERS` (two at each counter), `BEDS` (16 a garden;
+  `normalizeTown` spreads a save's three-by-three gardens onto them), `SHOP_STORAGE`, `SHOP_PLACES`) and
   timings, the state types (`TownState`: `shops`, a `ShopState` per shop bought, and `hands`, the
   doctor's hands in town, kept apart from `carrying`), `createTown`, `normalizeTown` and `townOpen`.
   Each shop's market: its outfitter (`OUTFITTER_GEAR`, `Gear`, `GEAR_COST`, `gearCost`; one level each
@@ -204,10 +206,20 @@ study, shade gardens and a mirrored second production line.
   the work out by hand as its fine good. Drops skip fine goods; `stockShopShelf` stocks both kinds.
   `dropAtStation` and `payRoute` refuse a second-line station or route until the line is bought.
 - `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
-  `ShopDef` (`gardenLayout`, `bedPosition`, `MARKET` for the outfitter and study, with its recipe marker, between the
-  gardens and the first station, `stationLayout` with its `priority` sign (a second-line station under its twin, along `LINE2_Y`), `guildLayout` under the first two stations,
-  `line2Layout` for the second line's sign and buy marker, `gardenLayout`'s `route2` for its garden routes, `counterLayout` with each
-  shelf's `priceSign`, its drop under the shelves and its work spot and till at the counter, `routePath`, `routeMs`); Phaser-free, since the sim reads route lengths from it.
+  `ShopDef` and its `YardPlan` in `YARD_PLANS`: `mirror` (gardens at the right, storefront at the
+  left), `gardens` (`column`, stacked at the side, or `row`, side by side along the top, which moves
+  everything else down by `ROW_DROP`) and `lines` (the first line in the `top` or `bottom` row). Every
+  layout is worked out with the gardens at the left, then `placed` mirrors its points and rectangles
+  (and what its functions return) when the plan says so. It holds `shopWorld`, `shopFence` (the
+  doctor's side ends there), `yardGround` (the earth the yard paints), `gardenLayout(id, g)` (beds,
+  sign, `route` and `route2` markers, `routeStart`), `bedPosition(id, bed)` (four by four, `BED_COLS`),
+  `marketLayout(id)` for the outfitter and study with its recipe marker, `stationLayout` with its
+  `priority` sign (a second-line station in the other row from its twin), `guildLayout` between the rows under the first two stations,
+  `line2Layout` for the second line's sign and buy marker, `counterLayout` for the small storefront
+  (`STORE`) at the end of the rows: its shelves with their `priceSign`s along the back wall, its
+  drop, level and hire markers in the yard outside that wall, its work spot and till either end of
+  the counter and its two `shopkeepers` behind it, and `routePath`, `routeMs`); Phaser-free, since the sim reads route lengths from it.
+  A station's purple markers stand `COINS_GAP` apart, a caption's width, so their captions never meet.
 - `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
   (saves, then starts another scene, which loads the save again) and `keepSaving`.
 - `TownScene` lays the lots out in rows of three (`LOT`) with the districts' cards in a row below
