@@ -349,10 +349,10 @@ export const tierCost = (id: ShopId, base: number) => base * TIER_STEP ** SHOPS[
 export const LEVEL_COST = 20;
 export const MAX_LEVEL = 4;
 export const levelCost = (id: ShopId, level: number) => tierCost(id, LEVEL_COST) * 2 ** level;
-/** A worker costs this, doubling for the second; a station takes `MAX_WORKERS`, the counter one. */
+/** A worker costs this, doubling for the second; a station takes `MAX_WORKERS`, the counter `MAX_SHOPKEEPERS`. */
 export const WORKER_COST = 30;
 export const MAX_WORKERS = 2;
-export const MAX_SHOPKEEPERS = 1;
+export const MAX_SHOPKEEPERS = 2;
 export const workerCost = (id: ShopId, hired: number) => tierCost(id, WORKER_COST) * 2 ** hired;
 export const routeCost = (id: ShopId, route: RouteDef) => tierCost(id, route.cost);
 
@@ -396,8 +396,10 @@ export const GUILD_JOIN_COST = 150;
 export const guildJoinCost = (id: ShopId) => tierCost(id, GUILD_JOIN_COST);
 export const guildCost = (id: ShopId, upgrade: ShopGuild, level: number) => tierCost(id, SHOP_GUILD_UPGRADES[upgrade].cost) * 2 ** level;
 
-/** Beds in each garden, three by three like the apothecary's. */
-export const BEDS = 9;
+/** Beds in each garden, four by four. */
+export const BEDS = 16;
+/** Beds a garden had before, three by three; `normalizeTown` spreads a save's onto the bigger gardens. */
+const OLD_BEDS = 9;
 /** What each station's in and out pallets, and the shelf, hold of each good. */
 export const SHOP_STORAGE = 12;
 /** Customers at the counter at once, and with the guild's slots. */
@@ -565,7 +567,7 @@ export function normalizeTown(saved: Partial<TownState> | undefined): TownState 
     town.shops[id] = {
       ...fresh,
       ...shop,
-      beds: [...shop.beds, ...fresh.beds.slice(shop.beds.length)],
+      beds: shop.beds.length % BEDS === 0 ? [...shop.beds, ...fresh.beds.slice(shop.beds.length)] : fresh.beds.map((ripe, b) => (b % BEDS < OLD_BEDS ? shop.beds[gardenOfBed(b) * OLD_BEDS + (b % BEDS)] : undefined) ?? ripe),
       stations: { ...fresh.stations, ...shop.stations },
       routes: { ...fresh.routes, ...shop.routes },
       counter: { ...fresh.counter, ...shop.counter },

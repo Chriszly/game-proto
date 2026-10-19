@@ -39,8 +39,10 @@ study, shade gardens and a mirrored second production line.
 - The town (the first of a planned series of PRs): once `state.seals > 0` (`townOpen`) a Town
   button left of Recipes opens the `Town` scene, a map of lot cards: the apothecary and one per shop
   in `SHOPS`. A shop costs `shopCost` (1,000 for the bakery, then ten times more each `tier`) and is
-  walked into as its own `Shop` scene, a yard laid out from its `ShopDef`: gardens, a row of
-  stations with drop, work and pick-up markers, and a counter whose shelves customers buy from.
+  walked into as its own `Shop` scene, a yard laid out by its own hand-placed `YardPlan` with
+  scenery of its own (a village green, hillside terraces, a river, a forge yard, a lake): gardens of
+  16 beds, stations with drop, work and pick-up markers, and a small storefront whose shelves
+  customers buy from, served by the doctor or up to two shopkeepers.
   Stations, the counter and pixie routes have purple markers; their costs grow by `TIER_STEP` (3)
   a tier. The shops so far are the Bakery (wheat and honeycomb, mill and oven, bread and honey
   cake) the Chandlery (honeycomb and flax, wax press, spinning wheel and dipping vat, candles
@@ -152,7 +154,8 @@ study, shade gardens and a mirrored second production line.
 - `src/game/town.ts`: the town's data, free of Phaser: `GoodId` and `GOODS`, the shop defs
   (`ShopDef`: gardens, stations with recipes, pixie `routes`, `sells` with base prices, `tier`) in
   `SHOPS`, the cost helpers (`shopCost`, `tierCost`, `levelCost`, `workerCost`, `routeCost`), the
-  limits (`MAX_LEVEL`, `MAX_WORKERS`, `MAX_SHOPKEEPERS`, `BEDS`, `SHOP_STORAGE`, `SHOP_PLACES`) and
+  limits (`MAX_LEVEL`, `MAX_WORKERS`, `MAX_SHOPKEEPERS` (two at each counter), `BEDS` (16 a garden;
+  `normalizeTown` spreads a save's three-by-three gardens onto them), `SHOP_STORAGE`, `SHOP_PLACES`) and
   timings, the state types (`TownState`: `shops`, a `ShopState` per shop bought, and `hands`, the
   doctor's hands in town, kept apart from `carrying`), `createTown`, `normalizeTown` and `townOpen`.
   Each shop's market: its outfitter (`OUTFITTER_GEAR`, `Gear`, `GEAR_COST`, `gearCost`; one level each
@@ -203,11 +206,25 @@ study, shade gardens and a mirrored second production line.
   is true from `1 - FINE_SHARE` of a sold good's work to its end, and `pickUpFromStation` then takes
   the work out by hand as its fine good. Drops skip fine goods; `stockShopShelf` stocks both kinds.
   `dropAtStation` and `payRoute` refuse a second-line station or route until the line is bought.
-- `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, worked out from its
-  `ShopDef` (`gardenLayout`, `bedPosition`, `MARKET` for the outfitter and study, with its recipe marker, between the
-  gardens and the first station, `stationLayout` with its `priority` sign (a second-line station under its twin, along `LINE2_Y`), `guildLayout` under the first two stations,
-  `line2Layout` for the second line's sign and buy marker, `gardenLayout`'s `route2` for its garden routes, `counterLayout` with each
-  shelf's `priceSign`, its drop under the shelves and its work spot and till at the counter, `routePath`, `routeMs`); Phaser-free, since the sim reads route lengths from it.
+- `src/scenes/shopLayout.ts`: where everything stands in a shop's yard, from its hand-placed
+  `YardPlan` in `YARD_PLANS`: its size (the fence `STREET_H` above its bottom, `shopFence`), each
+  garden's corner and the side its route markers stand on (`right`, `left` or `below`), the first and
+  second line's station spots (`line1`, `line2`, any shape: rows, columns, a diagonal, a Y), the
+  outfitter's and study's signs, the guild's join spot and shape (`row`, or a `grid` of two rows of
+  three), the second line's sign, the storefront's left edge, the doctor's `start`, and its
+  `YardScenery` (`earth` polygons, `paths`, `cobbles`, `water`, `bridges`, painted `props`, `plants`
+  and the `blocks` the doctor can't walk through). The bakery is a village green with a duck pond,
+  the chandlery hillside terraces, the dye house a river with three bridges, the smithy woods and
+  mines round a cobbled forge yard, the tavern a lake. The pieces are laid out the same way
+  everywhere: `gardenLayout(id, g)` (beds, sign, `route` and `route2` markers, `routeStart`),
+  `bedPosition(id, bed)` (four by four, `BED_COLS`), `marketLayout(id)`, `stationLayout` (its
+  purple markers `COINS_GAP` apart, a caption's width), `guildLayout`, `line2Layout`, `counterLayout`
+  for the small storefront (`STORE`): its shelves with their `priceSign`s along the back wall, its
+  drop, level and hire markers in the yard outside that wall, its work spot and till either end of
+  the counter and its two `shopkeepers` behind it; and `routePath`, `routeMs`. Phaser-free, since the
+  sim reads route lengths from it. A new shop needs its own plan: keep every piece's footprint clear
+  of the others' (a station takes about 280x270 around its spot, a garden with side markers 314x204)
+  and every marker reachable, and check the yard fresh and fully unlocked, in English and German.
 - `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
   (saves, then starts another scene, which loads the save again) and `keepSaving`.
 - `TownScene` lays the lots out in rows of three (`LOT`) with the districts' cards in a row below
@@ -219,7 +236,11 @@ study, shade gardens and a mirrored second production line.
   null)` after its own `tick`. `src/art/town.ts` paints the goods, the beds (`bedTexture`: hives, flax, woad, coppice, ore pit, orchard, lavender, madder, copper pit), each
   shop's stations (mill, oven, wax press, spinning wheel, dipping vat, loom, dye mill, dye vat,
   charcoal kiln, bloomery, anvil), a shop's yard (`bakeYard`)
-  and the lot houses (`bakeTown`, called by `BootScene`).
+  and the lot houses (`bakeTown`, called by `BootScene`). `drawYard` paints a yard's grass, earth,
+  paths, cobbles, water, bridges and props (`PROPS`: well, beer garden table, drying line of dyed
+  cloth, rocks, jetty, terrace wall, reeds), the street, the storefront's floor and the fence;
+  `ShopScene.createScenery` stands the trees and bushes (the apothecary's `tree-*` and `bush-*`
+  textures) and walls off the `blocks`.
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
 - `src/scenes/GameScene.ts`: builds the world, markers and HUD, reads input, walks the doctor
   around stations and through the shop door, calls the sim each frame and updates views. Also
