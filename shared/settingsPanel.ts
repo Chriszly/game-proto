@@ -2,14 +2,17 @@ import { DEFAULTS, SETTING_FIELDS, loadSettings, saveSettings, type Settings } f
 import { language, setLanguage, t } from './i18n';
 import { previewVolume } from './audio';
 import { clearAllProgress } from './progress';
+import { ALL, askToExport, askToImport, pickFile } from './saveFile';
 
 /**
  * Builds the hub's Settings panel inside `root` from `SETTING_FIELDS`, so a new setting shows up
  * without touching the page. Changes save at once and apply the next time a game opens, except
  * the language, which the hub switches to at once, and the hub-only settings: `onChange` is called
- * after every change to update the page. Below the settings, a Saved progress row deletes the saves
- * of every game in `games` (their folder names) and calls `onChange` too, and the panel ends with
- * Restore defaults and Done, which closes the dialog.
+ * after every change to update the page. Below the settings, a Saved progress row exports the saves
+ * of every game in `games` (their folder names) and the settings to a `.gh` file
+ * (`saveFile.ts`), imports such a file (and reloads the page, since it brings its own settings) and
+ * deletes the saves, calling `onChange` too,
+ * and the panel ends with Restore defaults and Done, which closes the dialog.
  */
 export function mountSettingsPanel(
   root: HTMLElement,
@@ -41,9 +44,14 @@ export function mountSettingsPanel(
     clearAllProgress(games);
     onChange(current);
   });
+  const exportButton = action('export-progress', () => askToExport(ALL, games));
+  // Importing brings the file's settings along, so the page reloads to show them.
+  const importButton = action('import-progress', () =>
+    pickFile((file) => askToImport(file, ALL, games, '', () => location.reload())),
+  );
   const resetRow = document.createElement('div');
   resetRow.className = 'setting-choices';
-  resetRow.append(reset);
+  resetRow.append(exportButton, importButton, reset);
   progress.append(progressName, resetRow, progressHint);
   root.append(progress);
 
@@ -59,6 +67,8 @@ export function mountSettingsPanel(
     restore.textContent = t('restoreDefaults');
     done.textContent = t('done');
     reset.textContent = t('resetProgress');
+    exportButton.textContent = t('exportAll');
+    importButton.textContent = t('importAll');
     progressName.textContent = t('savedProgress');
     progressHint.textContent = t('savedProgressHint');
     rows.replaceChildren(

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 // The hub lists every game and each card opens its game.
 const GAMES = [
@@ -399,4 +400,109 @@ test('hub switches language', async ({ page }, testInfo) => {
   expect(await formats('en')).toEqual(['1,234.5', '17/10/2026']);
   expect(await formats('en-US')).toEqual(['1,234.5', '10/17/2026']);
   expect(await formats('de')).toEqual(['1.234,5', '17.10.2026']);
+});
+
+// Progress files: a game's ⚙ exports just its progress to an encrypted file ending in .gh and the
+// game's code, and imports it back; another game's file or an edited one is refused. Settings
+// exports every game's progress and the settings to a .gh file and imports it back.
+test('hub progress files', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{"coins":42}');
+    localStorage.setItem('palisade-best', '7');
+    localStorage.setItem('other-site-data', '1');
+  });
+  await page.reload();
+  const alerts: string[] = [];
+  page.on('dialog', (d) => {
+    if (d.type() === 'alert') alerts.push(d.message());
+    d.accept();
+  });
+  const save = async (button: ReturnType<Page['getByRole']>) => {
+    const download = page.waitForEvent('download');
+    await button.click();
+    const file = await download;
+    return { name: file.suggestedFilename(), path: (await file.path())! };
+  };
+  const load = async (button: ReturnType<Page['getByRole']>, path: string) => {
+    const chooser = page.waitForEvent('filechooser');
+    await button.click();
+    await (await chooser).setFiles(path);
+  };
+  const stored = (key: string) => page.evaluate((k) => localStorage.getItem(k), key);
+
+  // One game's file holds its progress, encrypted.
+  await page.getByRole('button', { name: 'Settings for Palisade' }).click();
+  const palisade = page.getByRole('dialog', { name: 'Palisade' });
+  const palisadeFile = await save(palisade.getByRole('button', { name: 'Export progress' }));
+  expect(palisadeFile.name).toMatch(/^palisade-\d{4}-\d\d-\d\d\.ghpa$/);
+  await palisade.getByRole('button', { name: 'Close' }).click();
+
+  await page.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Apothecary' });
+  testInfo.attach('game progress file', { body: await dialog.screenshot({ path: testInfo.outputPath('game-progress-file.png') }), contentType: 'image/png' });
+  const file = await save(dialog.getByRole('button', { name: 'Export progress' }));
+  expect(file.name).toMatch(/^apothecary-\d{4}-\d\d-\d\d\.ghap$/);
+  const bytes = readFileSync(file.path);
+  expect(bytes.toString('latin1')).not.toContain('coins');
+
+  // Importing it brings the progress back, and leaves the other games alone.
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{"coins":1}');
+    localStorage.setItem('apothecary-extra', '1');
+  });
+  await load(dialog.getByRole('button', { name: 'Import progress' }), file.path);
+  await expect.poll(() => stored('apothecary-save')).toBe('{"coins":42}');
+  expect(await stored('apothecary-extra')).toBeNull();
+  expect(await stored('palisade-best')).toBe('7');
+  expect(alerts).toEqual([]);
+
+  // Another game's file and an edited file are refused.
+  await load(dialog.getByRole('button', { name: 'Import progress' }), palisadeFile.path);
+  await expect.poll(() => alerts).toEqual(['This is not a progress file for Apothecary, or it was changed.']);
+  const edited = testInfo.outputPath('edited.ghap');
+  bytes[bytes.length - 1] ^= 1;
+  writeFileSync(edited, bytes);
+  await load(dialog.getByRole('button', { name: 'Import progress' }), edited);
+  await expect.poll(() => alerts.length).toBe(2);
+  expect(await stored('apothecary-save')).toBe('{"coins":42}');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Export all and Import all carry every game and the settings, and nothing of other sites.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('group', { name: 'Difficulty' }).getByRole('button', { name: 'Hard' }).click();
+  const progressRow = settings.locator('.setting').filter({ has: page.locator('#export-progress') });
+  testInfo.attach('progress files', { body: await progressRow.screenshot({ path: testInfo.outputPath('progress-files.png') }), contentType: 'image/png' });
+  const all = await save(settings.getByRole('button', { name: 'Export all' }));
+  expect(all.name).toMatch(/^game-hub-progress-\d{4}-\d\d-\d\d\.gh$/);
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('other-site-data', '2');
+  });
+  // It reloads the hub, since the settings may have changed.
+  const reloaded = page.waitForEvent('load');
+  await load(settings.getByRole('button', { name: 'Import all' }), all.path);
+  await reloaded;
+  expect(await stored('palisade-best')).toBe('7');
+  expect(await stored('apothecary-save')).toBe('{"coins":42}');
+  expect(await stored('other-site-data')).toBe('2');
+  expect(JSON.parse((await stored('hub-settings'))!).difficulty).toBe('hard');
+  // A game's file is not a hub file.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await load(settings.getByRole('button', { name: 'Import all' }), file.path);
+  await expect.poll(() => alerts.at(-1)).toBe('This is not a .gh progress file, or it was changed.');
+});
+
+// The hub and every game link their own web app manifest, so each installs as an app of its own.
+test('hub and games install as apps', async ({ page, request }) => {
+  for (const [path, name] of [['/', 'Game hub'], ...GAMES.map((g) => [g.path, g.name])]) {
+    await page.goto(path);
+    const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+    const url = new URL(href!, page.url()).href;
+    const manifest = await (await request.get(url)).json();
+    expect(manifest.name).toBe(name);
+    expect(new URL(manifest.start_url, url).pathname).toBe(path);
+    for (const icon of manifest.icons) expect((await request.get(new URL(icon.src, url).href)).ok()).toBe(true);
+  }
 });

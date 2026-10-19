@@ -122,7 +122,9 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   Game dropdown of the three issue forms in
   `.github/ISSUE_TEMPLATE/` (before `Hub page` and `Shared / all games`, then raise each form's
   `default` by one so it still preselects Shared), and its name and label to the map in
-  `.github/workflows/issue-labels.yml`. Once that is merged, start the **Project setup** workflow to create
+  `.github/workflows/issue-labels.yml`. Give it a two-letter progress file code in
+  `shared/saveCodes.ts` and draw its app icons with `node scripts/pwa-icons.mjs <name>` (the build
+  fails without either). Once that is merged, start the **Project setup** workflow to create
   the game's GitHub Project, then remind **Chriszly**, in the PR's "Notes for reviewers" and in your
   reply, to finish it by hand: the Auto-add workflow with the filter
   `is:issue,pr is:open label:<game>`, the "Item added to project" workflow set to Issue only with
@@ -176,6 +178,13 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   file's `keepEnglish`), and warns where a text is much longer than English; run
   `node scripts/check-translations.mjs` before pushing. Playthroughs and other tests run in British
   English, the default language (the browser's own language is not used).
+- **Every game is an app.** The hub and every game install as apps of their own that play offline
+  (`scripts/pwa.ts` makes each game's manifest from its `<title>` and background colour and writes
+  the service worker; `shared/install.ts` registers it from `setupGame`), so a game needs nothing for
+  it beyond its code and icons (see "Add a game"). Keep every file a game loads inside the build (no
+  files fetched from other sites), so it still plays offline. Its progress exports and imports from
+  the hub as an encrypted `.gh<code>` file (`shared/saveFile.ts`), which carries every storage key
+  with the game's prefix.
 - **Play counts come for free.** `setupGame` also bumps the game's public play counter
   (`shared/playCount.ts`, keyed by the game's folder name) and the hub shows the count on its card,
   so a new game needs nothing for it. Tests never count: browser automation skips it.

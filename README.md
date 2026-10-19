@@ -79,12 +79,17 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 - **Genre filter** (off by default, hub only): a row of genres above the cards (Action, Strategy,
   Management, Puzzle, Adventure) that lists just the games of one. Each card's genres are its
   `data-genres` in `index.html`.
-- **Saved progress**: **Delete all progress** erases every game's saves and the Continue playing row,
-  and keeps the settings and any other site's storage on the same origin.
+- **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
+  and **Import all** loads one back, on this or another device. **Delete all progress** erases every
+  game's saves and the Continue playing row, and keeps the settings and any other site's storage on
+  the same origin.
+
+![Export all, Import all and Delete all progress](docs/screenshots/hub-progress-files.webp)
 - **Restore defaults** puts the settings back, and **Done** closes the panel.
 
 Each card also has a **⚙** in its corner that opens that game's own settings: whether it has
-anything saved on this device, **Delete this game's progress** (its storage keys, which all start
+anything saved on this device, **Export progress** and **Import progress** for just that game's
+progress (see Progress files), **Delete this game's progress** (its storage keys, which all start
 with its folder name, see `shared/progress.ts`) and **Play**.
 
 ![A game's own settings](docs/screenshots/hub-game-settings.webp)
@@ -130,9 +135,9 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `audio.ts`, the sound effects and music made in code, `corner.ts`, the corner buttons, `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion, full screen and the sound button
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files, that the hub and every game have an app manifest, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks
@@ -168,6 +173,41 @@ service with no account (`shared/playCount.ts`). `setupGame` adds one to the gam
 each card's count as "N plays". Only the built site counts: the dev server, browser automation (so
 the playthroughs and e2e tests) and `?watch` matches never do. If the service can't be reached, the
 games play as usual and the cards simply show no count. Nothing else is sent.
+
+## Install as an app
+
+The hub and every game install as apps of their own (PWAs) that play offline: open the hub or a
+game on the site and pick **Install** (Chrome and Edge, on phones and computers; the hub also shows
+an **Install** button next to Settings) or **Share > Add to Home Screen** (Safari on iPhone and
+iPad). Each app has its own name and icon, drawn from its favicon on its background colour.
+
+![The hub's and every game's app icons](docs/screenshots/app-icons.webp)
+
+- `scripts/pwa.ts`, a Vite plugin, links every page to its manifest: the hub's is
+  `public/manifest.webmanifest`, and each game's is made from its title and background colour. It
+  also writes `sw.js` into the build, the service worker from `scripts/sw.js` with every file of the
+  build to cache, so a deploy is a new version that replaces the old cache. Pages load from the
+  network while online and from the cache offline.
+- `shared/install.ts` registers the service worker (from the hub and from `setupGame`, only in the
+  built site and never under browser automation), shows the hub's Install button, and in the
+  installed app asks the browser to keep its storage.
+- `node scripts/pwa-icons.mjs [game...]` draws the icons into `public/icons/` from the favicons.
+  The build fails for a game without icons.
+
+Saves stay in the browser's storage on the device. On Android and computers the installed apps and
+the website share it; on iPhones each home screen app keeps its own, and private browsing forgets
+everything when the window closes.
+
+## Progress files
+
+A player can carry progress to another device, or between the website and an app, as a file:
+the ⚙ on a game's card exports and imports just that game's progress as
+`<game>-<date>.gh<code>` (`.ghap` for Apothecary, codes in `shared/saveCodes.ts`), and the Settings
+panel exports and imports every game's progress and the settings as `game-hub-progress-<date>.gh`.
+The files are encrypted (AES-GCM, `shared/saveFile.ts`), so they can't be read or edited by hand:
+an edited file, or another game's, is refused. The key ships with the code, so this keeps out
+casual editing, not a determined player. The installed hub on a computer also opens these files
+directly.
 
 ## Play online
 
