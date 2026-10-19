@@ -883,12 +883,12 @@ export function checkDeeds(s: GameState) {
   // The soldiers' chain: TR-9's Drop Squad unlocks Bram-17, Bram-17's Brothers in Arms unlocks Rook.
   done('bram', s.hero === 'tr9' && rank(s, 'drop-doctrine') >= 5);
   done('rook', s.hero === 'bram' && rank(s, 'brothers') >= 5);
-  done('kael', s.planet >= 1);
+  done('kael', s.stage >= 1);
   done('oom', s.cleanSwamp);
   done('corvin', s.arenaWins > 0);
-  done('veyl', s.planet >= 2);
+  done('veyl', s.stage >= 2);
   done('kresh', s.elitesKilled >= 10);
-  done('joren', s.planet >= 3);
+  done('joren', s.stage >= 3);
   done('vharn', s.hero === 'kael' && rank(s, 'the-fall') >= 5);
   done('elara', s.credits >= DEEDS.credits);
   done('triad', s.kills >= DEEDS.kills);

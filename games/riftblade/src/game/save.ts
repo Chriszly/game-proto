@@ -8,8 +8,10 @@ export interface Progress {
   bestMs: number;
   /** Runs won (the Hollow Champion beaten on the Lava world), by hero. */
   wins: Partial<Record<HeroId, number>>;
-  /** The furthest planet reached (1 to 4), by hero. Saves from before the star map have none. */
+  /** The furthest jump reached (1 to 4), by hero. Saves from before the star map have none. */
   furthest: Partial<Record<HeroId, number>>;
+  /** The planets (`PlanetId`s) ever landed on: the space map names a faction only once charted. */
+  charted: string[];
   /** Heroes whose deed is done. Saves from before the knights have none. */
   unlocked: HeroId[];
 }
@@ -24,9 +26,10 @@ export function loadProgress(): Progress {
       wins: object(saved.wins),
       furthest: object(saved.furthest),
       unlocked: Array.isArray(saved.unlocked) ? saved.unlocked.filter((id: unknown) => HERO_IDS.includes(id as HeroId)) : [],
+      charted: Array.isArray(saved.charted) ? saved.charted.filter((id: unknown) => typeof id === 'string') : [],
     };
   } catch {
-    return { bestMs: 0, wins: {}, furthest: {}, unlocked: [] };
+    return { bestMs: 0, wins: {}, furthest: {}, unlocked: [], charted: [] };
   }
 }
 
@@ -38,13 +41,27 @@ export function saveProgress(progress: Progress) {
   }
 }
 
-/** Records a finished run (`planet` is the one reached, 1 to 4) and returns the updated progress. */
-export function recordRun(hero: HeroId, ms: number, won: boolean, planet: number): Progress {
+/**
+ * Records a finished run (`stage` is the jump reached, 1 to 4, `route` the planets landed on) and
+ * returns the updated progress.
+ */
+export function recordRun(hero: HeroId, ms: number, won: boolean, stage: number, route: readonly string[] = []): Progress {
   const progress = loadProgress();
   progress.bestMs = Math.max(progress.bestMs, ms);
   if (won) progress.wins[hero] = (progress.wins[hero] ?? 0) + 1;
-  progress.furthest[hero] = Math.max(progress.furthest[hero] ?? 0, planet);
+  progress.furthest[hero] = Math.max(progress.furthest[hero] ?? 0, stage);
+  for (const id of route) if (!progress.charted.includes(id)) progress.charted.push(id);
   saveProgress(progress);
+  return progress;
+}
+
+/** Records a planet landed on, so the space map shows its faction from now on. */
+export function recordCharted(id: string): Progress {
+  const progress = loadProgress();
+  if (!progress.charted.includes(id)) {
+    progress.charted.push(id);
+    saveProgress(progress);
+  }
   return progress;
 }
 

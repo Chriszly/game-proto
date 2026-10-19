@@ -1,14 +1,14 @@
 /**
  * The Rift Crusade between the fights: what happens when a planet's boss (or the arena) falls, the
- * star map's nodes (trader, elite arena, rest, events) and the jump to the next planet. Pure state
- * changes like `sim.ts`; randomness from Math.random.
+ * space map (which planet to jump to), the star map's nodes on the way (trader, elite arena, rest,
+ * events) and the jump itself. Pure state changes like `sim.ts`; randomness from Math.random.
  */
 import { ELITE, OBJECTIVE_AT, WAVES, statsOf, type EventState, type GameState } from './state';
 import { collectAll, heal, lower, nextPick, pop, raise, refreshHealth, spawnElite, tick, SHORT_LIVED, type Input } from './sim';
 import { FILLER, MAX_TIER, UPGRADES, UPGRADE_IDS, canOffer, rollChoices } from './upgrades';
 import { t } from '../i18n';
 import { checkDeeds } from './blades';
-import { CREDITS, LAST_PLANET, NODE_INFO, PLANETS, REST_HEAL, TRADE, arenaElites, type EventId, type NodeKind } from './planets';
+import { CREDITS, LAST_STAGE, NODE_INFO, PLANETS, REST_HEAL, TRADE, arenaElites, planetsAt, type EventId, type NodeKind } from './planets';
 
 /** One frame of the game: the sim while a fight is on, then whatever follows a cleared fight. */
 export function frame(s: GameState, dtMs: number, input: Input) {
@@ -58,14 +58,26 @@ export function afterClear(s: GameState) {
     s.credits += CREDITS.clear;
     // Master Oom's deed: the Swamp world cleared with few hits from toad globs.
     if (s.planet === 1 && s.globHits <= 5) s.cleanSwamp = true;
-    if (s.planet >= LAST_PLANET) {
+    if (s.stage >= LAST_STAGE) {
       s.phase = 'won';
       return;
     }
-    s.nodes = rollNodes();
-    s.after = 'map';
+    s.after = 'chart';
   }
   nextPick(s);
+}
+
+/** The planets the space map offers for the next jump (indices into `PLANETS`). */
+export const chartOptions = (s: GameState) => planetsAt(s.stage + 1);
+
+/** Takes the planet at `index` of the space map's choices, then the star map's nodes on the way there. */
+export function chooseWorld(s: GameState, index: number) {
+  if (s.phase !== 'chart') return;
+  const planet = chartOptions(s)[index];
+  if (planet === undefined) return;
+  s.next = planet;
+  s.nodes = rollNodes();
+  s.phase = 'map';
 }
 
 /** Two or three different nodes for the star map. */
@@ -146,7 +158,7 @@ function startArena(s: GameState) {
   s.nextElite = Infinity;
   s.bossSpawned = false;
   s.phase = 'run';
-  const n = arenaElites(s.planet);
+  const n = arenaElites(s.stage);
   const a0 = Math.random() * Math.PI * 2;
   for (let i = 0; i < n; i++) spawnElite(s, a0 + (i / n) * Math.PI * 2);
   pop(s, t('arenaStart', { n }), '#ffe066');
@@ -253,7 +265,10 @@ export function chooseEvent(s: GameState, index: number) {
 // The next planet
 
 export function nextPlanet(s: GameState) {
-  s.planet += 1;
+  s.planet = s.next >= 0 ? s.next : chartOptions(s)[0];
+  s.stage += 1;
+  s.route.push(s.planet);
+  s.next = -1;
   clearField(s);
   s.time = 0;
   s.waves = [...WAVES];

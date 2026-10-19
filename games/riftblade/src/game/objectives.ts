@@ -254,12 +254,12 @@ function run(s: GameState, o: Objective, ms: number) {
         o.x = target.x;
         o.y = target.y;
       }
-      // Living nests breed mire rats.
+      // Living nests breed the planet's swarm (mire rats on the Swamp world).
       if (o.id === 'nests') {
         o.tickMs -= ms;
         if (o.tickMs <= 0) {
           o.tickMs = OBJ_MISC.nestMs;
-          for (const n of left) for (let i = 0; i < 2; i++) spawnAt(s, 'mirerat', n.x + (Math.random() - 0.5) * 40, n.y + 24);
+          for (const n of left) for (let i = 0; i < 2; i++) spawnAt(s, PLANETS[s.planet].swarm, n.x + (Math.random() - 0.5) * 40, n.y + 24);
         }
       }
       break;

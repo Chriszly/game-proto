@@ -3,8 +3,9 @@
 A survivor-style auto-attack roguelike built with [Phaser 4](https://phaser.io), TypeScript and
 Vite, part of the [game hub](../../README.md).
 
-Pick a hero (blaster soldiers, blade knights, a rebel commander or a trio of battle bots) and fight the Rift Crusade across four worlds: the Dune, Swamp, Ice and
-Lava worlds. On each you hold out for five minutes while its faction pours in from every side, then
+Pick a hero (blaster soldiers, blade knights, a rebel commander or a trio of battle bots) and fight the Rift Crusade across four of eight worlds: from the Dune world,
+the space map lets you choose your way through two of the Swamp, Spore, Scrap, Ice, Crystal and
+Storm worlds to the Lava world. On each you hold out for five minutes while its faction pours in from every side, then
 beat its boss. You only steer: your weapon fires (or your blade strikes) on its own. Shot-down foes drop lumen shards, and
 every level-up pauses the run on three upgrade cards (four for Elara Voss). Your hero, level and kit carry over from
 world to world, and between worlds a star map offers a trader, an elite fight, a rest or an event.
@@ -23,7 +24,7 @@ foes and bolts.
 | Touch: put a finger down anywhere and drag | A steering stick appears where the finger went down; walk the way you drag, faster the further out (the stick follows a finger that goes past its rim) |
 | Space, or the round button bottom right | Signature move, once charged |
 | Tap a hero card, or 1-9, 0, - and =; then Fight, or Enter | Choose a hero and start the run |
-| Tap a card, or 1 / 2 / 3 (and 4 on Elara's level-ups) | Choose an upgrade at a level-up, a node on the star map, an offer at the trader or an answer to an event |
+| Tap a card, or 1 / 2 / 3 (and 4 on Elara's level-ups) | Choose an upgrade at a level-up, the next planet on the space map, a node on the star map, an offer at the trader or an answer to an event |
 | Continue, Enter or Space | Close the panel of a hero just unlocked; the run waits behind it |
 | Reroll, or 4 | At the trader: new offers for a few credits |
 | Leave, or Enter | At the trader: on to the next world |
@@ -40,15 +41,15 @@ foes and bolts.
 | Captain Rook (slate armour, bronze markings) | Twin pistols: alternating shots at the two nearest bots | **Rally Order**: 5 s of +50% fire rate (12 s) | Gunslinger, Commander, Demolitions |
 | Legionary TR-9 (charcoal armour, orange lenses) | Spread rifle: three wide, inaccurate bolts at the nearest bot. 150 health, slow | **Brace**: 3 s without damage, knocks bots back (13 s) | Suppressor, Riot Shield, Drop Squad |
 | Corporal Bram-17 (sand armour, pink markings) | Carbine: straight bolts at the nearest bot | **Frag Out**: a grenade that clears a circle (9 s) | Marksman, Jump Trooper, Brothers in Arms |
-| Kael Varro (magenta blade) | Slashes in front. Fast and fragile; Temper fills as he kills and drains as he heals | **Leap Strike**: leaps onto the strongest foe and slashes all round (10 s) | Prodigy, Ace Pilot, The Fall (turns him crimson and to the Hollow) |
-| Lord Vharn (turquoise blade) | Throws his blade, which flies out and back. 210 health, armoured, slow | **Grip**: lifts the 5 nearest foes and crushes them (12 s) | Dread, Iron Grip, Life Support |
-| Master Oom (golden blade) | A Current push ripples out around him. Tiny, very fast, 70 health | **Somersault**: a spinning leap that cuts through foes (8 s) | Stillness, Whirlwind, Old Teacher |
+| Kael Varro (magenta blade) | Slashes in front. Fast and reckless; Temper fills as he kills and drains as he heals | **Leap Strike**: leaps onto the strongest foe and slashes all round (10 s) | Prodigy, Ace Pilot, The Fall (turns him crimson and to the Hollow) |
+| Lord Vharn (turquoise blade) | Throws his blade, which flies out and back. 160 health, armoured, slow | **Grip**: lifts the 5 nearest foes and crushes them (12 s) | Dread, Iron Grip, Life Support |
+| Master Oom (golden blade) | A Current push ripples out around him. Tiny, very fast, 175 health, lightly armoured | **Somersault**: a spinning leap that cuts through foes (8 s) | Stillness, Whirlwind, Old Teacher |
 | Elder Corvin Hale (sky blue blade) | A defensive spin hits every foe close by | **Deflect**: 3 s of foe bolts flying back, and foes that touch him thrown off (11 s) | Bulwark, Persuasion, Vantage |
 | Regent Veyl (lime lightning) | Forked lightning chains from foe to foe. Little health and slow, huge damage | **Overload**: 3 s of lightning in every direction (12 s) | Storm, Puppet Master, Dark Bargain |
-| Kresh the Twinblade (violet staff blade) | His double-ended staff orbits him. Fast, medium health | **Hunt**: marks the strongest foe and dashes in for triple damage (9 s) | Dervish, Stalker, Rebuilt |
+| Kresh the Twinblade (violet staff blade) | His double-ended staff orbits him. Fast and tough | **Hunt**: marks the strongest foe and dashes in for triple damage (9 s) | Dervish, Stalker, Rebuilt |
 | Master Joren Vask (royal blue blade) | A fast flurry strikes in four directions around him. **Edge**: every 10th hit is a critical hit | **Breaking Point**: one huge strike that stuns the strongest foe (12 s) | Duelist Form, Breaker, Council Seat |
-| Commander Elara Voss (red) | Precise pistol: always aims at the nearest foe. 100 health, medium speed. **Hope**: her level-ups offer 4 cards instead of 3 | **Call for Aid**: plants a signal flag, and rebel fighters bombard the area round it (16 s) | Sharpshooter, Rebel Network, Diplomat |
-| Triad-77 (white) | Three skinny battle bots moving as one unit, each shooting the foe nearest to it. 40 health per bot; a fallen bot is rebuilt after 10 s, and the run ends only when all are down | **Formation Shift**: toggles Spread (a wide triangle) and Column (stacked, all firing at the nearest foe, triple damage) (2.5 s) | Firing Line, Factory, Uplink |
+| Commander Elara Voss (red) | Precise pistol: always aims at the nearest foe. 95 health, medium speed. **Hope**: her level-ups offer 4 cards instead of 3 | **Call for Aid**: plants a signal flag, and rebel fighters bombard the area round it (16 s) | Sharpshooter, Rebel Network, Diplomat |
+| Triad-77 (white) | Three skinny battle bots moving as one unit, each shooting the foe nearest to it. about 42 health per bot; a fallen bot is rebuilt after 10 s, and the run ends only when all are down | **Formation Shift**: toggles Spread (a wide triangle) and Column (stacked, all firing at the nearest foe, triple damage) (2.5 s) | Firing Line, Factory, Uplink |
 
 Only Legionary TR-9 is open from the start. Every other hero unlocks through a deed, which the game
 never shows: a locked card is a dark placeholder with no art or name. When a deed is done, the run
@@ -59,8 +60,8 @@ the next run on. The deeds:
 | --- | --- |
 | Corporal Bram-17 | Take Legionary TR-9's Drop Squad path to tier 5 |
 | Captain Rook | Take Corporal Bram-17's Brothers in Arms path to tier 5 |
-| Kael Varro | Reach the Swamp world |
-| Regent Veyl | Reach the Ice world |
+| Kael Varro | Reach the second world |
+| Regent Veyl | Reach the third world |
 | Master Joren Vask | Reach the Lava world |
 | Master Oom | Clear the Swamp world taking at most 5 toad globs |
 | Elder Corvin Hale | Win an elite arena on the star map |
@@ -76,10 +77,12 @@ hero it shows as played (a world reached) or unlocked.
 
 ### The run: the Rift Crusade
 
-A run crosses four planets in a row. Each lasts five minutes and ends with its boss; the clock
-starts again on each, and the HUD shows where you are (for example "2/4 Swamp world") and your
-credits. Your hero, level, abilities and gear carry over. Each world is tougher than the last: its
-foes have more health, hit harder and come faster.
+A run makes four jumps: it starts on the Dune world and ends on the Lava world, and after each of
+the first two bosses the space map lets you pick the next planet from three (see below). Each
+world lasts five minutes and ends with its boss; the clock starts again on each, and the HUD shows
+where you are (for example "2/4 Spore world") and your credits. Your hero, level, abilities and
+gear carry over. Each jump is tougher than the last: its foes have more health, hit harder and
+come faster.
 
 - Foes appear just off screen and come at you. More come every minute, and they get tougher; at
   most 250 are on the field at once. At 1:30, 3:00 and 4:15 a ring of them closes in. Once the
@@ -95,9 +98,28 @@ foes have more health, hit harder and come faster.
 | 1 Dune world | Scrap bots (red and amber) | **Clankers** swarm. **Rollerbombs** stop and glow when close, then rush in a straight line and explode: step aside. | **The Grinder Crawler**: a giant tread tank that fires fans of shells, calls in Clankers, and gets faster below half health |
 | 2 Swamp world | Wild beasts (lime) | **Mire rats** run in fast weaving packs. **Spitter toads** stop in range and spit globs that slow you. | **The Bog Mother**: spits fans of globs, spawns packs of young and leaves bog pools that slow you |
 | 3 Ice world | Iron Dominion (periwinkle and white) | **Line troopers** come in squads of five that advance in a line and fire volleys together. **Walker gunners** are slow and fire heavy bursts. | **The Siege Walker**: four legs, shell volleys, artillery barrages that light up the ground before they land, and stomps when you get close |
+| 2 Spore world | Mycelid Bloom (magenta and pink) | **Sporelings** drift in clumps and burst into spore clouds that slow you. **Puffcaps** stop in range and puff out rings of spores. | **The Spore Queen**: spits fans of spores, calls in sporelings and leaves spore pools that slow you |
+| 2 Scrap world | Scrap Horde (rust and copper) | **Scrappers** run in fast packs of three. **Haulers** are slow and tough, and fall apart into scrappers when broken. | **The Scrap King**: a welded crawler that fires heavy fans of shells and calls in scrappers, faster below half health |
+| 3 Crystal world | Shardborn (violet and aqua) | **Shardlings** come in pairs and burst into splinters that fly out. **Prisms** stop in range and fire lances of bolts in a line. | **The Prism Colossus**: splinter volleys, barrages that light up the ground before they land, and stomps when you get close |
+| 3 Storm world | Stormcallers (electric yellow) | **Wisps** weave fast. **Conductors** stop in range and call lightning down where you stand. **Lightning** strikes near you now and then, after a warning ring. | **The Storm Herald**: lightning dashes along a line it marks first; below half health it sends out rings of sparks with gaps |
 | 4 Lava world | Hollow cult (violet and ember) | **Ash acolytes** swarm and burst into embers that burn for a moment. **Fallen knights** block bolts from the front with a shield and dash at you; hit them while their guard is down. **Lava vents** glow, then erupt. | **The Hollow Champion**: fast blade dashes along a line it marks first; below half health it burns and sends out rings of fire with gaps to slip through |
 
 ![The Bog Mother on the Swamp world](docs/screenshots/swamp.webp)
+
+![Sporelings and an elite puffcap on the Spore world](docs/screenshots/world-spore.webp)
+
+![A swarm of wisps and an elite conductor on the Storm world](docs/screenshots/world-storm.webp)
+
+### The space map
+
+After the boss of the Dune world falls (and again after the second world's), the space map shows
+the crusade's four jumps as columns of planets, with the route flown so far lit. Tap one of the
+next jump's three planets (or press 1, 2 or 3): each card shows its name, a line on what waits
+there and its faction, once you have landed on it in any run (until then it reads "Uncharted"; the
+planets landed on are saved in the browser). The Lava world is always the last jump. Then the star
+map comes, on the way to the planet you chose.
+
+![The space map: the route so far and the next jump's three planets](docs/screenshots/space-map.webp)
 
 ### Side objectives
 
@@ -114,10 +136,10 @@ under way when the boss comes is called off.
 | Escort the stranded bot | Every world | Stay near the bot, which only rolls on while you are close, until it reaches its goal; foes touching it wear it down (60 s) | 30 credits |
 | Destroy the relay beacons | Every world | Break 3 beacons (45 s) | A level |
 | Survive the shrinking zone | Every world | Stay inside a zone that closes in for 30 s; 4 s outside fails it | 25 credits |
-| Raid the scrap crawler cache | Dune world | Break the cache; an elite guards it (50 s) | 45 credits |
-| Purge the spore nests | Swamp world | Break 4 nests, which breed mire rats while they stand (50 s) | Upgrade card |
+| Raid the guarded cache | Dune, Scrap and Crystal worlds | Break the cache; an elite guards it (50 s) | 45 credits |
+| Purge the nests | Swamp and Spore worlds | Break 4 nests, which breed the world's swarm while they stand (50 s) | Upgrade card |
 | Thaw the frozen squad | Ice world | Stand by each of 3 frozen troopers for 1.5 s; each one freed fights beside you for 40 s (60 s) | A level |
-| Seal the lava vents | Lava world | Stand on each of 3 vents for 1.5 s while the open ones erupt (50 s) | Upgrade card |
+| Seal the vents | Lava and Storm worlds | Stand on each of 3 vents for 1.5 s while the open ones erupt (50 s) | Upgrade card |
 | Quick draw | Captain Rook | Down 70 foes (30 s) | 30 credits |
 | Hold the drop zone | Legionary TR-9 | Stay 8 s in a small drop zone while foes push in hard (35 s) | Upgrade card |
 | Recon run | Corporal Bram-17 | Reach 4 markers far apart (40 s) | 30 credits |
@@ -137,7 +159,7 @@ and drop nothing.
 
 ![Defend the position: the ring fills as you hold it](docs/screenshots/objective-defend.webp)
 
-![Purge the spore nests on the Swamp world](docs/screenshots/objective-nests.webp)
+![Purge the nests on the Swamp world](docs/screenshots/objective-nests.webp)
 
 ![Elder Corvin Hale shelters the pilgrim](docs/screenshots/objective-pilgrim.webp)
 
@@ -164,8 +186,9 @@ lying when a world is cleared are lost.
 
 ### The star map
 
-After a boss falls, you collect what is lying about, earn credits for the clear and choose one of
-two or three nodes on the star map (tap it or press its number):
+After a boss falls, you collect what is lying about, earn credits for the clear, choose the next
+planet on the space map and then one of two or three nodes on the star map on the way there (tap
+it or press its number):
 
 - **Trader**: three offers (a gear piece or an ability tier, priced by tier) bought with credits,
   as many as you can afford, and a reroll for 8 credits.
@@ -188,12 +211,14 @@ cleared (12).
 
 ![A level-up](docs/screenshots/level-up.webp)
 
+![New cards: Orbital Beacon, Executioner Rounds and the Threat Scanner](docs/screenshots/new-skills.webp)
+
 Each level-up offers three different cards (four for Elara Voss), at least one from your hero's own paths while any are
-left. Every upgrade has five tiers. A run holds at most **5 abilities** (your paths and pool
+left. Every upgrade has five tiers. A run holds at most **6 abilities** (your paths and pool
 skills) and **4 pieces of gear**; when both are full, only what you hold can come up, and when
 nothing is left a Field Ration heals you.
 
-- **Hero paths** (three per hero), soldiers: Gunslinger (fire rate, ricochets, quick-draw bursts), Commander
+- **Hero paths** (three per hero, plus a drill, below), soldiers: Gunslinger (fire rate, ricochets, quick-draw bursts), Commander
   (1-3 squad troopers), Demolitions (timed charges, bigger blasts, bomblets); Suppressor (a slowing,
   burning cone), Riot Shield (blocks the front, bashes, reflects), Drop Squad (1-3 squad
   troopers land in drop pods and follow him, supply crates); Marksman (piercing, heavy rounds), Jump Trooper (jet dashes that leave fire,
@@ -216,17 +241,43 @@ nothing is left a Field Ration heals you.
   chain, kills speed him up), Rebuilt (rises once on mechanical legs); Duelist Form (more strikes,
   a lunge, a counter), Breaker (hits strip armour from elites and bosses), Council Seat (turns foe
   bolts back, a ward).
+- **Drills** (each hero's fourth path): five plain gains in the hero's own order:
+
+  | Hero | Drill | Tiers 1 to 5 |
+  | --- | --- | --- |
+  | Rook | Old Soldier | +20 health, +0.5 health/s, +8% damage, +1 health/s, +15% fire rate |
+  | TR-9 | Garrison Drill | +8% damage, +0.5 health/s, +8% damage, signature 15% faster, +15% fire rate |
+  | Bram | Field Kit | +0.5 health/s, +8% damage, +20 health, +1 health/s, +15% fire rate |
+  | Kael | Momentum | +20 health, +8% damage, +0.5 health/s, +6% speed, +15% damage |
+  | Vharn | Juggernaut | +30 health, +8% damage, -6% damage taken, +30 health, +15% damage |
+  | Oom | Inner Calm | +20 health, +0.5 health/s, signature 15% faster, +30 health, +1 health/s |
+  | Corvin | Old Guard | +20 health, -6% damage taken, +8% damage, +1 health/s, +15% damage |
+  | Veyl | Cold Ambition | +8% damage, +6% crit chance, +8% damage, signature 15% faster, +15% damage |
+  | Kresh | Scavenger | +20 health, +0.5 health/s, +8% damage, +30 health, +1 health/s |
+  | Joren | Swordmaster | +20 health, +0.5 health/s, +8% damage, +30 health, +1 health/s |
+  | Elara | Resistance Cell | +8% damage, +20 health, signature 15% faster, +15% fire rate, +15% damage |
+  | Triad-77 | Hardened Chassis | -6% damage taken, +8% damage, -6% damage taken, +15% fire rate, +15% damage |
+
 - **Blaster pool** (soldiers, Elara and Triad-77): Ricochet Rounds, Overcharge (pierce), Thermal Grenade, Stun Rounds
   (slow), Quick Reload, Covering Drone, Scatter Shot, Call-In (a supply crate that crashes on the
-  swarm and leaves a medkit).
+  swarm and leaves a medkit), Orbital Beacon (a strike from orbit on the thickest crowd every 9 to
+  5 s), Executioner Rounds (a foe a hit leaves under 8 to 18% health falls; an elite under half
+  that, never a boss).
 - **Blade pool** (knights): Blade Throw, Wide Arc (reach), Riposte (a counter after a hit),
-  Blade Dash, Spinning Guard (orbiting blades), Focus (critical hits).
+  Blade Dash, Spinning Guard (orbiting blades), Focus (critical hits), Crescent Wave (a cutting
+  blast toward the nearest foe every 4 to 2.4 s), Iron Skin (-4 to -20% damage taken, +10 to +60
+  health).
 - **Current pool** (Kael, Oom, Corvin, Joren): Push Wave, Mending (healing), Foresight (dodge),
-  Calm Mind (signature cooldown).
+  Calm Mind (signature cooldown), Stasis Pulse (slows every foe close by by 40 to 60%, every 7 to
+  5 s), Battle Trance (+5 to +18% speed, 3 to 12% dodge).
 - **Hollow pool** (Vharn, Veyl, Kresh, and Kael after The Fall): Lightning Arc, Grip, Rage,
-  Drain. Joren may also draw Lightning Arc.
+  Drain, Dark Nova (a blast all round you every 6 to 4 s), Soul Harvest (0.4 to 1.3 health back
+  for each kill). Joren may also draw Lightning Arc.
 - **Gear**: Servo Boots (speed), Magnet Coil (pickup range), Plate Armour, Overclock (cooldowns),
-  Medpack (regeneration), Power Cell (damage), Lumen Lens (XP), Targeting Chip (critical hits).
+  Medpack (regeneration), Power Cell (damage), Lumen Lens (XP), Targeting Chip (critical hits),
+  Threat Scanner (+10 to +50% damage to elites and bosses), Salvage Rig (+20 to +100% credits
+  picked up), Barrier Emitter (blocks a whole hit, then recharges for 21 to 9 s), Adrenal Stim
+  (+10 to +30% speed and damage below 40% health).
 - **Capstones**: a path at tier 5 together with its gear piece unlocks at once:
 
   | Hero | Capstone | Path + gear | Effect |
@@ -293,8 +344,8 @@ nothing is left a Field Ration heals you.
 
 ![Triad-77 in Spread, linked by its command bot](docs/screenshots/triad.webp)
 
-The longest run, the wins and the furthest world reached per hero, and the heroes unlocked, are
-saved in the browser.
+The longest run, the wins and the furthest world reached per hero, the heroes unlocked and the
+planets landed on are saved in the browser.
 
 ## Running locally
 

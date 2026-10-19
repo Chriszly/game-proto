@@ -25,8 +25,54 @@ export interface UpgradeDef {
 
 export const MAX_TIER = 5;
 /** A run holds at most this many abilities (paths and pool skills) and this many gear pieces. */
-export const MAX_ABILITIES = 5;
+export const MAX_ABILITIES = 6;
 export const MAX_GEAR = 4;
+
+/** What one tier of a drill adds; `drillMods` in state.ts sums them into the stats. */
+export type DrillStep = 'damage' | 'damageBig' | 'health' | 'healthBig' | 'armour' | 'speed' | 'crit' | 'regen' | 'regenBig' | 'sig' | 'fire';
+/** Each step's numbers: damage and fire rate as a share, health in points, armour and crit as a share, regen per second. */
+export const DRILL_STEPS: Record<DrillStep, { damage?: number; hp?: number; armour?: number; speed?: number; crit?: number; regen?: number; sig?: number; fireRate?: number }> = {
+  damage: { damage: 0.08 },
+  damageBig: { damage: 0.15 },
+  health: { hp: 20 },
+  healthBig: { hp: 30 },
+  armour: { armour: 0.06 },
+  speed: { speed: 0.06 },
+  crit: { crit: 0.06 },
+  regen: { regen: 0.5 },
+  regenBig: { regen: 1 },
+  sig: { sig: 0.15 },
+  fire: { fireRate: 0.15 },
+};
+/** The tier line of each step. */
+const DRILL_TEXT: Record<DrillStep, TextKey> = {
+  damage: 'drillDamage', damageBig: 'drillDamageBig', health: 'drillHealth', healthBig: 'drillHealthBig', armour: 'drillArmour',
+  speed: 'drillSpeed', crit: 'drillCrit', regen: 'drillRegen', regenBig: 'drillRegenBig', sig: 'drillSig', fire: 'drillFire',
+};
+
+/** Each hero's drill: a fourth path of plain gains, five steps in order. */
+export const DRILLS: Record<HeroId, { id: string; name: TextKey; blurb: TextKey; steps: readonly [DrillStep, DrillStep, DrillStep, DrillStep, DrillStep] }> = {
+  rook: { id: 'old-soldier', name: 'oldSoldierName', blurb: 'oldSoldierBlurb', steps: ['health', 'regen', 'damage', 'regenBig', 'fire'] },
+  tr9: { id: 'garrison', name: 'garrisonName', blurb: 'garrisonBlurb', steps: ['damage', 'regen', 'damage', 'sig', 'fire'] },
+  bram: { id: 'field-kit', name: 'fieldKitName', blurb: 'fieldKitBlurb', steps: ['regen', 'damage', 'health', 'regenBig', 'fire'] },
+  kael: { id: 'momentum', name: 'momentumName', blurb: 'momentumBlurb', steps: ['health', 'damage', 'regen', 'speed', 'damageBig'] },
+  vharn: { id: 'juggernaut', name: 'juggernautName', blurb: 'juggernautBlurb', steps: ['healthBig', 'damage', 'armour', 'healthBig', 'damageBig'] },
+  oom: { id: 'inner-calm', name: 'innerCalmName', blurb: 'innerCalmBlurb', steps: ['health', 'regen', 'sig', 'healthBig', 'regenBig'] },
+  corvin: { id: 'old-guard', name: 'oldGuardName', blurb: 'oldGuardBlurb', steps: ['health', 'armour', 'damage', 'regenBig', 'damageBig'] },
+  veyl: { id: 'cold-ambition', name: 'coldAmbitionName', blurb: 'coldAmbitionBlurb', steps: ['damage', 'crit', 'damage', 'sig', 'damageBig'] },
+  kresh: { id: 'scavenger', name: 'scavengerName', blurb: 'scavengerBlurb', steps: ['health', 'regen', 'damage', 'healthBig', 'regenBig'] },
+  joren: { id: 'swordmaster', name: 'swordmasterName', blurb: 'swordmasterBlurb', steps: ['health', 'regen', 'damage', 'healthBig', 'regenBig'] },
+  elara: { id: 'resistance-cell', name: 'resistanceCellName', blurb: 'resistanceCellBlurb', steps: ['damage', 'health', 'sig', 'fire', 'damageBig'] },
+  triad: { id: 'hardened-chassis', name: 'hardenedChassisName', blurb: 'hardenedChassisBlurb', steps: ['armour', 'damage', 'armour', 'fire', 'damageBig'] },
+};
+
+function drillDefs(): UpgradeDef[] {
+  return (Object.keys(DRILLS) as HeroId[]).map((hero) => {
+    const d = DRILLS[hero];
+    const tiers = d.steps.map((step) => DRILL_TEXT[step]) as unknown as UpgradeDef['tiers'];
+    return { id: d.id, kind: 'path', hero, name: d.name, blurb: d.blurb, tiers };
+  });
+}
 
 const defs: UpgradeDef[] = [
   // Captain Rook
@@ -126,6 +172,15 @@ const defs: UpgradeDef[] = [
   {
     id: 'callin', kind: 'pool', pool: 'blaster', name: 'callinName', blurb: 'callinBlurb',
     tiers: ['callin1', 'callin2', 'callin3', 'callin4', 'callin5'],
+  },
+
+  {
+    id: 'orbital-beacon', kind: 'pool', pool: 'blaster', name: 'orbitalBeaconName', blurb: 'orbitalBeaconBlurb',
+    tiers: ['orbitalBeacon1', 'orbitalBeacon2', 'orbitalBeacon3', 'orbitalBeacon4', 'orbitalBeacon5'],
+  },
+  {
+    id: 'executioner', kind: 'pool', pool: 'blaster', name: 'executionerName', blurb: 'executionerBlurb',
+    tiers: ['executioner1', 'executioner2', 'executioner3', 'executioner4', 'executioner5'],
   },
 
   // Kael Varro
@@ -244,6 +299,14 @@ const defs: UpgradeDef[] = [
     id: 'focus', kind: 'pool', pool: 'blade', name: 'focusName', blurb: 'focusBlurb',
     tiers: ['focus1', 'focus2', 'focus3', 'focus4', 'focus5'],
   },
+  {
+    id: 'crescent', kind: 'pool', pool: 'blade', name: 'crescentName', blurb: 'crescentBlurb',
+    tiers: ['crescent1', 'crescent2', 'crescent3', 'crescent4', 'crescent5'],
+  },
+  {
+    id: 'iron-skin', kind: 'pool', pool: 'blade', name: 'ironSkinName', blurb: 'ironSkinBlurb',
+    tiers: ['ironSkin1', 'ironSkin2', 'ironSkin3', 'ironSkin4', 'ironSkin5'],
+  },
   // The Current pool
   {
     id: 'push-wave', kind: 'pool', pool: 'current', name: 'pushWaveName', blurb: 'pushWaveBlurb',
@@ -260,6 +323,14 @@ const defs: UpgradeDef[] = [
   {
     id: 'calm-mind', kind: 'pool', pool: 'current', name: 'calmMindName', blurb: 'calmMindBlurb',
     tiers: ['calmMind1', 'calmMind2', 'calmMind3', 'calmMind4', 'calmMind5'],
+  },
+  {
+    id: 'stasis', kind: 'pool', pool: 'current', name: 'stasisName', blurb: 'stasisBlurb',
+    tiers: ['stasis1', 'stasis2', 'stasis3', 'stasis4', 'stasis5'],
+  },
+  {
+    id: 'battle-trance', kind: 'pool', pool: 'current', name: 'battleTranceName', blurb: 'battleTranceBlurb',
+    tiers: ['battleTrance1', 'battleTrance2', 'battleTrance3', 'battleTrance4', 'battleTrance5'],
   },
   // The Hollow pool
   {
@@ -278,6 +349,14 @@ const defs: UpgradeDef[] = [
     id: 'drain', kind: 'pool', pool: 'hollow', name: 'drainName', blurb: 'drainBlurb',
     tiers: ['drain1', 'drain2', 'drain3', 'drain4', 'drain5'],
   },
+  {
+    id: 'dark-nova', kind: 'pool', pool: 'hollow', name: 'darkNovaName', blurb: 'darkNovaBlurb',
+    tiers: ['darkNova1', 'darkNova2', 'darkNova3', 'darkNova4', 'darkNova5'],
+  },
+  {
+    id: 'soul-harvest', kind: 'pool', pool: 'hollow', name: 'soulHarvestName', blurb: 'soulHarvestBlurb',
+    tiers: ['soulHarvest1', 'soulHarvest2', 'soulHarvest3', 'soulHarvest4', 'soulHarvest5'],
+  },
   // The Gear deck
   { id: 'boots', kind: 'gear', name: 'bootsName', blurb: 'bootsBlurb', tiers: ['boots1', 'boots2', 'boots3', 'boots4', 'boots5'] },
   { id: 'magnet', kind: 'gear', name: 'magnetName', blurb: 'magnetBlurb', tiers: ['magnet1', 'magnet2', 'magnet3', 'magnet4', 'magnet5'] },
@@ -287,6 +366,12 @@ const defs: UpgradeDef[] = [
   { id: 'cell', kind: 'gear', name: 'cellName', blurb: 'cellBlurb', tiers: ['cell1', 'cell2', 'cell3', 'cell4', 'cell5'] },
   { id: 'lens', kind: 'gear', name: 'lensName', blurb: 'lensBlurb', tiers: ['lens1', 'lens2', 'lens3', 'lens4', 'lens5'] },
   { id: 'chip', kind: 'gear', name: 'chipName', blurb: 'chipBlurb', tiers: ['chip1', 'chip2', 'chip3', 'chip4', 'chip5'] },
+  { id: 'scanner', kind: 'gear', name: 'scannerName', blurb: 'scannerBlurb', tiers: ['scanner1', 'scanner2', 'scanner3', 'scanner4', 'scanner5'] },
+  { id: 'salvager', kind: 'gear', name: 'salvagerName', blurb: 'salvagerBlurb', tiers: ['salvager1', 'salvager2', 'salvager3', 'salvager4', 'salvager5'] },
+  { id: 'barrier', kind: 'gear', name: 'barrierName', blurb: 'barrierBlurb', tiers: ['barrier1', 'barrier2', 'barrier3', 'barrier4', 'barrier5'] },
+  { id: 'stim', kind: 'gear', name: 'stimName', blurb: 'stimBlurb', tiers: ['stim1', 'stim2', 'stim3', 'stim4', 'stim5'] },
+  // Each hero's fourth path, its drill: plain numbers per tier (`DRILLS`), read by `statsOf`.
+  ...drillDefs(),
 ];
 
 export const UPGRADES: Record<string, UpgradeDef> = Object.fromEntries(defs.map((d) => [d.id, d]));

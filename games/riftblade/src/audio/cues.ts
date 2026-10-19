@@ -30,7 +30,7 @@ const BOMB_SOUND: Partial<Record<Bomb['kind'], SfxName>> = {
   grenade: 'toss', frag: 'toss', charge: 'charge', crate: 'whistle', orbital: 'whistle', carpet: 'whistle',
 };
 const HAZARD_SOUND: Partial<Record<Hazard['kind'], SfxName>> = {
-  vent: 'warn', shell: 'warn', stomp: 'stomp', ring: 'fireRing', bog: 'glob',
+  vent: 'warn', shell: 'warn', stomp: 'stomp', ring: 'fireRing', bog: 'glob', strike: 'warn',
 };
 
 /** How long after a ring wave the music stays tense, ms. */
@@ -130,7 +130,7 @@ export class SoundCues {
     for (const b of s.bullets) {
       if (!fresh(b.id)) continue;
       if (!b.hostile) play(boltSound(b.color, b.spin));
-      else if (seen(b.x, b.y)) play(b.color === 'glob' ? 'glob' : b.color === 'volley' || b.color === 'slug' ? 'enemyVolley' : 'enemyShot');
+      else if (seen(b.x, b.y)) play(b.color === 'glob' || b.color === 'spore' ? 'glob' : b.color === 'volley' || b.color === 'slug' || b.color === 'splinter' ? 'enemyVolley' : 'enemyShot');
     }
     const hero = s.hero ? HEROES[s.hero] : null;
     if (s.slashes.some((f) => fresh(f.id))) {
@@ -230,7 +230,7 @@ export class SoundCues {
       if (s.phase === 'levelup' && was === 'run' && s.pendingLevels > 0) play('levelUp');
       if (s.phase === 'won') playSting(STINGS, 'win');
       else if (s.phase === 'lost') playSting(STINGS, 'lose');
-      else if (was === 'run' && s.phase !== 'run' && (this.arena ? s.arenaWon : s.after === 'map' || s.phase === 'map')) {
+      else if (was === 'run' && s.phase !== 'run' && (this.arena ? s.arenaWon : s.after === 'chart' || s.phase === 'chart')) {
         playSting(STINGS, 'cleared');
       }
     }
@@ -250,6 +250,7 @@ export class SoundCues {
       case 'select':
         [song, part] = [MENU_SONG, 'select'];
         break;
+      case 'chart':
       case 'map':
       case 'event':
         [song, part] = [MENU_SONG, 'map'];

@@ -6,20 +6,21 @@ import { HERO_R, POWER_UPS, RUN_MS, clock, freshState, isStructure, statsOf, typ
 import { choose, inRingGap, phalanxSpots, shieldHalf, startRun, suppressorHalf, suppressorLength } from '../game/sim';
 import { bladeColor, dreadRadius, heroVariant, orbitBlades } from '../game/blades';
 import { bubble, rebuildTime } from '../game/squad';
-import { buy, chooseEvent, chooseNode, frame, leave, reroll } from '../game/voyage';
-import { ARENA_MS, BOSSES, CHAMPION, PLANETS, SIEGE, VENT, planetLabel } from '../game/planets';
+import { buy, chooseEvent, chooseNode, chooseWorld, chartOptions, frame, leave, reroll } from '../game/voyage';
+import { ARENA_MS, BOSSES, CHAMPION, PLANETS, SIEGE, STRIKE, VENT, planetLabel } from '../game/planets';
 import { UPGRADES, MAX_TIER } from '../game/upgrades';
-import { isUnlocked, loadProgress, recordRun, recordUnlocks, unlockedHeroes, type Progress } from '../game/save';
+import { isUnlocked, loadProgress, recordCharted, recordRun, recordUnlocks, unlockedHeroes, type Progress } from '../game/save';
 import { C, hex } from '../art/glow';
 import { heroKey } from '../art/sprites';
 import { t } from '../i18n';
 import { bladeKey } from '../art/knights';
+import { bakeWorlds } from '../art/worlds';
 import { ui } from '../../../../shared/audio';
 import { OBJ_COLOR, drawObjectiveGround, drawPowerUp, drawStructure, objectiveTarget } from './objectiveArt';
 import { objectiveHint, objectiveName, OBJ_MISC } from '../game/objectives';
 import { SoundCues } from '../audio/cues';
 import { sfx } from '../audio/sfx';
-import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader, unlockPanel } from '../ui/panels';
+import { Panel, endScreen, eventPanel, heroSelect, levelUp, spaceMap, starMap, trader, unlockPanel } from '../ui/panels';
 import {
   BOSS_BAR, CENTER, CREDITS_TAG, OBJECTIVE_HUD, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, SCREEN, FRAME, XP_BAR, fitLayout, inside,
 } from './layout';
@@ -80,6 +81,8 @@ export class GameScene extends Phaser.Scene {
   /** What the panel showing was built from, so it is rebuilt when any of it changes. */
   private shown = '';
   private progress: Progress = loadProgress();
+  /** Whether `bakeWorlds` has run (see `draw`). */
+  private worldsBaked = false;
   /** The hero chosen on the select screen (kept between runs), and deeds already saved this run. */
   chosen: HeroId = 'tr9';
   private savedDeeds = 0;
@@ -268,6 +271,9 @@ export class GameScene extends Phaser.Scene {
     if (s.phase === 'levelup') {
       if (s.choices?.[i]) sfx('card');
       choose(s, i);
+    } else if (s.phase === 'chart') {
+      if (chartOptions(s)[i] !== undefined) sfx('node');
+      chooseWorld(s, i);
     } else if (s.phase === 'map') {
       if (s.nodes[i]) sfx('node');
       chooseNode(s, i);
@@ -361,6 +367,9 @@ export class GameScene extends Phaser.Scene {
       this.stick = null;
     }
     this.cues.update(this.state);
+    // A planet landed on is charted in the save: the space map names its faction from then on.
+    const here = this.state.hero ? PLANETS[this.state.planet].id : null;
+    if (here && this.state.phase === 'run' && !this.progress.charted.includes(here)) this.progress = recordCharted(here);
     if (this.panelKey() !== this.shown) this.syncPanel();
     this.draw();
   }
@@ -380,11 +389,12 @@ export class GameScene extends Phaser.Scene {
     this.panel = null;
     if ((s.phase === 'won' || s.phase === 'lost') && !this.recorded) {
       this.recorded = true;
-      this.progress = recordRun(s.hero!, s.runMs, s.phase === 'won', s.planet + 1);
+      this.progress = recordRun(s.hero!, s.runMs, s.phase === 'won', s.stage + 1, s.route.map((i) => PLANETS[i].id));
     }
     if (this.unlocking.length) this.panel = unlockPanel(this, this.unlocking[0]);
     else if (s.phase === 'select') this.panel = heroSelect(this, this.progress, this.chosen);
     else if (s.phase === 'levelup') this.panel = levelUp(this, s);
+    else if (s.phase === 'chart') this.panel = spaceMap(this, s, this.progress.charted);
     else if (s.phase === 'map') this.panel = starMap(this, s);
     else if (s.phase === 'trader') this.panel = trader(this, s);
     else if (s.phase === 'event') this.panel = eventPanel(this, s);
@@ -398,6 +408,13 @@ export class GameScene extends Phaser.Scene {
   private draw() {
     const s = this.state;
     const p = s.player;
+    // The four later planets' textures are painted the first time a run gets past the Dune world, not
+    // at boot: Phaser draws on Math.random for each texture's id, and the first minute's seeded draws
+    // (the playthrough's) stay as they were.
+    if (!this.worldsBaked && s.hero && (s.phase === 'chart' || s.planet !== 0)) {
+      bakeWorlds(this);
+      this.worldsBaked = true;
+    }
     const cam = this.cameras.main;
     cam.centerOn(p.x, p.y);
     this.drawGround(p.x, p.y, s.hero ? s.planet : 0);
@@ -436,6 +453,10 @@ export class GameScene extends Phaser.Scene {
         if (def.id === 'swamp') this.swampCell(g, gx, gy, bx, by, cell, deco);
         else if (def.id === 'ice') this.iceCell(g, gx, gy, bx, by, cell, deco);
         else if (def.id === 'lava') this.lavaCell(g, gx, gy, bx, by, cell, deco);
+        else if (def.id === 'spore') this.sporeCell(g, gx, gy, bx, by, cell, deco);
+        else if (def.id === 'scrap') this.scrapCell(g, gx, gy, bx, by, cell, deco);
+        else if (def.id === 'crystal') this.crystalCell(g, gx, gy, bx, by, cell, deco);
+        else if (def.id === 'storm') this.stormCell(g, gx, gy, bx, by, cell, deco);
         else this.duneCell(g, gx, gy, bx, by, cell, deco);
       }
     }
@@ -542,6 +563,94 @@ export class GameScene extends Phaser.Scene {
     for (let k = 0; k < 8; k++) g.fillCircle(bx + hash(gx, gy, k + 240) * cell, by + hash(gx, gy, k + 250) * cell, 1.2);
   }
 
+  private sporeCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, deco: number) {
+    // Threads of mycelium, mushroom caps on short stems, and drifting spores.
+    g.lineStyle(1.2, 0xd36bff, 0.12);
+    for (let k = 0; k < 2; k++) this.crack(g, gx, gy, bx + hash(gx, gy, k + 300) * cell, by + hash(gx, gy, k + 303) * cell, 70 + hash(gx, gy, k + 306) * 90, k * 10 + 310);
+    for (let k = 0; k < 3; k++) {
+      if (hash(gx, gy, k + 330) < 0.4) continue;
+      const x = bx + hash(gx, gy, k + 331) * cell;
+      const y = by + hash(gx, gy, k + 334) * cell;
+      const r = 6 + hash(gx, gy, k + 337) * 9;
+      g.lineStyle(1.5, deco, 0.22).lineBetween(x, y, x, y + r * 1.1);
+      g.fillStyle(0x3a0f3a, 0.7).slice(x, y, r, Math.PI, 0, false).fillPath();
+      g.lineStyle(1.5, deco, 0.32).beginPath().arc(x, y, r, Math.PI, 0, false).strokePath();
+      g.fillStyle(deco, 0.25).fillCircle(x - r * 0.4, y - r * 0.45, 1.5).fillCircle(x + r * 0.3, y - r * 0.6, 1.2);
+    }
+    g.fillStyle(deco, 0.16);
+    for (let k = 0; k < 8; k++) g.fillCircle(bx + hash(gx, gy, k + 350) * cell, by + hash(gx, gy, k + 360) * cell, 1.3);
+  }
+
+  private scrapCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, deco: number) {
+    // Scrap plates half sunk in the dirt, coiled cables and bolts.
+    for (let k = 0; k < 3; k++) {
+      if (hash(gx, gy, k + 400) < 0.35) continue;
+      const x = bx + hash(gx, gy, k + 401) * cell;
+      const y = by + hash(gx, gy, k + 404) * cell;
+      const w = 18 + hash(gx, gy, k + 407) * 30;
+      const h = 8 + hash(gx, gy, k + 410) * 14;
+      g.fillStyle(0x2a1d14, 0.75).fillRect(x, y, w, h);
+      g.lineStyle(1.5, deco, 0.25).strokeRect(x, y, w, h);
+      g.fillStyle(deco, 0.3).fillCircle(x + 4, y + 4, 1.4).fillCircle(x + w - 4, y + 4, 1.4);
+    }
+    const cx = bx + hash(gx, gy, 420) * cell;
+    const cy = by + hash(gx, gy, 421) * cell;
+    g.lineStyle(1.5, 0x7fb8b0, 0.16).beginPath();
+    for (let i = 0; i <= 16; i++) {
+      const a = (i / 16) * Math.PI * 3;
+      const r = 6 + i * 1.6;
+      if (i === 0) g.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6);
+      else g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6);
+    }
+    g.strokePath();
+    g.fillStyle(deco, 0.14);
+    for (let k = 0; k < 7; k++) g.fillRect(bx + hash(gx, gy, k + 430) * cell, by + hash(gx, gy, k + 440) * cell, 2.2, 2.2);
+  }
+
+  private crystalCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, deco: number) {
+    // Clusters of crystal spikes, faint facet lines and glints.
+    g.lineStyle(1, 0x9c7cff, 0.1);
+    for (let k = 0; k < 2; k++) this.crack(g, gx, gy, bx + hash(gx, gy, k + 500) * cell, by + hash(gx, gy, k + 503) * cell, 60 + hash(gx, gy, k + 506) * 80, k * 10 + 510);
+    for (let k = 0; k < 2; k++) {
+      if (hash(gx, gy, k + 530) < 0.4) continue;
+      const x = bx + hash(gx, gy, k + 531) * cell;
+      const y = by + hash(gx, gy, k + 534) * cell;
+      for (let i = 0; i < 3; i++) {
+        const h = 12 + hash(gx, gy, k * 3 + i + 540) * 18;
+        const lean = (i - 1) * 7;
+        const px = x + (i - 1) * 9;
+        g.fillStyle(0x1b1640, 0.75).fillTriangle(px - 5, y, px + 5, y, px + lean, y - h);
+        g.lineStyle(1.5, deco, 0.32).strokeTriangle(px - 5, y, px + 5, y, px + lean, y - h);
+      }
+    }
+    g.fillStyle(0xffffff, 0.24);
+    for (let k = 0; k < 6; k++) g.fillCircle(bx + hash(gx, gy, k + 560) * cell, by + hash(gx, gy, k + 570) * cell, 1);
+  }
+
+  private stormCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, deco: number) {
+    // Rain puddles, scorched lightning scars and wind streaks.
+    for (let k = 0; k < 2; k++) {
+      if (hash(gx, gy, k + 600) < 0.45) continue;
+      const x = bx + hash(gx, gy, k + 601) * cell;
+      const y = by + hash(gx, gy, k + 604) * cell;
+      const r = 18 + hash(gx, gy, k + 607) * 26;
+      g.fillStyle(0x141c2c, 0.7);
+      this.blob(g, gx, gy, x, y, r, 0.55, k + 610);
+      g.fillPath();
+      g.lineStyle(1, 0x9fb8ff, 0.18);
+      this.blob(g, gx, gy, x, y, r, 0.55, k + 610);
+      g.strokePath();
+    }
+    g.lineStyle(2, deco, 0.13);
+    this.crack(g, gx, gy, bx + hash(gx, gy, 620) * cell, by + hash(gx, gy, 621) * cell, 70 + hash(gx, gy, 622) * 70, 630);
+    g.lineStyle(1, 0xcfe0ff, 0.1);
+    for (let k = 0; k < 5; k++) {
+      const x = bx + hash(gx, gy, k + 640) * cell;
+      const y = by + hash(gx, gy, k + 650) * cell;
+      g.lineBetween(x, y, x + 14, y + 6);
+    }
+  }
+
   /** The Dune world: amber dune ridges, sand specks and the odd rock. */
   private duneCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, dune: number) {
     // Two dune ridges per cell, as gentle waves.
@@ -599,7 +708,12 @@ export class GameScene extends Phaser.Scene {
     }
     // Ground hazards: bog pools, embers, and warning rings that fill before a blast.
     for (const h of s.hazards) {
-      if (h.kind === 'bog') {
+      if (h.kind === 'spore') {
+        const k = Math.min(1, h.ms / 800);
+        u.fillStyle(0x6a1f6a, 0.3 * k).fillCircle(h.x, h.y, h.r);
+        u.lineStyle(1.5, 0xff7ad9, 0.3 * k).strokeCircle(h.x, h.y, h.r);
+        u.fillStyle(0xff7ad9, 0.25 * k).fillCircle(h.x - h.r * 0.3, h.y - h.r * 0.1, 2).fillCircle(h.x + h.r * 0.35, h.y + h.r * 0.2, 1.6);
+      } else if (h.kind === 'bog') {
         const k = Math.min(1, h.ms / 800);
         u.fillStyle(0x2f5a12, 0.35 * k).fillCircle(h.x, h.y, h.r);
         u.lineStyle(2, hex(C.beast), 0.35 * k).strokeCircle(h.x, h.y, h.r);
@@ -609,9 +723,9 @@ export class GameScene extends Phaser.Scene {
         u.fillStyle(0xff7a2e, 0.28 * k).fillCircle(h.x, h.y, h.r);
         u.fillStyle(hex(C.ember), 0.4 * k).fillCircle(h.x, h.y, h.r * 0.45);
       } else if (h.warnMs > 0) {
-        const total = h.kind === 'vent' ? VENT.warnMs : h.kind === 'stomp' ? SIEGE.stompWarn : SIEGE.warnMs;
+        const total = h.kind === 'vent' ? VENT.warnMs : h.kind === 'stomp' ? SIEGE.stompWarn : h.kind === 'strike' ? STRIKE.warnMs : SIEGE.warnMs;
         const prog = Math.max(0, Math.min(1, 1 - h.warnMs / total));
-        const color = h.kind === 'vent' ? 0xff6a3c : h.kind === 'shell' ? hex(C.ironLight) : 0xd6efff;
+        const color = h.kind === 'vent' ? 0xff6a3c : h.kind === 'shell' ? hex(C.ironLight) : h.kind === 'strike' ? 0xfff08a : 0xd6efff;
         u.lineStyle(2, color, 0.4 + 0.5 * prog).strokeCircle(h.x, h.y, h.r);
         u.fillStyle(color, 0.08 + 0.16 * prog).fillCircle(h.x, h.y, h.r * prog);
       }
@@ -702,11 +816,11 @@ export class GameScene extends Phaser.Scene {
     for (const e of s.enemies) {
       if (isStructure(e.kind)) continue;
       let key = `rb-${e.kind}${e.elite ? '-elite' : ''}`;
-      if (e.kind === 'boss') key = bossId === 'grinder' ? 'rb-boss' : `rb-boss-${bossId}${e.phase2 ? '-burning' : ''}`;
+      if (e.kind === 'boss') key = bossId === 'grinder' ? 'rb-boss' : `rb-boss-${bossId}${e.phase2 && bossId === 'champion' ? '-burning' : ''}`;
       else if (e.kind === 'rollerbomb') key = `rb-roller${e.elite ? '-elite' : ''}${e.mode !== 'walk' ? '-armed' : ''}`;
       const im = en.next(key, e.x, e.y);
       const toHero = Math.atan2(p.y - e.y, p.x - e.x);
-      if (e.kind === 'boss' && (bossId === 'grinder' || bossId === 'siege')) im.setRotation(toHero);
+      if (e.kind === 'boss' && (bossId === 'grinder' || bossId === 'siege' || bossId === 'scrapking')) im.setRotation(toHero);
       else if (e.kind === 'rollerbomb' && e.mode === 'rush' && !still) im.setRotation(s.time / 80);
       else if (e.kind !== 'clanker' && e.kind !== 'rollerbomb') im.setFlipX(Math.cos(e.kind === 'knight' ? e.facing : toHero) < 0);
       if (e.flashMs > 0 && !still) im.setScale(1.15);
@@ -803,14 +917,16 @@ export class GameScene extends Phaser.Scene {
         } else if (e.mode === 'arm') {
           o.lineStyle(2, hex(C.ember), 0.5).lineBetween(e.x, e.y, e.x + Math.cos(e.facing) * 180, e.y + Math.sin(e.facing) * 180);
         }
-      } else if (e.kind === 'boss' && bossId === 'champion' && e.mode === 'arm') {
+      } else if (e.kind === 'boss' && BOSSES[bossId].mech === 'champion' && e.mode === 'arm') {
         const a = Math.atan2(e.aimY - e.y, e.aimX - e.x);
         const len = Math.hypot(e.aimX - e.x, e.aimY - e.y) + 140;
-        o.lineStyle(10, 0xff8a3c, 0.12).lineBetween(e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len);
-        o.lineStyle(2, 0xff8a3c, 0.8).lineBetween(e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len);
+        const c = bossId === 'champion' ? 0xff8a3c : 0xfff08a;
+        o.lineStyle(10, c, 0.12).lineBetween(e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len);
+        o.lineStyle(2, c, 0.8).lineBetween(e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len);
       }
     }
-    // Rings of fire: burning arcs with gaps to slip through.
+    // Rings of fire (or of sparks, from the Storm Herald): burning arcs with gaps to slip through.
+    const spark = bossId === 'stormherald';
     for (const h of s.hazards) {
       if (h.kind !== 'ring') continue;
       const seg = Math.PI / CHAMPION.ringGaps;
@@ -818,8 +934,8 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < CHAMPION.ringGaps * 2; i++) {
         const a0 = h.angle + i * seg;
         if (inRingGap(h, a0 + seg / 2)) continue;
-        o.lineStyle(12, 0xff6a3c, 0.15 * k).beginPath().arc(h.x, h.y, h.r, a0, a0 + seg).strokePath();
-        o.lineStyle(4, 0xffb347, 0.9 * k).beginPath().arc(h.x, h.y, h.r, a0, a0 + seg).strokePath();
+        o.lineStyle(12, spark ? 0xffe45c : 0xff6a3c, 0.15 * k).beginPath().arc(h.x, h.y, h.r, a0, a0 + seg).strokePath();
+        o.lineStyle(4, spark ? 0xfff8c8 : 0xffb347, 0.9 * k).beginPath().arc(h.x, h.y, h.r, a0, a0 + seg).strokePath();
       }
     }
     for (const b of s.blasts) {
@@ -973,7 +1089,7 @@ export class GameScene extends Phaser.Scene {
     if (s.arena) this.texts.timer.setText(clock(ARENA_MS - s.time)).setColor(C.elite);
     else this.texts.timer.setText(s.bossSpawned ? t('bossTimer') : clock(Math.min(s.time, RUN_MS))).setColor(s.bossSpawned ? C.boss : C.text);
     this.texts.level.setText(t('levelTag', { n: s.level }));
-    this.texts.planet.setText(s.arena ? t('eliteArena') : planetLabel(s.planet)).setColor(s.arena ? C.elite : PLANETS[s.planet].ground.deco);
+    this.texts.planet.setText(s.arena ? t('eliteArena') : planetLabel(s.stage, s.planet)).setColor(s.arena ? C.elite : PLANETS[s.planet].ground.deco);
     this.texts.credits.setText(t('credits', { n: s.credits }));
     this.texts.boss.setVisible(!!boss);
     if (boss) {
