@@ -86,7 +86,7 @@ import {
 import { t } from '../i18n';
 import { coined } from '../ui/coins';
 import { ProgressBar } from '../ui/ProgressBar';
-import { SHOP_HUD, guildLayout, marketLayout, shopFence, line2Layout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
+import { SHOP_HUD, guildLayout, marketLayout, shopFence, shopStart, yardScenery, line2Layout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
 import { setupZoom } from './zoom';
 import { TOWN_HUD_H, TOWN_TEXT, TOWN_UI_DEPTH, keepSaving, leaveFor, townCard, townTopBar } from './townKit';
 
@@ -109,8 +109,6 @@ const HANDS_BAR = { h: 40, gap: 40 };
 const CAPTION = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', stroke: TEXT_HALO, strokeThickness: 3, align: 'center', color: INK };
 const CAPTION_PAY = '#5a2c80';
 const COUNT = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
-/** Where the doctor starts in a shop's yard: in front of its first station. */
-const START = { dx: -40, dy: -50 };
 /** Widths of a station's "First:" sign and a shelf's price sign, as the apothecary's. */
 const PRIORITY_SIGN_W = 92;
 const PRICE_SIGN_W = 48;
@@ -185,6 +183,7 @@ export class ShopScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
     this.obstacles = this.physics.add.staticGroup();
 
+    this.createScenery();
     this.createGardens();
     this.createMarket();
     this.createGuild();
@@ -208,6 +207,13 @@ export class ShopScene extends Phaser.Scene {
   private sign(x: number, y: number, text: string) {
     const name = this.add.text(x, y, text, { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK }).setOrigin(0.5).setDepth(-900);
     return [name, fit(this.add.image(x, y, signTexture(this, name.width + 16))).setDepth(-910)] as const;
+  }
+
+  /** The yard's trees and bushes, standing like everything else, and the water and wells the doctor walks round. */
+  private createScenery() {
+    const { plants, blocks } = yardScenery(this.id);
+    for (const { key, x, y } of plants) fit(this.add.image(x, y, key)).setOrigin(0.5, key.startsWith('tree') ? 84 / 88 : 28 / 32).setDepth(y);
+    for (const b of blocks) this.addObstacle(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h);
   }
 
   private createGardens() {
@@ -637,8 +643,8 @@ export class ShopScene extends Phaser.Scene {
   // The doctor
 
   private createPlayer() {
-    const first = stationLayout(this.id, this.def.stations[0].id).at;
-    this.player = fit(this.physics.add.sprite(first.x + START.dx, first.y + START.dy, 'doctor-idle'));
+    const start = shopStart(this.id);
+    this.player = fit(this.physics.add.sprite(start.x, start.y, 'doctor-idle'));
     const res = resOf('doctor-idle');
     this.player.body!.setSize(30 * res, 15 * res).setOffset(9 * res, 57 * res);
     this.player.setCollideWorldBounds(true);

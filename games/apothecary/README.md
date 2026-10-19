@@ -365,16 +365,18 @@ apothecary. Every shop and the apothecary keep working while you are elsewhere, 
 is closed.
 
 A shop's yard works like the apothecary's: gardens of sixteen beds, four by four, harvested by
-walking past them, stations in a row with drop, work and pick-up markers, and a small storefront at
-the end of the row, where goods dropped outside its back wall go on its shelves and the doctor (or
-up to two shopkeepers) behind the counter serves the customers who come in from the street. Each
-shop lays its yard out its own way: the bakery has its gardens at the left and its storefront at
-the right, the chandlery the other way round, the dye house and the smithy grow their gardens side
-by side along the top (the smithy's mirrored, with its first line along the street), and the
-tavern runs its first line along the street too. The bakery grows wheat and honeycomb, mills wheat into flour and bakes two flour
-into bread (24 coins) or flour and honeycomb into honey cake (39). Every station and the counter
-have their own purple markers for a level, workers and pixies, dearer in each shop than in the one
-before (three times as much a shop) but nothing like the shop itself:
+walking past them, stations with drop, work and pick-up markers, and a small storefront by the
+street, where goods dropped outside its back wall go on its shelves and the doctor (or up to two
+shopkeepers) behind the counter serves the customers who come in from the street. Every shop's yard
+is a place of its own: the bakery is a village green, its gardens across the top, a line down either
+side, the guild on the green and a duck pond by the shop; the chandlery climbs a hillside in
+terraces, its lines stepping down to the shop; the dye house has a river between its gardens and its
+works, crossed by three bridges; the smithy's woods and mines feed a cobbled forge yard in the
+middle; and the tavern's lines run around a lake, with a beer garden by its door. The bakery grows
+wheat and honeycomb, mills wheat into flour and bakes two flour into bread (24 coins) or flour and
+honeycomb into honey cake (39). Every station and the counter have their own purple markers for a
+level, workers and pixies, dearer in each shop than in the one before (three times as much a shop)
+but nothing like the shop itself:
 
 | Bakery | Cost |
 | --- | --- |
@@ -465,7 +467,7 @@ wick (117). Its prices are three times the bakery's:
 | Chandler (2 per station) or shopkeeper (2 at the counter) | 270, then 540 |
 | Pixies: hives to press, flax to wheel, lavender to vat, press to vat, wheel to vat, vat to the shelves | 540, 540, 540, 900, 900, 1,350 |
 
-![The chandlery's yard, mirrored: its storefront at the left, its gardens at the right](docs/screenshots/chandlery.webp)
+![The chandlery's terraces stepping down the hillside](docs/screenshots/chandlery.webp)
 
 The third shop is the **dye house** (100,000 coins). Its looms weave two flax into linen, and its
 dye mill grinds woad leaves into blue dye. The dye vat makes blue cloth from a linen and a dye (216
@@ -478,7 +480,7 @@ which also want blue cloth and cloaks.
 | Dyer (2 per station) or shopkeeper (2 at the counter) | 810, then 1,620 |
 | Pixies: flax to loom, woad to mill, madder to mill, loom to vat, mill to vat, vat to the shelves | 1,620, 1,620, 1,620, 2,700, 2,700, 4,050 |
 
-![The dye house's yard, with its gardens side by side along the top](docs/screenshots/dye-house.webp)
+![The dye house's river, its bridges and its drying line](docs/screenshots/dye-house.webp)
 
 The fourth shop is the **smithy** (1,000,000 coins). Its coppice grows timber, burned into charcoal
 at the charcoal kiln, and its ore pit gives iron ore, which the bloomery smelts with charcoal into
@@ -491,7 +493,7 @@ district of mansions grows into palaces, which also want horseshoes and iron pot
 | Smith (2 per station) or shopkeeper (2 at the counter) | 2,430, then 4,860 |
 | Pixies: coppice to kiln, ore to bloomery, copper to anvil, kiln to bloomery, bloomery to anvil, anvil to the shelves | 4,860, 4,860, 4,860, 8,100, 8,100, 12,150 |
 
-![The smithy's yard: gardens along the top, its first line along the street](docs/screenshots/smithy.webp)
+![The smithy's woods, mines and cobbled forge yard](docs/screenshots/smithy.webp)
 
 The fifth shop is the **tavern** (10,000,000 coins). Its barley field gives barley, malted at the
 maltings, and its hop garden gives hops, dried at the oast. The brew kettle makes ale from a malt and
@@ -504,7 +506,7 @@ grows into castles, which also want ale and stout.
 | Brewer (2 per station) or shopkeeper (2 at the counter) | 7,290, then 14,580 |
 | Pixies: barley to maltings, hops to oast, orchard to kettle, maltings to kettle, oast to kettle, kettle to the shelves | 14,580, 14,580, 14,580, 24,300, 24,300, 36,450 |
 
-![The tavern's yard, its first line along the street](docs/screenshots/tavern.webp)
+![The tavern's lines around its lake](docs/screenshots/tavern.webp)
 
 Once every district is full of castles, the town map says the town has become a city: the
 game's second ending, after the cure of the plague.
@@ -513,7 +515,7 @@ game's second ending, after the cure of the plague.
 
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 
-![The bakery's yard: gardens at the left, the storefront at the right](docs/screenshots/bakery.webp)
+![The bakery's village green, with its duck pond by the shop](docs/screenshots/bakery.webp)
 
 ![The bakery's storefront, with two shopkeepers behind the counter](docs/screenshots/shop-storefront.webp)
 
