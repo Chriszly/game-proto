@@ -3,27 +3,9 @@ name: Hub
 # Checks that the hub lists every game, that its settings reach the games and that each card opens
 # its game. Opening a game is one job per game: on a pull request only the games whose folder changed
 # are opened, and every game when the hub page, its test, shared/, this workflow or the build setup
-# changes. A push to main opens every game. The screen checks of the games using shared/scaling.ts
+# changes. Main isn't checked again after the merge. The screen checks of the games using shared/scaling.ts
 # run in the Screens workflow.
 on:
-  push:
-    branches: [main]
-    paths: &paths
-      - index.html
-      - favicon.svg
-      - e2e/**
-      - games/*/index.html
-      - games/*/src/main.ts
-      - games/*/cover.png
-      - games/*/favicon.svg
-      - shared/**
-      - package.json
-      - package-lock.json
-      - tsconfig.json
-      - tsconfig.e2e.json
-      - vite.config.ts
-      - playwright.config.ts
-      - .github/workflows/hub.yml
   pull_request:
   workflow_dispatch:
 
@@ -72,7 +54,7 @@ jobs:
         run: |
           all=$(cd games && for d in */; do echo "${d%/}"; done)
           if [ -z "$BASE" ]; then
-            changed=$all # a push to main or workflow_dispatch: open every game
+            changed=$all # workflow_dispatch: open every game
           else
             files=$(git diff --name-only "$BASE" HEAD)
             if echo "$files" | grep -qE '^(index\.html$|favicon\.svg$|e2e/hub\.spec\.ts$|shared/|\.github/workflows/hub\.yml$|package(-lock)?\.json$|tsconfig(\.e2e)?\.json$|playwright\.config\.ts$|vite\.config\.ts$)'; then
