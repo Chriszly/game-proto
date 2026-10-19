@@ -44,6 +44,7 @@ export default defineConfig({
     { name: 'riftblade', testDir: 'games/riftblade/e2e' },
     { name: 'scrapyard-titans', testDir: 'games/scrapyard-titans/e2e' },
     { name: 'bramblecrest', testDir: 'games/bramblecrest/e2e' },
+    { name: 'ninefold', testDir: 'games/ninefold/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

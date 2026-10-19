@@ -28,6 +28,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Riftblade](games/riftblade/README.md) | Fight across four worlds as a blaster soldier or a blade knight: survive five minutes on each, beat its boss, and choose your way on the star map between them; every level-up offers a new skill. |
 | [Scrapyard Titans](games/scrapyard-titans/README.md) | Build a squad of junk-built robots on an 8x8 board, bolt on parts and watch them brawl it out against seven rival commanders. |
 | [Bramblecrest](games/bramblecrest/README.md) | A small knight explores an overgrown kingdom by lamplight, finding a new tool in every dungeon that opens more of the world. |
+| [Ninefold](games/ninefold/README.md) | Fill every row, column and box with each digit once: a daily puzzle, Classic boards at three levels, and Delve, a run of ever bigger boards with hearts and relics, in nine unlockable art styles. |
 
 ## Settings
 
@@ -70,6 +71,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Colonizer | the AI gathers 25% slower | the AI gathers 25% faster |
   | Riftblade | foes have 25% less health and come 25% slower | foes have 35% more health and come 25% faster |
   | Bramblecrest | 5 hearts, and the bosses call in foes 25% less often | 2 hearts, and the bosses call in foes 30% more often |
+  | Ninefold | 5 hints a Classic board, 4 hearts a Delve run | 2 hints a Classic board, 2 hearts a Delve run |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.

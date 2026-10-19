@@ -87,6 +87,7 @@ their sounds:
 | Hotfoot | effects queue, new ids in `GameScene.drawEffects` |
 | Lane Brawl | `s.fx`, drained in `GameScene.collectFx` (already skips fogged fx) |
 | Lanternkeep | `GameEvent`, drained into `GameScene.showEvent` |
+| Ninefold | `GameEvent`, drained in `GameScene.drain` |
 | Palisade | `state.effects`, new ids in `GameScene.drawEffects` |
 | Scrapyard Titans | battle events, in `GameScene.consume` |
 | Shrine Stack | `GameEvent`, drained into `GameScene.show` |
@@ -592,6 +593,26 @@ square lead.
 Notes:
 - One lookout can produce several finds at once, so play only the most important one.
 - No sounds while a saved game is restored.
+
+### Ninefold
+Number-placement puzzle in nine art styles; calm, tidy, a music box on a desk.
+
+**Done** (see `games/ninefold/AGENTS.md`, Sound).
+
+**Music:** A music-box tune at 84 BPM with a triangle lead.
+- Menu and style picker: a sparse two-bar loop.
+- Classic and daily boards: G major, light kick and hat.
+- Delve floors: A minor, busier drums.
+- Stings for a solved board and for a Delve run that ends.
+
+| Event | Sound | Where |
+|---|---|---|
+| Pick a cell | soft tick | `scenes/GameScene.ts:onBoardTap` |
+| Right digit / wrong digit | two-note pluck / low buzz (a falling buzz when it costs a heart, a bright drop when the Ward catches it) | `GameScene.ts:drain` (`placed`, `wrong`) |
+| Pencil mark / erase | pencil scratch / rub | `GameScene.ts:enterDigit`, `onErase` |
+| Hint | rising arpeggio | `GameScene.ts:drain` (`hint`) |
+| Row, column or box finished | chime | `GameScene.ts:drain` (`unit`) |
+| Style unlocked or picked / relic taken | sparkle / bright arpeggio | `GameScene.ts:drain`, `buildStyles` |
 
 ### Palisade
 Low-poly fixed-hero siege defence with level-up cards; heroic medieval.

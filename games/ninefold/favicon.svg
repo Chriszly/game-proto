@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Ninefold</title>
+  <circle cx="7" cy="9" r="5" fill="#e37100"/>
+  <circle cx="25" cy="9" r="5" fill="#e37100"/>
+  <circle cx="7" cy="9" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="9" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="19.5" rx="13" ry="12" fill="#e37100"/>
+  <rect x="10" y="0.8" width="12" height="12" rx="1" fill="#fffaf3" stroke="#3b3a5a" stroke-width="0.9"/>
+  <path d="M14 0.8 V12.8 M18 0.8 V12.8 M10 4.8 H22 M10 8.8 H22" stroke="#3b3a5a" stroke-width="0.6"/>
+  <rect x="14" y="4.8" width="4" height="4" fill="#ffd27a"/>
+  <path d="M14 4.8 H18 V8.8 H14 Z" fill="none" stroke="#3b3a5a" stroke-width="0.6"/>
+  <text x="16" y="8" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="3.6" fill="#3b3a5a">9</text>
+  <circle cx="10.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="24" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="23" rx="2.2" ry="1.4" fill="#311300"/>
+</svg>

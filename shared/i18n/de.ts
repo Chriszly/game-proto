@@ -136,6 +136,8 @@ const de: Translation<typeof en> = {
   shrineStackCover: 'Ein Tempel aus gestapelten Steinen mit Laternen auf den ausgewogenen Ebenen, darüber schwingt in der Dämmerung ein Stein',
   mapmakerCard: 'Decke eine nebelverhangene Insel Feld für Feld mit knappen Vorräten auf und tausche deine Karten im Hafen gegen Verbesserungen.',
   mapmakerCover: 'Ein Bär als Landvermesser kartiert eine nebelverhangene Insel Feld für Feld',
+  ninefoldCard: 'Löse Zahlenrätsel in neun freischaltbaren Grafikstilen: ein Tagesrätsel, klassische Rätsel in drei Stufen und der Abstieg, eine Reihe immer größerer Rätsel mit Herzen und Relikten.',
+  ninefoldCover: 'Ein Zahlenrätsel auf geschichtetem Papier, mit einigen eingetragenen Ziffern und einem gewählten Feld',
   lanternkeepCard: 'Schicke Motten aus ihrem Glas, um die Laternen der Burg vor Einbruch der Nacht anzuzünden, und gib die Münzen für Dochte, Öl und mehr Motten aus.',
   lanternkeepCover: 'Eine Burg bei Einbruch der Nacht mit leuchtenden Laternen auf den Türmen und Motten, die zwischen ihnen fliegen',
   spaceWarsCard: 'Baue eine Basis auf einer zufälligen Sternenkarte, baue Kristall ab und stelle eine Flotte auf, um vier rivalisierende Fraktionen mit eigenen Schiffen und Gebäuden zu besiegen.',
