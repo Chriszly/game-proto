@@ -4,7 +4,7 @@ import { settings as hubSettings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { RUSH_SONG, SONG, sfx, type SfxName } from '../audio';
-import { renderScale, scrollingCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
+import { scrollingCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
 import { PIXIE_FRAMES, drawFairyPaths, laneOffset, pointAlong } from '../art/pixies';
 import { plantTexture } from '../art/garden';
 import { EXPANSION_IMAGE, WALLS_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
@@ -50,6 +50,7 @@ import { clearSave, loadState, saveState } from '../game/save';
 import { townOpen } from '../game/town';
 import { tickTown } from '../game/townSim';
 import { leaveFor } from './townKit';
+import { setupZoom } from './zoom';
 import {
   BELTS,
   BELT_COST,
@@ -289,17 +290,6 @@ const REFINING_BAR = 0xc8741e;
 /** The refining bars' height, a little taller than the 6px default so they read under the table. */
 const REFINING_BAR_H = 8;
 
-/**
- * Closest and farthest the view zooms: out until the whole yard is tall enough to fit, but never past
- * the world's width (see `setZoom`), in to double size.
- */
-const MIN_ZOOM = 0.62;
-const MAX_ZOOM = 2;
-/** How much one mouse wheel notch or key press zooms. */
-const ZOOM_STEP = 1.1;
-/** Where the zoom is kept between visits; it's a view preference, so "New game" keeps it. */
-const ZOOM_KEY = 'apothecary-zoom';
-
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
   zone: Phaser.Geom.Rectangle;
@@ -377,8 +367,6 @@ export class GameScene extends Phaser.Scene {
   private views: (() => void)[] = [];
   /** Draws the top bar and panels at a fixed size, while the main camera zooms the world. */
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
-  /** The finger spread and zoom when a two-finger pinch began, or null while there is no pinch. */
-  private pinch: { spread: number; zoom: number } | null = null;
   /** What the craftsmen and belts earned while the player was away, shown on a chip until tapped. */
   away: AwaySummary | null = null;
   /** The panel shown once the town is cured, until tapped away. */
@@ -439,7 +427,7 @@ export class GameScene extends Phaser.Scene {
     this.createSound();
     this.createUiCamera();
     this.createControls();
-    this.createZoom();
+    setupZoom(this, WORLD);
     this.setUpSaving();
   }
 
@@ -485,45 +473,6 @@ export class GameScene extends Phaser.Scene {
     const world = this.cameras.main.id;
     const ui = this.uiCamera.id;
     for (const obj of this.children.list) obj.cameraFilter = (obj as unknown as { depth: number }).depth >= UI_DEPTH ? world : ui;
-  }
-
-  /** Zoom with the mouse wheel, the + and - keys, or a two-finger pinch. */
-  private createZoom() {
-    this.setZoom(Number(readZoom()) || 1);
-    this.input.on('wheel', (_p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
-      if (dy !== 0) this.setZoom(this.zoom * (dy < 0 ? ZOOM_STEP : 1 / ZOOM_STEP));
-    });
-    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
-      if (e.key === '+' || e.key === '=') this.setZoom(this.zoom * ZOOM_STEP);
-      if (e.key === '-' || e.key === '_') this.setZoom(this.zoom / ZOOM_STEP);
-    });
-    // A second touch pointer, so two fingers can pinch.
-    if (this.input.manager.pointersTotal < 3) this.input.addPointer(1);
-    this.input.on('pointermove', () => {
-      const [a, b] = [this.input.pointer1, this.input.pointer2];
-      if (!a.isDown || !b.isDown) return;
-      const spread = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
-      if (!this.pinch) this.pinch = { spread, zoom: this.zoom };
-      else if (this.pinch.spread > 0) this.setZoom((this.pinch.zoom * spread) / this.pinch.spread);
-    });
-    this.input.on('pointerup', () => {
-      if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) this.pinch = null;
-    });
-  }
-
-  /** The player's zoom; the main camera's own zoom also includes the screen's `renderScale`. */
-  private get zoom() {
-    return this.cameras.main.zoom / renderScale;
-  }
-
-  private setZoom(zoom: number) {
-    // Never out past the world's width or height, so the map always fills the view (a 4:3 view is taller than 540).
-    const view = viewSize(this);
-    const clamped = Phaser.Math.Clamp(zoom, Math.max(MIN_ZOOM, view.width / WORLD.w, view.height / WORLD.h), MAX_ZOOM);
-    // A view wider than the world even at the closest zoom (never at 960x540) widens the bounds evenly on both sides.
-    const w = Math.max(WORLD.w, view.width / clamped);
-    this.cameras.main.setZoom(clamped * renderScale).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
-    writeZoom(clamped);
   }
 
   /** A painted piece of ground laid flat, its top-left corner at (x, y). */
@@ -2603,22 +2552,6 @@ function walkTowards(obj: Phaser.GameObjects.Image, to: Point, step: number, lea
   else obj.setX(along(obj.x, to.x));
   obj.setDepth(obj.y);
   return obj.x === to.x && obj.y === to.y;
-}
-
-function readZoom() {
-  try {
-    return localStorage.getItem(ZOOM_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeZoom(zoom: number) {
-  try {
-    localStorage.setItem(ZOOM_KEY, String(zoom));
-  } catch {
-    // Without storage the zoom just isn't remembered.
-  }
 }
 
 /** How wide an order bubble is for `n` potions: their icons and a margin. */

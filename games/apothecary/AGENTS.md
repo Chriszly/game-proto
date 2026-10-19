@@ -310,17 +310,20 @@ study, shade gardens and a mirrored second production line.
   keys, nothing inside `STICK.dead`; the base is dragged along past `STICK.r`. Lifting the finger
   or a second finger (`pinching`) ends it. `drawStick` draws it at `UI_DEPTH` on the UI camera.
 - Zoom: two cameras. The main camera follows the doctor and zooms (`MIN_ZOOM` 0.62 to `MAX_ZOOM`
-  2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`, which also
+  2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`; all of it in
+  `setupZoom(scene, world)` in `src/scenes/zoom.ts`, which `ShopScene` calls too, so every shop's
+  yard zooms between the same levels and keeps the zoom when the doctor walks between yards. The
+  pinch also
   cancels the walk when the second finger lands on the map, the top bar, a top-bar button or a
   priority sign; `pinching` checks it, so that finger doesn't change the sign or press the button.
   The open Recipes and Settings panels stop taps without this check). The camera's own zoom is
-  the player's zoom times `renderScale` (the `zoom` getter reads the player's part back), and
+  the player's zoom times `renderScale` (`setupZoom`'s `zoom` reads the player's part back), and
   `followPlayer` gives it back Phaser's middle origin with `scrollingCamera`. `uiCamera`
   never moves or zooms beyond `renderScale` and draws everything from `UI_DEPTH` up: `splitCameras` sets each object's
   `cameraFilter` by its depth every frame, so later objects sort themselves. `setZoom` clamps,
-  never zooming out past the world's width or height (so no paper shows at the sides, nor below
-  the world on a 4:3 view), and stores the zoom
-  under `apothecary-zoom`.
+  never zooming out past the world's width or height (`WORLD`, or the shop's `shopWorld`, so no
+  paper shows at the sides, nor below the world on a 4:3 view), and stores the zoom
+  under `apothecary-zoom`, one key for the apothecary and every shop.
 - Map (`WORLD` 1680x900): two rows of production either side of the shop (line one on the left,
   line two mirrored on the right with `mirror`), each running east along `LINE_Y` from its gardens
   (wheat, mandrake and shade stacked at the far edge) through `REFINER` and `CAULDRON` into the
@@ -569,7 +572,7 @@ brew's `out` may be `PANACEA`.
   `rush`, `plague`, `signs`, `rival`, `seals`, `wagon`, `marketPick`) come from `fresh` through the shallow merge, so `version` was
   not bumped; old orders without `tip` tip nothing, and an old save's rival picks its potion on
   the next tick.
-- `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
+- `apothecary-zoom`: the main camera's zoom in the apothecary and every shop, a view preference that "New game" keeps.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
   `apothecary-fps` key is no longer used; the frame rate comes from the hub.
 

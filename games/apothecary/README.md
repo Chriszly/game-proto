@@ -34,7 +34,7 @@ the town and plague cards, the orders and the hands) are a little see-through.
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
 | Touch: put a finger down and drag | A steering stick appears where the finger went down and the doctor walks the way you drag; it follows a finger that goes past its rim. A tap without dragging still walks to the spot |
-| Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered |
+| Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered and the same in every shop |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Tap a slot in the hands bar (bottom of the screen) | Throw that item away; a small bin on each full slot shows it |
