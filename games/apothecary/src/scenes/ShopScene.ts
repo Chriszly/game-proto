@@ -87,6 +87,7 @@ import { t } from '../i18n';
 import { coined } from '../ui/coins';
 import { ProgressBar } from '../ui/ProgressBar';
 import { FENCE_Y, MARKET, SHOP_HUD, guildLayout, line2Layout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
+import { setupZoom } from './zoom';
 import { TOWN_HUD_H, TOWN_TEXT, TOWN_UI_DEPTH, keepSaving, leaveFor, townCard, townTopBar } from './townKit';
 
 // A town shop's yard, built from its `ShopDef` the way the apothecary's is laid out by hand: the
@@ -195,8 +196,9 @@ export class ShopScene extends Phaser.Scene {
     this.createHud();
     this.createControls();
     this.createSound();
-    scrollingCamera(this.cameras.main).setBounds(0, 0, world.w, world.h).startFollow(this.player, true);
+    scrollingCamera(this.cameras.main).startFollow(this.player, true);
     splitHudCamera(this);
+    setupZoom(this, world);
     playMusic(SONG, 'calm');
     keepSaving(this, () => this.state);
   }
@@ -645,6 +647,12 @@ export class ShopScene extends Phaser.Scene {
     this.cursors = keyboard.createCursorKeys();
     this.wasd = { up: keyboard.addKey('W'), down: keyboard.addKey('S'), left: keyboard.addKey('A'), right: keyboard.addKey('D') };
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      // A second finger starts a pinch: stop walking instead of heading for it.
+      if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        this.pointerTarget = null;
+        this.waypoint = null;
+        return;
+      }
       if (viewPoint(p).y < TOWN_HUD_H) return;
       const at = this.cameras.main.getWorldPoint(p.x, p.y);
       this.pointerTarget = this.reachable(new Phaser.Math.Vector2(at.x, at.y));
