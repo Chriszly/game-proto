@@ -91,7 +91,7 @@ export const YARD_PLANS: Record<ShopId, YardPlan> = {
     guild: { x: 780, y: 470, shape: 'row' },
     line2Sign: { x: 1320, y: 640 },
     store: 630,
-    start: { x: 200, y: 490 },
+    start: { x: 330, y: 580 },
     scenery: {
       earth: [pts(70, 400, 410, 400, 410, 990, 70, 990), pts(1150, 400, 1490, 400, 1490, 990, 1150, 990)],
       paths: [
@@ -128,7 +128,7 @@ export const YARD_PLANS: Record<ShopId, YardPlan> = {
     guild: { x: 230, y: 900, shape: 'grid' },
     line2Sign: { x: 820, y: 780 },
     store: 1340,
-    start: { x: 520, y: 180 },
+    start: { x: 650, y: 270 },
     scenery: {
       earth: [
         pts(400, 100, 760, 100, 1340, 500, 1340, 800, 980, 800, 400, 400),
@@ -164,7 +164,7 @@ export const YARD_PLANS: Record<ShopId, YardPlan> = {
     guild: { x: 1450, y: 200, shape: 'grid' },
     line2Sign: { x: 1110, y: 480 },
     store: 1300,
-    start: { x: 760, y: 180 },
+    start: { x: 890, y: 270 },
     scenery: {
       earth: [pts(650, 80, 1620, 80, 1620, 1040, 650, 1040), pts(20, 780, 520, 780, 520, 1040, 20, 1040)],
       paths: [pts(360, 165, 700, 165), pts(360, 515, 700, 515), pts(330, 875, 700, 875)],
@@ -201,7 +201,7 @@ export const YARD_PLANS: Record<ShopId, YardPlan> = {
     guild: { x: 845, y: 130, shape: 'grid' },
     line2Sign: { x: 845, y: 830 },
     store: 60,
-    start: { x: 520, y: 210 },
+    start: { x: 650, y: 300 },
     scenery: {
       earth: [pts(400, 120, 1300, 120, 1300, 1080, 400, 1080), pts(1290, 300, 1680, 300, 1680, 1080, 1290, 1080)],
       paths: [pts(210, 280, 210, 700)],
@@ -233,7 +233,7 @@ export const YARD_PLANS: Record<ShopId, YardPlan> = {
     guild: { x: 1530, y: 200, shape: 'grid' },
     line2Sign: { x: 900, y: 800 },
     store: 1380,
-    start: { x: 560, y: 180 },
+    start: { x: 690, y: 270 },
     scenery: {
       earth: [pts(440, 80, 1360, 80, 1360, 420, 440, 420), pts(440, 760, 1360, 760, 1360, 1080, 440, 1080), pts(1370, 80, 1700, 80, 1700, 700, 1370, 700)],
       paths: [pts(420, 420, 420, 760), pts(1340, 420, 1340, 760)],
@@ -380,8 +380,8 @@ export function counterLayout(id: ShopId) {
     hire: { x: cx + STORE_MARKER_GAP, y: top - STORE_YARD_DY },
     /** The drop marker that stocks the shelves, outside the back wall; serving and the till are at the counter. */
     drop: { x: cx, y: top - STORE_YARD_DY },
-    work: { x: cx - 110, y: fence - 110 },
-    till: { x: cx + 110, y: fence - 110 },
+    work: { x: cx - 110, y: fence - 124 },
+    till: { x: cx + 110, y: fence - 124 },
     counter: { x: cx, y: fence - 40 },
     place: (spot: number): Point => ({ x: cx + (spot - (MAX_SHOP_PLACES - 1) / 2) * 72, y: fence + 36 }),
     street: (spot: number): Point => ({ x: cx + (spot - (MAX_SHOP_PLACES - 1) / 2) * 30, y: plan(id).h + 30 }),
@@ -391,14 +391,16 @@ export function counterLayout(id: ShopId) {
 }
 
 /**
- * The guild: its sign, the marker to join it and, once joined, its six upgrades in a `row` or in a
- * `grid` of two rows of three.
+ * The guild: its sign, the marker to join it and, once joined, its seven upgrades in a `row` or in a
+ * `grid` of rows of three, the last row's centred.
  */
 export function guildLayout(id: ShopId) {
   const { x, y, shape } = plan(id).guild;
   const upgrade = (u: ShopGuild): Point => {
     const i = SHOP_GUILD.indexOf(u);
-    return shape === 'row' ? { x: x + (i - (SHOP_GUILD.length - 1) / 2) * 90, y } : { x: x + ((i % 3) - 1) * 92, y: y + Math.floor(i / 3) * 90 };
+    if (shape === 'row') return { x: x + (i - (SHOP_GUILD.length - 1) / 2) * 90, y };
+    const row = Math.floor(i / 3), inRow = Math.min(3, SHOP_GUILD.length - row * 3);
+    return { x: x + ((i % 3) - (inRow - 1) / 2) * 92, y: y + row * 90 };
   };
   return { sign: { x, y: y - 48 }, join: shape === 'row' ? { x, y } : { x, y: y + 45 }, upgrade };
 }

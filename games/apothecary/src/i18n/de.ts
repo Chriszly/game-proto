@@ -314,6 +314,8 @@ const de: Translation<typeof en> = {
   // A shop's fine goods and contracts
   fineGood: '{item} (fein)',
   shopContract: 'Auftrag: {item} {made}/{need}, {coins}{coin}',
+  shopContractBundle: 'Auftrag: {item} {made}/{need} + {item2} {made2}/{need2}, {coins}{coin}',
+  blightInShop: 'Fäule in den Beeten! Beseitige sie mit der Sichel',
   shopContractKept: 'Auftrag erfüllt! +{coins}{coin}',
   // The recipes each shop's study teaches, and their gardens
   orchard: 'Obstgarten',

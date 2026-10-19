@@ -388,7 +388,7 @@ but nothing like the shop itself:
 | Study: apple tart, then fruit cake | 180, 360 |
 | Guild: join | 450 |
 | Guild: growth, pixies, prices (2 levels each) | 180, 360; 270, 540; 180, 360 |
-| Guild: storage (3 levels), slots (1), customers (2) | 225, 450, 900; 270; 225, 450 |
+| Guild: storage (3 levels), slots (1), customers (2), herbalist (1) | 225, 450, 900; 270; 225, 450; 360 |
 | Second line | 1,500 |
 
 Between its gardens and its first station, every shop has a little market of its own, like the
@@ -416,14 +416,14 @@ shop as in the one before:
 
 ![The bakery's orchard, planted with the apple tart learned, and the fruit cake for sale at its study](docs/screenshots/shop-recipes.webp)
 
-Under its first two stations every shop also has a **guild**, like the apothecary's. Join it once,
-and its six upgrades go up for sale in a row: growth (its beds grow a quarter faster a level), pixies
-(half again as fast a level), storage (6 more of each good on every pallet and shelf a level, from
-12), prices (a quarter dearer a level), slots (a fourth customer at the counter) and customers (they
-come in as often again a level). They count only in that shop, and cost three times as much in
-each shop as in the one before.
+Every shop also has a **guild**, like the apothecary's. Join it once, and its seven upgrades go up
+for sale: growth (its beds grow a quarter faster a level), pixies (half again as fast a level),
+storage (6 more of each good on every pallet and shelf a level, from 12), prices (a quarter dearer a
+level), slots (a fourth customer at the counter), customers (they come in as often again a level)
+and the herbalist (the blight never takes its beds). They count only in that shop, and cost three
+times as much in each shop as in the one before.
 
-![A shop's guild, joined, with its upgrades for sale](docs/screenshots/shop-guild.webp)
+![The smithy's guild, joined, with its upgrades for sale and the herbalist in a row of its own](docs/screenshots/shop-guild.webp)
 
 Every good a shop sells has a **fine window** too: the last quarter of its station's bar is gold,
 and picked up by hand then (step off the work spot and onto the pick-up marker), it comes out
@@ -433,6 +433,33 @@ top bar: sell so many of one of its goods today (4 at first, one more for every 
 to 12) and its reward goes into the till. A new one comes with every day, for another good.
 
 ![The bakery's contract card under the top bar, with two Fine loaves in hand](docs/screenshots/shop-contract.webp)
+
+A shop's day runs like the apothecary's, and the **town card** at the top right shows it: the day's
+weather, the shop's reputation and tomorrow's weather.
+
+- **Weather.** Rain makes its beds grow half again as fast, a drought slows them to 60%, and on a
+  fair day customers come half again as often.
+- **Tips and reputation.** Every customer brings a tip, a quarter of what their order pays, which
+  shrinks while they wait (the ring around the coin on their bubble) and goes into the till when
+  their order is filled. A filled order raises the shop's reputation and one who walks off lowers
+  it, and a good name brings customers more often. A sale off a Cheap shelf raises it too.
+- **Regulars.** A customer served with half their tip still left comes back now and then as a
+  regular, with a star on their bubble, for the same goods, and pays a fifth more for them. A shop
+  remembers four.
+- **Market days.** Every fourth day a crowd of five comes in at midday. They take every free place
+  at the counter first and wait in the street for the rest, and serving all of them pays a bonus,
+  half of what their goods are worth; one walking off, or still waiting at dusk, loses it.
+- **Blight.** From day 3 rain can blight a bed. It stops growing, its pixies pass it by, and it
+  blights a neighbour now and then until the doctor's sickle clears it. The guild's herbalist keeps
+  every bed clear.
+- **Overstock.** Past 5 of a good on the shelf, each one sells for less, down to half on a full
+  shelf, as at the apothecary; the cut price shows in orange under the shelf.
+- **Two-good contracts.** Every third day from day 4, as at the apothecary, the contract asks for
+  two goods, the total split between them.
+
+![The tavern on a market day: a two-good contract, the crowd at the counter with their tips, and the town card](docs/screenshots/shop-market-day.webp)
+
+![The bakery in the rain, with blighted beds in its wheat field and a blighted hive](docs/screenshots/shop-blight.webp)
 
 Below the guild, every shop has room for a **second line**, like the apothecary's expansion. Bought
 once at its marker (1,500 coins at the bakery, three times as much in each shop after), it builds a

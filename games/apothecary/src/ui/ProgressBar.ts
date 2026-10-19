@@ -20,6 +20,12 @@ export class ProgressBar {
     this.bar = scene.add.graphics().setDepth(depth);
   }
 
+  /** Pins the bar to the screen (0) for a card that doesn't scroll with the world. */
+  setScrollFactor(factor: number) {
+    this.bar.setScrollFactor(factor);
+    return this;
+  }
+
   /** Removes the bar from its scene. */
   destroy() {
     this.bar.destroy();

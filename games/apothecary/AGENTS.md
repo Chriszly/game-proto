@@ -51,9 +51,14 @@ study, shade gardens and a mirrored second production line.
   iron pots) and the Tavern (barley field and hop garden, maltings, oast and brew kettle, ale and
   stout). Each shop also has a third garden and two recipes its study teaches (apple tart and
   fruit cake, lavender soap and scented candle, red cloth and gown with madder and red dye, copper
-  pot and lantern, cider and apple ale). Each shop has a guild of its own too: growth, pixies, storage, prices, slots and customers. Every
+  pot and lantern, cider and apple ale). Each shop has a guild of its own too: growth, pixies, storage, prices, slots, customers and the herbalist. Every
   good a shop sells can come out Fine in the last quarter of its station's work, and from day 4
-  each shop has a daily contract for one of its goods. A second line, bought once per shop, adds
+  each shop has a daily contract for one of its goods, for two on the apothecary's bundle days.
+  Each shop's day runs on the apothecary's rules: customers tip, the shop has a reputation of its
+  own and up to four regulars, the almanac weather speeds its beds or brings customers, every
+  fourth day brings a market crowd at midday, the blight takes its beds on rainy days (cleared by
+  the sickle, or kept off by the herbalist) and an overstocked shelf sells cheaper. A town card at
+  the top right of the shop shows the weather, the reputation and the market day. A second line, bought once per shop, adds
   a copy of each station in a row below the guild, with its own pixie routes. With more than three lots the map lays them in two rows of shorter cards (`lot`), and
   keeps `CORNER_H` free at the bottom for the corner buttons. Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
   households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
@@ -172,10 +177,19 @@ study, shade gardens and a mirrored second production line.
   Each shop's guild (`ShopState.guild`: `join`, then one `Upgrade` per `SHOP_GUILD` id;
   `SHOP_GUILD_UPGRADES` for levels and costs, `GUILD_JOIN_COST`, `guildJoinCost`, `guildCost`) feeds
   `shopStorage` (pallets and shelves, in place of `SHOP_STORAGE`), `shopPlaces` (up to
-  `MAX_SHOP_PLACES`), `shopGrowth`, `shopRouteSpeed`, `shopPriceBoost` and `shopFootfall`.
+  `MAX_SHOP_PLACES`), `shopGrowth`, `shopRouteSpeed`, `shopPriceBoost`, `shopFootfall` and
+  `shopBlightImmune` (the herbalist).
+  A shop's day: `ShopState.reputation` (0 to 100, from 50), `regulars` (`ShopRegular`: `face` and
+  `wants`, up to `MAX_REGULARS`), `rush` (`ShopRush`: the market day's crowd, `day`, `size`,
+  `waiting`, `served`, `lost`, `paid` and its `bonus`) and `blight` (`{ bed, ms }` per blighted bed;
+  `isBlightedBed`, `bedNeighbours` four by four). A `ShopOrder` also carries its `tip`, the goods it
+  `asked` for, and whether it is a `regular` or one of the `rush`; `SHOP_TIP`, `SHOP_REGULAR_BONUS`
+  and `SHOP_RUSH_BONUS` set what they are worth. `town.ts` can't import values from `state.ts` (it
+  imports `town.ts`), so the shared numbers are read in `townSim.ts`.
   Fine goods are their own kind, `FineGood` (`<good>-fine`; `fineOf`, `isFineGood`, `plainGood`);
   `Held` (a good or a fine good) is what `TownState.hands` and `ShopState.shelf` hold. A shop's
-  contract (`ShopState.contract`, a `ShopContract`: `day`, `good`, `need`, `made`, `reward`) starts
+  contract (`ShopState.contract`, a `ShopContract`: `day`, `good`, `need`, `made`, `reward`, and on a
+  bundle day a `bundle` with a second `good`, `need` and `made`) starts
   on `SHOP_CONTRACT_START`; `ShopState.kept` counts the ones kept (it picks the next good and need,
   up to `MAX_SHOP_CONTRACT`; the reward is `SHOP_CONTRACT_SHARE` of the goods' base price).
   The second line (`ShopState.line2`, bought for `LINE2_COST`, `line2Cost`) copies every station
@@ -197,12 +211,25 @@ study, shade gardens and a mirrored second production line.
   `pickUpFromStation`, `stockShopShelf`, `collectShopTill`, `tossGood`, `payStationLevel`,
   `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`, `payGear`, `payLesson`, `payRecipe`, `payLine2`, `payGuildJoin`, `payGuildUpgrade`,
   `cycleShopPriority`, `cycleShopSign`) return `Feedback` like the sim's. `nextRecipe` skips recipes
-  not learned yet and takes the station's priority first when it is ready; `runOrders` draws wants by `SIGN_DEMAND`, pays
-  `shopPrice` (counter level, guild prices and sign) and runs patience down by `SIGN_PATIENCE`.
-  `serveOne` hands a fine good first, at `FINE_BONUS` times the price, and counts what it hands
-  for the contract (`deliverForShopContract` pays the reward into the till once `made` reaches
-  `need`); `supplyNeed` takes a plain good first. `tickTown` rolls each shop's contract
-  (`shopContractFor`) when the apothecary's contract day changes. `inShopFineWindow(def, station)`
+  not learned yet and takes the station's priority first when it is ready. A shop's day reuses the
+  apothecary's rules and numbers from `state.ts`: `newShopOrder` brings back a regular now and then
+  (`REGULAR_CHANCE`, paying `SHOP_REGULAR_BONUS` more) or draws wants by `SIGN_DEMAND`, pays
+  `shopPrice` (counter level, guild prices and sign) and sets the tip; `runOrders` runs patience down
+  by `SIGN_PATIENCE`, lets a walk-off lower the reputation (`REPUTATION_WALKED_OFF`) and lose the
+  crowd, seats a market crowd first and spaces customers by `reputationFactor`, `shopFootfall` and
+  the weather's `customers`; `runRush` brings the crowd at midday on `isMarketDay` and loses those
+  still waiting when the day changes; `spreadShopBlight` blights beds on rainy days from
+  `BLIGHT_DAY` and spreads them, and `clearShopBlight` is the sickle's. Beds grow by the weather's
+  `growth`, and a blighted one neither grows, ripens (`isRipeBed`) nor feeds a route.
+  `serveOne` hands a fine good first, at `FINE_BONUS` times the price, cut by `shopStockedPay`
+  (the apothecary's `stockedPay` overstock cut, counting the one sold), nudges the reputation by
+  `SIGN_REPUTATION`, and counts what it hands for the contract (`deliverForShopContract` pays the
+  reward into the till once `shopContractKept`, both parts of a bundle met; `shopContractWants`
+  says whether a good still counts). A filled order pays its tip (`tipNow`), and `orderFilled`
+  raises the reputation, keeps a customer served with `REGULAR_TIP_LEFT` of the tip left as a
+  regular and pays the crowd's bonus once all of it is served. `supplyNeed` takes a plain good
+  first. `tickTown` rolls each shop's contract (`shopContractFor`, a bundle every `BUNDLE_EVERY`th
+  day from `BOOK_CONTRACT_DAY`, as at the apothecary) when the apothecary's contract day changes. `inShopFineWindow(def, station)`
   is true from `1 - FINE_SHARE` of a sold good's work to its end, and `pickUpFromStation` then takes
   the work out by hand as its fine good. Drops skip fine goods; `stockShopShelf` stocks both kinds.
   `dropAtStation` and `payRoute` refuse a second-line station or route until the line is bought.
@@ -210,8 +237,9 @@ study, shade gardens and a mirrored second production line.
   `YardPlan` in `YARD_PLANS`: its size (the fence `STREET_H` above its bottom, `shopFence`), each
   garden's corner and the side its route markers stand on (`right`, `left` or `below`), the first and
   second line's station spots (`line1`, `line2`, any shape: rows, columns, a diagonal, a Y), the
-  outfitter's and study's signs, the guild's join spot and shape (`row`, or a `grid` of two rows of
-  three), the second line's sign, the storefront's left edge, the doctor's `start`, and its
+  outfitter's and study's signs, the guild's join spot and shape (`row`, or a `grid` of rows of
+  three with the last row centred), the second line's sign, the storefront's left edge, the doctor's
+  `start` (beside the first station, clear of its markers), and its
   `YardScenery` (`earth` polygons, `paths`, `cobbles`, `water`, `bridges`, painted `props`, `plants`
   and the `blocks` the doctor can't walk through). The bakery is a village green with a duck pond,
   the chandlery hillside terraces, the dye house a river with three bridges, the smithy woods and
@@ -221,7 +249,8 @@ study, shade gardens and a mirrored second production line.
   purple markers `COINS_GAP` apart, a caption's width), `guildLayout`, `line2Layout`, `counterLayout`
   for the small storefront (`STORE`): its shelves with their `priceSign`s along the back wall, its
   drop, level and hire markers in the yard outside that wall, its work spot and till either end of
-  the counter and its two `shopkeepers` behind it; and `routePath`, `routeMs`. Phaser-free, since the
+  the counter (far enough up that the customers' tips clear the Work caption) and its two
+  `shopkeepers` behind it; and `routePath`, `routeMs`. `SHOP_HUD` is the yard's top band, under the top bar. Phaser-free, since the
   sim reads route lengths from it. A new shop needs its own plan: keep every piece's footprint clear
   of the others' (a station takes about 280x270 around its spot, a garden with side markers 314x204)
   and every marker reachable, and check the yard fresh and fully unlocked, in English and German.
@@ -240,7 +269,17 @@ study, shade gardens and a mirrored second production line.
   paths, cobbles, water, bridges and props (`PROPS`: well, beer garden table, drying line of dyed
   cloth, rocks, jetty, terrace wall, reeds), the street, the storefront's floor and the fence;
   `ShopScene.createScenery` stands the trees and bushes (the apothecary's `tree-*` and `bush-*`
-  textures) and walls off the `blocks`.
+  textures) and walls off the `blocks`. `ShopScene` also draws a shop's day: its customers' tip
+  rings and coins, the regular's star and the tip each pays, blighted beds in `BLIGHT_TINT` (the
+  sickle, `autoHarvest`, clears them before it cuts), the shelf price with the overstock cut (orange
+  when cut), a bundle contract with both goods' icons, and the town card (`createTownCard`:
+  weather, reputation bar, tomorrow or the crowd, and a note when the blight strikes or the crowd
+  comes, is served or walks off). It passes `HUD_BAND` to `setupZoom`, so at the top the camera
+  scrolls past the yard and the yard below `SHOP_HUD` shows below the top bar and the cards.
+- `src/scenes/weather.ts`: `addWeather(scene, world, depth, state)`, the weather over a yard, used
+  by `GameScene` and `ShopScene`: a world-sized tint per weather (`TINTS`), rain streaks
+  (`RAIN_STREAKS`) or heat waves (`HEAT_WAVES`), and the evening light (`DUSK_FROM`, `DUSK_ALPHA`).
+  Returns a view.
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
 - `src/scenes/GameScene.ts`: builds the world, markers and HUD, reads input, walks the doctor
   around stations and through the shop door, calls the sim each frame and updates views. Also
@@ -276,6 +315,7 @@ study, shade gardens and a mirrored second production line.
   stacks, exposes `item` and `count`, `setVisible`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
   ones first; exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
   an optional last argument sets its height, 6 by default; `setZone` marks a golden end zone, used for the cauldron's fine window;
+  `setScrollFactor` pins it to the screen, as the shop's town card does;
   `destroy` removes it, as `ShopScene` does when a customer leaves),
   `RecipeBook` (exposes `lines`, in the game's language), `coins` (`coined`: gold coins over the
   `{coin}` slots of a text), `Settings` (read-only view of the hub's
@@ -285,7 +325,7 @@ study, shade gardens and a mirrored second production line.
   minus 230, which the test clicks), the day bar (`createDayBar`, at `DAY_BAR` from the middle:
   "Day 3", a dawn-to-dusk sky, the sun at the share of `DAY_MS` gone, the moon at its end, and a big
   "Day N" across the screen when `contract.day` changes), the hint, and the Settings cogwheel
-  (`HUD_ICON_BUTTON`). `createWeather` also lays the evening light (`DUSK_FROM`, `DUSK_ALPHA`). The
+  (`HUD_ICON_BUTTON`). `addWeather` (`weather.ts`) also lays the evening light. The
   hands bar (`HANDS_BAR`) sits at the bottom middle of the screen: a slot per `MAX_CARRY`, a `bin`
   on each full one, and a tap on a slot calls `dropItem`. Both bars stop taps from walking.
 - Selling by hand: the doctor on the counter's work spot serves everyone, or a tap on a waiting
@@ -332,8 +372,10 @@ study, shade gardens and a mirrored second production line.
   or a second finger (`pinching`) ends it. `drawStick` draws it at `UI_DEPTH` on the UI camera.
 - Zoom: two cameras. The main camera follows the doctor and zooms (`MIN_ZOOM` 0.62 to `MAX_ZOOM`
   2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`; all of it in
-  `setupZoom(scene, world)` in `src/scenes/zoom.ts`, which `ShopScene` calls too, so every shop's
-  yard zooms between the same levels and keeps the zoom when the doctor walks between yards. The
+  `setupZoom(scene, world, hud)` in `src/scenes/zoom.ts`, which `ShopScene` calls too, so every shop's
+  yard zooms between the same levels and keeps the zoom when the doctor walks between yards; `hud`
+  (screen band covered, world band meant to be under it) lets the camera scroll above the world so
+  nothing walkable stays under the HUD at the top. The
   pinch also
   cancels the walk when the second finger lands on the map, the top bar, a top-bar button or a
   priority sign; `pinching` checks it, so that finger doesn't change the sign or press the button.
@@ -426,10 +468,11 @@ study, shade gardens and a mirrored second production line.
 - Orders: `createOrderStrip` shows a `chip` card per order (`ORDER_STRIP`, up to
   `MAX_ORDER_SLOTS`) under the top bar on the left, with the wants still owed and, once at the
   counter, a patience bar.
-- Weather: `createWeather` lays a world-sized tint rectangle and a `Graphics` at `WEATHER_DEPTH`
-  (under the bubbles and bars) and, each frame, draws `RAIN_STREAKS` rain streaks or `HEAT_WAVES`
-  heat waves across `cameras.main.worldView`, placed by a fixed `scatter` so it never calls
-  `Math.random`. Mild days draw nothing; reduced motion keeps only the tint.
+- Weather: `addWeather` (`src/scenes/weather.ts`, also used by every shop) lays a world-sized tint
+  rectangle and a `Graphics` at the depth it is given (`WEATHER_DEPTH`, under the bubbles and bars)
+  and, each frame, draws `RAIN_STREAKS` rain streaks or `HEAT_WAVES` heat waves across
+  `cameras.main.worldView`, placed by a fixed `scatter` so it never calls `Math.random`. Mild days
+  draw nothing; reduced motion keeps only the tint.
 - Fine window: `inFineWindow(brew)` holds from `1 - FINE_SHARE` (75%) of a brew to its end.
   `pickUpFromCauldron` takes such a brew (`brewing` first, then `brewing2`) out as its `FINE` potion before anything on the out
   pallets. A brew only moves while worked, so stepping off the work spot holds it in the window.
@@ -646,8 +689,8 @@ brew's `out` may be `PANACEA`.
   `settings.reduceMotion` (imported as `hubSettings`, since the scene has its own `settings`
   panel): `addCauldron` leaves the cauldron on its still frame instead of playing the
   `cauldron-boil` flicker, the craftsmen at the stations stop rocking while they work, the belt
-  pixies glide on their first frame without bobbing, and `createWeather` keeps only the tint (no
-  rain or heat waves). `ShopScene` holds its route pixies still the same way, and `TownScene` skips
+  pixies glide on their first frame without bobbing, and `addWeather` keeps only the tint (no
+  rain or heat waves), in the shops too. `ShopScene` holds its route pixies still the same way, and `TownScene` skips
   the shake of a lot card the player can't afford.
 - The game's Settings panel only shows the difficulty and frame rate ("Change these on the hub
   page") and has "New game". Settings are read once at page load.
@@ -699,7 +742,9 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
   that hands nothing over (out of the shop or not on the shelf), a wagon tap without a full crate,
   and a purple or herb market marker that takes nothing (no coins, nothing to trade), once a visit
   (`refusedMarker`, reset on stepping off).
-- The town's scenes play the `calm` part. `ShopScene` plays `swish` + `pluck` for a bed cut,
+- The town's scenes play the `calm` part, and `ShopScene` the `rush` part while a market crowd is
+  at the counter or waiting. `ShopScene` plays `swish` + `pluck` for a bed cut, `rasp` for a
+  blighted bed cleared, `blight` when a bed is blighted and `rush` when the crowd comes,
   `drop`, `pickUp`, `pay`, `cascade` (the till) and `upgrade` at its markers as the apothecary does,
   `toss` for a hands slot, `bubble`, `sell`, `served` and `hmph` from what changed in its shop each
   frame, `fine` for a pick-up in a station's fine window, the `kept` sting when its contract is
@@ -817,6 +862,10 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
   `src/art/town.ts` (a `good-<id>` icon, a station texture per station, `bedTexture` for a new
   garden good, and a lot house in `bakeTown`), its texts, and its goods in a `HOME_TIERS` need list;
   the scenes lay it out from its def.
+- `state.ts` imports `town.ts`, so `town.ts` can only import types from `state.ts`: a shop rule that
+  reuses an apothecary number (tips, reputation, regulars, weather, market day, blight, overstock,
+  bundles) reads it in `townSim.ts`. New `ShopState` fields come from `createShop` through
+  `normalizeTown`'s spread, so older saves get them.
 - `rival.open` starts true and `rival.day` 0, so the rival exists in every save; it only does
   anything from `RIVAL_DAY`. `rival.potion` is null until then and once closed.
 - Fine potions are not in `POTIONS`, so they have no pallets, shelves, belt lanes or orders of their
