@@ -51,7 +51,9 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   (phase `'role'`) and game over are overlays in the same scene; an extraction or a won operation
   ends in the same game over overlay with a win title (`state.extracted`). On game over a tap on a
   starting crate buys or refunds it, on an outpost upgrade buys its next level, on an operation
-  picks it for the next run; any other tap calls `scene.restart()`.
+  picks it for the next run; any other tap calls `scene.restart()`. Taps count only once the
+  screen has been up for `OVER_GRACE_MS` (600ms of game time, `overMs`), so a steering tap as the
+  horde breaks through doesn't skip it.
 - **Persistence:** the Open Road's best wave, the art style, banked scrap, the starting crates
   bought for the next run, the outpost levels, the next operation and each operation's best (see
   Save keys). It also reads the hub's
@@ -209,7 +211,9 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   the pack (`callPack`: `BOSS.pack` runners, or `BROOD.pack` crawlers for the Brood Mother, placed
   by `spawnPack`, which adds them to `waveTotal`). A medkit push ends a charge. In `kill`, a
   Brood Mother bursts into `BROOD.burst` crawlers (`spawnPack` again) and a Bloater lobs a
-  `BLOATER.poolRadius` acid pool at the hero's x that burns for `BLOATER.poolMs`.
+  `BLOATER.poolRadius` acid pool at the hero's x that burns for `BLOATER.poolMs`; the boss is
+  released to its pool only after that, since `Pool.take` hands out the last released object and
+  the burst would otherwise reuse (and move) the boss's own `Enemy`.
 - **Perks:** `collected` counts every crate of a kind (the starting kit included, counted in
   `create`); `perksOf(collected)` lists the perks at `PERK_AT` or more, kept in `state.perks`
   (`collect` shows a banner for a new one). In `hitTargets`, with `fire` every bullet hit sets
@@ -305,13 +309,14 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
 - **Input:** a `pointerdown` inside `Hud.onSwitch` (the `STYLE_SWITCH` box, padded 6px) calls
   `switchStyle` and nothing else; the V key does the same. In `'over'` it runs a `shop` button's
   `act` or restarts, in `'supply'` it picks a card (1, 2, 3, or 4 for the extraction card), in
-  `'role'` a role card (1, 2, 3), on the kit panel it toggles placing, and while placing it
-  places a wall. Otherwise `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
+  `'role'` a role card (1, 2, 3), on the kit panel it toggles placing (outside a wave it only
+  plays `ui('refuse')`), and while placing it places a wall. Otherwise `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
   `pointerdown`, and on `pointermove` while held (unless the press was used by any of the above:
   `pressOnUi`). `moveHero` walks towards it at `HERO.speed` and clears it
   on arrival; it re-clamps `pointerTarget` to `heroRange()` first, since a new companion can narrow
   it. Held A/D or arrow keys move directly and clear `pointerTarget`. A tap in the `'over'` phase
-  restarts the scene instead.
+  restarts the scene instead (after `OVER_GRACE_MS`). Phaser's keyboard plugin destroys its keys
+  on shutdown, so `createInput`'s key listeners don't pile up over restarts.
 - **Rendering:** objects are long-lived and updated in place: pooled images for enemies, crates
   (with a label image and an hp Text), drums (with a ring image and a label Text), bullets, splats
   and effects are repositioned each frame and hidden on release. `bars` (health bars, drum label
@@ -353,7 +358,8 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
 - **Shared sounds:** `ui('click')` for the style switch, the kit panel toggle, putting the
   sandbags away, refunding a starting crate, picking an operation and the restart tap;
   `ui('coin')` for buying a starting crate or an outpost level; `ui('refuse')` for one that can't
-  be afforded and for S with no sandbags in a wave (`placeWall` returns whether it placed).
+  be afforded, for S with no sandbags in a wave (`placeWall` returns whether it placed) and for a
+  tap on the kit panel outside a wave.
 - There is no `?watch` mode, so nothing for it.
 
 ### Save keys
@@ -397,7 +403,7 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
 
 ### State model
 
-- `GameState` (exported from `GameScene.ts`): `wave`, `phase` (`'wave' | 'break' | 'supply' | 'over'`),
+- `GameState` (exported from `GameScene.ts`): `wave`, `phase` (`'wave' | 'break' | 'supply' | 'role' | 'over'`),
   `kills`, `stats` (a `Stats` from `rules.ts`: `damage`, `fireInterval`, `companions`, `pierce`),
   `collected` (count per `UpgradeKind`), `best`, `fallen` and `waveTotal` (the progress strip),
   `streak`, `frenzyMs` and `frenzies`, `drumsBlown` and `lastBlast` (`{ caught, killed }` of the
@@ -456,7 +462,7 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
   `1 + floor(wave / 3)`, crate hp `10 + 6 * wave`, drum count `1 + floor(wave / 4)` from 2000ms,
   plus 2 in an ammo shortage).
 - Visual-only constants stay in `GameScene.ts` (`DEPTH`, `SPLAT_MS`, `BLAM_EVERY`,
-  `SPLUT_EVERY`), `Hud.ts` (layout) and `src/art/` (colours, `GEOM`).
+  `SPLUT_EVERY`, and the game over screen's `OVER_GRACE_MS`), `Hud.ts` (layout) and `src/art/` (colours, `GEOM`).
 
 ## Testing hooks
 
@@ -470,8 +476,8 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
   behind it), converted from game pixels with its bounding box. The Playwright project `deadline`
   uses a 540x960 viewport.
 - The test seeds `Math.random`, owns the clock (64ms frames), and forces the canvas renderer.
-- The test reads no text, so it plays the same in any language; it runs in the browser's US
-  English in CI, and passes with a German locale (`locale: 'de-DE'` in the Playwright config) too.
+- The test reads no text, so it plays the same in any language; it runs in British English, the
+  default (the hub's Language setting picks the language, not the browser's).
 - Flow: wave 1 starts with `BASE_STATS`, best 1 (saved), no scrap, starting kit or sandbags, the
   hero at `VIEW.w / 2` and the comic style; it taps the switch's NV half (style `nv`, saved, hero not moving, screenshot
   `0-night-vision`) and its COMIC half (back to `comic`); at least 3 grunts come in; it taps above the lowest
@@ -563,7 +569,7 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
   keeps moving into the break.
 - Crate and drum hit boxes are squares (`PICKUP.halfSize`, `DRUM.halfSize`), enemy hit boxes are
   circles (`radius`). Hits are swept: `hitTargets` tests each bullet's whole move this frame, from
-  `prevY` up to `y`, so a long frame can't carry it through a target, and a piercing bullet hits
+  `prevY` to `y` (either way, as a ricochet can fly down), so a long frame can't carry it through a target, and a piercing bullet hits
   the nearest enemies first. Zombies in the drum's column shield it, which is why drums are one hit.
 - Screens: `src/main.ts` calls `setupScaling(game, { fill: true })` from `shared/scaling.ts`, so
   the canvas has `renderScale` canvas pixels per game pixel (up to 4 on a 4K screen) and the camera
@@ -579,7 +585,8 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
   right edge, stretches the progress strip and boss bar across it and puts the kit and frenzy
   panels in its bottom corners, and `centreOverlay` moves the supply drop, role pick and game over
   (and their tap boxes) down to the middle of a taller view. At 540x960 `FIELD` is the view and
-  nothing moves. Bullets are dropped once they leave `FIELD`. Texts take `renderScale` as their resolution (don't set one). `bake` paints
+  nothing moves. Bullets are dropped once they leave `FIELD` (at the top: once above the HUD bar;
+  a ricochet can fly down and leave at the bottom). Texts take `renderScale` as their resolution (don't set one). `bake` paints
   at `sharpRes`: full-screen textures (`FULL_SCREEN` in `paint.ts`) at 1x on a screen that needs no
   scaling and at most 2x, sprites at `HI` (2x) and at most 4x, since painting, and night vision's
   per-pixel pass, slows with the square of it. On a phone held sideways a hint asks to turn it
