@@ -11,7 +11,8 @@ const HUB_COLOUR = '#1b1410';
  * hub's manifest (`public/manifest.webmanifest`), and each game's page its own, made here from the
  * game's title and background colour, with the icons `scripts/pwa-icons.mjs` draws, so a game
  * installs from its page as an app of its own. The build also gets `sw.js`, the service worker
- * from `scripts/sw.js` with every file of the build to cache, which `shared/install.ts` registers.
+ * from `scripts/sw.js` with every file of the build and a hash of its content to cache, which
+ * `shared/install.ts` registers.
  * The hub's built manifest lets the installed hub open progress files (`.gh`, and each game's
  * `.gh<code>` from `shared/saveCodes.ts`). `games` are the folder names; the build fails for a game
  * without a code or icons.
@@ -67,12 +68,15 @@ export function pwa(games: string[]): Plugin {
         writeFileSync(file, JSON.stringify(gameManifest(root, game), null, 2));
       }
 
-      const files = walk(outDir).map((f) => relative(outDir, f).split('\\').join('/'));
-      const version = createHash('sha256');
-      for (const file of files.sort()) version.update(file).update(readFileSync(join(outDir, file)));
+      // Every file with a hash of its content, so an update downloads only what changed.
+      const files: Record<string, string> = {};
+      for (const file of walk(outDir).map((f) => relative(outDir, f).split('\\').join('/')).sort()) {
+        files[`./${file}`] = createHash('sha256').update(readFileSync(join(outDir, file))).digest('hex').slice(0, 16);
+      }
+      const version = createHash('sha256').update(JSON.stringify(files)).digest('hex').slice(0, 12);
       const source = readFileSync(join(root, 'scripts/sw.js'), 'utf8')
-        .replace('__VERSION__', version.digest('hex').slice(0, 12))
-        .replace('__FILES__', JSON.stringify(files.map((f) => `./${f}`)));
+        .replace('__VERSION__', version)
+        .replace('__FILES__', JSON.stringify(files));
       writeFileSync(join(outDir, 'sw.js'), source);
     },
   };

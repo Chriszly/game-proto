@@ -192,8 +192,10 @@ has its own name and icon, drawn from its favicon on its background colour.
 - `scripts/pwa.ts`, a Vite plugin, links every page to its manifest: the hub's is
   `public/manifest.webmanifest`, and each game's is made from its title and background colour. It
   also writes `sw.js` into the build, the service worker from `scripts/sw.js` with every file of the
-  build to cache, so a deploy is a new version that replaces the old cache. Pages load from the
-  network while online and from the cache offline.
+  build and a hash of its content, so a deploy is a new version that replaces the old cache. An
+  update downloads only the files whose content changed and copies the rest from the old cache, so
+  it costs phones little data. Pages load from the network while online and from the cache offline,
+  so a player sees an update the next time they open the app online.
 - `shared/install.ts` registers the service worker (from the hub and from `setupGame`, only in the
   built site and never under browser automation), shows the Install buttons, and in the
   installed app asks the browser to keep its storage.
