@@ -4,6 +4,7 @@ import { t } from './i18n';
 import type { HowToPlay } from './howToPlay';
 import { cornerBar, volumeSliders } from './corner';
 import { resumeAudio, suspendAudio, ui, unlockAudio } from './audio';
+import { mountInstallButton } from './install';
 
 /** The key that pauses the game and resumes it. Esc is left to the games, some of which close panels with it. */
 const PAUSE_KEY = 'p';
@@ -25,6 +26,8 @@ const HELP_KEY = 'h';
  *   P, Enter, Space or Esc resume.
  * - How to play: when the game hands over its `howToPlay`, the start and pause screens get a How to
  *   play button (and the H key) that shows it in place of the card; Back, H or Esc go back.
+ * - Install: where the game can be installed as an app, the start and pause screens show an Install
+ *   button (`install.ts`).
  * While a screen is up, keys go to it and not to the game.
  */
 export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
@@ -39,6 +42,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     `<button type="button" class="game-overlay-button game-start-button">${escapeHtml(t('start'))}</button>` +
     `<button type="button" class="game-overlay-button game-resume-button">${escapeHtml(t('resume'))}</button>` +
     (howToPlay ? `<button type="button" class="game-overlay-link game-help-button">${escapeHtml(t('howToPlay'))}</button>` : '') +
+    `<button type="button" class="game-overlay-link game-install-button" hidden>${escapeHtml(t('installGame'))}</button>` +
     '<div class="game-overlay-volumes"></div>' +
     '<div class="game-overlay-hint"></div>' +
     `<a class="game-overlay-hub" href="../../">${escapeHtml(t('allGames'))}</a>` +
@@ -50,6 +54,12 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   const hint = overlay.querySelector<HTMLDivElement>('.game-overlay-hint')!;
   const help = overlay.querySelector<HTMLElement>('.game-help-body');
   overlay.querySelector('.game-overlay-volumes')!.append(...volumeSliders('pause'));
+  // Install the game as an app of its own; opened with ?install (the Install on its hub card), the
+  // button shows in every browser and stands out as the main button.
+  const installButton = overlay.querySelector<HTMLButtonElement>('.game-install-button')!;
+  const installAsked = new URLSearchParams(location.search).has('install');
+  if (installAsked) installButton.className = 'game-overlay-button game-install-button';
+  mountInstallButton(installButton, installAsked);
 
   const pauseButton = document.createElement('button');
   pauseButton.type = 'button';
@@ -303,7 +313,9 @@ function injectStyles() {
 .game-overlay:not(.start) .game-start-button,
 .game-overlay:not(.paused) .game-resume-button,
 .game-overlay:not(.paused) .game-overlay-hub,
-.game-overlay:not(.start):not(.paused) .game-help-button { display: none; }
+.game-overlay:not(.start):not(.paused) .game-help-button,
+.game-overlay:not(.start):not(.paused) .game-install-button { display: none; }
+.game-install-button[hidden] { display: none; }
 ${settings.reduceMotion ? '.game-overlay-loading span { animation: none; }' : ''}
 `;
   document.head.append(style);

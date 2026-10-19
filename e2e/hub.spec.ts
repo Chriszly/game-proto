@@ -179,6 +179,7 @@ test('hub game settings, continue playing and genre filter', async ({ page }, te
   const dialog = page.getByRole('dialog', { name: 'Apothecary' });
   await expect(dialog).toContainText('This game has progress saved on this device');
   await expect(dialog.getByRole('link', { name: 'Play' })).toHaveAttribute('href', 'games/apothecary/');
+  await expect(dialog.getByRole('link', { name: 'Install' })).toHaveAttribute('href', 'games/apothecary/?install');
   testInfo.attach('game settings', { body: await dialog.screenshot({ path: testInfo.outputPath('game-settings.png') }), contentType: 'image/png' });
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: "Delete this game's progress" }).click();
@@ -295,6 +296,8 @@ test('games have start and pause screens', async ({ page }, testInfo) => {
   await expect(page.locator('.game-start-button')).toBeVisible();
   await expect(page.locator('.game-overlay-title')).toHaveText('Apothecary');
   expect(await running(), 'paused on the start screen').toBe(false);
+  // Install shows only where the browser can install the page, which a test browser can't.
+  await expect(page.getByRole('button', { name: 'Install as an app' })).toBeHidden();
   testInfo.attach('start', { body: await page.screenshot({ path: testInfo.outputPath('start.png') }), contentType: 'image/png' });
 
   // How to play opens from the start screen, keeps the game paused, and Esc goes back.
@@ -505,4 +508,24 @@ test('hub and games install as apps', async ({ page, request }) => {
     expect(new URL(manifest.start_url, url).pathname).toBe(path);
     for (const icon of manifest.icons) expect((await request.get(new URL(icon.src, url).href)).ok()).toBe(true);
   }
+});
+
+// The Install on a game's hub card opens the game with ?install: its start screen shows Install as
+// the main button in every browser, and where the browser has no install prompt it says how.
+test('a game installs from its start screen', async ({ page }, testInfo) => {
+  await page.addInitScript(() => Object.assign(window, { showStartScreen: true }));
+  await page.goto('/games/apothecary/?install');
+  const install = page.getByRole('button', { name: 'Install as an app' });
+  await expect(install).toBeVisible();
+  await expect(install).toHaveClass(/game-overlay-button/);
+  testInfo.attach('install', { body: await page.screenshot({ path: testInfo.outputPath('install.png') }), contentType: 'image/png' });
+  let hint = '';
+  page.once('dialog', (d) => {
+    hint = d.message();
+    d.accept();
+  });
+  await install.click();
+  await expect.poll(() => hint).toBe("To install, pick Install app or Add to Home Screen in your browser's menu.");
+  await page.locator('.game-start-button').click();
+  await expect(install).toBeHidden();
 });

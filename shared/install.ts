@@ -27,11 +27,13 @@ interface InstallPrompt extends Event {
 }
 
 /**
- * Shows the hub's Install button where the app can be installed: browsers built on Chromium offer
- * their install prompt, and on iPhones and iPads the button explains Add to Home Screen. In the
- * installed app it stays hidden.
+ * Shows an Install button where the page can be installed: browsers built on Chromium offer their
+ * install prompt, and on iPhones and iPads the button explains Add to Home Screen. With `always`
+ * (a game opened with `?install` from the ⚙ on its hub card) it shows in every browser, and where
+ * there is no prompt it says how to install from the browser's menu. In the installed app it stays
+ * hidden. The hub has one next to Settings, and every game one on its start and pause screens.
  */
-export function mountInstallButton(button: HTMLButtonElement) {
+export function mountInstallButton(button: HTMLButtonElement, always = false) {
   if (installed()) return;
   let offer: InstallPrompt | undefined;
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -44,10 +46,10 @@ export function mountInstallButton(button: HTMLButtonElement) {
     button.hidden = true;
   });
   const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  if (apple) button.hidden = false;
+  if (apple || always) button.hidden = false;
   button.addEventListener('click', async () => {
     if (!offer) {
-      alert(t('installAppHint'));
+      alert(t(apple ? 'installAppHint' : 'installAppMenuHint'));
       return;
     }
     await offer.prompt();

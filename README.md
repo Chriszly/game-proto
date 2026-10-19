@@ -89,7 +89,8 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 
 Each card also has a **⚙** in its corner that opens that game's own settings: whether it has
 anything saved on this device, **Export progress** and **Import progress** for just that game's
-progress (see Progress files), **Delete this game's progress** (its storage keys, which all start
+progress (see Progress files), **Install**, which opens the game ready to install as an app (see
+Install as an app), **Delete this game's progress** (its storage keys, which all start
 with its folder name, see `shared/progress.ts`) and **Play**.
 
 ![A game's own settings](docs/screenshots/hub-game-settings.webp)
@@ -177,19 +178,26 @@ games play as usual and the cards simply show no count. Nothing else is sent.
 ## Install as an app
 
 The hub and every game install as apps of their own (PWAs) that play offline: open the hub or a
-game on the site and pick **Install** (Chrome and Edge, on phones and computers; the hub also shows
-an **Install** button next to Settings) or **Share > Add to Home Screen** (Safari on iPhone and
-iPad). Each app has its own name and icon, drawn from its favicon on its background colour.
+game on the site and pick **Install** (Chrome and Edge, on phones and computers) or **Share > Add to
+Home Screen** (Safari on iPhone and iPad). The hub shows an **Install** button next to Settings, and
+every game one on its start and pause screens, where the browser can install it; the **Install** in
+a game's ⚙ on the hub opens the game with `?install`, which shows that button as the main one in
+every browser (and says how to install from the browser's menu where there is no prompt). Each app
+has its own name and icon, drawn from its favicon on its background colour.
+
+![A game's start screen opened from Install on its hub card](docs/screenshots/game-install.webp)
 
 ![The hub's and every game's app icons](docs/screenshots/app-icons.webp)
 
 - `scripts/pwa.ts`, a Vite plugin, links every page to its manifest: the hub's is
   `public/manifest.webmanifest`, and each game's is made from its title and background colour. It
   also writes `sw.js` into the build, the service worker from `scripts/sw.js` with every file of the
-  build to cache, so a deploy is a new version that replaces the old cache. Pages load from the
-  network while online and from the cache offline.
+  build and a hash of its content, so a deploy is a new version that replaces the old cache. An
+  update downloads only the files whose content changed and copies the rest from the old cache, so
+  it costs phones little data. Pages load from the network while online and from the cache offline,
+  so a player sees an update the next time they open the app online.
 - `shared/install.ts` registers the service worker (from the hub and from `setupGame`, only in the
-  built site and never under browser automation), shows the hub's Install button, and in the
+  built site and never under browser automation), shows the Install buttons, and in the
   installed app asks the browser to keep its storage.
 - `node scripts/pwa-icons.mjs [game...]` draws the icons into `public/icons/` from the favicons.
   The build fails for a game without icons.

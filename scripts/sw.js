@@ -1,20 +1,51 @@
 // The service worker that lets the installed hub and every game play offline. `scripts/pwa.ts`
-// copies it into the build as sw.js, with VERSION and FILES filled in: every file of the build,
-// so a new deploy brings a new version, which caches the new build and drops the old one.
+// copies it into the build as sw.js, with VERSION and FILES filled in: every file of the build with
+// a hash of its content, so a new deploy brings a new version, which caches the new build and drops
+// the old one. An update downloads only the files whose content changed and copies the rest from
+// the cache of the version before, so it costs phones little data.
 const VERSION = '__VERSION__';
 const FILES = __FILES__;
 // Other sites of the same owner share the origin, so only this hub's caches are ever touched.
 const PREFIX = 'game-proto-';
 const CACHE = PREFIX + VERSION;
+// Where each cache keeps the FILES it was filled from, for the next version to compare against.
+const INDEX = './__files__.json';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(FILES))
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil(fill().then(() => self.skipWaiting()));
 });
+
+/** Fills this version's cache, reusing every file an older cache holds with the same content. */
+async function fill() {
+  const cache = await caches.open(CACHE);
+  const older = await olderCaches();
+  await Promise.all(
+    Object.entries(FILES).map(async ([path, hash]) => {
+      for (const old of older) {
+        const kept = old.files[path] === hash && (await old.cache.match(path));
+        if (kept) return cache.put(path, kept);
+      }
+      // A file that failed to download fails the install, so the old version stays until next time.
+      const response = await fetch(path, { cache: 'no-cache' });
+      if (!response.ok) throw new Error(`${path}: ${response.status}`);
+      await cache.put(path, response);
+    }),
+  );
+  await cache.put(INDEX, new Response(JSON.stringify(FILES)));
+}
+
+/** The caches of earlier versions, with the files each was filled from. */
+async function olderCaches() {
+  const names = (await caches.keys()).filter((k) => k.startsWith(PREFIX) && k !== CACHE);
+  const found = await Promise.all(
+    names.map(async (name) => {
+      const cache = await caches.open(name);
+      const index = await cache.match(INDEX);
+      return index ? { cache, files: await index.json() } : null;
+    }),
+  );
+  return found.filter(Boolean);
+}
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
