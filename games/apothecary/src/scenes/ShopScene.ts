@@ -679,7 +679,7 @@ export class ShopScene extends Phaser.Scene {
     return to;
   }
 
-  /** A corner of the first station in the way to `to`, or null when the way is clear. */
+  /** A corner of the first station in the way to `to` (never the one the doctor stands on), or null when the way is clear. */
   private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
     const feet = this.player.body!.center;
     const from = new Phaser.Math.Vector2(feet.x, feet.y);
@@ -695,7 +695,7 @@ export class ShopScene extends Phaser.Scene {
       new Phaser.Math.Vector2(area.right, area.top),
       new Phaser.Math.Vector2(area.left, area.bottom),
       new Phaser.Math.Vector2(area.right, area.bottom),
-    ].filter((c) => bounds.contains(c.x, c.y) && !Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(from.x, from.y, c.x, c.y), inner(area)));
+    ].filter((c) => from.distance(c) >= 5 && bounds.contains(c.x, c.y) && !Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(from.x, from.y, c.x, c.y), inner(area)));
     corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
     return corners[0] ?? null;
   }
