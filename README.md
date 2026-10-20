@@ -81,6 +81,12 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 - **Genre filter** (off by default, hub only): a row of genres above the cards (Action, Strategy,
   Management, Puzzle, Adventure) that lists just the games of one. Each card's genres are its
   `data-genres` in `index.html`.
+- **Updates** (Wi-Fi only by default): when the installed apps download a new version. **Automatic**
+  updates on the next visit online, **Wi-Fi only** waits while an Android phone is on mobile data or
+  Data Saver (other browsers can't tell, so they update as usual), and **Off** keeps the version in
+  place. **Update now** fetches a new version at once whatever the setting says.
+
+  ![The Updates setting](docs/screenshots/hub-updates.webp)
 - **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
   and **Import all** loads one back, on this or another device. **Delete all progress** erases every
   game's saves and the Continue playing row, and keeps the settings and any other site's storage on
@@ -196,7 +202,10 @@ has its own name and icon, drawn from its favicon on its background colour.
   also writes `sw.js` into the build, the service worker from `scripts/sw.js` with every file of the
   build and a hash of its content, so a deploy is a new version that replaces the old cache. An
   update downloads only the files whose content changed and copies the rest from the old cache, so
-  it costs phones little data. Pages load from the network while online and from the cache offline,
+  it costs phones little data. The Updates setting can hold updates back: the service worker can't read
+  the settings, so `shared/install.ts` copies it into a cache of its own, and while updates are held
+  back the new version's install fails on purpose and pages load from the cache, so the version in
+  place keeps playing. Pages load from the network while online and from the cache offline,
   so a player sees an update the next time they open the app online.
 - `shared/install.ts` registers the service worker (from the hub and from `setupGame`, only in the
   built site and never under browser automation), shows the Install buttons, and in the

@@ -27,6 +27,14 @@ export type Language = (typeof LANGUAGES)[number];
 /** Each language's own name, the same whatever language is chosen. */
 export const LANGUAGE_NAMES: Record<Language, string> = { en: 'English (UK)', 'en-US': 'English (US)', de: 'Deutsch' };
 
+/**
+ * When the installed apps download a new version (`install.ts`, `scripts/sw.js`): always, only on
+ * WiFi (on mobile data or Data Saver they wait; only Android browsers built on Chrome tell the two
+ * apart, so elsewhere it is the same as always), or never until Update now is pressed.
+ */
+export const UPDATE_MODES = ['auto', 'wifi', 'off'] as const;
+export type UpdateMode = (typeof UPDATE_MODES)[number];
+
 export interface Settings {
   /** How hard every game plays; each game decides what that scales. Normal is the game as designed. */
   difficulty: Difficulty;
@@ -46,6 +54,8 @@ export interface Settings {
   muted: boolean;
   /** Hub only: shows a row of genres above the games to filter the cards by. */
   genreFilter: boolean;
+  /** When the installed apps download a new version. */
+  updates: UpdateMode;
 }
 
 export const DEFAULTS: Settings = {
@@ -58,6 +68,7 @@ export const DEFAULTS: Settings = {
   effects: 80,
   muted: false,
   genreFilter: false,
+  updates: 'wifi',
 };
 
 /**
@@ -101,6 +112,17 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   { key: 'effects', label: 'settingEffects', hint: 'settingEffectsHint', ...VOLUME },
   { key: 'muted', label: 'settingMuted', hint: 'settingMutedHint', kind: 'toggle' },
   { key: 'genreFilter', label: 'settingGenreFilter', hint: 'settingGenreFilterHint', kind: 'toggle' },
+  {
+    key: 'updates',
+    label: 'settingUpdates',
+    hint: 'settingUpdatesHint',
+    kind: 'choice',
+    options: [
+      { value: 'auto', label: 'updatesAuto' },
+      { value: 'wifi', label: 'updatesWifi' },
+      { value: 'off', label: 'off' },
+    ],
+  },
 ];
 
 export const SETTINGS_KEY = 'hub-settings';
@@ -123,6 +145,7 @@ export function loadSettings(): Settings {
     effects: volume(saved.effects, DEFAULTS.effects),
     muted: typeof saved.muted === 'boolean' ? saved.muted : DEFAULTS.muted,
     genreFilter: typeof saved.genreFilter === 'boolean' ? saved.genreFilter : DEFAULTS.genreFilter,
+    updates: UPDATE_MODES.find((u) => u === saved.updates) ?? DEFAULTS.updates,
   };
 }
 

@@ -1,5 +1,6 @@
 import { t } from './i18n';
 import { gameOf } from './playCount';
+import { settings, type UpdateMode } from './settings';
 
 /**
  * Installing the hub as an app (a PWA). The build's service worker (`scripts/pwa.ts`) caches every
@@ -9,11 +10,60 @@ import { gameOf } from './playCount';
  */
 export function registerServiceWorker() {
   if (!import.meta.env.PROD || navigator.webdriver || !('serviceWorker' in navigator)) return;
-  const root = gameOf(location.pathname) ? '../../' : './';
-  navigator.serviceWorker.register(`${root}sw.js`, { scope: root }).catch(() => {});
+  navigator.serviceWorker.register(`${root()}sw.js`, { scope: root() }).catch(() => {});
+  shareUpdates(settings.updates);
   // An installed app asks the browser to keep its saves even when the device runs low on space.
   // Asking from a browser tab would show a prompt in some browsers, so only the app asks.
   if (installed()) navigator.storage?.persist?.().catch(() => {});
+}
+
+/** The hub's folder, where the service worker lives, relative to this page. */
+function root() {
+  return gameOf(location.pathname) ? '../../' : './';
+}
+
+/**
+ * The service worker can't read the settings, so the Updates setting is also kept where it can:
+ * in a cache of its own, which every page refreshes as it opens and the Settings panel on a change.
+ * An `update-now` entry there lets one update through whatever the setting says. See `scripts/sw.js`.
+ */
+const UPDATES_CACHE = 'game-proto.updates';
+const updatesKey = (name: string) => new URL(`${root()}${name}`, location.href).href;
+
+export function shareUpdates(mode: UpdateMode) {
+  if (!('caches' in window)) return;
+  caches
+    .open(UPDATES_CACHE)
+    .then((cache) => cache.put(updatesKey('updates'), new Response(mode)))
+    .catch(() => {});
+}
+
+/**
+ * Downloads a new version now, whatever the Updates setting says: `updated` once it is in place
+ * (reload the page to show it), `current` when there is none, `failed` when it couldn't download.
+ */
+export async function updateNow(): Promise<'updated' | 'current' | 'failed'> {
+  const registration = await navigator.serviceWorker?.getRegistration(root()).catch(() => undefined);
+  if (!registration) return 'current';
+  const cache = await caches.open(UPDATES_CACHE);
+  await cache.put(updatesKey('update-now'), new Response('1'));
+  try {
+    await registration.update();
+    const worker = registration.installing ?? registration.waiting;
+    if (!worker) return 'current';
+    return await new Promise((resolve) => {
+      const done = () => {
+        if (worker.state === 'activated') resolve('updated');
+        else if (worker.state === 'redundant') resolve('failed');
+      };
+      worker.addEventListener('statechange', done);
+      done();
+    });
+  } catch {
+    return 'failed';
+  } finally {
+    await cache.delete(updatesKey('update-now'));
+  }
 }
 
 /** Whether the page runs as the installed app rather than in a browser tab. */
