@@ -445,26 +445,26 @@ counts as lost if a boss still stands 7 minutes after it appears. The script is 
 repo; rebuild it from this description when you rebalance, and have it append each finished run
 to a results file (and skip runs already there) so a restart loses little.
 
-The current numbers were checked on a seed set they were not tuned on (base 290001, 60 runs per
+The current numbers were checked on a seed set they were not tuned on (base 330001, 60 runs per
 hero, 720 in all):
 
 | Hero | Won | Win rate | Fell on jump 1 / 2 / 3 / 4 |
 | --- | --- | --- | --- |
-| Captain Rook | 45 / 60 | 75% | 0 / 1 / 3 / 11 |
-| Legionary TR-9 | 45 / 60 | 75% | 0 / 2 / 1 / 12 |
-| Corporal Bram-17 | 44 / 60 | 73% | 0 / 0 / 4 / 12 |
-| Kael Varro | 40 / 60 | 67% | 0 / 1 / 7 / 12 |
-| Lord Vharn | 38 / 60 | 63% | 0 / 2 / 1 / 19 |
-| Master Oom | 42 / 60 | 70% | 0 / 1 / 5 / 12 |
-| Elder Corvin Hale | 39 / 60 | 65% | 17 / 0 / 0 / 4 |
-| Regent Veyl | 36 / 60 | 60% | 0 / 0 / 0 / 24 |
-| Kresh the Twinblade | 43 / 60 | 72% | 0 / 0 / 1 / 16 |
-| Master Joren Vask | 45 / 60 | 75% | 0 / 0 / 1 / 14 |
-| Commander Elara Voss | 47 / 60 | 78% | 6 / 1 / 2 / 4 |
-| Triad-77 | 46 / 60 | 77% | 0 / 0 / 5 / 9 |
-| **All** | 510 / 720 | **70.8%** | |
+| Captain Rook | 38 / 60 | 63% | 0 / 1 / 9 / 12 |
+| Legionary TR-9 | 47 / 60 | 78% | 0 / 1 / 4 / 8 |
+| Corporal Bram-17 | 40 / 60 | 67% | 0 / 0 / 6 / 14 |
+| Kael Varro | 38 / 60 | 63% | 0 / 2 / 10 / 10 |
+| Lord Vharn | 39 / 60 | 65% | 5 / 3 / 1 / 12 |
+| Master Oom | 37 / 60 | 62% | 0 / 2 / 4 / 17 |
+| Elder Corvin Hale | 42 / 60 | 70% | 12 / 0 / 1 / 5 |
+| Regent Veyl | 37 / 60 | 62% | 0 / 0 / 0 / 23 |
+| Kresh the Twinblade | 45 / 60 | 75% | 0 / 0 / 2 / 13 |
+| Master Joren Vask | 43 / 60 | 72% | 0 / 0 / 2 / 15 |
+| Commander Elara Voss | 48 / 60 | 80% | 6 / 1 / 3 / 2 |
+| Triad-77 | 44 / 60 | 73% | 0 / 0 / 2 / 14 |
+| **All** | 498 / 720 | **69.2%** | |
 
-The spread is 18 points (60% to 78%). Most runs are lost on the Lava world; Corvin's losses come
+The spread is 18 points (62% to 80%). Most runs are lost on the Lava world; Corvin's losses come
 mostly on the Dune world. Things learned while tuning:
 
 - At 60 runs a hero's rate still wobbles by about 6 points either way, and seed sets differ, so
