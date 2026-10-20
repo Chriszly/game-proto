@@ -22,6 +22,12 @@ styles, from Paper Cut-out to Stained Glass; the digits stay plain and easy to r
 | Hint (H) | Fill in the picked cell, or the first open one |
 | Menu | Leave the board for the menu |
 
+It plays sideways or upright, whichever way the phone or window is held, and turns with it: upright,
+the board sits under a header with the mode, hearts and clock, and the nine digits make one row of
+keys under the board.
+
+<img src="docs/screenshots/upright-board.webp" alt="A Classic board on an upright phone" width="270">
+
 A right digit stays. A wrong one shows in red, counts a mistake and can be erased or written over.
 Picking a cell lights its row, column and box, and every cell holding the same digit; the number
 pad shows how many of each digit are still to place and greys out finished ones. A finished row,
@@ -78,6 +84,7 @@ hints and 2 hearts; Normal is 3 and 3. The puzzles themselves don't change.
 - `src/game/catalog.ts`: the styles, relics and Classic levels.
 - `src/game/save.ts`: the saved progress.
 - `src/scenes/GameScene.ts`: the menu, style picker, board, panel and end cards.
+- `src/scenes/layout.ts`: where everything sits, sideways and upright.
 - `src/scenes/themes.ts`: the colours and fonts of the nine styles.
 - `src/audio.ts`: music and sound effects.
 

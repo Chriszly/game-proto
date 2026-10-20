@@ -212,7 +212,10 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   the designed size: paint backgrounds and the world over the whole view, pin bars and buttons to the
   view's edges, centre panels and dialogs in the view, and put a play area that was laid out for the
   designed size in `viewFrame(scene)`, the designed-size rectangle in the middle of the view. A
-  scrolling world shows more of itself instead. The Screens check then also fails a filling game that
+  scrolling world shows more of itself instead. A game laid out for upright screens too (Ninefold)
+  adds `bothWays: true`: its view turns round on an upright window and again when the phone turns,
+  with no hint to turn it, so it picks its layout from `viewSize` and lays out again on the scale
+  manager's `resize` event. The Screens check then also fails a filling game that
   leaves bars, and the playthrough, at 960x540, plays as before.
 - **Watch AI.** A game whose AI can play every side supports `?watch` with `shared/watch.ts`: when
   `watching` is set, hand the player's side to the AI and lift the fog, call `mountWatch` once the

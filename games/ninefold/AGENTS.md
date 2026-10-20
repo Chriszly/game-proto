@@ -29,6 +29,9 @@ Implemented today:
 - Delve floors are `FLOORS` (from floor 6 on, the last row repeats). Relics (`RELICS`): Lantern
   (+1 hint), Heartstone (+1 heart, up to `MAX_HEARTS`), Seer's Eye (`SEER_CELLS` more cells filled
   at the start of each floor, per copy), Ward (first mistake each floor is free).
+- Both ways round: a wide view gets the `WIDE` layout (board left, panel with a 3x3 pad right) and an
+  upright one the `TALL` layout (header panel, board, then a dock with one row of nine keys and the
+  tools), and turning the phone mid-game lays everything out again.
 - Styles (`STYLES`, `THEMES`): Paper Cut-out (default), Garden Markers, Chalkboard, Ink &
   Parchment, Cosy Pixel, Star Chart, Carved Stone, Neon Arcade, Stained Glass, unlocked by
   `UNLOCKS` and picked on the style screen. Fonts are the device's own, so nothing is downloaded.
@@ -39,7 +42,8 @@ Missing or rough:
 - The daily puzzle has no streak and no shared leaderboard; the menu only ticks it off for today.
 - No undo; a right digit can't be taken back (it is right).
 - Puzzle levels are by given count, not by the solving techniques they need.
-- `docs/screenshots/all-styles.webp`, `style-picker.webp`, `menu.webp` and `cover.png` are not made by
+- `docs/screenshots/all-styles.webp`, `style-picker.webp`, `menu.webp`, `upright-board.webp` (a
+  390x844 phone at 2x) and `cover.png` are not made by
   the test; refresh them by hand (a Playwright script that sets `ninefold-progress` with every style
   unlocked and taps like the test) when the look changes. `delve-relics.webp` is the test's
   `playthrough-3-relics` screenshot.
@@ -49,7 +53,7 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Phaser.Scale.FIT`) with `GameScene`,
-  calls `setupGame(game, { howToPlay })` and then `setupScaling(game, { fill: true })`, and in dev
+  calls `setupGame(game, { howToPlay })` and then `setupScaling(game, { fill: true, bothWays: true })`, and in dev
   builds puts `game` on `window`.
 - `howToPlay.ts`: the How to play text in English (also used for US English, which spells nothing
   differently there) and German; update both when the controls or the first round change.
@@ -70,8 +74,10 @@ File map (`src/`):
 - `game/save.ts`: `loadProgress` and `saveProgress`.
 - `scenes/GameScene.ts`: everything drawn and all input.
 - `scenes/themes.ts`: `Theme`, `THEMES` (one per style) and `hex`.
-- `scenes/layout.ts`: `VIEW`, `BOARD`, `PANEL`, `PAD`, `TOOLS`, `MENU_BUTTON`, `MENU`,
-  `STYLE_CARDS`, `BACK`, `END`, `END_BUTTONS`, `RELIC_CARDS`, `UI_DEPTH`.
+- `scenes/layout.ts`: the `Layout` type and its two values, `WIDE` (960x540) and `TALL` (540x960),
+  with every spot (`board`, `panel` and its `rows`, `dock`, `pad` with its `cols`, `tools`,
+  `keysHint`, `menuButton`, `menu`, `stylesTitle`, `styleCards`, `back`, `end`, `endButtons`,
+  `relicBox`, `relicCards`); `layoutFor(w, h)`, `VIEW` (= `WIDE.view`, for `main.ts`) and `UI_DEPTH`.
 
 Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScaling`, `viewSize`,
 `viewFrame`), `shared/audio.ts` (`sounds`, `playMusic`, `playSting`, `ui`), `shared/settings.ts`
@@ -79,11 +85,15 @@ Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScalin
 
 How it runs:
 
-- Coordinates: everything is laid out in the designed 960x540 frame (`layout.ts`). The game fills
-  the screen's shape (`fill: true`); `create` reads `viewSize`/`viewFrame` and scrolls the camera to
-  `(-fx, -fy)` once, so the frame sits in the middle of the view. Backdrops (`drawDeco`) and dims
-  are drawn from `(-fx, -fy)` over the whole view. The camera never moves after that. Taps on the
-  board use `pointer.worldX/Y`.
+- Coordinates: everything is laid out in a designed frame, 960x540 sideways or 540x960 upright
+  (`this.L`, from `layoutFor`). The game fills the screen's shape (`fill: true`) and turns with it
+  (`bothWays: true`: `shared/scaling.ts` turns the view round on an upright window, and again when
+  the window turns). `fitView` reads `viewSize`/`viewFrame`, picks the layout and scrolls the camera
+  to `(-fx, -fy)`, so the frame sits in the middle of the view; it runs in `create` and on the scale
+  manager's `resize`, which also redraws the backdrop and rebuilds the screen. Backdrops
+  (`drawDeco`, placed against the view's edges) and dims are drawn from `(-fx, -fy)` over the whole
+  view. Never use fixed coordinates in the scene: take them from `this.L`. Taps on the board use
+  `pointer.worldX/Y`.
 - Time: `update` takes `dt` from the frame time (capped at `MAX_STEP_MS`) and calls `tick`, which
   only runs the board's clock (`timeMs`) while playing. Nothing else is timed; the flashes age by
   `dt`.
@@ -173,13 +183,15 @@ digit, Erase or Hint that can't be used, a disabled pad key and a locked style.
   pad tools are the tightest spots).
 - **Add a style**: its id in `STYLES` (the order is the unlock order; Stained Glass waits for every
   other one), `STYLE_INFO` and its two texts, its goal in `UNLOCKS`, its `THEMES` entry, a case in
-  `drawDeco`, and the README row. Ten styles need `STYLE_CARDS` laid out four across.
+  `drawDeco`, and the README row. Ten styles need `styleCards` laid out four across in `WIDE` (`TALL`'s five rows of two already hold ten).
 - **Add a relic**: its id and `RELIC_INFO` in `catalog.ts`, its effect in `takeRelic`, `nextFloor`
   or `enter`, an emblem in `drawRelicIcon`, a README row and a case in the test's `switch`. A fifth
   relic still offers three.
 - **Retune**: the constants at the top of `state.ts`; mirror the first two `FLOORS` and the Normal
   hearts in the test.
 - **Board sizes**: `SHAPES` in `sudoku.ts`; the pad has nine keys, so boards go up to 9x9.
+- **Move something on screen**: change it in both `WIDE` and `TALL`, and check an upright phone
+  (390x844) and German there, where the style cards and relic cards are narrowest.
 
 ## Gotchas
 

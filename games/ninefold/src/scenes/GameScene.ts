@@ -11,7 +11,7 @@ import {
 import { boxOf, dailySeed } from '../game/sudoku';
 import { SFX, SONG } from '../audio';
 import { t } from '../i18n';
-import { BACK, BOARD, END, END_BUTTONS, MENU, MENU_BUTTON, PAD, PANEL, RELIC_CARDS, STYLE_CARDS, TOOLS, UI_DEPTH } from './layout';
+import { layoutFor, UI_DEPTH, WIDE, type Layout } from './layout';
 import { hex, THEMES, type Theme } from './themes';
 
 /** A spot the test can tap, in view pixels. */
@@ -38,6 +38,8 @@ export class GameScene extends Phaser.Scene {
   private vh = 540;
   private fx = 0;
   private fy = 0;
+  /** Where things go: the wide or the upright layout, whichever fits the view. */
+  private L: Layout = WIDE;
   private theme!: Theme;
   private backdrop!: Phaser.GameObjects.Graphics;
   private boardG!: Phaser.GameObjects.Graphics;
@@ -58,10 +60,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    ({ width: this.vw, height: this.vh } = viewSize(this));
-    ({ x: this.fx, y: this.fy } = viewFrame(this));
-    // The designed frame sits in the middle of the view; everything is laid out in its coordinates.
-    this.cameras.main.setScroll(-this.fx, -this.fy);
+    this.fitView();
     this.state = newGame(loadProgress());
     this.backdrop = this.add.graphics();
     this.boardG = this.add.graphics();
@@ -72,7 +71,23 @@ export class GameScene extends Phaser.Scene {
     }
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onBoardTap(p.worldX, p.worldY));
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
+    // A phone turned the other way round reshapes the view: lay everything out again.
+    const onResize = () => {
+      this.fitView();
+      this.applyTheme();
+    };
+    this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, onResize));
     this.applyTheme();
+  }
+
+  /** Reads the view's size, picks the layout for its shape and keeps its frame in the middle. */
+  private fitView() {
+    ({ width: this.vw, height: this.vh } = viewSize(this));
+    ({ x: this.fx, y: this.fy } = viewFrame(this));
+    this.L = layoutFor(this.vw, this.vh);
+    // The designed frame sits in the middle of the view; everything is laid out in its coordinates.
+    this.cameras.main.setSize(this.scale.width, this.scale.height).setScroll(-this.fx, -this.fy);
   }
 
   /** Wears the progress's style: redraws the backdrop and restyles the digits and the screen. */
@@ -109,9 +124,9 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (this.screen !== 'board' || s.phase !== 'playing' || !s.puzzle) return;
     const size = s.puzzle.size;
-    const cs = BOARD.size / size;
-    const c = Math.floor((x - BOARD.x) / cs);
-    const r = Math.floor((y - BOARD.y) / cs);
+    const cs = this.L.board.size / size;
+    const c = Math.floor((x - this.L.board.x) / cs);
+    const r = Math.floor((y - this.L.board.y) / cs);
     if (c < 0 || r < 0 || c >= size || r >= size) return;
     select(s, r * size + c);
     SFX('tap');
@@ -220,7 +235,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     const s = this.state;
     if (!s.puzzle || this.screen !== 'board') return (this.flashes = []), undefined;
-    const cs = BOARD.size / s.puzzle.size;
+    const cs = this.L.board.size / s.puzzle.size;
     this.flashes = this.flashes.filter((f) => (f.age += dt) < 600);
     if (settings.reduceMotion) return;
     for (const f of this.flashes) {
@@ -228,7 +243,7 @@ export class GameScene extends Phaser.Scene {
       for (const cell of f.cells) {
         const r = Math.floor(cell / s.puzzle.size);
         const c = cell % s.puzzle.size;
-        g.fillRect(BOARD.x + c * cs, BOARD.y + r * cs, cs, cs);
+        g.fillRect(this.L.board.x + c * cs, this.L.board.y + r * cs, cs, cs);
       }
     }
   }
@@ -270,13 +285,16 @@ export class GameScene extends Phaser.Scene {
       case 'chalk':
         for (let i = 0; i < 160; i++) g.fillStyle(0xffffff, rnd.realInRange(0.02, 0.07)).fillCircle(x0 + rnd.between(0, w), y0 + rnd.between(0, h), rnd.between(6, 40));
         g.lineStyle(14, 0x8a5a30, 1).strokeRect(x0 + 7, y0 + 7, w - 14, h - 14);
-        g.fillStyle(0xf4f2e8, 0.9).fillRoundedRect(PANEL.x + 150, y0 + h - 32, 44, 9, 3);
-        g.fillStyle(0xf7d96a, 0.9).fillRoundedRect(PANEL.x + 210, y0 + h - 31, 30, 8, 3);
+        g.fillStyle(0xf4f2e8, 0.9).fillRoundedRect(x0 + w - 270, y0 + h - 32, 44, 9, 3);
+        g.fillStyle(0xf7d96a, 0.9).fillRoundedRect(x0 + w - 210, y0 + h - 31, 30, 8, 3);
         break;
       case 'parchment':
         for (let i = 0; i < 900; i++) g.fillStyle(0x6b4a20, rnd.realInRange(0.03, 0.12)).fillRect(x0 + rnd.between(0, w), y0 + rnd.between(0, h), 2, 2);
-        g.fillStyle(0x8a1a1a, 1).fillCircle(BOARD.x + BOARD.size - 6, BOARD.y + BOARD.size + 2, 22);
-        g.lineStyle(2, 0xb33a3a, 1).strokeCircle(BOARD.x + BOARD.size - 6, BOARD.y + BOARD.size + 2, 15);
+      {
+        const { board } = this.L;
+        g.fillStyle(0x8a1a1a, 1).fillCircle(board.x + board.size - 6, board.y + board.size + 2, 22);
+        g.lineStyle(2, 0xb33a3a, 1).strokeCircle(board.x + board.size - 6, board.y + board.size + 2, 15);
+      }
         break;
       case 'pixel':
         g.fillStyle(th.bg[1], 1);
@@ -285,7 +303,8 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'stars': {
         for (let i = 0; i < 240; i++) g.fillStyle(0xffffff, rnd.realInRange(0.3, 1)).fillCircle(x0 + rnd.between(0, w), y0 + rnd.between(0, h), rnd.realInRange(0.4, 1.6));
-        const pts = [[600, 515], [660, 495], [720, 505], [780, 480], [860, 495]];
+        // A constellation in the bottom right corner of the view.
+        const pts = [[-360, -25], [-300, -45], [-240, -35], [-180, -60], [-100, -45]].map(([dx, dy]) => [x0 + w + dx, y0 + h + dy]);
         g.lineStyle(1.2, 0xffd76a, 0.5).beginPath().moveTo(pts[0][0], pts[0][1]);
         for (const [x, y] of pts) g.lineTo(x, y);
         g.strokePath();
@@ -294,20 +313,22 @@ export class GameScene extends Phaser.Scene {
       }
       case 'stone':
         for (let i = 0; i < 1400; i++) g.fillStyle(rnd.pick([0x000000, 0xffffff]), rnd.realInRange(0.02, 0.06)).fillRect(x0 + rnd.between(0, w), y0 + rnd.between(0, h), 3, 3);
-        for (const [x, y] of [[x0 + 14, 270], [538, y0 + 14]]) {
+        // Lamps on the left wall and, wide, over the gap between board and panel or, upright, on the right wall.
+        const lamps = this.L === WIDE ? [[x0 + 14, 270], [520, y0 + 14]] : [[x0 + 14, y0 + h / 2], [x0 + w - 14, y0 + h / 2]];
+        for (const [x, y] of lamps) {
           for (let r = 140; r > 0; r -= 14) g.fillStyle(0xffb84a, 0.05).fillCircle(x, y, r);
           g.fillStyle(0xffcf5a, 1).fillTriangle(x - 6, y + 8, x, y - 14, x + 6, y + 8);
         }
         break;
       case 'neon':
         g.lineStyle(1, 0x7a2aff, 0.45);
-        for (let x = -480; x < 1500; x += 80) g.lineBetween(480 + (x - 480) * 0.2, y0 + h - 160, x, y0 + h);
+        for (let x = -w; x < 2 * w; x += 80) g.lineBetween(x0 + w / 2 + (x - w / 2) * 0.2, y0 + h - 160, x0 + x, y0 + h);
         for (const dy of [150, 135, 115, 88, 50, 0]) g.lineBetween(x0, y0 + h - dy, x0 + w, y0 + h - dy);
         break;
       case 'glass':
         g.lineStyle(2, 0x6a4a20, 0.5);
         for (const spread of [0, 60]) {
-          const curve = new Phaser.Curves.QuadraticBezier(new Phaser.Math.Vector2(x0 - spread, y0 + h), new Phaser.Math.Vector2(480, y0 - 120 - spread), new Phaser.Math.Vector2(x0 + w + spread, y0 + h));
+          const curve = new Phaser.Curves.QuadraticBezier(new Phaser.Math.Vector2(x0 - spread, y0 + h), new Phaser.Math.Vector2(x0 + w / 2, y0 - 120 - spread), new Phaser.Math.Vector2(x0 + w + spread, y0 + h));
           curve.draw(g, 48);
         }
         break;
@@ -327,13 +348,13 @@ export class GameScene extends Phaser.Scene {
     this.cellSpots = [];
     if (!p || this.screen !== 'board') return;
     const size = p.size;
-    const cs = BOARD.size / size;
-    const { x, y } = BOARD;
+    const cs = this.L.board.size / size;
+    const { x, y } = this.L.board;
     const f = th.frame;
-    if (th.shadow) g.fillStyle(th.shadow.color, 1).fillRoundedRect(x - f + (th.shadow.dx ?? 0), y - f + th.shadow.dy, BOARD.size + 2 * f, BOARD.size + 2 * f, th.radius);
-    g.fillStyle(th.line, 1).fillRoundedRect(x - f, y - f, BOARD.size + 2 * f, BOARD.size + 2 * f, th.radius);
+    if (th.shadow) g.fillStyle(th.shadow.color, 1).fillRoundedRect(x - f + (th.shadow.dx ?? 0), y - f + th.shadow.dy, this.L.board.size + 2 * f, this.L.board.size + 2 * f, th.radius);
+    g.fillStyle(th.line, 1).fillRoundedRect(x - f, y - f, this.L.board.size + 2 * f, this.L.board.size + 2 * f, th.radius);
     if (th.glow && this.state.progress.style === 'neon') {
-      for (let k = 1; k <= 4; k++) g.lineStyle(k * 3, th.line, 0.12).strokeRoundedRect(x - f, y - f, BOARD.size + 2 * f, BOARD.size + 2 * f, th.radius);
+      for (let k = 1; k <= 4; k++) g.lineStyle(k * 3, th.line, 0.12).strokeRoundedRect(x - f, y - f, this.L.board.size + 2 * f, this.L.board.size + 2 * f, th.radius);
     }
     const sel = s.selected;
     const selValue = sel >= 0 && isRight(s, sel) ? s.values[sel] : 0;
@@ -517,46 +538,47 @@ export class GameScene extends Phaser.Scene {
   private buildMenu() {
     const p = this.state.progress;
     const th = this.theme;
-    const title = this.text(MENU.title.x, MENU.title.y, t('title'), 58, th.accent);
+    const title = this.text(this.L.menu.title.x, this.L.menu.title.y, t('title'), 58, th.accent);
     if (th.glow) title.setShadow(0, 0, th.glow === 'auto' ? th.accent : th.glow, 16, false, true);
-    this.text(MENU.title.x, MENU.title.y + 44, t('tagline'), 17);
-    this.box(MENU.box.x, MENU.box.y, MENU.box.w, MENU.box.h, UI_DEPTH, undefined, Math.min(th.panelAlpha, 0.85));
+    this.text(this.L.menu.title.x, this.L.menu.title.y + 44, t('tagline'), 17, undefined, { wordWrap: { width: this.L.menu.box.w } });
+    this.box(this.L.menu.box.x, this.L.menu.box.y, this.L.menu.box.w, this.L.menu.box.h, UI_DEPTH, undefined, Math.min(th.panelAlpha, 0.85));
     const today = dailySeed(new Date());
     const dailyDone = p.daily === today;
-    this.button('daily', MENU.daily.x, MENU.daily.y, MENU.daily.w, MENU.daily.h, dailyDone ? t('dailyDone') : t('daily'), () => {
+    this.button('daily', this.L.menu.daily.x, this.L.menu.daily.y, this.L.menu.daily.w, this.L.menu.daily.h, dailyDone ? t('dailyDone') : t('daily'), () => {
       ui('click');
       startDaily(this.state, new Date());
     }, 20);
-    this.text(MENU.levels.xs[1], MENU.levels.y - 44, t('classic'), 15);
+    this.text(this.L.menu.levels.xs[1], this.L.menu.levels.y - 44, t('classic'), 15);
     LEVELS.forEach((level, k) => {
-      this.button(level, MENU.levels.xs[k], MENU.levels.y, MENU.levels.w, MENU.levels.h, t(level), () => {
+      this.button(level, this.L.menu.levels.xs[k], this.L.menu.levels.y, this.L.menu.levels.w, this.L.menu.levels.h, t(level), () => {
         ui('click');
         startClassic(this.state, level as Level);
       }, 19);
     });
-    this.button('delve', MENU.delve.x, MENU.delve.y, MENU.delve.w, MENU.delve.h, t('delve'), () => {
+    this.button('delve', this.L.menu.delve.x, this.L.menu.delve.y, this.L.menu.delve.w, this.L.menu.delve.h, t('delve'), () => {
       ui('click');
       startDelve(this.state);
     }, 20);
-    this.text(MENU.delve.x, MENU.delve.y + 40, p.bestFloor ? t('bestFloor', { n: p.bestFloor }) : t('delveBlurb'), 13);
-    this.button('styles', MENU.styles.x, MENU.styles.y, MENU.styles.w, MENU.styles.h, t('stylesButton', { n: p.unlocked.length, of: STYLES.length }), () => {
+    this.text(this.L.menu.delve.x, this.L.menu.delve.y + 40, p.bestFloor ? t('bestFloor', { n: p.bestFloor }) : t('delveBlurb'), 13);
+    this.button('styles', this.L.menu.styles.x, this.L.menu.styles.y, this.L.menu.styles.w, this.L.menu.styles.h, t('stylesButton', { n: p.unlocked.length, of: STYLES.length }), () => {
       ui('click');
       this.screen = 'styles';
     }, 18);
-    this.text(MENU.stats.x, MENU.stats.y, t('stats', { solved: p.solved, flawless: p.flawless }), 14);
+    this.text(this.L.menu.stats.x, this.L.menu.stats.y, t('stats', { solved: p.solved, flawless: p.flawless }), 14);
   }
 
   private buildStyles() {
     const p = this.state.progress;
-    this.text(480, 50, t('stylesTitle'), 30, this.theme.accent);
-    this.button('back', BACK.x, BACK.y, BACK.w, BACK.h, t('back'), () => {
+    this.text(this.L.stylesTitle.x, this.L.stylesTitle.y, t('stylesTitle'), 30, this.theme.accent);
+    this.button('back', this.L.back.x, this.L.back.y, this.L.back.w, this.L.back.h, t('back'), () => {
       ui('click');
       this.screen = 'menu';
     }, 17);
     STYLES.forEach((style, k) => {
-      const x = STYLE_CARDS.xs[k % 3];
-      const y = STYLE_CARDS.ys[Math.floor(k / 3)];
-      const { w, h } = STYLE_CARDS;
+      const cols = this.L.styleCards.xs.length;
+      const x = this.L.styleCards.xs[k % cols];
+      const y = this.L.styleCards.ys[Math.floor(k / cols)];
+      const { w, h } = this.L.styleCards;
       const open = p.unlocked.includes(style);
       const worn = p.style === style;
       this.styleCard(style, x, y, w, h, open, worn);
@@ -578,7 +600,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.add_(this.add.graphics().setDepth(UI_DEPTH));
     g.fillStyle(th.bg[style === 'stars' || style === 'glass' || style === 'stone' ? 1 : 0], 1).fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
     g.lineStyle(worn ? 4 : 2, worn ? hex(this.theme.accent) : 0x000000, worn ? 1 : 0.4).strokeRoundedRect(x - w / 2, y - h / 2, w, h, 12);
-    const cs = 28;
+    const cs = this.L.styleCards.cell;
     const bx = x - w / 2 + 14;
     const by = y - (3 * cs) / 2;
     g.fillStyle(th.line, 1).fillRect(bx - 3, by - 3, 3 * cs + 6, 3 * cs + 6);
@@ -601,7 +623,7 @@ export class GameScene extends Phaser.Scene {
     }
     const tx = bx + 3 * cs + 16;
     const textColor = !open ? '#ffffff' : THEMES[style].panelAlpha > 0.5 && style !== 'parchment' ? th.text : th.given;
-    this.add_(this.add.text(tx, y - 30, t(STYLE_INFO[style].name), { fontFamily: th.font, fontSize: '18px', color: textColor, fontStyle: 'bold', wordWrap: { width: w - (tx - x + w / 2) - 10 } }).setOrigin(0, 0.5).setDepth(UI_DEPTH + 2));
+    this.add_(this.add.text(tx, y - 30, t(STYLE_INFO[style].name), { fontFamily: th.font, fontSize: w < 260 ? '16px' : '18px', color: textColor, fontStyle: 'bold', wordWrap: { width: w - (tx - x + w / 2) - 10 } }).setOrigin(0, 0.5).setDepth(UI_DEPTH + 2));
     const line = worn ? t('worn') : open ? t('wear') : t(STYLE_INFO[style].goal);
     this.add_(this.add.text(tx, y + 14, line, { fontFamily: th.font, fontSize: '13px', color: textColor, wordWrap: { width: w - (tx - x + w / 2) - 10 } }).setOrigin(0, 0.5).setDepth(UI_DEPTH + 2));
   }
@@ -610,38 +632,40 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const th = this.theme;
     const p = s.puzzle!;
-    this.box(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 5);
+    const { panel, rows, pad, dock } = this.L;
+    this.box(panel.x, panel.y, panel.w, panel.h, 5);
+    if (dock) this.box(dock.x, dock.y, dock.w, dock.h, 5);
     const left = (x: number, y: number, content: string, size: number, color?: string) =>
       this.add_(this.add.text(x, y, content, { fontFamily: th.font, fontSize: `${size}px`, color: color ?? th.text, fontStyle: th.bold ? 'bold' : '' }).setOrigin(0, 0.5).setDepth(UI_DEPTH + 2));
     const kicker = s.mode === 'delve' ? t('delve') : s.mode === 'daily' ? t('daily') : t('classic');
-    left(PANEL.x + 24, PANEL.y + 26, kicker.toUpperCase(), 13).setAlpha(0.75);
+    left(panel.x + 24, panel.y + rows.kicker, kicker.toUpperCase(), 13).setAlpha(0.75);
     const heading = s.mode === 'delve' ? t('floor', { n: s.floor, size: p.size }) : t(s.level);
-    const h1 = left(PANEL.x + 24, PANEL.y + 56, heading, 28, th.accent);
+    const h1 = left(panel.x + 24, panel.y + rows.heading, heading, 28, th.accent);
     if (th.glow) h1.setShadow(0, 0, th.glow === 'auto' ? th.accent : th.glow, 10, false, true);
-    this.button('menu', MENU_BUTTON.x, MENU_BUTTON.y, MENU_BUTTON.w, MENU_BUTTON.h, t('menu'), () => {
+    this.button('menu', this.L.menuButton.x, this.L.menuButton.y, this.L.menuButton.w, this.L.menuButton.h, t('menu'), () => {
       ui('click');
       toMenu(this.state);
       this.screen = 'menu';
     }, 15);
-    this.panelTexts.status = left(PANEL.x + 24, PANEL.y + 100, '', s.mode === 'delve' ? 26 : 17, s.mode === 'delve' ? th.heart : th.text);
-    this.panelTexts.clock = this.add_(this.add.text(PANEL.x + PANEL.w - 24, PANEL.y + 100, '', { fontFamily: th.font, fontSize: '20px', color: th.text }).setOrigin(1, 0.5).setDepth(UI_DEPTH + 2));
-    if (s.mode === 'delve') this.panelTexts.relics = left(PANEL.x + 24, PANEL.y + 128, '', 12);
+    this.panelTexts.status = left(panel.x + 24, panel.y + rows.status, '', s.mode === 'delve' ? 26 : 17, s.mode === 'delve' ? th.heart : th.text);
+    this.panelTexts.clock = this.add_(this.add.text(panel.x + panel.w - 24, panel.y + rows.status, '', { fontFamily: th.font, fontSize: '20px', color: th.text }).setOrigin(1, 0.5).setDepth(UI_DEPTH + 2));
+    if (s.mode === 'delve') this.panelTexts.relics = left(panel.x + 24, panel.y + rows.relics, '', 12);
     for (let d = 1; d <= 9; d++) {
       const k = d - 1;
-      const x = PAD.x + (k % 3) * (PAD.w + PAD.gap) + PAD.w / 2;
-      const y = PAD.y + Math.floor(k / 3) * (PAD.h + PAD.gap) + PAD.h / 2;
+      const x = pad.x + (k % pad.cols) * (pad.w + pad.gap) + pad.w / 2;
+      const y = pad.y + Math.floor(k / pad.cols) * (pad.h + pad.gap) + pad.h / 2;
       const usable = d <= p.size;
-      const { g } = this.button(`key-${d}`, x, y, PAD.w, PAD.h, String(d), () => this.enterDigit(d), 32, usable);
-      const count = this.add_(this.add.text(x + PAD.w / 2 - 8, y + PAD.h / 2 - 5, '', { fontFamily: th.font, fontSize: '12px', color: th.keyText }).setOrigin(1, 1).setDepth(UI_DEPTH + 2).setAlpha(0.7));
+      const { g } = this.button(`key-${d}`, x, y, pad.w, pad.h, String(d), () => this.enterDigit(d), 32, usable);
+      const count = this.add_(this.add.text(x + pad.w / 2 - 8, y + pad.h / 2 - 5, '', { fontFamily: th.font, fontSize: '12px', color: th.keyText }).setOrigin(1, 1).setDepth(UI_DEPTH + 2).setAlpha(0.7));
       count.setData('key', g);
       this.padTexts.push(count);
     }
-    const notes = this.button('notes', TOOLS.xs[0], TOOLS.y, TOOLS.w, TOOLS.h, '', () => this.onNotes(), 15);
+    const notes = this.button('notes', this.L.tools.xs[0], this.L.tools.y, this.L.tools.w, this.L.tools.h, '', () => this.onNotes(), 15);
     this.panelTexts.notes = notes.label;
-    this.button('erase', TOOLS.xs[1], TOOLS.y, TOOLS.w, TOOLS.h, t('erase'), () => this.onErase(), 15);
-    const hintButton = this.button('hint', TOOLS.xs[2], TOOLS.y, TOOLS.w, TOOLS.h, '', () => this.onHint(), 15);
+    this.button('erase', this.L.tools.xs[1], this.L.tools.y, this.L.tools.w, this.L.tools.h, t('erase'), () => this.onErase(), 15);
+    const hintButton = this.button('hint', this.L.tools.xs[2], this.L.tools.y, this.L.tools.w, this.L.tools.h, '', () => this.onHint(), 15);
     this.panelTexts.hint = hintButton.label;
-    this.add_(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 22, t('keysHint'), { fontFamily: th.font, fontSize: '11px', color: th.text }).setOrigin(0.5).setDepth(UI_DEPTH + 2).setAlpha(0.6));
+    this.add_(this.add.text(this.L.keysHint.x, this.L.keysHint.y, t('keysHint'), { fontFamily: th.font, fontSize: '11px', color: th.text }).setOrigin(0.5).setDepth(UI_DEPTH + 2).setAlpha(0.6));
   }
 
   /** A dim over the whole view that swallows taps, under an end card. */
@@ -666,18 +690,18 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     this.dim();
     const from = this.parts.length;
-    this.box(END.x - END.w / 2, END.y - END.h / 2, END.w, END.h, UI_DEPTH, undefined, Math.max(0.95, this.theme.panelAlpha));
-    this.text(END.x, END.y - 92, t('solved'), 34, this.theme.accent);
+    this.box(this.L.end.x - this.L.end.w / 2, this.L.end.y - this.L.end.h / 2, this.L.end.w, this.L.end.h, UI_DEPTH, undefined, Math.max(0.95, this.theme.panelAlpha));
+    this.text(this.L.end.x, this.L.end.y - 92, t('solved'), 34, this.theme.accent);
     const secs = Math.floor(s.timeMs / 1000);
-    this.text(END.x, END.y - 46, t('solvedLine', { time: `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, mistakes: s.mistakes, hints: s.hintsUsed }), 16);
-    this.text(END.x, END.y - 10, this.unlockedLine(), 16, this.theme.accent, { wordWrap: { width: END.w - 40 } });
+    this.text(this.L.end.x, this.L.end.y - 46, t('solvedLine', { time: `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, mistakes: s.mistakes, hints: s.hintsUsed }), 16);
+    this.text(this.L.end.x, this.L.end.y - 10, this.unlockedLine(), 16, this.theme.accent, { wordWrap: { width: this.L.end.w - 40 } });
     if (s.mode === 'classic') {
-      this.button('next', END_BUTTONS.xs[0], END_BUTTONS.y, END_BUTTONS.w, END_BUTTONS.h, t('next'), () => {
+      this.button('next', this.L.endButtons.xs[0], this.L.endButtons.y, this.L.endButtons.w, this.L.endButtons.h, t('next'), () => {
         ui('click');
         startClassic(this.state, this.state.level);
       });
     }
-    this.button('done', s.mode === 'classic' ? END_BUTTONS.xs[1] : END.x, END_BUTTONS.y, END_BUTTONS.w, END_BUTTONS.h, t('menu'), () => {
+    this.button('done', s.mode === 'classic' ? this.L.endButtons.xs[1] : this.L.end.x, this.L.endButtons.y, this.L.endButtons.w, this.L.endButtons.h, t('menu'), () => {
       ui('click');
       toMenu(this.state);
       this.screen = 'menu';
@@ -690,13 +714,14 @@ export class GameScene extends Phaser.Scene {
     this.dim();
     const from = this.parts.length;
     const th = this.theme;
-    this.box(120, 70, 720, 420, UI_DEPTH, undefined, Math.max(0.95, th.panelAlpha));
-    this.text(480, 112, t('floorCleared', { n: s.floor }), 30, th.accent);
-    this.text(480, 150, this.unlockedLine() || t('takeRelic'), 15, this.unlockedLine() ? th.accent : th.text);
+    const box = this.L.relicBox;
+    this.box(box.x, box.y, box.w, box.h, UI_DEPTH, undefined, Math.max(0.95, th.panelAlpha));
+    this.text(box.x + box.w / 2, box.title, t('floorCleared', { n: s.floor }), 30, th.accent);
+    this.text(box.x + box.w / 2, box.line, this.unlockedLine() || t('takeRelic'), 15, this.unlockedLine() ? th.accent : th.text, { wordWrap: { width: box.w - 40 } });
     s.relicOffer.forEach((relic, k) => {
-      const x = RELIC_CARDS.xs[k];
-      const y = RELIC_CARDS.y;
-      const { w, h } = RELIC_CARDS;
+      const x = this.L.relicCards.xs[k];
+      const y = this.L.relicCards.y;
+      const { w, h } = this.L.relicCards;
       const info = RELIC_INFO[relic];
       const g = this.add_(this.add.graphics().setDepth(UI_DEPTH + 1));
       g.fillStyle(th.key, 1).fillRoundedRect(x - w / 2, y - h / 2, w, h, Math.min(th.radius, 12));
@@ -741,15 +766,15 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     this.dim();
     const from = this.parts.length;
-    this.box(END.x - END.w / 2, END.y - END.h / 2, END.w, END.h, UI_DEPTH, undefined, Math.max(0.95, this.theme.panelAlpha));
-    this.text(END.x, END.y - 92, t('runOver'), 34, this.theme.heart);
-    this.text(END.x, END.y - 46, t('overLine', { n: s.floor }), 17);
-    if (s.progress.bestFloor) this.text(END.x, END.y - 14, t('bestFloor', { n: s.progress.bestFloor }), 15);
-    this.button('again', END_BUTTONS.xs[0], END_BUTTONS.y, END_BUTTONS.w, END_BUTTONS.h, t('delveAgain'), () => {
+    this.box(this.L.end.x - this.L.end.w / 2, this.L.end.y - this.L.end.h / 2, this.L.end.w, this.L.end.h, UI_DEPTH, undefined, Math.max(0.95, this.theme.panelAlpha));
+    this.text(this.L.end.x, this.L.end.y - 92, t('runOver'), 34, this.theme.heart);
+    this.text(this.L.end.x, this.L.end.y - 46, t('overLine', { n: s.floor }), 17);
+    if (s.progress.bestFloor) this.text(this.L.end.x, this.L.end.y - 14, t('bestFloor', { n: s.progress.bestFloor }), 15);
+    this.button('again', this.L.endButtons.xs[0], this.L.endButtons.y, this.L.endButtons.w, this.L.endButtons.h, t('delveAgain'), () => {
       ui('click');
       startDelve(this.state);
     });
-    this.button('done', END_BUTTONS.xs[1], END_BUTTONS.y, END_BUTTONS.w, END_BUTTONS.h, t('menu'), () => {
+    this.button('done', this.L.endButtons.xs[1], this.L.endButtons.y, this.L.endButtons.w, this.L.endButtons.h, t('menu'), () => {
       ui('click');
       toMenu(this.state);
       this.screen = 'menu';

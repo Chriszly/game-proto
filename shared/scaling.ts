@@ -35,6 +35,12 @@ import { t } from './i18n';
  * against `viewSize(scene)` rather than its designed size: it paints its background over the whole
  * view, pins its bars and buttons to the view's edges and centres its play area, which
  * `viewFrame(scene)` gives as the designed-size rectangle in the middle of the view.
+ *
+ * With `setupScaling(game, { bothWays: true })` a game plays either way round: on a window taller
+ * than it is wide its designed size is turned round (960x540 becomes 540x960), no hint asks to turn
+ * the phone, and turning the phone (or reshaping a window past square) turns the view again while
+ * the game runs. `viewSize` and `viewFrame` follow, and the scale manager's `resize` event tells the
+ * game's scenes to lay themselves out again; `isTurned()` says which way round the view is.
  */
 
 /** Canvas pixels per game pixel; 1 until `setupScaling` runs. */
@@ -51,28 +57,53 @@ const MAX_ASPECT = 2.4;
 /** The squarest a filling view gets: a 4:3 tablet. */
 const MIN_ASPECT = 4 / 3;
 
+/** Whether a game that plays both ways round is turned from its designed shape right now. */
+let turned = false;
+
 export interface ScalingOptions {
   /** Grow the view to the screen's shape instead of leaving bars at its sides. */
   fill?: boolean;
+  /** Play upright or sideways, whichever way the window is, instead of asking to turn the phone. */
+  bothWays?: boolean;
 }
 
 /**
  * Opts a game into sharp scaling. Call it right after `setupGame(game)`, before any scene starts.
  */
-export function setupScaling(game: Phaser.Game, { fill = false }: ScalingOptions = {}) {
-  const design = { w: Number(game.config.width), h: Number(game.config.height) };
+export function setupScaling(game: Phaser.Game, { fill = false, bothWays = false }: ScalingOptions = {}) {
+  const configured = { w: Number(game.config.width), h: Number(game.config.height) };
   const apply = () => {
+    if (bothWays) turned = windowUpright(game) !== configured.h > configured.w;
+    const design = turned ? { w: configured.h, h: configured.w } : configured;
     const view = fill ? fillView(design.w, design.h, game) : design;
     const canvasRenderer = game.config.renderType === Phaser.CANVAS || game.renderer?.type === Phaser.CANVAS;
     renderScale = pickRenderScale(view.w, view.h, canvasRenderer ? MAX_CANVAS_SCALE : MAX_SCALE);
-    if (renderScale !== 1 || view !== design) game.scale.setGameSize(view.w * renderScale, view.h * renderScale);
+    if (bothWays || renderScale !== 1 || view !== configured) game.scale.setGameSize(view.w * renderScale, view.h * renderScale);
   };
   // Phaser boots right away once the page has loaded, which it has when a module script runs.
   if (game.renderer) apply();
   else game.events.once(Phaser.Core.Events.BOOT, apply);
   zoomNewCameras();
   sharpenTexts();
-  addTurnHint(game, design.w >= design.h);
+  if (bothWays) {
+    // Turned the other way round: take the new shape, and let the scenes lay out again.
+    window.addEventListener('resize', () => {
+      if (game.renderer && windowUpright(game) !== (turned !== configured.h > configured.w)) apply();
+    });
+  } else addTurnHint(game, configured.w >= configured.h);
+}
+
+/** Whether the game's window (its parent element) is taller than it is wide. */
+function windowUpright(game: Phaser.Game) {
+  const parent = game.scale.parent as HTMLElement | undefined;
+  const w = parent?.clientWidth || window.innerWidth;
+  const h = parent?.clientHeight || window.innerHeight;
+  return h > w;
+}
+
+/** Whether a game that plays both ways round shows its designed shape turned round right now. */
+export function isTurned() {
+  return turned;
 }
 
 /**
@@ -136,8 +167,9 @@ export function viewSize(scene: Phaser.Scene) {
  */
 export function viewFrame(scene: Phaser.Scene) {
   const { width, height } = viewSize(scene);
-  const w = Math.min(width, Number(scene.game.config.width));
-  const h = Math.min(height, Number(scene.game.config.height));
+  const [dw, dh] = [Number(scene.game.config.width), Number(scene.game.config.height)];
+  const w = Math.min(width, turned ? dh : dw);
+  const h = Math.min(height, turned ? dw : dh);
   return new Phaser.Geom.Rectangle(Math.round((width - w) / 2), Math.round((height - h) / 2), w, h);
 }
 
