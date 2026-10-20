@@ -119,7 +119,8 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     effects: 80,
     muted: false,
     genreFilter: false,
-    updates: 'wifi',
+    // Desktop Chromium can't tell WiFi from mobile data, so Wi-Fi only isn't offered.
+    updates: 'auto',
   });
   await expect(dialog.getByRole('slider', { name: 'Music' })).toHaveValue('35');
 
@@ -538,7 +539,9 @@ test('hub update settings', async ({ page }, testInfo) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const updates = page.getByRole('dialog', { name: 'Settings' }).getByRole('group', { name: 'Updates' });
-  await expect(updates.getByRole('button', { name: 'Wi-Fi only' })).toHaveAttribute('aria-pressed', 'true');
+  // Desktop Chromium can't tell WiFi from mobile data, so it isn't offered Wi-Fi only.
+  await expect(updates.getByRole('button', { name: 'Automatic' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(updates.getByRole('button', { name: 'Wi-Fi only' })).toHaveCount(0);
   await updates.getByRole('button', { name: 'Off' }).click();
   await expect(updates.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
   const row = updates.locator('xpath=..');
@@ -551,4 +554,17 @@ test('hub update settings', async ({ page }, testInfo) => {
   });
   await updates.getByRole('button', { name: 'Update now' }).click();
   await expect.poll(() => message).toBe('You have the latest version.');
+});
+
+// A browser that tells WiFi from mobile data, like Chrome on Android, offers Wi-Fi only and picks it first.
+test('hub offers Wi-Fi only updates where the connection type is known', async ({ page }) => {
+  await page.addInitScript(() => {
+    const connection = (navigator as { connection?: object }).connection!;
+    Object.defineProperty(Object.getPrototypeOf(connection), 'type', { get: () => 'wifi', configurable: true });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const updates = page.getByRole('dialog', { name: 'Settings' }).getByRole('group', { name: 'Updates' });
+  await expect(updates.getByRole('button', { name: 'Wi-Fi only' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Wi-Fi only waits while you are on mobile data.', { exact: false })).toBeVisible();
 });

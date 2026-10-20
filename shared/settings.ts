@@ -29,11 +29,18 @@ export const LANGUAGE_NAMES: Record<Language, string> = { en: 'English (UK)', 'e
 
 /**
  * When the installed apps download a new version (`install.ts`, `scripts/sw.js`): always, only on
- * WiFi (on mobile data or Data Saver they wait; only Android browsers built on Chrome tell the two
- * apart, so elsewhere it is the same as always), or never until Update now is pressed.
+ * WiFi (on mobile data or Data Saver they wait), or never until Update now is pressed.
  */
 export const UPDATE_MODES = ['auto', 'wifi', 'off'] as const;
 export type UpdateMode = (typeof UPDATE_MODES)[number];
+/**
+ * Whether this browser tells WiFi from mobile data (`navigator.connection.type`, which only Android
+ * browsers built on Chrome have). Elsewhere Wi-Fi only isn't offered, and a saved one reads as Automatic.
+ */
+export const WIFI_KNOWN =
+  typeof navigator !== 'undefined' && 'type' in ((navigator as { connection?: object }).connection ?? {});
+const UPDATE_CHOICES = UPDATE_MODES.filter((u) => u !== 'wifi' || WIFI_KNOWN);
+const UPDATE_LABELS = { auto: 'updatesAuto', wifi: 'updatesWifi', off: 'off' } as const;
 
 export interface Settings {
   /** How hard every game plays; each game decides what that scales. Normal is the game as designed. */
@@ -68,7 +75,7 @@ export const DEFAULTS: Settings = {
   effects: 80,
   muted: false,
   genreFilter: false,
-  updates: 'wifi',
+  updates: WIFI_KNOWN ? 'wifi' : 'auto',
 };
 
 /**
@@ -115,13 +122,9 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   {
     key: 'updates',
     label: 'settingUpdates',
-    hint: 'settingUpdatesHint',
+    hint: WIFI_KNOWN ? 'settingUpdatesWifiHint' : 'settingUpdatesHint',
     kind: 'choice',
-    options: [
-      { value: 'auto', label: 'updatesAuto' },
-      { value: 'wifi', label: 'updatesWifi' },
-      { value: 'off', label: 'off' },
-    ],
+    options: UPDATE_CHOICES.map((u) => ({ value: u, label: UPDATE_LABELS[u] })),
   },
 ];
 
@@ -145,7 +148,10 @@ export function loadSettings(): Settings {
     effects: volume(saved.effects, DEFAULTS.effects),
     muted: typeof saved.muted === 'boolean' ? saved.muted : DEFAULTS.muted,
     genreFilter: typeof saved.genreFilter === 'boolean' ? saved.genreFilter : DEFAULTS.genreFilter,
-    updates: UPDATE_MODES.find((u) => u === saved.updates) ?? DEFAULTS.updates,
+    updates:
+      saved.updates === 'wifi' && !WIFI_KNOWN
+        ? 'auto'
+        : (UPDATE_CHOICES.find((u) => u === saved.updates) ?? DEFAULTS.updates),
   };
 }
 
