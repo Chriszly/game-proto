@@ -128,6 +128,11 @@
     "description": "Game: Ninefold"
   },
   {
+    "name": "augury",
+    "color": "5b7a99",
+    "description": "Game: Augury"
+  },
+  {
     "name": "hub",
     "color": "5b7a99",
     "description": "Game: The hub page and its settings",

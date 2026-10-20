@@ -80,6 +80,7 @@ their sounds:
 | Game | Hook |
 | --- | --- |
 | Anvilheart | `s.events`, drained in `GameScene.drawEvents` |
+| Augury | `RunEvent`, drained in `GameScene.drain` |
 | Beehive Baron | `GameEvent` list, drained in `GameScene.drawEvents` |
 | Broadside | `s.effects` via `effect()` in `sim.ts` |
 | Catacomb | `s.pops` via `pop()` (kinds damage, block, heal, status), plus the sim's actions |
@@ -179,6 +180,28 @@ Notes:
   the scene or mute during it.
 - Pixies on belts: no sound per pixie.
 - Ambience: a cauldron bubble loop while it works, and rain on rain days.
+
+### Augury
+Nine kinds of brain puzzle dealt as tarot cards; calm, starlit, a harp in a quiet room.
+
+**Done** (see `games/augury/AGENTS.md`, Sound).
+
+**Music:** A harp-like triangle lead in D minor at 76 BPM.
+- Menu, practice picker and records: a slow two-bar loop.
+- A puzzle in Endless, Daily, Draft, Practice or pass and play: a four-bar tune with a light kick and hat.
+- Blitz: the same key in running sixteenths with busier drums.
+- A sting when a run ends.
+
+| Event | Sound | Where |
+|---|---|---|
+| Pick a cell, island or block | soft tick | `views/*` through `ctx.tap` |
+| A move on a puzzle | two-note pluck | `scenes/GameScene.ts:ctx` (`act`) |
+| A puzzle dealt | card laid down | `GameScene.ts:drain` (`start`) |
+| Solved / lost, skipped or out of time | rising arpeggio / low buzz | `GameScene.ts:drain` (`end`) |
+| A heart lost | falling buzz | `GameScene.ts:drain` (`heart`) |
+| Hint / last five seconds | bright arpeggio / short tick | `GameScene.ts:drain` (`hint`, `warn`) |
+| Memory Echo card turned | soft flick | `GameScene.ts:update` |
+| Relic taken | sparkle | `GameScene.ts:drain` (`relic`) |
 
 ### Beehive Baron
 Idle beehive in cut paper; warm, sunny, relaxed.
