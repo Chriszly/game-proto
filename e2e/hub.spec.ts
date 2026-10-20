@@ -25,6 +25,7 @@ const GAMES = [
   { name: 'Riftblade', path: '/games/riftblade/' },
   { name: 'Bramblecrest', path: '/games/bramblecrest/' },
   { name: 'Ninefold', path: '/games/ninefold/' },
+  { name: 'Augury', path: '/games/augury/' },
 ];
 
 // The games with a Watch AI mode (`?watch`, see shared/watch.ts); there is no hub link to it.
@@ -201,8 +202,8 @@ test('hub game settings, continue playing and genre filter', async ({ page }, te
   await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
   await genres.getByRole('button', { name: 'Puzzle' }).click();
   await expect(genres.getByRole('button', { name: 'Puzzle' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.game:visible h2')).toContainText(['Lanternkeep', 'Mapmaker', 'Ninefold', 'Shrine Stack', 'TinctureTinker', 'Tiny Kingdom', 'Wyrmrail']);
-  await expect(page.locator('.game:visible')).toHaveCount(7);
+  await expect(page.locator('.game:visible h2')).toContainText(['Augury', 'Lanternkeep', 'Mapmaker', 'Ninefold', 'Shrine Stack', 'TinctureTinker', 'Tiny Kingdom', 'Wyrmrail']);
+  await expect(page.locator('.game:visible')).toHaveCount(8);
   testInfo.attach('genre filter', { body: await page.screenshot({ path: testInfo.outputPath('genre-filter.png') }), contentType: 'image/png' });
   await genres.getByRole('button', { name: 'All' }).click();
   await expect(page.locator('.game:visible')).toHaveCount(GAMES.length);

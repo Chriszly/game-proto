@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Augury</title>
+  <circle cx="7" cy="9" r="5" fill="#e37100"/>
+  <circle cx="25" cy="9" r="5" fill="#e37100"/>
+  <circle cx="7" cy="9" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="9" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="19.5" rx="13" ry="12" fill="#e37100"/>
+  <g transform="rotate(-8 16 7)">
+    <rect x="11" y="0.6" width="10" height="13" rx="1" fill="#2c1f52" stroke="#f2cf73" stroke-width="0.9"/>
+    <rect x="12.4" y="2" width="7.2" height="10.2" fill="none" stroke="#f2cf73" stroke-width="0.4"/>
+    <path d="M16 3.6 L17 6.3 L19.6 7.1 L17 7.9 L16 10.6 L15 7.9 L12.4 7.1 L15 6.3 Z" fill="#9be7ff"/>
+  </g>
+  <circle cx="10.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="24" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="23" rx="2.2" ry="1.4" fill="#311300"/>
+</svg>

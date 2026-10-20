@@ -6,6 +6,7 @@
 export const SAVE_CODES: Record<string, string> = {
   anvilheart: 'an',
   apothecary: 'ap',
+  augury: 'au',
   'beehive-baron': 'bb',
   bramblecrest: 'br',
   broadside: 'bs',

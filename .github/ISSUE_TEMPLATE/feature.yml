@@ -31,10 +31,11 @@ body:
         - Scrapyard Titans
         - Bramblecrest
         - Ninefold
+        - Augury
         - Hub page
         - Shared / all games
       # Preselect Shared, so a report never lands on a game by accident.
-      default: 23
+      default: 24
     validations:
       required: true
   - type: textarea
