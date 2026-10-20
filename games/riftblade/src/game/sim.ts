@@ -584,7 +584,7 @@ function abilities(s: GameState, ms: number) {
     const len = suppressorLength(s);
     const half = suppressorHalf(s);
     const slow = at([0.3, 0.4, 0.4, 0.45, 0.55], sup, 0.3);
-    const dps = at([3, 3, 10, 10, 18], sup, 3);
+    const dps = at([3, 3, 7, 7, 12], sup, 3);
     near(s, p.x, p.y, len, (e) => {
       const diff = Math.abs(angleDiff(Math.atan2(e.y - p.y, e.x - p.x), p.aim));
       if (diff > half) return;
@@ -602,7 +602,7 @@ function abilities(s: GameState, ms: number) {
     const half = shieldHalf(s) + 0.25;
     near(s, p.x, p.y, 95, (e) => {
       if (Math.abs(angleDiff(Math.atan2(e.y - p.y, e.x - p.x), p.facing)) > half) return;
-      damage(s, e, shield >= 4 ? 30 : 15);
+      damage(s, e, shield >= 4 ? 24 : 12);
       knock(e, p.x, p.y, 380);
       if (stun) e.stunMs = Math.max(e.stunMs, 1200);
     });
