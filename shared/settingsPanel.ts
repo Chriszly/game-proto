@@ -3,6 +3,7 @@ import { language, setLanguage, t } from './i18n';
 import { previewVolume } from './audio';
 import { clearAllProgress } from './progress';
 import { ALL, askToExport, askToImport, pickFile } from './saveFile';
+import { shareUpdates, updateNow } from './install';
 
 /**
  * Builds the hub's Settings panel inside `root` from `SETTING_FIELDS`, so a new setting shows up
@@ -24,6 +25,7 @@ export function mountSettingsPanel(
     current = { ...current, ...patch };
     saveSettings(current);
     if (current.language !== language()) setLanguage(current.language);
+    shareUpdates(current.updates);
     onChange(current);
     render();
   };
@@ -55,6 +57,17 @@ export function mountSettingsPanel(
   progress.append(progressName, resetRow, progressHint);
   root.append(progress);
 
+  // Update now sits in the Updates row and lets one update through whatever the setting says.
+  const updateButton = action('update-now', async () => {
+    updateButton.disabled = true;
+    updateButton.textContent = t('updateChecking');
+    const result = await updateNow();
+    updateButton.disabled = false;
+    updateButton.textContent = t('updateNow');
+    if (result === 'updated') location.reload();
+    else alert(t(result === 'current' ? 'updatesCurrent' : 'updatesFailed'));
+  });
+
   const actions = document.createElement('div');
   actions.className = 'settings-actions';
   const restore = action('restore-defaults', () => set(DEFAULTS));
@@ -67,6 +80,7 @@ export function mountSettingsPanel(
     restore.textContent = t('restoreDefaults');
     done.textContent = t('done');
     reset.textContent = t('resetProgress');
+    if (!updateButton.disabled) updateButton.textContent = t('updateNow');
     exportButton.textContent = t('exportAll');
     importButton.textContent = t('importAll');
     progressName.textContent = t('savedProgress');
@@ -107,6 +121,7 @@ export function mountSettingsPanel(
           button.addEventListener('click', () => set({ [field.key]: option.value } as Partial<Settings>));
           choices.append(button);
         }
+        if (field.key === 'updates') choices.append(updateButton);
         row.append(name, choices, hint);
         return row;
       }),

@@ -119,6 +119,7 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     effects: 80,
     muted: false,
     genreFilter: false,
+    updates: 'wifi',
   });
   await expect(dialog.getByRole('slider', { name: 'Music' })).toHaveValue('35');
 
@@ -529,4 +530,25 @@ test('a game installs from its start screen', async ({ page }, testInfo) => {
   await expect.poll(() => hint).toBe("To install, pick Install app or Add to Home Screen in your browser's menu.");
   await page.locator('.game-start-button').click();
   await expect(install).toBeHidden();
+});
+
+// The Updates setting says when the installed apps download a new version, and Update now checks
+// at once; the dev server has no service worker, so it finds the latest version in place.
+test('hub update settings', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const updates = page.getByRole('dialog', { name: 'Settings' }).getByRole('group', { name: 'Updates' });
+  await expect(updates.getByRole('button', { name: 'Wi-Fi only' })).toHaveAttribute('aria-pressed', 'true');
+  await updates.getByRole('button', { name: 'Off' }).click();
+  await expect(updates.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+  const row = updates.locator('xpath=..');
+  testInfo.attach('updates', { body: await row.screenshot({ path: testInfo.outputPath('updates.png') }), contentType: 'image/png' });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-settings')!).updates)).toBe('off');
+  let message = '';
+  page.once('dialog', (d) => {
+    message = d.message();
+    d.accept();
+  });
+  await updates.getByRole('button', { name: 'Update now' }).click();
+  await expect.poll(() => message).toBe('You have the latest version.');
 });

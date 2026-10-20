@@ -183,7 +183,8 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   (`scripts/pwa.ts` makes each game's manifest from its `<title>` and background colour and writes
   the service worker; `shared/install.ts` registers it from `setupGame`, and the shared start and
   pause screens show its Install button, also opened by the Install on its hub card as `?install`),
-  so a game needs nothing for it beyond its code and icons (see "Add a game"). Keep every file a game loads inside the build (no
+  so a game needs nothing for it beyond its code and icons (see "Add a game"). The hub's Updates
+  setting (`updates`) holds new versions back (`scripts/sw.js`), and Update now lets one through. Keep every file a game loads inside the build (no
   files fetched from other sites), so it still plays offline. Its progress exports and imports from
   the hub as an encrypted `.gh<code>` file (`shared/saveFile.ts`), which carries every storage key
   with the game's prefix.

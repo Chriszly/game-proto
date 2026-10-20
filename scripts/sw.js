@@ -11,14 +11,34 @@ const CACHE = PREFIX + VERSION;
 // Where each cache keeps the FILES it was filled from, for the next version to compare against.
 const INDEX = './__files__.json';
 
+// The hub's Updates setting, which the pages copy here (`shared/install.ts`): `auto`, `wifi` or
+// `off`, and an `update-now` entry while Update now lets one update through whatever it says.
+const UPDATES_CACHE = 'game-proto.updates';
+
 self.addEventListener('install', (event) => {
   event.waitUntil(fill().then(() => self.skipWaiting()));
 });
 
+/**
+ * Whether a new version may download now. With updates held back (Off, or Wi-Fi only on mobile
+ * data or Data Saver, which only Android browsers built on Chrome report), the install fails on
+ * purpose: the version in place stays, and the browser tries again on a later visit.
+ */
+async function updatesAllowed() {
+  const settings = await caches.open(UPDATES_CACHE);
+  if (await settings.match('./update-now')) return true;
+  const mode = (await (await settings.match('./updates'))?.text()) ?? 'wifi';
+  if (mode === 'off') return false;
+  const connection = self.navigator.connection;
+  return mode !== 'wifi' || !connection || (connection.type !== 'cellular' && !connection.saveData);
+}
+
 /** Fills this version's cache, reusing every file an older cache holds with the same content. */
 async function fill() {
-  const cache = await caches.open(CACHE);
   const older = await olderCaches();
+  // The first install always goes ahead; only updates are held back.
+  if (older.length && !(await updatesAllowed())) throw new Error('Updates are held back by the Updates setting');
+  const cache = await caches.open(CACHE);
   await Promise.all(
     Object.entries(FILES).map(async ([path, hash]) => {
       for (const old of older) {
@@ -57,13 +77,21 @@ self.addEventListener('activate', (event) => {
 });
 
 // Pages come from the network while online, so a deploy shows up at once, and from the cache
-// offline. Everything else (scripts, images) has a hashed name, so the cached copy is always right.
+// offline or while updates are held back. Everything else (scripts, images) has a hashed name, so the cached copy is always right.
 // Requests to other sites, like the play counter, are left to the browser.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || new URL(request.url).origin !== location.origin) return;
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => cached(request).then((r) => r ?? Response.error())));
+    // While updates are held back, pages come from the cache too, since a newer page from the
+    // network would download the newer files it uses.
+    event.respondWith(
+      updatesAllowed().then((allowed) =>
+        allowed
+          ? fetch(request).catch(() => cached(request).then((r) => r ?? Response.error()))
+          : cached(request).then((r) => r ?? fetch(request)),
+      ),
+    );
     return;
   }
   event.respondWith(cached(request).then((r) => r ?? fetch(request)));
