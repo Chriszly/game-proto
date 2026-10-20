@@ -7,16 +7,16 @@ import Phaser from 'phaser';
 import { HEROES, HERO_IDS, schemeOf, type HeroDef, type HeroId } from '../game/heroes';
 import { clock, type GameState } from '../game/state';
 import { CAPSTONES, FILLER, MAX_TIER, POOL_NAMES, UPGRADES, capstoneFor, crossoverFor } from '../game/upgrades';
-import { BOSSES, NODE_INFO, PLANETS, TRADE, planetLabel, type NodeKind } from '../game/planets';
-import { priceOf } from '../game/voyage';
+import { BOSSES, NODE_INFO, PLANETS, STAGES, TRADE, planetLabel, planetsAt, type NodeKind } from '../game/planets';
+import { chartOptions, priceOf } from '../game/voyage';
 import { isUnlocked, type Progress } from '../game/save';
 import type { Vars } from '../../../../shared/i18n';
 import { t } from '../i18n';
 import { C, hex } from '../art/glow';
 import { portraitKey } from '../art/sprites';
 import {
-  AGAIN, CONTINUE, DEPTH, FIGHT, FONT, HERO_DETAIL, LEAVE, MAP, REROLL, SCREEN, UNLOCK, VIEW, eventOptionRect, heroCardRect, levelCardRect, mapNodeRect,
-  mapNodeSpot, tradeCardRect, type Rect,
+  AGAIN, CHART, CONTINUE, DEPTH, FIGHT, FONT, HERO_DETAIL, LEAVE, MAP, REROLL, SCREEN, UNLOCK, VIEW, chartRect, chartSpot, eventOptionRect, heroCardRect,
+  levelCardRect, mapNodeRect, mapNodeSpot, tradeCardRect, type Rect,
 } from '../scenes/layout';
 
 /** A tappable rectangle and what it stands for; a hero card whose deed is not done yet is `locked`. */
@@ -177,7 +177,7 @@ function heroCard(p: Panel, scene: Phaser.Scene, id: HeroId, i: number, progress
   p.text(cx, r.y + 142, sideOf(hero), 11, sch.accent, { origin: [0.5, 0], align: 'center', wrap: r.w - 8 });
   const wins = progress.wins[id] ?? 0;
   const furthest = progress.furthest[id] ?? 0;
-  const status = wins > 0 ? t('wins', { n: wins }) : furthest > 0 ? t('reached', { n: furthest, of: PLANETS.length }) : '';
+  const status = wins > 0 ? t('wins', { n: wins }) : furthest > 0 ? t('reached', { n: furthest, of: STAGES }) : '';
   if (status) p.text(cx, r.y + r.h - 6, status, 10.5, wins > 0 ? C.elite : C.muted, { origin: [0.5, 1] });
 }
 
@@ -330,7 +330,7 @@ export function endScreen(scene: Phaser.Scene, s: GameState, progress: Progress)
   p.text(VIEW.w / 2, 120, t(won ? 'victory' : 'fallen'), 46, color, { bold: true, origin: [0.5, 0], glow: true });
   const hero = HEROES[s.hero!];
   const planet = PLANETS[s.planet];
-  const vars = { hero: t(hero.name), planet: t(planet.name), n: s.planet + 1, of: PLANETS.length };
+  const vars = { hero: t(hero.name), planet: t(planet.name), n: s.stage + 1, of: STAGES };
   p.text(VIEW.w / 2, 182, t(won ? BOSSES[planet.boss].beaten : s.arena ? 'fellArena' : 'fellOn', vars), 17, C.text, { origin: [0.5, 0] });
   const caps = s.capstones.map((id) => t(CAPSTONES.find((c) => c.id === id)!.name));
   const lines = [
@@ -400,7 +400,7 @@ export function starMap(scene: Phaser.Scene, s: GameState) {
   const p = new Panel(scene);
   p.dim(0.9);
   stars(p, scene);
-  const next = s.planet + 1;
+  const next = s.next >= 0 ? s.next : chartOptions(s)[0];
   p.text(VIEW.w / 2, 26, t('starMap'), 30, '#9fd8ff', { bold: true, origin: [0.5, 0], glow: true });
   p.text(VIEW.w / 2, 64, t('mapSubtitle', { planet: t(PLANETS[s.planet].name), n: s.credits, keys: s.nodes.map((_, i) => i + 1).join(', ') }), 14, C.muted, { origin: [0.5, 0] });
   const g = p.add(scene.add.graphics(), 1);
@@ -415,7 +415,7 @@ export function starMap(scene: Phaser.Scene, s: GameState) {
   planetDisc(g, MAP.from.x, MAP.from.y, 50, s.planet, true);
   planetDisc(g, MAP.to.x, MAP.to.y, 60, next, false);
   p.text(MAP.from.x, MAP.from.y + 64, t('planetCleared', { planet: t(PLANETS[s.planet].name) }), 13, C.muted, { origin: [0.5, 0], align: 'center' });
-  p.text(MAP.to.x, MAP.to.y + 74, t('nextPlanet', { planet: planetLabel(next) }), 14, C.text, { bold: true, origin: [0.5, 0], align: 'center' });
+  p.text(MAP.to.x, MAP.to.y + 74, t('nextPlanet', { planet: planetLabel(s.stage + 1, next) }), 14, C.text, { bold: true, origin: [0.5, 0], align: 'center' });
   p.text(MAP.to.x, MAP.to.y + 94, t(PLANETS[next].faction), 12.5, PLANETS[next].ground.deco, { origin: [0.5, 0] });
   s.nodes.forEach((kind, i) => {
     const info = NODE_INFO[kind];
@@ -430,6 +430,71 @@ export function starMap(scene: Phaser.Scene, s: GameState) {
     p.text(spot.x + MAP.node.r + 14, spot.y - 22, t(info.name), 18, C.text, { bold: true });
     p.text(spot.x + MAP.node.r + 14, spot.y + 2, t(info.text), 12, C.muted, { wrap: r.x + r.w - (spot.x + MAP.node.r + 14) - 10 });
     p.text(r.x + 10, r.y + 8, String(i + 1), 12, C.muted);
+  });
+  return p;
+}
+
+/**
+ * The space map: the crusade's four jumps as columns, the route flown so far lit, and the planets of
+ * the next jump as cards to tap (their faction shows once the save has charted them).
+ */
+export function spaceMap(scene: Phaser.Scene, s: GameState, charted: readonly string[]) {
+  const p = new Panel(scene);
+  p.dim(0.92);
+  stars(p, scene);
+  const options = chartOptions(s);
+  p.text(VIEW.w / 2, 26, t('spaceMap'), 30, '#9fd8ff', { bold: true, origin: [0.5, 0], glow: true });
+  p.text(VIEW.w / 2, 64, t('spaceMapSubtitle', { planet: t(PLANETS[s.planet].name), keys: options.map((_, i) => i + 1).join(', ') }), 14, C.muted, { origin: [0.5, 0] });
+  const g = p.add(scene.add.graphics(), 1);
+  const spotOf = (planet: number) => {
+    const col = PLANETS[planet].stage;
+    const list = planetsAt(col);
+    return chartSpot(col, list.indexOf(planet), list.length);
+  };
+  // Lanes between every planet of one jump and the next; the route flown so far, and the jumps on offer, lit.
+  for (let col = 0; col < STAGES - 1; col++) {
+    for (const a of planetsAt(col)) {
+      for (const b of planetsAt(col + 1)) {
+        const from = spotOf(a);
+        const to = spotOf(b);
+        const flown = s.route[col] === a && s.route[col + 1] === b;
+        const offered = col === s.stage && a === s.planet;
+        g.lineStyle(flown ? 3 : 1.5, flown ? 0x9fd8ff : offered ? hex(PLANETS[b].ground.deco) : 0x8ea0c4, flown ? 0.85 : offered ? 0.5 : 0.12);
+        g.lineBetween(from.x, from.y, to.x, to.y);
+      }
+    }
+  }
+  // Every planet: the ones behind and ahead as small discs, the one the hero is on ringed.
+  for (let col = 0; col < STAGES; col++) {
+    const list = planetsAt(col);
+    list.forEach((planet, i) => {
+      if (col === s.stage + 1) return;
+      const c = chartSpot(col, i, list.length);
+      const past = col <= s.stage;
+      const visited = s.route[col] === planet;
+      const r = visited ? CHART.r : 18;
+      planetDisc(g, c.x, c.y, r, planet, !visited);
+      if (planet === s.planet) g.lineStyle(2, 0x9fd8ff, 0.9).strokeCircle(c.x, c.y, r + 8);
+      p.text(c.x, c.y + r + 8, t(PLANETS[planet].name), 12, visited ? C.text : C.muted, { origin: [0.5, 0], bold: visited });
+      if (planet === s.planet) p.text(c.x, c.y + r + 24, t('youAreHere'), 11, '#9fd8ff', { origin: [0.5, 0] });
+      else if (past && !visited) p.text(c.x, c.y + r + 24, t('notTaken'), 11, C.muted, { origin: [0.5, 0] });
+    });
+  }
+  // The jumps on offer.
+  options.forEach((planet, i) => {
+    const def = PLANETS[planet];
+    const col = s.stage + 1;
+    const r = chartRect(col, i, options.length);
+    const c = chartSpot(col, i, options.length);
+    p.frame(r, def.ground.deco);
+    p.spots.push({ id: def.id, ...r });
+    const disc = p.add(scene.add.graphics(), 2);
+    planetDisc(disc, c.x, c.y - 18, CHART.r, planet, false);
+    p.text(r.x + 10, r.y + 8, String(i + 1), 12, C.muted);
+    p.text(c.x, c.y + 8, t(def.name), 15, C.text, { bold: true, origin: [0.5, 0] });
+    const known = charted.includes(def.id);
+    p.text(c.x, c.y + 27, known ? t(def.faction) : t('uncharted'), 11.5, known ? def.ground.deco : C.muted, { origin: [0.5, 0] });
+    p.text(c.x, c.y + 43, t(def.hint), 11, C.muted, { origin: [0.5, 0], align: 'center', wrap: CHART.w - 16 });
   });
   return p;
 }

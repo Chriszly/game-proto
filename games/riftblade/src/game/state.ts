@@ -1,7 +1,7 @@
 /** The run's state and the numbers that shape it. The rules that change it are in `sim.ts`. */
 import { byDifficulty } from '../../../../shared/settings';
 import { HEROES, isKnight, type HeroId } from './heroes';
-import { at, capstonesOf, crossoversOf } from './upgrades';
+import { DRILLS, DRILL_STEPS, at, capstonesOf, crossoversOf } from './upgrades';
 import type { EventId, FoeKind, NodeKind } from './planets';
 import type { TextKey } from '../i18n';
 
@@ -57,6 +57,14 @@ export const ENEMY: Record<EnemyKind, EnemySpec> = {
   walker: { r: 18, hp: 70, speed: 34, dmg: 12, xp: 5 },
   acolyte: { r: 10, hp: 9, speed: 74, dmg: 6, xp: 1 },
   knight: { r: 15, hp: 55, speed: 56, dmg: 12, xp: 4 },
+  sporeling: { r: 10, hp: 9, speed: 56, dmg: 6, xp: 1 },
+  puffcap: { r: 15, hp: 40, speed: 40, dmg: 9, xp: 4 },
+  scrapper: { r: 9, hp: 7, speed: 90, dmg: 5, xp: 1 },
+  hauler: { r: 18, hp: 64, speed: 38, dmg: 11, xp: 4 },
+  shardling: { r: 10, hp: 12, speed: 60, dmg: 7, xp: 1 },
+  prism: { r: 15, hp: 50, speed: 42, dmg: 10, xp: 4 },
+  wisp: { r: 8, hp: 7, speed: 100, dmg: 5, xp: 1 },
+  conductor: { r: 14, hp: 46, speed: 46, dmg: 9, xp: 4 },
   boss: { r: 58, hp: 2600, speed: 42, dmg: 22, xp: 0 },
   beacon: { r: 16, hp: 110, speed: 0, dmg: 0, xp: 0 },
   nest: { r: 17, hp: 80, speed: 0, dmg: 0, xp: 0 },
@@ -75,9 +83,17 @@ export const LINE = { squad: 5, gap: 26, range: 270, volleyMs: 2800, boltSpeed: 
 /** A walker gunner stops in range and fires heavy bursts. */
 export const WALKER = { range: 300, burstMs: 3300, shots: 3, speed: 250, dmg: 9 };
 /** An ash acolyte bursts into embers that burn the hero for a moment. */
-export const EMBER = { r: 24, ms: 1300, dmg: 6 };
+export const EMBER = { r: 24, ms: 1300, dmg: 3 };
 /** A fallen knight blocks bolts from the front, and dashes (its guard drops while it does). */
 export const KNIGHT = { trigger: 230, aimMs: 550, dashSpeed: 420, dashMs: 420, guardMs: 900, every: 3800, block: 0.25 };
+/** Sporelings leave a slowing cloud of spores where they burst; a puffcap stops in range and puffs a ring of spores. */
+export const SPORE = { cloudR: 34, cloudMs: 2600, slow: 0.35, range: 240, puffMs: 3000, puffs: 6, puffSpeed: 120, puffDmg: 6, clump: 3 };
+/** Scrappers run in packs of three; a hauler falls apart into scrappers. */
+export const SCRAP = { pack: 3, split: 3 };
+/** A shardling bursts into splinters that fly out; a prism stops in range and fires a lance of bolts in a line. */
+export const SHARD = { splinters: 3, speed: 210, dmg: 5, range: 290, lanceMs: 3200, lance: 4, lanceSpeed: 330, lanceDmg: 7 };
+/** Wisps weave hard as they come. */
+export const WISP = { weave: 1.1 };
 /** The Grinder Crawler's attacks. */
 export const BOSS = { shellMs: 3500, shells: 5, shellSpeed: 210, shellDmg: 12, spawnMs: 8000, adds: 5, enragedAt: 0.5, alone: 2 };
 
@@ -135,7 +151,7 @@ export interface Enemy {
  * or a mini rocket; or a hostile one: a bot shell, a slowing glob, a trooper's volley bolt or a
  * walker's slug.
  */
-export type BoltColor = HeroId | 'drone' | 'shell' | 'heavy' | 'rocket' | 'glob' | 'volley' | 'slug' | 'fallen';
+export type BoltColor = HeroId | 'drone' | 'shell' | 'heavy' | 'rocket' | 'glob' | 'volley' | 'slug' | 'fallen' | 'spore' | 'splinter';
 
 export interface Bullet {
   id: number;
@@ -318,7 +334,7 @@ export interface Pickup {
  */
 export interface Hazard {
   id: number;
-  kind: 'bog' | 'vent' | 'shell' | 'stomp' | 'ring' | 'ember';
+  kind: 'bog' | 'vent' | 'shell' | 'stomp' | 'ring' | 'ember' | 'spore' | 'strike';
   x: number;
   y: number;
   r: number;
@@ -344,9 +360,10 @@ export interface Pop {
 
 /**
  * `cleared` (a boss or the arena is done) and `travel` (on to the next planet) only last until the
- * next frame; `map` is the star map, `trader` and `event` its nodes.
+ * next frame; `chart` is the space map (where to jump next), `map` the star map on the way there,
+ * `trader` and `event` its nodes.
  */
-export type Phase = 'select' | 'run' | 'levelup' | 'cleared' | 'map' | 'trader' | 'event' | 'travel' | 'won' | 'lost';
+export type Phase = 'select' | 'run' | 'levelup' | 'cleared' | 'chart' | 'map' | 'trader' | 'event' | 'travel' | 'won' | 'lost';
 
 /** An event on offer: its id, its two options and, for the shrine, the tier it takes and the one it raises twice. */
 export interface EventState {
@@ -420,8 +437,15 @@ export interface Hero {
 export interface GameState {
   phase: Phase;
   hero: HeroId | null;
-  /** The planet (0 Dune to 3 Lava), and whether this is the elite arena after it. */
+  /**
+   * The planet (an index into `PLANETS`: 0 Dune, 1 Swamp, 2 Ice, 3 Lava, then the later ones) and
+   * the jump of the crusade it is (`stage`, 0 to 3), and whether this is the elite arena after it.
+   */
   planet: number;
+  stage: number;
+  /** The planets visited so far, in order, and the one chosen on the space map for the next jump. */
+  route: number[];
+  next: number;
   arena: boolean;
   /** Planet (or arena) time in ms; the boss comes at RUN_MS. */
   time: number;
@@ -435,7 +459,7 @@ export interface GameState {
   pendingLevels: number;
   rewardPicks: number;
   /** Where the run goes once the cards are chosen. */
-  after: 'run' | 'map' | 'travel';
+  after: 'run' | 'chart' | 'map' | 'travel';
   /** Tiers of each held upgrade, by id (paths, pool skills and gear). */
   ranks: Record<string, number>;
   /** Unlocked capstones and completed crossovers, by id. */
@@ -460,7 +484,7 @@ export interface GameState {
   nextElite: number;
   waves: number[];
   bossSpawned: boolean;
-  /** When the next lava vent erupts (Lava world). */
+  /** When the next lava vent erupts (Lava world) or lightning strikes (Storm world). */
   nextVent: number;
   /** Credits to spend at a trader. */
   credits: number;
@@ -541,6 +565,9 @@ export function freshState(): GameState {
     phase: 'select',
     hero: null,
     planet: 0,
+    stage: 0,
+    route: [0],
+    next: -1,
     arena: false,
     time: 0,
     runMs: 0,
@@ -614,7 +641,7 @@ export function freshState(): GameState {
 
 /** XP needed to go from `level` to the next. */
 export function xpFor(level: number) {
-  return 5 + 3 * level + Math.floor((level * level) / 6);
+  return 5 + 2 * level + Math.floor((level * level) / 3);
 }
 
 /** The hero's numbers from their base and the upgrades held. */
@@ -638,6 +665,12 @@ export interface Stats {
   reach: number;
   dodge: number;
   sigCooldown: number;
+  /** Threat Scanner: damage to elites and bosses. Executioner: foes left under this share of health fall. */
+  bossDmg: number;
+  execute: number;
+  /** Health back for each kill (Soul Harvest) and the share of credits picked up (Salvage Rig). */
+  harvest: number;
+  creditMul: number;
 }
 
 /** Whether the hero stands on Corvin's raised platform. */
@@ -662,18 +695,24 @@ export function statsOf(s: GameState): Stats {
   const bounces = at([1, 2, 2, 3, 4], r('ricochet'), 0) + (r('gunslinger') >= 2 ? 1 : 0) + (r('gunslinger') >= 5 ? 1 : 0);
   const k = s.hero ? knightMods(s) : NO_MODS;
   const q = squadMods(s);
-  fireRate += q.fireRate;
+  const d = drillMods(s);
+  fireRate += q.fireRate + d.fireRate;
   if (pierce < 999) pierce += q.pierce;
+  // Adrenal Stim: faster and harder while health is low.
+  const p = s.player;
+  const stim = p.maxHp > 0 && p.hp < p.maxHp * 0.4 ? at([0.1, 0.15, 0.2, 0.25, 0.3], r('stim'), 0) : 0;
   return {
-    speed: hero.speed * (1 + 0.08 * r('boots')) * k.speed,
+    speed: hero.speed * (1 + 0.08 * r('boots')) * k.speed * (1 + d.speed + stim),
     pickup: PICKUP_R * (1 + 0.3 * r('magnet')) * (s.lureMs > 0 ? POWER.lure : 1),
-    armour: 0.08 * r('armour') + k.armour,
-    maxHp: s.hero === 'triad' ? botMax(s) * botCount(s) : Math.round((hero.maxHp + 10 * r('armour') + k.hp) * s.maxHpMod),
-    regen: 0.5 * r('medpack') + k.regen,
+    armour: 0.08 * r('armour') + k.armour + d.armour,
+    maxHp: s.hero === 'triad' ? botMax(s) * botCount(s) : Math.round((hero.maxHp + 10 * r('armour') + k.hp + d.hp) * s.maxHpMod),
+    regen: 0.5 * r('medpack') + k.regen + d.regen,
     cooldown: 1 - 0.07 * r('overclock'),
-    damage: (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)) * k.damage * q.damage,
+    damage:
+      (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)) * k.damage * q.damage *
+      (1 + d.damage) * (1 + stim),
     xp: 1 + 0.1 * r('lens'),
-    crit: 0.06 * r('chip') + k.crit,
+    crit: 0.06 * r('chip') + k.crit + d.crit,
     fireRate: fireRate * overdrive,
     pierce,
     bounces,
@@ -682,8 +721,25 @@ export function statsOf(s: GameState): Stats {
     slowMs: r('stun') >= 3 ? 2000 : 1500,
     reach: k.reach,
     dodge: k.dodge,
-    sigCooldown: (1 - 0.07 * r('overclock')) * k.sig * q.sig,
+    sigCooldown: (1 - 0.07 * r('overclock')) * k.sig * q.sig * (1 - d.sig),
+    bossDmg: 1 + 0.1 * r('scanner'),
+    execute: at([0.08, 0.1, 0.12, 0.15, 0.18], r('executioner'), 0),
+    harvest: at([0.4, 0.6, 0.8, 1, 1.3], r('soul-harvest'), 0),
+    creditMul: 1 + 0.2 * r('salvager'),
   };
+}
+
+/** What the hero's drill (its fourth path) adds so far: the sum of its steps up to its tier. */
+function drillMods(s: GameState) {
+  const out = { damage: 0, hp: 0, armour: 0, speed: 0, crit: 0, regen: 0, sig: 0, fireRate: 0 };
+  if (!s.hero) return out;
+  const drill = DRILLS[s.hero];
+  const tier = s.ranks[drill.id] ?? 0;
+  for (let i = 0; i < tier; i++) {
+    const step = DRILL_STEPS[drill.steps[i]];
+    for (const key of Object.keys(step) as (keyof typeof out)[]) out[key] += step[key] ?? 0;
+  }
+  return out;
 }
 
 /** How many battle bots Triad-77 fields: three, more on the Firing Line, eight with Endless Ranks. */
@@ -724,7 +780,8 @@ function knightMods(s: GameState) {
   const r = (id: string) => s.ranks[id] ?? 0;
   const cap = (id: string) => s.capstones.includes(id);
   const low = p.maxHp > 0 && p.hp < p.maxHp * 0.3;
-  let speed = 1;
+  // Battle Trance: quicker on the feet.
+  let speed = 1 + at([0.05, 0.08, 0.11, 0.14, 0.18], r('battle-trance'), 0);
   let damage = 1 + (r('wide-arc') >= 5 ? 0.2 : 0);
   let reach = 1 + at([0.15, 0.3, 0.45, 0.6, 0.8], r('wide-arc'), 0);
   let sig = 1 - 0.1 * r('calm-mind');
@@ -760,13 +817,13 @@ function knightMods(s: GameState) {
   }
   return {
     speed,
-    armour: (hero.armour ?? 0) + (cap('hollow-rebirth') ? 0.3 : 0),
-    hp: (r('rebuilt') >= 2 ? 20 : 0) + (cap('hollow-rebirth') ? 60 : 0),
+    armour: (hero.armour ?? 0) + (cap('hollow-rebirth') ? 0.3 : 0) + at([0.04, 0.08, 0.12, 0.16, 0.2], r('iron-skin'), 0),
+    hp: (r('rebuilt') >= 2 ? 20 : 0) + (cap('hollow-rebirth') ? 60 : 0) + at([10, 20, 30, 40, 60], r('iron-skin'), 0),
     regen: at([0.6, 1.2, 1.8, 2.4, 3], r('mending'), 0) + (s.hero === 'vharn' && low && r('life-support') >= 5 ? 2 : 0),
     damage,
     crit: 0.05 * r('focus'),
     reach,
-    dodge: 0.06 * r('foresight'),
+    dodge: 0.06 * r('foresight') + at([0.03, 0.05, 0.07, 0.09, 0.12], r('battle-trance'), 0),
     sig,
   };
 }
@@ -801,7 +858,8 @@ export type ObjectiveId =
   | 'quickdraw' | 'dropzone' | 'recon' | 'duel' | 'unbroken' | 'lift' | 'pilgrim' | 'storm' | 'bloodtrail' | 'monolith'
   | 'signal' | 'salvage';
 export const SHARED_OBJECTIVES: readonly ObjectiveId[] = ['defend', 'escort', 'beacons', 'zone'];
-export const WORLD_OBJECTIVES: readonly ObjectiveId[] = ['cache', 'nests', 'thaw', 'seal'];
+/** Each planet's own objective, by planet index (Dune, Swamp, Ice, Lava, Spore, Scrap, Crystal, Storm). */
+export const WORLD_OBJECTIVES: readonly ObjectiveId[] = ['cache', 'nests', 'thaw', 'seal', 'nests', 'cache', 'cache', 'seal'];
 export const HERO_OBJECTIVES: Record<HeroId, ObjectiveId> = {
   rook: 'quickdraw', tr9: 'dropzone', bram: 'recon', kael: 'duel', vharn: 'unbroken', oom: 'lift', corvin: 'pilgrim',
   veyl: 'storm', kresh: 'bloodtrail', joren: 'monolith', elara: 'signal', triad: 'salvage',

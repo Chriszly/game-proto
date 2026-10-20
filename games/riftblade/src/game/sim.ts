@@ -6,7 +6,7 @@
 import { HEROES, isKnight, type HeroId } from './heroes';
 import {
   BOSS, DIFF, ELITE, EMBER, ENEMY, HERO_R, KNIGHT, LEASH, LINE, MAX_ENEMIES, MAX_SHARDS, RATS, ROLLER, RUN_MS,
-  POWER, POWER_UPS, SPAWN_RING, TOAD, WALKER, freshHero, freshState, isStructure, refreshUnlocks, statsOf, xpFor,
+  POWER, POWER_UPS, SCRAP, SHARD, SPAWN_RING, SPORE, TOAD, WALKER, WISP, freshHero, freshState, isStructure, refreshUnlocks, statsOf, xpFor,
   type AllyKind, type PowerUp, type BoltColor, type Bomb, type Bullet, type Enemy, type EnemyKind, type GameState, type Hazard, type Pickup, type Stats,
 } from './state';
 import {
@@ -18,7 +18,7 @@ import {
   squadKill, squadSignature, squadStart, syncSquad, turnedBonus,
 } from './squad';
 import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, cardCount, rewardChoices, rollChoices } from './upgrades';
-import { ARENA_MS, BOG, BOSSES, CHAMPION, CREDITS, PLANETS, SIEGE, VENT, type FoeKind } from './planets';
+import { ARENA_MS, BOG, BOSSES, CHAMPION, CREDITS, PLANETS, SIEGE, STRIKE, VENT, type FoeKind } from './planets';
 // `t` is a common local name here (targets, time), so the translator goes by `tr`.
 import { t as tr, type TextKey } from '../i18n';
 import { cancelObjective, objectives } from './objectives';
@@ -37,7 +37,7 @@ const MAX_FRAME_MS = 100;
 /** After a hit the hero takes no damage for this long, ms. */
 export const HURT_GRACE_MS = 450;
 /** Colours of the blast rings. */
-const BLAST = { bomb: '#9fe8ff', wreck: '#ffd23f', hero: '#ffb347', bot: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
+const BLAST = { bomb: '#9fe8ff', wreck: '#ffd23f', hero: '#ffb347', bot: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff', strike: '#fff08a' };
 
 /** The stats for this frame, computed once per tick, and whether the hero is a knight (or Elara Voss or Triad-77). */
 let st: Stats = statsOf(freshState());
@@ -347,6 +347,14 @@ function untouchable(s: GameState) {
 function hurtHero(s: GameState, dmg: number, x?: number, y?: number) {
   if (untouchable(s) || s.phase !== 'run') return;
   const p = s.player;
+  // The Barrier Emitter takes a hit when charged.
+  const barrier = s.ranks.barrier ?? 0;
+  if (barrier > 0 && (s.cd.barrier ?? 0) <= 0) {
+    s.cd.barrier = at([21000, 18000, 15000, 12000, 9000], barrier, 21000);
+    p.hurtMs = HURT_GRACE_MS;
+    s.blasts.push({ id: s.nextId++, x: p.x, y: p.y, r: 30, ms: 260, maxMs: 260, color: BLAST.bomb });
+    return;
+  }
   // A Shield power-up takes the hit.
   if (s.shieldHits > 0) {
     s.shieldHits -= 1;
@@ -580,7 +588,7 @@ function abilities(s: GameState, ms: number) {
     const len = suppressorLength(s);
     const half = suppressorHalf(s);
     const slow = at([0.3, 0.4, 0.4, 0.45, 0.55], sup, 0.3);
-    const dps = at([3, 3, 10, 10, 18], sup, 3);
+    const dps = at([3, 3, 7, 7, 12], sup, 3);
     near(s, p.x, p.y, len, (e) => {
       const diff = Math.abs(angleDiff(Math.atan2(e.y - p.y, e.x - p.x), p.aim));
       if (diff > half) return;
@@ -598,7 +606,7 @@ function abilities(s: GameState, ms: number) {
     const half = shieldHalf(s) + 0.25;
     near(s, p.x, p.y, 95, (e) => {
       if (Math.abs(angleDiff(Math.atan2(e.y - p.y, e.x - p.x), p.facing)) > half) return;
-      damage(s, e, shield >= 4 ? 30 : 15);
+      damage(s, e, shield >= 4 ? 24 : 12);
       knock(e, p.x, p.y, 380);
       if (stun) e.stunMs = Math.max(e.stunMs, 1200);
     });
@@ -665,6 +673,43 @@ function abilities(s: GameState, ms: number) {
     const spot = swarmSpot(s, 300);
     addBomb(s, 'crate', spot.x, spot.y, 1000, 90, at([60, 75, 90, 110, 140], callin, 60), { heal: at([15, 20, 25, 30, 35], callin, 15) });
   }
+  // Orbital Beacon: a strike from orbit on the thickest crowd.
+  const beacon = r('orbital-beacon');
+  if (beacon > 0 && ready(s, 'orbital-beacon', at([9000, 8000, 7000, 6000, 5000], beacon, 9000), ms)) {
+    if (nearest(s, p.x, p.y, 1, 420).length) {
+      const spot = swarmSpot(s, 380);
+      addBomb(s, 'orbital', spot.x, spot.y, 900, at([70, 75, 80, 85, 95], beacon, 70), at([40, 50, 60, 75, 90], beacon, 40));
+    } else s.cd['orbital-beacon'] = 300;
+  }
+  // Crescent Wave (Blade): a cutting blast in front of the hero.
+  const crescent = r('crescent');
+  if (crescent > 0 && ready(s, 'crescent', at([4000, 3600, 3200, 2800, 2400], crescent, 4000), ms)) {
+    if (nearest(s, p.x, p.y, 1, 200).length) {
+      const t = nearest(s, p.x, p.y, 1, 200)[0];
+      const a = Math.atan2(t.y - p.y, t.x - p.x);
+      explode(s, p.x + Math.cos(a) * 70, p.y + Math.sin(a) * 70, at([60, 65, 70, 75, 85], crescent, 60), at([20, 26, 32, 40, 50], crescent, 20), BLAST.frag);
+    } else s.cd.crescent = 300;
+  }
+  // Stasis Pulse (Current): every foe close by is slowed hard for a moment.
+  const stasis = r('stasis');
+  if (stasis > 0 && ready(s, 'stasis', at([7000, 6500, 6000, 5500, 5000], stasis, 7000), ms)) {
+    const reach = at([150, 160, 170, 180, 200], stasis, 150);
+    const slow = at([0.4, 0.45, 0.5, 0.55, 0.6], stasis, 0.4);
+    near(s, p.x, p.y, reach, (e) => {
+      e.slowPct = Math.max(e.slowPct, slow);
+      e.slowMs = Math.max(e.slowMs, 2500);
+    });
+    s.blasts.push({ id: s.nextId++, x: p.x, y: p.y, r: reach, ms: 420, maxMs: 420, color: BLAST.bomb });
+  }
+  // Dark Nova (Hollow): a burst of dark force all round the hero.
+  const nova = r('dark-nova');
+  if (nova > 0 && ready(s, 'dark-nova', at([6000, 5500, 5000, 4500, 4000], nova, 6000), ms)) {
+    const reach = at([90, 100, 110, 120, 140], nova, 90);
+    if (nearest(s, p.x, p.y, 1, reach).length) explode(s, p.x, p.y, reach, at([25, 32, 40, 50, 65], nova, 25), '#b65cff');
+    else s.cd['dark-nova'] = 300;
+  }
+  // Barrier Emitter (Gear): recharges while unspent; `hurtHero` spends it.
+  if (r('barrier') > 0 && (s.cd.barrier ?? 0) > 0) s.cd.barrier -= ms;
 }
 
 /** How far the Suppressor's cone reaches, px (0 without it), and half its angle, radians. */
@@ -677,7 +722,7 @@ export function suppressorHalf(s: GameState) {
 
 /** Half the angle the Riot Shield covers, radians. */
 export function shieldHalf(s: GameState) {
-  return (s.ranks['riot-shield'] ?? 0) >= 4 ? 1.3 : 0.9;
+  return (s.ranks['riot-shield'] ?? 0) >= 4 ? 1.0 : 0.7;
 }
 
 /** Where the three Phalanx shields are around the hero. */
@@ -782,14 +827,14 @@ function moveAllies(s: GameState, ms: number) {
       if (cm >= 4) bolt(s, a.x, a.y, ang + 0.05, dmg, { ...plain, color: 'rook' });
       a.cdMs = 900 * (cm >= 2 ? 0.75 : 1);
     } else if (a.kind === 'thawed') {
-      bolt(s, a.x, a.y, ang, 9 + 4 * s.planet, { ...plain, color: 'rook' });
+      bolt(s, a.x, a.y, ang, 9 + 4 * s.stage, { ...plain, color: 'rook' });
       a.cdMs = 700;
     } else if (a.kind === 'legionary') {
       bolt(s, a.x, a.y, ang, 7 * ((s.ranks['drop-doctrine'] ?? 0) >= 4 ? 1.6 : 1), { ...plain, color: 'tr9' });
       a.cdMs = 900;
     } else if (a.kind === 'escort') {
       // The stranded bot: a little turret that keeps up with the planet's toughness.
-      bolt(s, a.x, a.y, ang, 10 + 6 * s.planet, { ...plain, color: 'drone', speed: 620 });
+      bolt(s, a.x, a.y, ang, 10 + 6 * s.stage, { ...plain, color: 'drone', speed: 620 });
       a.cdMs = 420;
     } else {
       bolt(s, a.x, a.y, ang, 10, { ...plain, color: 'drone', speed: 600 });
@@ -825,6 +870,9 @@ export function spawnAt(s: GameState, kind: EnemyKind, x: number, y: number, eli
   else if (kind === 'walker') e.shellMs = WALKER.burstMs * 0.5;
   else if (kind === 'knight') e.shellMs = KNIGHT.every * 0.5;
   else if (kind === 'linetrooper') e.shellMs = LINE.volleyMs * 0.6;
+  else if (kind === 'puffcap') e.shellMs = SPORE.puffMs * 0.5;
+  else if (kind === 'prism') e.shellMs = SHARD.lanceMs * 0.5;
+  else if (kind === 'conductor') e.shellMs = STRIKE.callMs * 0.5;
   s.enemies.push(e);
   return e;
 }
@@ -875,6 +923,45 @@ export function spawnGroup(s: GameState, t: number, room: number) {
       e.slot = slot;
       e.shellMs = volley;
     }
+    return n;
+  }
+  if (id === 'spore') {
+    if (roll < (t < 30 ? 0 : Math.min(0.14, 0.05 + t / 1100))) {
+      spawnAt(s, 'puffcap', spot.x, spot.y);
+      return 1;
+    }
+    // Sporelings drift in clumps.
+    const n = Math.min(room, SPORE.clump);
+    for (let i = 0; i < n; i++) spawnAt(s, 'sporeling', spot.x + (Math.random() - 0.5) * 44, spot.y + (Math.random() - 0.5) * 44);
+    return n;
+  }
+  if (id === 'scrap') {
+    if (roll < (t < 35 ? 0 : Math.min(0.12, 0.04 + t / 1200))) {
+      spawnAt(s, 'hauler', spot.x, spot.y);
+      return 1;
+    }
+    // Scrappers run in packs, one behind the other.
+    const n = Math.min(room, SCRAP.pack);
+    const a = Math.atan2(s.player.y - spot.y, s.player.x - spot.x);
+    for (let i = 0; i < n; i++) spawnAt(s, 'scrapper', spot.x - Math.cos(a) * i * 22, spot.y - Math.sin(a) * i * 22);
+    return n;
+  }
+  if (id === 'crystal') {
+    if (roll < (t < 35 ? 0 : Math.min(0.13, 0.04 + t / 1300))) {
+      spawnAt(s, 'prism', spot.x, spot.y);
+      return 1;
+    }
+    const n = Math.min(room, 2);
+    for (let i = 0; i < n; i++) spawnAt(s, 'shardling', spot.x + (Math.random() - 0.5) * 36, spot.y + (Math.random() - 0.5) * 36);
+    return n;
+  }
+  if (id === 'storm') {
+    if (roll < (t < 35 ? 0 : Math.min(0.12, 0.04 + t / 1300))) {
+      spawnAt(s, 'conductor', spot.x, spot.y);
+      return 1;
+    }
+    const n = Math.min(room, 4);
+    for (let i = 0; i < n; i++) spawnAt(s, 'wisp', spot.x + (Math.random() - 0.5) * 60, spot.y + (Math.random() - 0.5) * 60);
     return n;
   }
   if (roll < (t < 35 ? 0 : Math.min(0.16, 0.05 + t / 1100))) {
@@ -933,15 +1020,16 @@ function director(s: GameState, ms: number) {
     cancelObjective(s);
     const spot = ringPoint(s, s.player.facing);
     const e = spawnAt(s, 'boss', spot.x, spot.y);
-    if (planet.boss === 'bogmother') {
+    const mech = BOSSES[planet.boss].mech;
+    if (mech === 'bogmother') {
       e.shellMs = BOG.globMs;
       e.spawnMs = BOG.spawnMs;
       e.modeMs = BOG.poolMs;
-    } else if (planet.boss === 'siege') {
+    } else if (mech === 'siege') {
       e.shellMs = SIEGE.volleyMs;
       e.spawnMs = SIEGE.barrageMs * 0.5;
       e.modeMs = 0;
-    } else if (planet.boss === 'champion') {
+    } else if (mech === 'champion') {
       e.shellMs = CHAMPION.dashEvery;
       e.spawnMs = CHAMPION.ringMs;
     }
@@ -953,6 +1041,13 @@ function director(s: GameState, ms: number) {
     const a = Math.random() * Math.PI * 2;
     const d = 40 + Math.random() * 200;
     addHazard(s, 'vent', s.player.x + Math.cos(a) * d, s.player.y + Math.sin(a) * d, VENT.r, VENT.warnMs, 450, VENT.dmg);
+  }
+  // Lightning on the Storm world: a warning ring near the hero, then the strike.
+  if (planet.id === 'storm' && s.time >= s.nextVent) {
+    s.nextVent = s.time + STRIKE.minMs + Math.random() * (STRIKE.maxMs - STRIKE.minMs);
+    const a = Math.random() * Math.PI * 2;
+    const d = 30 + Math.random() * 180;
+    addHazard(s, 'strike', s.player.x + Math.cos(a) * d, s.player.y + Math.sin(a) * d, STRIKE.r, STRIKE.warnMs, 300, STRIKE.dmg * planet.dmg);
   }
 }
 
@@ -1065,6 +1160,44 @@ function moveEnemies(s: GameState, ms: number) {
       const weave = Math.sin(s.time / 170 + e.id) * 0.6 * speed;
       vx += (-dy / dist) * weave;
       vy += (dx / dist) * weave;
+    } else if (e.kind === 'wisp') {
+      // Wisps weave hard, like sparks on the wind.
+      const weave = Math.sin(s.time / 140 + e.id * 1.7) * WISP.weave * speed;
+      vx += (-dy / dist) * weave;
+      vy += (dx / dist) * weave;
+    } else if (e.kind === 'puffcap') {
+      e.shellMs -= ms;
+      if (dist < SPORE.range) {
+        vx = vy = 0;
+        if (e.shellMs <= 0 && !still) {
+          e.shellMs = SPORE.puffMs;
+          const n = SPORE.puffs + (e.elite ? 4 : 0);
+          for (let i = 0; i < n; i++) shoot(s, e.x, e.y, toHero + (i / n) * Math.PI * 2, SPORE.puffSpeed, SPORE.puffDmg * harm, 'spore', 7, 3000);
+        }
+      }
+    } else if (e.kind === 'prism') {
+      e.shellMs -= ms;
+      if (dist < SHARD.range) {
+        vx = vy = 0;
+        if (e.shellMs <= 0 && !still) {
+          // A lance: bolts one behind the other along the same line.
+          e.shellMs = SHARD.lanceMs;
+          const n = SHARD.lance + (e.elite ? 2 : 0);
+          for (let i = 0; i < n; i++) {
+            shoot(s, e.x - Math.cos(toHero) * i * 16, e.y - Math.sin(toHero) * i * 16, toHero, SHARD.lanceSpeed, SHARD.lanceDmg * harm, 'splinter', 5);
+          }
+        }
+      }
+    } else if (e.kind === 'conductor') {
+      e.shellMs -= ms;
+      if (dist < STRIKE.callRange) {
+        vx = vy = 0;
+        if (e.shellMs <= 0 && !still) {
+          // Calls lightning down where the hero stands.
+          e.shellMs = STRIKE.callMs * (e.elite ? 0.7 : 1);
+          addHazard(s, 'strike', p.x, p.y, STRIKE.r, STRIKE.warnMs, 300, STRIKE.dmg * harm);
+        }
+      }
     } else if (e.kind === 'toad') {
       e.shellMs -= ms;
       if (dist < TOAD.range) {
@@ -1222,8 +1355,9 @@ function guarded(e: Enemy, vx: number, vy: number) {
 
 /** The planet boss's attacks; returns its own velocity when it moves other than straight at the hero. */
 function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number, dist: number): { vx: number; vy: number } | null {
-  const id = PLANETS[s.planet].boss;
-  const spec = BOSSES[id];
+  const spec = BOSSES[PLANETS[s.planet].boss];
+  const id = spec.mech;
+  const power = spec.power;
   const enraged = e.hp < e.maxHp * BOSS.enragedAt;
   const base = Math.atan2(uy, ux);
   e.shellMs -= ms;
@@ -1234,14 +1368,14 @@ function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number,
       e.shellMs = BOSS.shellMs * (enraged ? 0.75 : 1);
       const n = BOSS.shells + (enraged ? 2 : 0);
       for (let i = 0; i < n; i++) {
-        shoot(s, e.x + ux * 50, e.y + uy * 50, base + (i - (n - 1) / 2) * 0.24, BOSS.shellSpeed, BOSS.shellDmg, 'shell', 7);
+        shoot(s, e.x + ux * 50, e.y + uy * 50, base + (i - (n - 1) / 2) * 0.24, BOSS.shellSpeed, BOSS.shellDmg * power, 'shell', 7);
       }
     }
     if (e.spawnMs <= 0) {
       e.spawnMs = BOSS.spawnMs;
       for (let i = 0; i < BOSS.adds; i++) {
         const a = Math.atan2(-uy, -ux) + (i - (BOSS.adds - 1) / 2) * 0.4;
-        spawnAt(s, 'clanker', e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 70);
+        spawnAt(s, spec.adds ?? 'clanker', e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 70);
       }
     }
     return null;
@@ -1251,7 +1385,7 @@ function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number,
     if (e.shellMs <= 0) {
       e.shellMs = BOG.globMs * (enraged ? 0.75 : 1);
       const n = BOG.globs + (enraged ? 2 : 0);
-      for (let i = 0; i < n; i++) shoot(s, e.x + ux * 40, e.y + uy * 40, base + (i - (n - 1) / 2) * 0.22, TOAD.globSpeed, TOAD.globDmg * 1.6, 'glob', 9);
+      for (let i = 0; i < n; i++) shoot(s, e.x + ux * 40, e.y + uy * 40, base + (i - (n - 1) / 2) * 0.22, TOAD.globSpeed, TOAD.globDmg * 1.6 * power, spec.adds === 'sporeling' ? 'spore' : 'glob', 9);
     }
     if (e.spawnMs <= 0) {
       // Her young: a pack of mire rats.
@@ -1259,21 +1393,22 @@ function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number,
       const n = Math.min(BOG.young + (enraged ? 2 : 0), MAX_ENEMIES + 1 - s.enemies.length);
       for (let i = 0; i < n; i++) {
         const a = (i / Math.max(1, n)) * Math.PI * 2;
-        spawnAt(s, 'mirerat', e.x + Math.cos(a) * 60, e.y + Math.sin(a) * 60);
+        spawnAt(s, spec.adds ?? 'mirerat', e.x + Math.cos(a) * 60, e.y + Math.sin(a) * 60);
       }
     }
     e.modeMs -= ms;
     if (e.modeMs <= 0) {
       e.modeMs = BOG.poolMs;
-      addHazard(s, 'bog', e.x, e.y, BOG.poolR, 0, BOG.poolLife, 0);
+      addHazard(s, spec.adds === 'sporeling' ? 'spore' : 'bog', e.x, e.y, BOG.poolR, 0, BOG.poolLife, 0);
     }
     return null;
   }
   if (id === 'siege') {
+    const crystal = spec !== BOSSES.siege;
     if (enraged) e.speed = spec.speed * 1.25;
     if (e.shellMs <= 0) {
       e.shellMs = SIEGE.volleyMs;
-      for (let i = 0; i < 5; i++) shoot(s, e.x + ux * 50, e.y + uy * 50, base + (i - 2) * 0.16, WALKER.speed, WALKER.dmg * 1.4, 'slug', 7);
+      for (let i = 0; i < 5; i++) shoot(s, e.x + ux * 50, e.y + uy * 50, base + (i - 2) * 0.16, WALKER.speed, WALKER.dmg * 1.4 * power, crystal ? 'splinter' : 'slug', 7);
     }
     if (e.spawnMs <= 0) {
       // An artillery barrage: one shell on the hero, the rest around, each with a warning ring.
@@ -1283,24 +1418,24 @@ function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number,
       for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2;
         const d = i === 0 ? 0 : 60 + Math.random() * 170;
-        addHazard(s, 'shell', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, SIEGE.shellR, SIEGE.warnMs + i * 90, 400, SIEGE.shellDmg);
+        addHazard(s, 'shell', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, SIEGE.shellR, SIEGE.warnMs + i * 90, 400, SIEGE.shellDmg * power);
       }
     }
     e.modeMs -= ms;
     if (dist < SIEGE.stompR - 10 && e.modeMs <= 0) {
       e.modeMs = SIEGE.stompMs;
-      addHazard(s, 'stomp', e.x, e.y, SIEGE.stompR, SIEGE.stompWarn, 400, SIEGE.stompDmg);
+      addHazard(s, 'stomp', e.x, e.y, SIEGE.stompR, SIEGE.stompWarn, 400, SIEGE.stompDmg * power);
     }
     return null;
   }
   // The Hollow Champion: blade dashes; below half health, rings of fire too.
   if (enraged && !e.phase2) {
     e.phase2 = true;
-    pop(s, tr('championBurns'), '#ff9a3c');
+    pop(s, tr(spec === BOSSES.champion ? 'championBurns' : 'heraldCharges'), spec === BOSSES.champion ? '#ff9a3c' : '#fff08a');
   }
   if (e.phase2 && e.spawnMs <= 0) {
     e.spawnMs = CHAMPION.ringMs;
-    addHazard(s, 'ring', e.x, e.y, 24, 0, (560 / CHAMPION.ringSpeed) * 1000, CHAMPION.ringDmg, Math.random() * Math.PI * 2);
+    addHazard(s, 'ring', e.x, e.y, 24, 0, (560 / CHAMPION.ringSpeed) * 1000, CHAMPION.ringDmg * power, Math.random() * Math.PI * 2);
   }
   if (e.mode === 'walk') {
     if (e.shellMs <= 0 && dist < 520) {
@@ -1361,6 +1496,8 @@ export function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
   if (knight) dmg *= foeMod(s, e);
   // A boss with no foe left beside it stands exposed.
   if (e.kind === 'boss' && !s.enemies.some((o2) => o2 !== e && o2.hp > 0 && o2.charmMs <= 0)) dmg *= BOSS.alone;
+  // Threat Scanner: elites and bosses take more.
+  if (e.elite || e.kind === 'boss') dmg *= st.bossDmg;
   // Elara's Sharpshooter makes its own critical hits.
   const sure = squad ? squadCrit(s, e) : 1;
   if (sure > 1) dmg *= sure;
@@ -1368,6 +1505,8 @@ export function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
   e.hp -= dmg;
   e.flashMs = 90;
   s.hits += 1;
+  // Executioner Rounds: a foe left this low falls (an elite at half the share; never a boss or structure).
+  if (st.execute > 0 && e.hp > 0 && e.kind !== 'boss' && !isStructure(e.kind) && e.hp < e.maxHp * st.execute * (e.elite ? 0.5 : 1)) e.hp = 0;
   if (o.slow && st.slowPct > 0) {
     e.slowPct = Math.max(e.slowPct, st.slowPct);
     e.slowMs = Math.max(e.slowMs, st.slowMs);
@@ -1400,6 +1539,8 @@ function kill(s: GameState, e: Enemy) {
   }
   const value = e.elite ? ELITE.xp : ENEMY[e.kind].xp;
   dropShard(s, e.x, e.y, value);
+  // Soul Harvest: each kill gives back a little health.
+  if (st.harvest > 0) heal(s, st.harvest);
   dropPowerUp(s, e);
   if (e.elite) {
     s.elitesKilled += 1;
@@ -1412,6 +1553,19 @@ function kill(s: GameState, e: Enemy) {
   if (e.kind === 'rollerbomb') {
     explodeBots(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
     s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.bot });
+  }
+  // A sporeling bursts into a cloud of spores, a hauler falls apart into scrappers, a shardling into splinters.
+  if (e.kind === 'sporeling') addHazard(s, 'spore', e.x, e.y, SPORE.cloudR * (e.elite ? 1.6 : 1), 0, SPORE.cloudMs, 0);
+  else if (e.kind === 'hauler') {
+    const n = Math.min(SCRAP.split + (e.elite ? 2 : 0), MAX_ENEMIES + 2 - s.enemies.length);
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2;
+      spawnAt(s, 'scrapper', e.x + Math.cos(a) * 18, e.y + Math.sin(a) * 18);
+    }
+  } else if (e.kind === 'shardling') {
+    const a0 = Math.random() * Math.PI * 2;
+    const harm = PLANETS[s.planet].dmg;
+    for (let i = 0; i < SHARD.splinters; i++) shoot(s, e.x, e.y, a0 + (i / SHARD.splinters) * Math.PI * 2, SHARD.speed, SHARD.dmg * harm, 'splinter', 4, 900);
   }
   // An ash acolyte bursts into embers.
   if (e.kind === 'acolyte') addHazard(s, 'ember', e.x, e.y, EMBER.r * (e.elite ? 1.6 : 1), 0, EMBER.ms, EMBER.dmg * PLANETS[s.planet].dmg);
@@ -1626,16 +1780,17 @@ function hazards(s: GameState, ms: number) {
       // The warning is over: it goes off.
       if (d < h.r + p.r) hurtHero(s, h.dmg, h.x, h.y);
       if (h.kind === 'vent') explodeBots(s, h.x, h.y, h.r, VENT.foeDmg * PLANETS[s.planet].hp, null);
-      const color = h.kind === 'vent' ? BLAST.vent : h.kind === 'shell' ? BLAST.shell : BLAST.stomp;
+      else if (h.kind === 'strike') explodeBots(s, h.x, h.y, h.r, STRIKE.foeDmg * PLANETS[s.planet].hp, null);
+      const color = h.kind === 'vent' ? BLAST.vent : h.kind === 'shell' ? BLAST.shell : h.kind === 'strike' ? BLAST.strike : BLAST.stomp;
       s.blasts.push({ id: s.nextId++, x: h.x, y: h.y, r: h.r, ms: 420, maxMs: 420, color });
       h.ms = 0;
       continue;
     }
     h.ms -= ms;
-    if (h.kind === 'bog') {
+    if (h.kind === 'bog' || h.kind === 'spore') {
       if (d < h.r) {
         p.slowMs = Math.max(p.slowMs, 120);
-        p.slowPct = Math.max(p.slowPct, BOG.slow);
+        p.slowPct = Math.max(p.slowPct, h.kind === 'bog' ? BOG.slow : SPORE.slow);
       }
     } else if (h.kind === 'ember') {
       if (d < h.r + p.r * 0.5) hurtHero(s, h.dmg, h.x, h.y);
@@ -1700,8 +1855,10 @@ function take(s: GameState, k: Pickup) {
     heal(s, k.heal);
     pop(s, tr('plusHealth', { n: k.heal }), '#7dffa0');
   } else if (k.kind === 'credits') {
-    s.credits += k.value;
-    pop(s, tr('plusCredits', { n: k.value }), '#ffd36b');
+    // The Salvage Rig finds more in each chip.
+    const value = Math.round(k.value * st.creditMul);
+    s.credits += value;
+    pop(s, tr('plusCredits', { n: value }), '#ffd36b');
   } else openChest(s);
 }
 

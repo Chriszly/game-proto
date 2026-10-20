@@ -1,17 +1,26 @@
 /**
- * The Rift Crusade: four planets in a row, each with its own faction, wave curve and boss, and the
- * numbers of the star map between them (credits, the trader, the elite arena and the events). Names
- * and texts are keys of `i18n/en.ts`, shown with `t`.
+ * The Rift Crusade: four jumps across eight planets, each with its own faction, wave curve and boss.
+ * A run starts on the Dune world and ends on the Lava world; between them the space map offers a
+ * choice of planets at each jump (`stage`). Also the numbers of the star map between fights
+ * (credits, the trader, the elite arena and the events). Names and texts are keys of `i18n/en.ts`,
+ * shown with `t`.
  */
 import { t, type TextKey } from '../i18n';
 
-export type BossId = 'grinder' | 'bogmother' | 'siege' | 'champion';
+export type BossId = 'grinder' | 'bogmother' | 'siege' | 'champion' | 'sporequeen' | 'scrapking' | 'colossus' | 'stormherald';
+/** How a boss fights: each later boss fights like one of the first four, in its own colours. */
+export type BossMech = 'grinder' | 'bogmother' | 'siege' | 'champion';
+export type PlanetId = 'dune' | 'swamp' | 'ice' | 'lava' | 'spore' | 'scrap' | 'crystal' | 'storm';
 
 /** The swarm kinds of each faction, besides the bosses. */
-export type FoeKind = 'clanker' | 'rollerbomb' | 'mirerat' | 'toad' | 'linetrooper' | 'walker' | 'acolyte' | 'knight';
+export type FoeKind =
+  | 'clanker' | 'rollerbomb' | 'mirerat' | 'toad' | 'linetrooper' | 'walker' | 'acolyte' | 'knight'
+  | 'sporeling' | 'puffcap' | 'scrapper' | 'hauler' | 'shardling' | 'prism' | 'wisp' | 'conductor';
 
 export interface PlanetDef {
-  id: 'dune' | 'swamp' | 'ice' | 'lava';
+  id: PlanetId;
+  /** Which jump of the crusade it is on (0 to 3): the space map offers the planets of the next stage. */
+  stage: number;
   name: TextKey;
   /** Who lives there, for the map and the end screen. */
   faction: TextKey;
@@ -28,35 +37,63 @@ export interface PlanetDef {
   boss: BossId;
   /** Ground colours: the field, its grid and the scenery lines. */
   ground: { field: string; grid: string; deco: string };
+  /** The space map's one-line hint at what waits there. */
+  hint: TextKey;
 }
 
 export const PLANETS: readonly PlanetDef[] = [
   {
-    id: 'dune', name: 'duneName', faction: 'duneFaction', foes: 'duneFoes', elite: 'duneElite', hp: 1, spawn: 1, dmg: 1,
-    swarm: 'clanker', elites: ['clanker', 'rollerbomb'], boss: 'grinder',
+    id: 'dune', stage: 0, name: 'duneName', faction: 'duneFaction', foes: 'duneFoes', elite: 'duneElite', hp: 1, spawn: 1, dmg: 1,
+    swarm: 'clanker', elites: ['clanker', 'rollerbomb'], boss: 'grinder', hint: 'duneHint',
     ground: { field: '#070b16', grid: '#508cff', deco: '#ffb347' },
   },
   {
-    id: 'swamp', name: 'swampName', faction: 'swampFaction', foes: 'swampFoes', elite: 'swampElite', hp: 4, spawn: 1.25, dmg: 1.5,
-    swarm: 'mirerat', elites: ['toad', 'mirerat'], boss: 'bogmother',
+    id: 'swamp', stage: 1, name: 'swampName', faction: 'swampFaction', foes: 'swampFoes', elite: 'swampElite', hp: 4, spawn: 1.25, dmg: 1.5,
+    swarm: 'mirerat', elites: ['toad', 'mirerat'], boss: 'bogmother', hint: 'swampHint',
     ground: { field: '#06130f', grid: '#3ccf8e', deco: '#5fd6a0' },
   },
   {
-    id: 'ice', name: 'iceName', faction: 'iceFaction', foes: 'iceFoes', elite: 'iceElite', hp: 7, spawn: 1.35, dmg: 1.7,
-    swarm: 'linetrooper', elites: ['walker', 'linetrooper'], boss: 'siege',
+    id: 'ice', stage: 2, name: 'iceName', faction: 'iceFaction', foes: 'iceFoes', elite: 'iceElite', hp: 7, spawn: 1.35, dmg: 1.7,
+    swarm: 'linetrooper', elites: ['walker', 'linetrooper'], boss: 'siege', hint: 'iceHint',
     ground: { field: '#0a1424', grid: '#9fd4ff', deco: '#d6efff' },
   },
   {
-    id: 'lava', name: 'lavaName', faction: 'lavaFaction', foes: 'lavaFoes', elite: 'lavaElite', hp: 14, spawn: 1.5, dmg: 2.1,
-    swarm: 'acolyte', elites: ['knight', 'acolyte'], boss: 'champion',
+    id: 'lava', stage: 3, name: 'lavaName', faction: 'lavaFaction', foes: 'lavaFoes', elite: 'lavaElite', hp: 14, spawn: 1.5, dmg: 2.1,
+    swarm: 'acolyte', elites: ['knight', 'acolyte'], boss: 'champion', hint: 'lavaHint',
     ground: { field: '#160807', grid: '#ff6a3c', deco: '#ff8a3c' },
+  },
+  {
+    id: 'spore', stage: 1, name: 'sporeName', faction: 'sporeFaction', foes: 'sporeFoes', elite: 'sporeElite', hp: 4, spawn: 1.2, dmg: 1.4,
+    swarm: 'sporeling', elites: ['puffcap', 'sporeling'], boss: 'sporequeen', hint: 'sporeHint',
+    ground: { field: '#13071a', grid: '#d36bff', deco: '#ff7ad9' },
+  },
+  {
+    id: 'scrap', stage: 1, name: 'scrapName', faction: 'scrapFaction', foes: 'scrapFoes', elite: 'scrapElite', hp: 3.5, spawn: 1.35, dmg: 1.5,
+    swarm: 'scrapper', elites: ['hauler', 'scrapper'], boss: 'scrapking', hint: 'scrapHint',
+    ground: { field: '#110d09', grid: '#c98a5a', deco: '#e8b07a' },
+  },
+  {
+    id: 'crystal', stage: 2, name: 'crystalName', faction: 'crystalFaction', foes: 'crystalFoes', elite: 'crystalElite', hp: 6.5, spawn: 1.3, dmg: 1.8,
+    swarm: 'shardling', elites: ['prism', 'shardling'], boss: 'colossus', hint: 'crystalHint',
+    ground: { field: '#0b0a1e', grid: '#9c7cff', deco: '#7ff5e6' },
+  },
+  {
+    id: 'storm', stage: 2, name: 'stormWorldName', faction: 'stormFaction', foes: 'stormFoes', elite: 'stormElite', hp: 7, spawn: 1.45, dmg: 1.8,
+    swarm: 'wisp', elites: ['conductor', 'wisp'], boss: 'stormherald', hint: 'stormHint',
+    ground: { field: '#090c14', grid: '#ffe45c', deco: '#fff08a' },
   },
 ];
 
-export const LAST_PLANET = PLANETS.length - 1;
+/** The last jump: the Lava world, where the Hollow Champion waits. */
+export const LAST_STAGE = 3;
+/** The jumps of a run, counting the first world. */
+export const STAGES = LAST_STAGE + 1;
 
-/** "2/4 Swamp world". */
-export const planetLabel = (i: number) => t('planetLabel', { n: i + 1, of: PLANETS.length, planet: t(PLANETS[i].name) });
+/** The planets (indices into `PLANETS`) of a stage, in the space map's order. */
+export const planetsAt = (stage: number) => PLANETS.flatMap((p, i) => (p.stage === stage ? [i] : []));
+
+/** "2/4 Swamp world": the jump and the planet. */
+export const planetLabel = (stage: number, i: number) => t('planetLabel', { n: stage + 1, of: STAGES, planet: t(PLANETS[i].name) });
 
 export interface BossDef {
   /** Its name ("The Grinder Crawler"), the boss bar's label and the end screen's line when it falls last. */
@@ -69,13 +106,26 @@ export interface BossDef {
   dmg: number;
   /** Credits it leaves. */
   credits: number;
+  /** How it fights, and how hard its shots, shells and blasts hit against the first of that kind. */
+  mech: BossMech;
+  power: number;
+  /** The foe it calls in (the Grinder's and the Bog Mother's way), if not the first boss's own. */
+  adds?: FoeKind;
 }
 
 export const BOSSES: Record<BossId, BossDef> = {
-  grinder: { name: 'grinderName', bar: 'grinderBar', beaten: 'grinderBeaten', r: 58, hp: 2600, speed: 42, dmg: 22, credits: 30 },
-  bogmother: { name: 'bogmotherName', bar: 'bogmotherBar', beaten: 'bogmotherBeaten', r: 60, hp: 17000, speed: 36, dmg: 24, credits: 30 },
-  siege: { name: 'siegeName', bar: 'siegeBar', beaten: 'siegeBeaten', r: 62, hp: 15000, speed: 32, dmg: 26, credits: 30 },
-  champion: { name: 'championName', bar: 'championBar', beaten: 'championBeaten', r: 30, hp: 58000, speed: 92, dmg: 26, credits: 0 },
+  grinder: { name: 'grinderName', bar: 'grinderBar', beaten: 'grinderBeaten', r: 58, hp: 2600, speed: 42, dmg: 22, credits: 30, mech: 'grinder', power: 1 },
+  bogmother: { name: 'bogmotherName', bar: 'bogmotherBar', beaten: 'bogmotherBeaten', r: 60, hp: 17000, speed: 36, dmg: 24, credits: 30, mech: 'bogmother', power: 1 },
+  siege: { name: 'siegeName', bar: 'siegeBar', beaten: 'siegeBeaten', r: 62, hp: 15000, speed: 32, dmg: 26, credits: 30, mech: 'siege', power: 1 },
+  champion: { name: 'championName', bar: 'championBar', beaten: 'championBeaten', r: 30, hp: 58000, speed: 92, dmg: 26, credits: 0, mech: 'champion', power: 1 },
+  sporequeen: {
+    name: 'sporequeenName', bar: 'sporequeenBar', beaten: 'sporequeenBeaten', r: 58, hp: 16000, speed: 38, dmg: 22, credits: 30, mech: 'bogmother', power: 0.9, adds: 'sporeling',
+  },
+  scrapking: {
+    name: 'scrapkingName', bar: 'scrapkingBar', beaten: 'scrapkingBeaten', r: 60, hp: 15000, speed: 40, dmg: 24, credits: 30, mech: 'grinder', power: 1.6, adds: 'scrapper',
+  },
+  colossus: { name: 'colossusName', bar: 'colossusBar', beaten: 'colossusBeaten', r: 60, hp: 14500, speed: 34, dmg: 26, credits: 30, mech: 'siege', power: 1.05 },
+  stormherald: { name: 'stormheraldName', bar: 'stormheraldBar', beaten: 'stormheraldBeaten', r: 30, hp: 15000, speed: 84, dmg: 20, credits: 30, mech: 'champion', power: 0.8 },
 };
 
 /** The Bog Mother: globs, young and the bog pools she leaves. */
@@ -86,13 +136,15 @@ export const SIEGE = { volleyMs: 2600, barrageMs: 5200, shells: 6, warnMs: 1200,
 export const CHAMPION = { dashEvery: 3000, aimMs: 650, dashSpeed: 820, ringMs: 3800, ringSpeed: 120, ringDmg: 14, ringGaps: 4 };
 /** Lava vents: one erupts near the hero every so often on the Lava world, after a warning. */
 export const VENT = { minMs: 5000, maxMs: 9000, warnMs: 1300, r: 70, dmg: 14, foeDmg: 40 };
+/** Lightning on the Storm world: a strike near the hero every so often, after a warning; conductors call them too. */
+export const STRIKE = { minMs: 4500, maxMs: 8000, warnMs: 1000, r: 48, dmg: 11, foeDmg: 30, callMs: 3600, callRange: 320 };
 
 /** Credits: dropped by elites, left by bosses, and paid for each planet cleared. */
 export const CREDITS = { elite: 6, clear: 12, arena: 20, arenaElite: 6 };
 
 /** The elite arena between planets: this long, with this many elites to beat. */
 export const ARENA_MS = 60_000;
-export const arenaElites = (planet: number) => (planet >= 1 ? 3 : 2);
+export const arenaElites = (stage: number) => (stage >= 1 ? 3 : 2);
 
 /** The trader: what a tier costs (more for one already held) and a reroll. */
 export const TRADE = { base: 25, perTier: 10, reroll: 8 };

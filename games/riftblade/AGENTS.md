@@ -6,9 +6,10 @@ as any change to the game.
 
 ## Current state
 
-A survivor-style auto-attack roguelike, landscape 960x540. A run is the Rift Crusade: four planets
-(Dune, Swamp, Ice, Lava) of five minutes each, every one ending in its boss, with a star map
-between them.
+A survivor-style auto-attack roguelike, landscape 960x540. A run is the Rift Crusade: four jumps
+of five minutes each, every one ending in its boss: the Dune world, then one of Swamp, Spore and
+Scrap, then one of Ice, Crystal and Storm (each picked on the space map), then the Lava world, with
+a star map between them.
 
 - Implemented: a hero select screen with twelve heroes in a 6x2 grid and a detail panel with a
   Fight button: three soldiers (Captain Rook, Legionary TR-9, Corporal Bram-17), seven blade
@@ -18,10 +19,11 @@ between them.
   shown in the game: a locked card is a dark placeholder (`rb-locked`, no art, name or colour) and
   its detail panel says only "Locked". A deed done mid-run pauses the game on the new hero's panel
   until Continue. Each hero has an auto-attacking weapon, a
-  signature move (Space or the round button) and three five-tier paths. Pools by weapon class
-  and side: Blaster (8 skills: soldiers, Elara, Triad-77), Blade (6, knights), Current (4: Kael, Oom, Corvin,
-  Joren) and Hollow (4: Vharn, Veyl, Kresh, and Kael once he takes The Fall); Joren may also draw
-  Lightning Arc. The shared Gear deck (8 pieces), the 5-ability and 4-gear limits, level-ups with
+  signature move (Space or the round button), three five-tier paths and a fourth, its drill (plain
+  stat gains, `DRILLS`). Pools by weapon class
+  and side: Blaster (10 skills: soldiers, Elara, Triad-77), Blade (8, knights), Current (6: Kael, Oom, Corvin,
+  Joren) and Hollow (6: Vharn, Veyl, Kresh, and Kael once he takes The Fall); Joren may also draw
+  Lightning Arc. The shared Gear deck (12 pieces), the 6-ability and 4-gear limits, level-ups with
   three cards (four for Elara, her Hope; at least one of the hero's own paths while any are left,
   the Field Ration as filler), 36 capstones and 13 crossovers (the cards show a link icon); gold-ringed elites with
   chests and credits, ring waves at 1:30, 3:00 and 4:15 on every planet; once the boss appears
@@ -31,17 +33,26 @@ between them.
   screen's edge and two HUD lines under the clock; rewards are credits, a level or a free card.
   None in the arena; the boss calls one off. Power-ups (bomb, magnet, lure, overdrive, shield,
   freeze, credit cache) drop from foes after a world's first minute.
-- Four factions: Scrap bots (Clankers, Rollerbombs; the Grinder Crawler), wild beasts (mire rat
+- Eight factions. The first four: Scrap bots (Clankers, Rollerbombs; the Grinder Crawler), wild beasts (mire rat
   packs, spitter toads with slowing globs; the Bog Mother with globs, young and bog pools), the
   Iron Dominion (line trooper squads firing volleys, walker gunners; the Siege Walker with volleys,
   artillery barrages behind ground warnings and stomps) and the Hollow cult (ash acolytes that
   burst into embers, fallen knights with a frontal shield and dashes; the Hollow Champion with
-  marked blade dashes and, below half health, rings of fire with gaps), plus lava vents.
-- Between planets: collecting what is left, credits, the star map with 2-3 nodes (trader, elite
+  marked blade dashes and, below half health, rings of fire with gaps), plus lava vents. The four
+  the space map adds (`art/worlds.ts`): the Mycelid Bloom (sporelings in clumps that burst into
+  slowing spore clouds, puffcaps puffing rings of spores; the Spore Queen fights like the Bog
+  Mother with spores and sporelings), the Scrap Horde (scrapper packs, haulers that split into
+  scrappers; the Scrap King fights like the Grinder Crawler, harder, with scrappers), the Shardborn
+  (shardlings that burst into splinters, prisms firing lances; the Prism Colossus fights like the
+  Siege Walker) and the Stormcallers (weaving wisps, conductors calling lightning on the hero,
+  lightning strikes; the Storm Herald fights like the Hollow Champion with sparks). Each later boss
+  is its own `BossId` with `mech` (whose attacks), `power` (its shots' strength) and `adds`.
+- Between planets: collecting what is left, credits, the space map (the next planet, from the
+  next stage's three; the Lava world last), the star map with 2-3 nodes (trader, elite
   arena, rest, event; four events), free arena picks, the escort bot. The hero, level, kit and
   allies carry over; the clock resets per planet. Victory after the Lava boss; the end screen
-  names the planet reached. Saved longest run, wins and furthest planet per hero, and the heroes
-  unlocked.
+  names the planet reached. Saved longest run, wins and furthest jump per hero, the heroes
+  unlocked and the planets charted (landed on).
 - The field is endless: the camera follows the hero, foes spawn on a ring just past the view's
   corners (whatever the screen's shape) and ones left far behind are brought round ahead again.
 - Sound effects and music (see Sound below).
@@ -76,22 +87,32 @@ between them.
 - `src/game/upgrades.ts`: `UPGRADES` (every path, pool skill and gear piece, with five tier lines),
   `MAX_TIER`, `MAX_ABILITIES`, `MAX_GEAR`, `FILLER`, `CAPSTONES`, `CROSSOVERS`, `capstonesOf`,
   `crossoversOf`, `crossoverFor(id, hero)` and `capstoneFor` (card hints), `at` (per-tier tables),
+  `DRILLS` (each hero's fourth path: an id, name and five `DrillStep`s, made into `UPGRADES` rows by
+  `drillDefs`; `DRILL_STEPS` holds each step's numbers, summed by `drillMods` in `statsOf`),
   `POOL_NAMES` (the pools' card kind lines), `poolsOf` (the pools a hero draws from now), `canOffer`,
   `rollChoices` and `cardCount` (4 for Elara, else 3). Pool skills carry `pool`; a hero is only offered skills of `poolsOf` or its
   `extra`.
-- `src/game/planets.ts`: `PLANETS` (per planet: name, faction, `foes` (the HUD's kill count, with
+- `src/game/planets.ts`: `PlanetId`, `PLANETS` (per planet: `stage` (its jump, 0 to 3), name, faction, `foes` (the HUD's kill count, with
   plural forms), `elite` (its pop), `hp` / `spawn` / `dmg`
-  multipliers, ring-wave kind, elite kinds, boss, ground colours), `BOSSES` (name, boss bar label,
-  `beaten` line for the end screen, size, health, credits), the bosses' attack numbers (`BOG`, `SIEGE`, `CHAMPION`), `VENT`, `CREDITS`, `ARENA_MS`,
-  `arenaElites`, `TRADE` (prices), `NODE_INFO` (star map nodes), `REST_HEAL`, `planetLabel`.
+  multipliers, ring-wave kind, elite kinds, boss, ground colours, `hint` (the space map's line)),
+  `LAST_STAGE`, `STAGES`, `planetsAt(stage)`, `BOSSES` (name, boss bar label,
+  `beaten` line for the end screen, size, health, credits, `mech`, `power`, `adds`), the bosses' attack numbers (`BOG`, `SIEGE`, `CHAMPION`), `VENT`, `STRIKE` (the Storm world's lightning and conductors), `CREDITS`, `ARENA_MS`,
+  `arenaElites`, `TRADE` (prices), `NODE_INFO` (star map nodes), `REST_HEAL`, `planetLabel(stage, planet)`.
+  The first four planets keep their indices 0 to 3 (Dune, Swamp, Ice, Lava); the later ones follow
+  (4 Spore, 5 Scrap, 6 Crystal, 7 Storm), so tables by planet index (`WORLD_OBJECTIVES`,
+  `PLANET_SONGS`) list them in that order.
 - `src/game/state.ts`: `GameState` and its parts (`Hero`, `Enemy`, `Bullet`, `Shard`, `Blast`,
   `Bomb`, `Fire`, `Ally`, `Pickup`, `Hazard`, `Pop`, `EventState`), the balance numbers (`RUN_MS`,
   `MAX_ENEMIES`, `MAX_SHARDS`, `ENEMY` for every foe kind, `ELITE`, `ROLLER`, `RATS`, `TOAD`,
-  `LINE`, `WALKER`, `EMBER`, `KNIGHT`, `BOSS`, `WAVES`, `SPAWN_RING`, `LEASH`, `PICKUP_R`, `HERO_R`),
+  `LINE`, `WALKER`, `EMBER`, `KNIGHT`, `SPORE`, `SCRAP`, `SHARD`, `WISP`, `BOSS`, `WAVES`, `SPAWN_RING`, `LEASH`, `PICKUP_R`, `HERO_R`),
   `POWER` and `POWER_UPS` (power-up drop chance, weights and effects), the objective types
   (`Objective`, `ObjectiveId`, `SHARED_OBJECTIVES`, `WORLD_OBJECTIVES`, `HERO_OBJECTIVES`,
-  `OBJECTIVE_AT`, `StructureKind`), `DIFF` (difficulty), `freshState`, `xpFor`, `statsOf` (the hero's numbers from upgrades and
-  `maxHpMod`, with `squadMods` for Elara and Triad-77), `botCount` and `botMax` (Triad-77's
+  `OBJECTIVE_AT`, `StructureKind`), `DIFF` (difficulty), `freshState`, `xpFor` (5 + 2·level +
+  level²/3: a little quicker than before for the first levels, slower from level 8 and much slower
+  later), `statsOf` (the hero's numbers from upgrades and
+  `maxHpMod`, with `squadMods` for Elara and Triad-77 and `drillMods` for the drills; `bossDmg`,
+  `execute`, `harvest` and `creditMul` are the Threat Scanner, Executioner Rounds, Soul Harvest and
+  Salvage Rig), `botCount` and `botMax` (Triad-77's
   bots and their health), `refreshUnlocks` and `clock`. `Bot` and `Flag` are Triad-77's bots
   (`state.bots`, `formation`, `scrap`) and Elara's signal flag (`state.flag`, `supplyWorld`).
 - `src/game/sim.ts`: the rules of a fight. `startRun`, `choose` / `nextPick` (free picks first,
@@ -150,10 +171,12 @@ between them.
   in place (`aimX`/`aimY`), `knock` skips and `kill` breaks without a kill, shard or drop;
   frozen troopers thawed become `thawed` allies (40 s, short-lived).
 - `src/game/voyage.ts`: between fights. `frame` (tick, then `afterClear` and `nextPlanet` for the
-  passing phases), `afterClear` (collect, credits, arena reward, map or victory), `rollNodes`,
+  passing phases), `afterClear` (collect, credits, arena reward, the space map or victory),
+  `chartOptions` and `chooseWorld` (the space map: sets `state.next` and rolls the nodes), `rollNodes`,
   `chooseNode`, the trader (`priceOf`, `buy`, `reroll`, `leave`), the arena (`startArena`),
-  events (`rollEvent`, `chooseEvent`) and `nextPlanet`.
-- `src/game/save.ts`: `SAVE_KEY`, `loadProgress`, `saveProgress`, `recordRun`, `recordUnlocks`,
+  events (`rollEvent`, `chooseEvent`) and `nextPlanet` (to `state.next`, `stage` + 1, onto
+  `state.route`).
+- `src/game/save.ts`: `SAVE_KEY`, `loadProgress`, `saveProgress`, `recordRun`, `recordCharted`, `recordUnlocks`,
   `isUnlocked` (TR-9, a deed done, a hero the save shows as played, or the old world deeds) and
   `unlockedHeroes`.
 - `src/audio/music.ts`: the songs (`PLANET_SONGS`, `MENU_SONG`, `STINGS`); `src/audio/sfx.ts`: the
@@ -166,6 +189,11 @@ between them.
   (`rb-boss-bogmother`, `rb-boss-siege`, `rb-boss-champion`, `-burning`), hostile bolts
   (`rb-bolt-glob`, `-volley`, `-slug`), `rb-escort` and `rb-credits`. Faction colours are `C.beast`
   / `C.toad`, `C.iron` / `C.ironLight`, `C.hollow` / `C.ember` in `glow.ts`, apart from the heroes'.
+- `src/art/worlds.ts`: `bakeWorlds` paints the four later planets' foes (`rb-sporeling`,
+  `rb-puffcap`, `rb-scrapper`, `rb-hauler`, `rb-shardling`, `rb-prism`, `rb-wisp`, `rb-conductor`,
+  each with `-elite`), bosses (`rb-boss-sporequeen`, `-scrapking`, `-colossus`, `-stormherald`) and
+  bolts (`rb-bolt-spore`, `rb-bolt-splinter`). `GameScene.draw` calls it the first time a run gets
+  past the Dune world (the space map or another planet), not at boot (see Gotchas).
 - `src/art/sprites.ts`: `bakeSprites` paints the first textures (keys start `rb-`): the heroes
   (`heroKey`, `portraitKey`, drawn by `drawHero` from the scheme), `rb-trooper`, `rb-brother`,
   `rb-legionary` (TR-9's Drop Squad troopers), `rb-commando`, `rb-medic` (Elara's rebels, drawn by
@@ -183,7 +211,7 @@ between them.
   the designed rectangle sits in it), `fitLayout`, `CENTER`, HUD places (`XP_BAR`, `HP_BAR`, `KIT`, `TIMER`,
   `LEVEL`, `PLANET_TAG`, `CREDITS_TAG`, `BOSS_BAR`, `OBJECTIVE_HUD`, `SIG_BUTTON`, `STICK`), card rectangles
   (`heroCardRect` for the 6x2 grid, `levelCardRect` with `LEVEL_CARD4` for four cards, `UNLOCK` and
-  `CONTINUE` for the new hero panel, `mapNodeRect` / `mapNodeSpot`, `tradeCardRect`, `REROLL`,
+  `CONTINUE` for the new hero panel, `CHART`, `chartSpot` / `chartRect` (the space map), `mapNodeRect` / `mapNodeSpot`, `tradeCardRect`, `REROLL`,
   `LEAVE`, `eventOptionRect`, `AGAIN`), `DEPTH`, `inside`.
 - `src/scenes/objectiveArt.ts`: the objectives and power-ups, drawn in code on the graphics
   layers (no baked textures, so boot's Math.random draws are unchanged): `drawObjectiveGround`
@@ -191,7 +219,7 @@ between them.
   (`POWER_COLORS`), `objectiveTarget` (where the HUD arrow points) and `OBJ_COLOR` (cyan).
 - `src/scenes/GameScene.ts`: owns `state`, reads input, runs `frame`, follows the hero with the
   camera and draws: the planet's ground (`drawGround` with `duneCell`, `swampCell`, `iceCell`,
-  `lavaCell`, scenery from a hash, so the rules' `Math.random` is untouched), graphics layers under
+  `lavaCell`, `sporeCell`, `scrapCell`, `crystalCell`, `stormCell`, scenery from a hash, so the rules' `Math.random` is untouched), graphics layers under
   and over the sprites (hazards, warnings, knight shields, dash lines, rings of fire), image pools
   per layer (bolts and foes drawn with additive blending; structures are skipped there and drawn
   by `objectiveArt.ts`; the wreck, escort bot and frozen troopers use pool images), floating texts
@@ -202,7 +230,9 @@ between them.
   `heroCardRect`, keyed by `heroKeyLabel`, and the detail panel `HERO_DETAIL` with the `FIGHT`
   button; a locked hero shows only `rb-locked`), `unlockPanel` (the new hero, with a `continue`
   spot), `levelUp` (also the arena's and an objective's reward, titled by `state.after`; three or four cards whose lines flow down; pool labels
-  from `POOL_NAMES`, `linkIcon` for crossovers), `starMap`, `trader`, `eventPanel`, `endScreen`.
+  from `POOL_NAMES`, `linkIcon` for crossovers), `spaceMap` (the four jumps as columns, lanes, the
+  route lit, the next jump's planets as cards with spot ids = `PlanetId`; a faction shows once
+  `progress.charted` has it), `starMap` (on the way to `state.next`), `trader`, `eventPanel`, `endScreen`.
 
 ### Layout on every screen shape
 
@@ -224,13 +254,16 @@ off. At exactly 960x540 the frame is at 0,0 and nothing moves.
 
 ### Flow
 
-`state.phase` is `select` (hero cards), `run`, `levelup` (sim stopped, cards shown), `map`,
-`trader`, `event`, `won` or `lost` (end screen); `cleared` and `travel` last only until the end of
-the frame. The sim runs only in `run`. A boss's death sets `cleared`; `afterClear` collects what is
-lying about, pays credits and either wins (the Lava boss) or rolls the map nodes, showing any
-level-ups first (`after` = `map`). A node opens the trader or an event, starts the arena (`run`
+`state.phase` is `select` (hero cards), `run`, `levelup` (sim stopped, cards shown), `chart`
+(the space map), `map`, `trader`, `event`, `won` or `lost` (end screen); `cleared` and `travel`
+last only until the end of the frame. The sim runs only in `run`. `state.planet` is the planet
+(an index into `PLANETS`), `state.stage` the jump (0 to 3, what the HUD's "2/4", deeds, the arena
+and the save count), `state.route` the planets landed on and `state.next` the one chosen. A boss's
+death sets `cleared`; `afterClear` collects what is lying about, pays credits and either wins (the
+last stage's boss) or opens the space map, showing any level-ups first (`after` = `chart`).
+`chooseWorld` sets `next` and rolls the star map's nodes (`map`). A node opens the trader or an event, starts the arena (`run`
 with `arena` set, ended in `step` by the last elite falling or 60 s, then `cleared` again with a
-free pick if won) or rests; each ends in `travel`, which `nextPlanet` turns into the next planet's
+free pick if won) or rests; each ends in `travel`, which `nextPlanet` turns into the chosen planet's
 `run` (clock reset, field cleared, the escort bot added if taken). Run again resets to a fresh
 `select` state.
 
@@ -246,8 +279,8 @@ draws it. A second touch pointer (`addPointer(1)`) lets the other thumb tap the 
 (during a level-up or a panel) is dropped. Panel cards are hit-tested with `viewPoint` against
 `panel.spots`. On the hero select, tapping a card (or 1-9, 0, then - and = for the last two) sets
 `GameScene.chosen` and tapping Fight (or Enter) starts the run, if the hero is unlocked. At a
-level-up 1-4 pick a card (as many as there are); elsewhere 1/2/3 pick (a node, an offer or an
-answer), 4 rerolls at the trader, Enter leaves the trader or runs again. While `GameScene.unlocking`
+level-up 1-4 pick a card (as many as there are); elsewhere 1/2/3 pick (a planet on the space
+map, a node, an offer or an answer), 4 rerolls at the trader, Enter leaves the trader or runs again. While `GameScene.unlocking`
 holds heroes just unlocked, `frame` is not run, the new hero panel shows, and Continue, Enter or
 Space closes it.
 
@@ -257,10 +290,12 @@ The foes and Triad-77's units are called bots everywhere (texts, ids, textures s
 `state.bots`); they went by another name before, but no save key or stored id ever held it, so old
 saves load unchanged.
 
-- `riftblade-progress`: `{ bestMs, wins: { [heroId]: count }, furthest: { [heroId]: planet 1-4 },
-  unlocked: HeroId[] }`. `bestMs` is the whole run's time (`runMs`). Older saves without
-  `furthest` load with `{}`, without `unlocked` with `[]`; unknown hero ids are dropped, and
-  so are `wins` and `furthest` values that are not finite numbers. A hero with a
+- `riftblade-progress`: `{ bestMs, wins: { [heroId]: count }, furthest: { [heroId]: jump 1-4 },
+  unlocked: HeroId[], charted: PlanetId[] }`. `bestMs` is the whole run's time (`runMs`). Older saves without
+  `furthest` load with `{}`, without `unlocked` or `charted` with `[]`; unknown ids are dropped, and
+  so are `wins` and `furthest` values that are not finite numbers.
+  `charted` gets a planet the first frame a run is on it (`recordCharted` in `GameScene.update`) and
+  the route at the run's end (`recordRun`). A hero with a
   `furthest` world is open (so saves from when Rook and Bram were free keep them), and the deeds
   of reaching a world (Kael, Veyl, Joren) also count from `furthest`. `GameScene` saves new
   `state.deeds` with `recordUnlocks` as they happen.
@@ -283,12 +318,14 @@ counts that went up (`kills`, `elitesKilled`, `chests`, `signatures`, `damageTak
 Enemy bolts, blasts and hazards play only on screen. The scene plays the input sounds itself.
 
 **Music** (`music.ts`): one song per planet, Dune in D minor (152 BPM), Swamp in E minor swung
-(150, three steps a beat, via `swing`), Ice in B minor sparse (156) and Lava in C minor heavy
-(160). Each has its own `calm` part, and `tense`, `boss` and `pad` written once in D minor and moved
+(150, three steps a beat, via `swing`), Ice in B minor sparse (156), Lava in C minor heavy
+(160), Spore in A minor drifting (132, triangle lead), Scrap in G minor clanking (168), Crystal in
+F# minor with chiming arpeggios (144, sine lead) and Storm in E minor driving (172, sawtooth
+lead). Each has its own `calm` part, and `tense`, `boss` and `pad` written once in D minor and moved
 into its key (`transpose`). `MENU_SONG` (90 BPM) has `select`, `map` and `shop`. `SoundCues.pickMusic`:
 hero select `select`; a fight `calm`, `tense` for 25 s after a ring wave (ended by a new planet) and in the elite arena,
 `boss` while a boss lives; level-up cards mid-fight `pad`, between planets `map`; star map and
-events `map`; trader `shop`; the end screen stops the music. `STINGS`: `cleared` (a boss falls or
+events `map` (the space map too); trader `shop`; the end screen stops the music. `STINGS`: `cleared` (a boss falls or
 the arena is won), `unlock` (a new hero), `win`, `lose`.
 
 **Effects** (`sfx.ts`), and where they play:
@@ -308,10 +345,11 @@ the arena is won), `unlock` (a new hero), `win`, `lose`.
   `barrier`, `heal` (health up by more than 8), `shard` (pitch rises with a combo), `chest`,
   `ui('coin')` for credits gained.
 - `levelUp` (into the cards), `card` (a pick), `capstone`, `crossover`.
-- `eliteHorn`, `siren` (ring wave), hazards `warn` (vent, shell), `stomp`, `fireRing`, `glob` (bog
-  pool and toad globs), `enemyShot`, `enemyVolley` (volley and slug bolts), `bossStab`,
+- `eliteHorn`, `siren` (ring wave), hazards `warn` (vent, shell, lightning strike), `stomp`, `fireRing`
+  (also the Storm Herald's sparks), `glob` (bog pool, toad globs and spore puffs; a sporeling's
+  cloud is silent), `enemyShot`, `enemyVolley` (volley, slug and splinter bolts), `bossStab`,
   `bossDown`.
-- Between fights: `node` (star map), `ui('coin')` / `ui('refuse')` (trader buy), `reroll` /
+- Between fights: `node` (space map and star map), `ui('coin')` / `ui('refuse')` (trader buy), `reroll` /
   `ui('refuse')`, `event`, `warp` (on to a new planet or the arena), `ui('click')` for the hero
   cards, Fight, Leave, Continue and Run again, `ui('refuse')` for a locked hero.
 
@@ -323,7 +361,7 @@ free of audio) or from the scene's input handler.
 - `window.game.scene.getScene('Game').state`: the `GameState` (`objective` is the side objective
   under way, `objectivesDone` and `powerUps` count them).
 - `.panel.spots`: the cards of the panel showing (moved into `FRAME` on a wider or taller view; `id` is a `HeroId`, `fight`, an upgrade id, a
-  node kind, `option-0` / `option-1`, `sold`, `reroll`, `leave`, `again` or `continue`), in game
+  node kind, a `PlanetId` on the space map, `option-0` / `option-1`, `sold`, `reroll`, `leave`, `again` or `continue`), in game
   pixels. A locked hero card has `locked: true`. `.chosen` is the hero picked on the select screen
   (TR-9 at first), `.unlocking` the heroes waiting to be shown.
 - The hero is always at `CENTER` (480, 270 at 960x540: the middle of the view) on screen;
@@ -334,7 +372,8 @@ free of audio) or from the scene's input handler.
   time), taps Rook's locked card (no Fight button), then TR-9 and Fight, walks a circle by holding
   the mouse at a point turning once every 25 s, takes the first card at each level-up, fires Brace
   and plays to 60 s. It depends on: the hero card order, TR-9 being the open hero, his health,
-  paths and Brace length, the layout above, and TR-9 surviving a minute of that walk on Normal.
+  paths and Brace length, the layout above, TR-9 surviving a minute of that walk on Normal, and the
+  first minute's XP reaching level 3 (`xpFor(1) + xpFor(2)` = 17; the run gets 18).
   Side objectives start at `OBJECTIVE_AT[0]` (1:00) and power-ups drop from `POWER.fromMs` (1:00),
   neither calling Math.random before then, so they leave the playthrough's minute as it was. Keep
   both at or after 1:00, or update the playthrough.
@@ -366,13 +405,16 @@ free of audio) or from the scene's input handler.
 - **A capstone or crossover**: add to `CAPSTONES` / `CROSSOVERS`; check `s.capstones.includes(id)`
   / `s.crossovers.includes(id)` where it acts.
 - **Balance**: spawn rate `spawnRate`, per planet `PLANETS[i].hp` / `spawn` / `dmg`, boss health
-  `BOSSES`, foe stats `ENEMY`, `ELITE`, `ROLLER` and the kinds' numbers, XP curve `xpFor`, credits
-  `CREDITS` and prices `TRADE`. The Dune world (planet 0) must stay as it is for the playthrough:
+  and `power` in `BOSSES`, foe stats `ENEMY`, `ELITE`, `ROLLER` and the kinds' numbers, XP curve `xpFor`, credits
+  `CREDITS`, prices `TRADE` and the heroes' own numbers (`HEROES`, `DRILLS`). The Dune world (planet 0) must stay as it is for the playthrough:
   rerun it; it must still survive the first minute on Normal. A headless bot that runs `frame` in
-  Node (stubbing nothing but `Math.random`) is the quickest way to test the later planets.
+  Node (stubbing nothing but `Math.random`, picking planets on the space map at random) is the
+  quickest way to test the later planets. The balance target: on Normal about two runs in three
+  won over all heroes, with at most 20 points between the best and worst hero's win rate (see
+  Balance below).
 - **A new foe**: add a `FoeKind` (planets.ts) and `ENEMY` entry, its spawning in `spawnGroup`, its
-  behaviour in `moveEnemies`, its texture in `factions.ts` (key `rb-<kind>` and `-elite`, picked up
-  by `GameScene.drawRun` on its own).
+  behaviour in `moveEnemies` (and any death effect in `kill`), its texture in `factions.ts` or
+  `worlds.ts` (key `rb-<kind>` and `-elite`, picked up by `GameScene.drawRun` on its own).
 - **A new side objective**: add its id to `ObjectiveId` (and to `SHARED_OBJECTIVES`,
   `WORLD_OBJECTIVES` or `HERO_OBJECTIVES`), its row in `OBJ`, its setup in `start` and its rules
   in `run` (objectives.ts), its drawing in `drawObjectiveGround` (a structure: a `StructureKind`,
@@ -384,8 +426,56 @@ free of audio) or from the scene's input handler.
   README row.
 - **A new event**: add its id to `EventId`, its title, text and options (as `TextKey`s, with the
   texts in `i18n/`) in `rollEvent` and its effect in `chooseEvent` (voyage.ts).
-- **A new planet or boss**: add a `PLANETS` row (and a `BossId` in `BOSSES` with its attacks in
-  `bossAttacks` and texture `rb-boss-<id>`), its ground cell in `GameScene.drawGround`.
+- **A new planet or boss**: add a `PlanetId` and a `PLANETS` row at the end (with its `stage`; the
+  space map lays each stage out as a column of up to three), a `BossId` in `BOSSES` (a `mech` to
+  reuse an attack set in `bossAttacks`, or a new one) and texture `rb-boss-<id>`, its ground cell
+  in `GameScene.drawGround`, its song in `PLANET_SONGS`, its world objective in
+  `WORLD_OBJECTIVES`, its texts (name, faction, foes, elite, hint, the boss's name, bar and
+  beaten) and its README row.
+
+## Balance
+
+Tuned on Normal with a headless bot: a Node script that imports `freshState`, `startRun` and the
+voyage functions and calls `frame` every 16.7 ms, with `Math.random` seeded per run (seeds
+`<base> + k * 7919`). It steers away from foes, bolts and live hazards, heads for objective markers
+and shards, uses the signature in a crowd or against the boss, picks path cards first, then cards
+it holds, then a fixed list of strong ones, picks a random planet on the space map, rests below
+55% health and otherwise takes elite, trader, event; it buys the first thing it can afford. A run
+counts as lost if a boss still stands 7 minutes after it appears. The script is not in the
+repo; rebuild it from this description when you rebalance, and have it append each finished run
+to a results file (and skip runs already there) so a restart loses little.
+
+The current numbers were checked on a seed set they were not tuned on (base 330001, 60 runs per
+hero, 720 in all):
+
+| Hero | Won | Win rate | Fell on jump 1 / 2 / 3 / 4 |
+| --- | --- | --- | --- |
+| Captain Rook | 38 / 60 | 63% | 0 / 1 / 9 / 12 |
+| Legionary TR-9 | 47 / 60 | 78% | 0 / 1 / 4 / 8 |
+| Corporal Bram-17 | 40 / 60 | 67% | 0 / 0 / 6 / 14 |
+| Kael Varro | 38 / 60 | 63% | 0 / 2 / 10 / 10 |
+| Lord Vharn | 39 / 60 | 65% | 5 / 3 / 1 / 12 |
+| Master Oom | 37 / 60 | 62% | 0 / 2 / 4 / 17 |
+| Elder Corvin Hale | 42 / 60 | 70% | 12 / 0 / 1 / 5 |
+| Regent Veyl | 37 / 60 | 62% | 0 / 0 / 0 / 23 |
+| Kresh the Twinblade | 45 / 60 | 75% | 0 / 0 / 2 / 13 |
+| Master Joren Vask | 43 / 60 | 72% | 0 / 0 / 2 / 15 |
+| Commander Elara Voss | 48 / 60 | 80% | 6 / 1 / 3 / 2 |
+| Triad-77 | 44 / 60 | 73% | 0 / 0 / 2 / 14 |
+| **All** | 498 / 720 | **69.2%** | |
+
+The spread is 18 points (62% to 80%). Most runs are lost on the Lava world; Corvin's losses come
+mostly on the Dune world. Things learned while tuning:
+
+- At 60 runs a hero's rate still wobbles by about 6 points either way, and seed sets differ, so
+  judge a change on 60 or more runs and confirm on a fresh seed set; one set tuned to a 15-point
+  spread showed 25 to 30 on the next.
+- Health and damage in `HEROES` are the main levers; Vharn (range) and Corvin (range, and health
+  for the Dune world) barely respond to damage.
+- TR-9's health, damage and range stay as they are for the playthrough (its health is checked,
+  and a shorter range broke its first minute), so it was nerfed through its drill, a 20 s Brace,
+  a narrower Riot Shield (`shieldHalf`) and softer high-tier Suppressor burn and shield bash.
+- Bram-17 swings a lot with small damage changes.
 
 ## Gotchas
 
@@ -396,15 +486,19 @@ free of audio) or from the scene's input handler.
   Phaser text makes a texture too, and one more at boot shifted the playthrough's seeded minute.
 - Phaser draws on `Math.random` for the id of every texture it makes, so baking more textures at
   boot shifts the seeded sequence the playthrough's run starts with (Rook's run then sees other
-  bots and cards; the rules are unchanged).
+  bots and cards; the rules are unchanged). That is why `bakeWorlds` waits until a run leaves the
+  Dune world. Adding upgrades to a pool TR-9 draws from shifts his card rolls the same way; the
+  first minute then plays out differently and the playthrough needs a rerun.
 - The playthrough's animation frames sit on a fixed grid of 64 ms (the fake clock's timers can fire
   late on a busy machine), so each step is the same length.
 - The sim uses `Math.random` only for rules; the ground decoration uses its own hash, so drawing
   never shifts the seeded sequence the test relies on. The Dune world's spawning calls
   `Math.random` in the same order as before the other planets came, so keep it that way.
 - Bosses are `kind: 'boss'` on every planet; which one it is comes from `PLANETS[state.planet].boss`.
-  The boss's timers reuse `shellMs`, `spawnMs` and `modeMs` with a meaning per boss (see
+  The boss's timers reuse `shellMs`, `spawnMs` and `modeMs` with a meaning per boss `mech` (see
   `bossAttacks`).
+- `state.planet` is an index into `PLANETS`, not how far the run has come: use `state.stage` for
+  that (deeds, arena size, the escort's and thawed troopers' damage, the save's `furthest`).
 - `blades.ts` and `sim.ts` import each other. That works because each only calls the other's
   functions at run time; don't read the other module's values at load time (top-level constants
   built from imported values).

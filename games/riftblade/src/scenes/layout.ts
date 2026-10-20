@@ -73,6 +73,18 @@ export function mapNodeSpot(i: number, n: number) {
   return { x: MAP.node.x, y: r.y + r.h / 2 };
 }
 
+/** The space map: one column per jump, its planets stacked; the next jump's planets are cards to tap. */
+export const CHART = { cols: [130, 370, 610, 850], pitch: 130, w: 204, h: 124, r: 20 };
+/** The centre of planet `i` of `n` in column `col`. */
+export function chartSpot(col: number, i: number, n: number) {
+  return { x: CHART.cols[col], y: 290 + (i - (n - 1) / 2) * CHART.pitch };
+}
+/** The card around a planet of the next jump. */
+export function chartRect(col: number, i: number, n: number) {
+  const c = chartSpot(col, i, n);
+  return { x: c.x - CHART.w / 2, y: c.y - 46, w: CHART.w, h: CHART.h };
+}
+
 /** The trader's three offers and its two buttons. */
 export const TRADE_CARD = { w: 236, h: 236, y: 268, gap: 256 };
 export function tradeCardRect(i: number) {

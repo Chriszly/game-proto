@@ -2,7 +2,8 @@ import type { Part, Song } from '../../../../shared/audio';
 
 /**
  * Riftblade's music: space-opera chiptune, one song per planet (Dune in D minor, Swamp in E minor
- * with a swing, Ice in B minor and sparse, Lava in C minor and heavy), a slow song for the hero
+ * with a swing, Ice in B minor and sparse, Lava in C minor and heavy, Spore in A minor and drifting,
+ * Scrap in G minor and clanking, Crystal in F# minor and chiming, Storm in E minor and driving), a slow song for the hero
  * select, the star map and the trader, and the stings. Each planet's song has a `calm` part of its
  * own, and `tense` (ring waves, the elite arena), `boss` and `pad` (the level-up cards) parts
  * written once in D minor and moved into the planet's key. The bars below are eighth notes, eight
@@ -170,8 +171,96 @@ const LAVA: Song = {
   },
 };
 
-/** One song per planet, by planet index (Dune, Swamp, Ice, Lava). */
-export const PLANET_SONGS: readonly Song[] = [DUNE, SWAMP, ICE, LAVA];
+/** Spore world, A minor: slow, drifting and a little eerie. */
+const SPORE: Song = {
+  bpm: 132,
+  steps: 2,
+  waves: { lead: 'triangle' },
+  parts: {
+    calm: {
+      lead:
+        'a4 . c5 . e5 . . . | d5 . c5 . b4 . . . | a4 . . . g#4 . a4 . | e4 . . . - - - - | ' +
+        'f4 . a4 . c5 . . . | b4 . a4 . g#4 . e4 . | a4 . b4 . c5 . b4 . | a4 . . . - - - -',
+      harmony:
+        'a3 - c4 - e4 - c4 - | f3 - a3 - c4 - a3 - | d3 - f3 - a3 - f3 - | e3 - g#3 - b3 - g#3 - | ' +
+        'f3 - a3 - c4 - a3 - | d3 - f3 - a3 - f3 - | e3 - g#3 - b3 - e4 - | a3 - c4 - e4 - . -',
+      bass:
+        'a1 . . . e2 . . . | f1 . . . c2 . . . | d2 . . . a1 . . . | e2 . . . b1 . . . | ' +
+        'f1 . . . c2 . . . | d2 . . . a1 . . . | e2 . . . e1 . . . | a1 . . . . . . .',
+      drums: 'k - - h s - h - | k - k h s - - h',
+    },
+    ...shared(-5),
+  },
+};
+
+/** Scrap world, G minor: clanking and quick. */
+const SCRAP: Song = {
+  bpm: 168,
+  steps: 2,
+  waves: { lead: 'pulse25' },
+  mix: { lead: 0.12, bass: 0.28 },
+  parts: {
+    calm: {
+      lead:
+        'g4 g4 . bb4 . g4 c5 . | bb4 . a4 . g4 . f4 . | g4 g4 . bb4 . d5 c5 . | d5 . . . - - - - | ' +
+        'eb5 . d5 . c5 . bb4 . | c5 . bb4 . a4 . f4 . | g4 . a4 . bb4 . a4 f#4 | g4 . . . - - - -',
+      harmony:
+        'bb3 . d4 . bb3 . d4 . | f3 . a3 . f3 . a3 . | bb3 . d4 . bb3 . d4 . | a3 . d4 . f#3 . a3 . | ' +
+        'g3 . c4 . eb4 . c4 . | f3 . a3 . c4 . a3 . | g3 . bb3 . d4 . c4 . | bb3 . d4 . g3 . . .',
+      bass:
+        'g1 g2 g1 g2 g1 g2 f1 g1 | f1 f2 f1 f2 f1 f2 eb1 f1 | g1 g2 g1 g2 g1 g2 f1 g1 | d2 d2 d1 d2 d2 d2 c2 d2 | ' +
+        'c2 c2 c1 c2 eb1 eb1 eb2 eb1 | f1 f1 f2 f1 f1 f1 a1 f1 | g1 g1 g2 g1 d2 d2 d1 d2 | g1 g2 g1 g1 g1 . . .',
+      drums: 'k h s h k k s h',
+    },
+    ...shared(5),
+  },
+};
+
+/** Crystal world, F# minor: bright, chiming arpeggios. */
+const CRYSTAL: Song = {
+  bpm: 144,
+  steps: 2,
+  waves: { lead: 'sine' },
+  mix: { lead: 0.16 },
+  parts: {
+    calm: {
+      lead:
+        'f#4 a4 c#5 f#5 c#5 a4 f#4 a4 | e4 a4 c#5 e5 c#5 a4 e4 a4 | d4 f#4 b4 d5 b4 f#4 d4 f#4 | c#4 f4 g#4 c#5 g#4 f4 c#4 f4 | ' +
+        'f#4 a4 c#5 f#5 c#5 a4 f#4 a4 | b3 d4 f#4 b4 f#4 d4 b3 d4 | c#4 f4 g#4 c#5 b4 g#4 f4 c#4 | f#4 . . . - - - -',
+      bass:
+        'f#2 . . . . . . . | a1 . . . . . . . | b1 . . . . . . . | c#2 . . . . . . . | ' +
+        'f#2 . . . . . . . | b1 . . . . . . . | c#2 . . . . . . . | f#1 . . . . . . .',
+      drums: 'k - h - s - h - | k - h k s - h h',
+    },
+    ...shared(4),
+  },
+};
+
+/** Storm world, E minor: driving, with rolling drums. */
+const STORM: Song = {
+  bpm: 172,
+  steps: 2,
+  waves: { lead: 'sawtooth' },
+  mix: { lead: 0.1 },
+  parts: {
+    calm: {
+      lead:
+        'e5 . b4 . e5 . f#5 g5 | f#5 . e5 . d5 . b4 . | c5 . . . d5 . e5 . | b4 . . . - - - - | ' +
+        'e5 . b4 . e5 . g5 a5 | b5 . a5 . g5 . f#5 . | e5 . d5 . c5 . d5 . | e5 . . . - - - -',
+      harmony:
+        'g4 . b4 . g4 . b4 . | d4 . f#4 . d4 . f#4 . | c4 . e4 . a3 . c4 . | b3 . d#4 . f#4 . d#4 . | ' +
+        'g4 . b4 . g4 . b4 . | d4 . g4 . b4 . g4 . | a3 . c4 . e4 . d4 . | e4 . g4 . b3 . . .',
+      bass:
+        'e2 e2 e3 e2 e2 e2 d2 e2 | d2 d2 d3 d2 b1 b1 b2 b1 | c2 c2 c3 c2 a1 a1 a2 a1 | b1 b1 b2 b1 b1 b1 d#2 b1 | ' +
+        'e2 e2 e3 e2 e2 e2 d2 e2 | g1 g1 g2 g1 b1 b1 b2 b1 | a1 a1 a2 a1 b1 b1 b2 b1 | e2 e2 e3 e2 e2 . . .',
+      drums: 'k s k s k s s s',
+    },
+    ...shared(2),
+  },
+};
+
+/** One song per planet, by planet index (Dune, Swamp, Ice, Lava, Spore, Scrap, Crystal, Storm). */
+export const PLANET_SONGS: readonly Song[] = [DUNE, SWAMP, ICE, LAVA, SPORE, SCRAP, CRYSTAL, STORM];
 
 // ---------------------------------------------------------------------------------------------
 // Between fights
