@@ -52,7 +52,8 @@ a star map between them.
   arena, rest, event; four events), free arena picks, the escort bot. The hero, level, kit and
   allies carry over; the clock resets per planet. Victory after the Lava boss; the end screen
   names the planet reached. Saved longest run, wins and furthest jump per hero, the heroes
-  unlocked and the planets charted (landed on).
+  unlocked and the planets charted (landed on), and the run under way: closed mid-run, the game
+  opens on it again, where it stood.
 - The field is endless: the camera follows the hero, foes spawn on a ring just past the view's
   corners (whatever the screen's shape) and ones left far behind are brought round ahead again.
 - Sound effects and music (see Sound below).
@@ -178,7 +179,8 @@ a star map between them.
   `state.route`).
 - `src/game/save.ts`: `SAVE_KEY`, `loadProgress`, `saveProgress`, `recordRun`, `recordCharted`, `recordUnlocks`,
   `isUnlocked` (TR-9, a deed done, a hero the save shows as played, or the old world deeds) and
-  `unlockedHeroes`.
+  `unlockedHeroes`; the run under way: `RUN_KEY`, `isResumable`, `saveRun`, `loadRun` and
+  `clearRun`.
 - `src/audio/music.ts`: the songs (`PLANET_SONGS`, `MENU_SONG`, `STINGS`); `src/audio/sfx.ts`: the
   sound table `sfx`; `src/audio/cues.ts`: `SoundCues`, which plays them by watching the state (see
   Sound).
@@ -267,6 +269,14 @@ free pick if won) or rests; each ends in `travel`, which `nextPlanet` turns into
 `run` (clock reset, field cleared, the escort bot added if taken). Run again resets to a fresh
 `select` state.
 
+The run under way is saved (`saveRun`) in every phase but `select`, `won` and `lost`: when it
+starts, every time a panel opens or closes (`syncPanel`), every 5 s of run time in a fight
+(`RUN_SAVE_MS`) and when the page is hidden or closed. The end screen clears it. `create` loads it
+(`loadRun`) and `GameScene.resume` picks it up: the state as saved, `ringOut` worked out again for
+the screen's shape, `savedDeeds` at the deeds already done and `SoundCues.resume`, so nothing
+plays for getting there. The shared start screen holds it paused until Start. A hero panel
+waiting to be shown is not saved (its hero is already unlocked).
+
 ### Input
 
 Keys WASD / arrows walk; a mouse held on the field walks toward
@@ -299,6 +309,12 @@ saves load unchanged.
   `furthest` world is open (so saves from when Rook and Bram were free keep them), and the deeds
   of reaching a world (Kael, Veyl, Joren) also count from `furthest`. `GameScene` saves new
   `state.deeds` with `recordUnlocks` as they happen.
+- `riftblade-run`: the run under way, the whole `GameState` as JSON (it is plain data; `Infinity`,
+  as in `nextElite` and `objectiveAt`, is stored as the text `"Infinity"`). `loadRun` lays it over
+  `freshState()` (and the hero over `freshHero()`), so fields added since take their fresh values;
+  one with an unknown hero, a phase it can't resume in or an unknown planet is dropped. Keep
+  `GameState` plain data (no Maps, Sets, class instances or shared references), or teach
+  `saveRun` and `loadRun` the new kind.
 
 ### Difficulty and reduced motion
 
@@ -315,6 +331,7 @@ which compares the state with the frame before and plays at most one of each sou
 new bolts, slashes, zaps, bombs, blasts and hazards by id (`id >= nextId` of the frame before),
 counts that went up (`kills`, `elitesKilled`, `chests`, `signatures`, `damageTaken`, `credits`,
 `xp`, `capstones`, `crossovers`), `waves` and `nextElite`, a boss appearing or gone, and the phase.
+A run picked up from the save calls `resume`, which counts from where it stands.
 Enemy bolts, blasts and hazards play only on screen. The scene plays the input sounds itself.
 
 **Music** (`music.ts`): one song per planet, Dune in D minor (152 BPM), Swamp in E minor swung
@@ -374,6 +391,8 @@ free of audio) or from the scene's input handler.
   and plays to 60 s. It depends on: the hero card order, TR-9 being the open hero, his health,
   paths and Brace length, the layout above, TR-9 surviving a minute of that walk on Normal, and the
   first minute's XP reaching level 3 (`xpFor(1) + xpFor(2)` = 17; the run gets 18).
+  A fresh browser has no saved run, so the playthrough starts on the hero select as before; saving
+  draws no `Math.random`.
   Side objectives start at `OBJECTIVE_AT[0]` (1:00) and power-ups drop from `POWER.fromMs` (1:00),
   neither calling Math.random before then, so they leave the playthrough's minute as it was. Keep
   both at or after 1:00, or update the playthrough.
