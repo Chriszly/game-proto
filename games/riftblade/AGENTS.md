@@ -432,38 +432,44 @@ free of audio) or from the scene's input handler.
 
 Tuned on Normal with a headless bot: a Node script that imports `freshState`, `startRun` and the
 voyage functions and calls `frame` every 16.7 ms, with `Math.random` seeded per run (seeds
-`11001 + k * 7919`). It steers away from foes, bolts and live hazards, heads for objective markers
+`<base> + k * 7919`). It steers away from foes, bolts and live hazards, heads for objective markers
 and shards, uses the signature in a crowd or against the boss, picks path cards first, then cards
 it holds, then a fixed list of strong ones, picks a random planet on the space map, rests below
 55% health and otherwise takes elite, trader, event; it buys the first thing it can afford. A run
 counts as lost if a boss still stands 7 minutes after it appears. The script is not in the
-repo; rebuild it from this description when you rebalance. Results with the current numbers
-(60 runs per hero, 720 in all):
+repo; rebuild it from this description when you rebalance, and have it append each finished run
+to a results file (and skip runs already there) so a restart loses little.
+
+The current numbers were checked on a seed set they were not tuned on (base 290001, 60 runs per
+hero, 720 in all):
 
 | Hero | Won | Win rate | Fell on jump 1 / 2 / 3 / 4 |
 | --- | --- | --- | --- |
-| Captain Rook | 40 / 60 | 67% | 0 / 0 / 6 / 14 |
-| Legionary TR-9 | 46 / 60 | 77% | 0 / 1 / 0 / 13 |
-| Corporal Bram-17 | 45 / 60 | 75% | 0 / 0 / 7 / 8 |
-| Kael Varro | 38 / 60 | 63% | 0 / 1 / 13 / 8 |
-| Lord Vharn | 40 / 60 | 67% | 5 / 0 / 0 / 15 |
-| Master Oom | 39 / 60 | 65% | 0 / 0 / 5 / 16 |
-| Elder Corvin Hale | 44 / 60 | 73% | 9 / 0 / 2 / 5 |
-| Regent Veyl | 41 / 60 | 68% | 0 / 1 / 0 / 18 |
-| Kresh the Twinblade | 44 / 60 | 73% | 0 / 0 / 0 / 16 |
-| Master Joren Vask | 40 / 60 | 67% | 0 / 1 / 0 / 19 |
-| Commander Elara Voss | 47 / 60 | 78% | 4 / 3 / 2 / 4 |
-| Triad-77 | 41 / 60 | 68% | 0 / 0 / 2 / 17 |
-| **All** | 505 / 720 | **70.1%** | |
+| Captain Rook | 45 / 60 | 75% | 0 / 1 / 3 / 11 |
+| Legionary TR-9 | 45 / 60 | 75% | 0 / 2 / 1 / 12 |
+| Corporal Bram-17 | 44 / 60 | 73% | 0 / 0 / 4 / 12 |
+| Kael Varro | 40 / 60 | 67% | 0 / 1 / 7 / 12 |
+| Lord Vharn | 38 / 60 | 63% | 0 / 2 / 1 / 19 |
+| Master Oom | 42 / 60 | 70% | 0 / 1 / 5 / 12 |
+| Elder Corvin Hale | 39 / 60 | 65% | 17 / 0 / 0 / 4 |
+| Regent Veyl | 36 / 60 | 60% | 0 / 0 / 0 / 24 |
+| Kresh the Twinblade | 43 / 60 | 72% | 0 / 0 / 1 / 16 |
+| Master Joren Vask | 45 / 60 | 75% | 0 / 0 / 1 / 14 |
+| Commander Elara Voss | 47 / 60 | 78% | 6 / 1 / 2 / 4 |
+| Triad-77 | 46 / 60 | 77% | 0 / 0 / 5 / 9 |
+| **All** | 510 / 720 | **70.8%** | |
 
-The spread is 15 points (63% to 78%). Most runs are lost on the Lava world. Things learned while
-tuning:
+The spread is 18 points (60% to 78%). Most runs are lost on the Lava world; Corvin's losses come
+mostly on the Dune world. Things learned while tuning:
 
-- At 60 runs a hero's rate still wobbles by about 6 points either way, and any change reshuffles
-  every seeded run, so judge a change on 60 or more runs, not 10 or 20.
+- At 60 runs a hero's rate still wobbles by about 6 points either way, and seed sets differ, so
+  judge a change on 60 or more runs and confirm on a fresh seed set; one set tuned to a 15-point
+  spread showed 25 to 30 on the next.
 - Health and damage in `HEROES` are the main levers; Vharn (range) and Corvin (range, and health
-  for the Dune world) barely respond to damage. TR-9's own numbers stay as they are for the
-  playthrough (its health is checked), so it was nerfed through its drill instead.
+  for the Dune world) barely respond to damage.
+- TR-9's health, damage and range stay as they are for the playthrough (its health is checked,
+  and a shorter range broke its first minute), so it was nerfed through its drill, a 20 s Brace,
+  a narrower Riot Shield (`shieldHalf`) and softer high-tier Suppressor burn and shield bash.
 - Bram-17 swings a lot with small damage changes.
 
 ## Gotchas
