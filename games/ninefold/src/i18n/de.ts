@@ -1,0 +1,76 @@
+import type { Translation } from '../../../../shared/i18n';
+import type en from './en';
+
+/** Ninefold's texts in German. */
+const de: Translation<typeof en> = {
+  // Menu
+  title: 'Ninefold',
+  tagline: 'Fülle jede Zeile, Spalte und jedes Kästchen mit jeder Ziffer genau einmal.',
+  daily: 'Tagesrätsel',
+  dailyDone: 'Tagesrätsel ✓ gelöst',
+  classic: 'Klassisch',
+  easy: 'Leicht',
+  normal: 'Mittel',
+  hard: 'Schwer',
+  delve: 'Abstieg',
+  delveBlurb: 'Eine Reihe immer größerer Rätsel, mit Herzen und Relikten.',
+  bestFloor: 'Tiefste Ebene: {n}',
+  stylesButton: 'Stile ({n} von {of})',
+  stats: 'Gelöst: {solved} · Fehlerfrei: {flawless}',
+  // Styles
+  stylesTitle: 'Stile',
+  back: 'Zurück',
+  worn: 'Aktiv',
+  wear: 'Tippen zum Wählen',
+  locked: 'Gesperrt',
+  paperName: 'Scherenschnitt',
+  paperGoal: 'Von Anfang an da',
+  gardenName: 'Gartenschilder',
+  gardenGoal: 'Löse 3 Rätsel',
+  chalkName: 'Schultafel',
+  chalkGoal: 'Löse ein Rätsel ohne Fehler',
+  parchmentName: 'Tinte & Pergament',
+  parchmentGoal: 'Löse 10 Rätsel',
+  pixelName: 'Gemütliche Pixel',
+  pixelGoal: 'Löse ein Rätsel ohne Tipps',
+  starsName: 'Sternkarte',
+  starsGoal: 'Schweres Rätsel oder Ebene 6 lösen',
+  stoneName: 'Gemeißelter Stein',
+  stoneGoal: 'Löse 25 Rätsel',
+  neonName: 'Neon-Spielhalle',
+  neonGoal: 'Löse ein 9×9 in unter 10 Minuten',
+  glassName: 'Buntglas',
+  glassGoal: 'Schalte alle anderen Stile frei',
+  // Board
+  menu: 'Menü',
+  floor: 'Ebene {n} · {size}×{size}',
+  mistakes: { one: '{n} Fehler', other: '{n} Fehler' },
+  hintButton: 'Tipp · {n}',
+  notesOn: 'Notizen: an',
+  notesOff: 'Notizen: aus',
+  erase: 'Löschen',
+  keysHint: 'Tasten: 1-9, Pfeile, N Notizen, H Tipp, Rücktaste löscht',
+  // End cards
+  solved: 'Gelöst!',
+  solvedLine: 'Zeit {time} · Fehler {mistakes} · Tipps {hints}',
+  unlocked: 'Neuer Stil freigeschaltet: {styles}',
+  next: 'Nächstes Rätsel',
+  floorCleared: 'Ebene {n} geschafft',
+  takeRelic: 'Nimm ein Relikt mit nach unten.',
+  runOver: 'Keine Herzen mehr',
+  overLine: 'Der Abstieg endet auf Ebene {n}.',
+  delveAgain: 'Erneut absteigen',
+  // Relics
+  lanternName: 'Laterne',
+  lanternText: 'Ein Tipp mehr.',
+  heartstoneName: 'Herzstein',
+  heartstoneText: 'Ein Herz mehr, bis zu 5.',
+  seerName: 'Sehergabe',
+  seerText: 'Jede Ebene beginnt mit 2 weiteren ausgefüllten Feldern.',
+  wardName: 'Schutzzeichen',
+  wardText: 'Der erste Fehler auf jeder Ebene kostet kein Herz.',
+};
+
+export const keepEnglish: (keyof typeof en)[] = ['title'];
+
+export default de;

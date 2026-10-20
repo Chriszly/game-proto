@@ -12,8 +12,8 @@ Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, C
 `games/beehive-baron/`, Wyrmrail, in `games/wyrmrail/`, Shrine Stack, in `games/shrine-stack/`,
 Mapmaker, in `games/mapmaker/`, Lanternkeep, in `games/lanternkeep/`, Space Wars, in
 `games/space-wars/`, Lane Brawl, in `games/lane-brawl/`, Colonizer, in `games/colonizer/`, Riftblade,
-in `games/riftblade/`, Scrapyard Titans, in `games/scrapyard-titans/`, and Bramblecrest, in
-`games/bramblecrest/`.
+in `games/riftblade/`, Scrapyard Titans, in `games/scrapyard-titans/`, Bramblecrest, in
+`games/bramblecrest/`, and Ninefold, in `games/ninefold/`.
 
 Each game's guide for agents, to read before changing it:
 
@@ -40,6 +40,7 @@ Each game's guide for agents, to read before changing it:
 | Riftblade | [games/riftblade/AGENTS.md](games/riftblade/AGENTS.md) |
 | Scrapyard Titans | [games/scrapyard-titans/AGENTS.md](games/scrapyard-titans/AGENTS.md) |
 | Bramblecrest | [games/bramblecrest/AGENTS.md](games/bramblecrest/AGENTS.md) |
+| Ninefold | [games/ninefold/AGENTS.md](games/ninefold/AGENTS.md) |
 
 ## Feedback and issues
 
