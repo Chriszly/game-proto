@@ -67,9 +67,14 @@ export class SoundCues {
 
     // Buildings finished (the player's), Monuments standing (anyone's), and buildings falling on screen.
     const gone = new Set(this.buildings.keys());
+    const placed = new Set<string>();
     for (const b of s.buildings.values()) {
       gone.delete(b.id);
       const before = this.buildings.get(b.id);
+      if (!before) {
+        const at = this.seen(b);
+        placed.add(`${at.x},${at.y}`);
+      }
       if (before && !before.built && b.built) {
         if (b.type === 'monument') sfx('monument');
         else if (b.owner === PLAYER && own) sfx('built');
@@ -79,7 +84,8 @@ export class SoundCues {
     let fell = false;
     for (const id of gone) {
       const b = this.buildings.get(id)!;
-      if (onScreen(b.x, b.y)) fell = true;
+      // A piece of palisade that a new gate took the place of did not fall.
+      if (onScreen(b.x, b.y) && !placed.has(`${b.x},${b.y}`)) fell = true;
       this.buildings.delete(id);
     }
     if (fell) sfx('crumble');

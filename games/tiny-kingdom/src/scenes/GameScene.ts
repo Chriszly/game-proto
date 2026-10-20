@@ -6,7 +6,7 @@ import { propKey, PROP_ORIGIN, tileKey } from '../art/textures';
 import { addArt, RES } from '../art/wood';
 import { PLACE_PITCH, sfx, SONG } from '../audio';
 import { joinedCells, joinedCount } from '../game/castle';
-import { DECREE_BONUS, decreeMarks, type At, type Decree } from '../game/decree';
+import { DECREE_BONUS, decreeMarks, decreeRegion, type At, type Decree } from '../game/decree';
 import { GIFT_INFO, type Gift } from '../game/gifts';
 import { dailyIsland, LEVELS, levelOpen, parseIsland, starScores, starsFor, today, type Kingdom } from '../game/islands';
 import { loadBest, loadCrowns, loadDailyBest, loadStars, saveBest, saveCrowns, saveDailyBest, saveStars } from '../game/save';
@@ -24,6 +24,7 @@ import {
   finish,
   goalFor,
   handCount,
+  housesCanMerge,
   merge,
   mergeable,
   newGame,
@@ -72,6 +73,8 @@ import {
 
 /** How long a score popup floats up before it fades out, in milliseconds. */
 const POPUP_MS = 900;
+/** Score popups and the decree's "+8" float over the gift card (UI_DEPTH + 10), which opens on the same placement. */
+const POPUP_DEPTH = UI_DEPTH + 11;
 const BANNER_MS = 2400;
 
 /** The paints used by text and Graphics, matching src/art/wood.ts. */
@@ -347,8 +350,9 @@ export class GameScene extends Phaser.Scene {
     this.undoBg = addArt(this, x, y, `plaque-${w}x${h}`);
     this.undoText = this.add.text(x, y - 1, '', style(13, INK)).setOrigin(0.5);
     this.undoBg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      // With no room for any tile, the button finishes the kingdom instead (merging could still make room).
-      if (finish(this.state)) {
+      // With no room for any tile and nothing to undo, the button finishes the kingdom instead
+      // (merging or clearing a wood could still make room).
+      if (!canUndo(this.state) && finish(this.state)) {
         this.gameEnded();
         this.refresh();
         return;
@@ -866,7 +870,7 @@ export class GameScene extends Phaser.Scene {
     const text = this.add
       .text(x, y - 8, word || `${gained >= 0 ? '+' : ''}${gained}`, style(word ? 15 : main ? 24 : 16, color, '900', { stroke: '#3a2414', strokeThickness: 4 }))
       .setOrigin(0.5)
-      .setDepth(UI_DEPTH);
+      .setDepth(POPUP_DEPTH);
     const rise = settings.reduceMotion ? 0 : 32;
     this.tweens.add({ targets: text, y: y - 8 - rise, alpha: 0, duration: POPUP_MS, ease: 'Quad.easeIn', onComplete: () => text.destroy() });
   }
@@ -877,7 +881,7 @@ export class GameScene extends Phaser.Scene {
     const text = this.add
       .text(x, DECREE.y + DECREE.h + 4, `+${DECREE_BONUS}`, style(22, '#f2c33a', '900', { stroke: '#3a2414', strokeThickness: 4 }))
       .setOrigin(0.5)
-      .setDepth(UI_DEPTH);
+      .setDepth(POPUP_DEPTH);
     const fall = settings.reduceMotion ? 0 : 30;
     this.tweens.add({ targets: text, y: text.y + fall, alpha: 0, delay: 300, duration: POPUP_MS * 1.4, onComplete: () => text.destroy() });
     if (!settings.reduceMotion) this.tweens.add({ targets: this.crownsText, scale: 1.4, duration: 160, yoyo: true });
@@ -1069,11 +1073,13 @@ export class GameScene extends Phaser.Scene {
     if (d.done || s.phase === 'over') return;
 
     // Outline the lake or wood (or the tower's watch), name it, tick what counts and mark the open spots.
-    const outline: At[] = d.kind === 'watch' ? (marks.tower ? this.around(marks.tower) : []) : d.cells;
+    // A wood's cells come from the board as it stands, so a cleared cell drops out of the outline.
+    const cells = decreeRegion(s.grid, d);
+    const outline: At[] = d.kind === 'watch' ? (marks.tower ? this.around(marks.tower) : []) : cells;
     this.dashedOutline(g, outline);
-    if (d.kind !== 'watch') {
-      const cx = d.cells.reduce((t, [c]) => t + c, 0) / d.cells.length;
-      const bottom = Math.max(...d.cells.filter(([c]) => Math.abs(c - cx) < 1).map(([, r]) => r), ...d.cells.map(([, r]) => r).slice(0, 1));
+    if (d.kind !== 'watch' && cells.length) {
+      const cx = cells.reduce((t, [c]) => t + c, 0) / cells.length;
+      const bottom = Math.max(...cells.filter(([c]) => Math.abs(c - cx) < 1).map(([, r]) => r), ...cells.map(([, r]) => r).slice(0, 1));
       const x = GRID.x + (cx + 0.5) * GRID.cell;
       const y = GRID.y + (bottom + 1) * GRID.cell - 9;
       this.placeLabel.setText(placeName(d.place)).setPosition(x, y).setVisible(true);
@@ -1280,10 +1286,12 @@ export class GameScene extends Phaser.Scene {
       parts.count.setText(`x${inHand}`);
     }
 
-    const stuck = s.phase === 'playing' && !anyPlace(s);
+    // With no room left and nothing to undo, the button finishes the kingdom.
+    const stuck = s.phase === 'playing' && !anyPlace(s) && !canUndo(s);
     const undoable = canUndo(s) || stuck;
     const usedHere = s.undoneIn === s.round;
-    fit(this.undoText.setText(t(stuck ? 'noRoom' : usedHere && !undoable ? 'undoUsed' : 'undo')), UNDO_BUTTON.w - 16);
+    const noRoom = housesCanMerge(s.grid) ? 'noRoom' : 'noRoomWood';
+    fit(this.undoText.setText(t(stuck ? noRoom : usedHere && !undoable ? 'undoUsed' : 'undo')), UNDO_BUTTON.w - 16);
     this.undoBg.setAlpha(undoable ? 1 : 0.5);
     this.undoText.setAlpha(undoable ? 1 : 0.5);
 

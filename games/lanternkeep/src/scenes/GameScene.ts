@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { formatNumber, language } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
-import { BACK_RES, bakeScenery, DUSK, FX, FY, HUD_RES, INK, INK_HEX, PAD, RES, SCREENS } from '../art/puppet';
+import { BACK_RES, bakeScenery, DUSK, FX, FY, HUD_RES, INK, INK_HEX, lampOriginY, PAD, RES, SCREENS } from '../art/puppet';
 import { DISTRICT_IDS, DISTRICTS, type DistrictId, JARS, LANTERN_SPOTS } from '../game/places';
 import { loadBest, loadBestPeril, saveBest, saveBestPeril } from '../game/save';
 import {
@@ -16,6 +16,7 @@ import {
   carryOn,
   chase,
   CLOSE_CALL,
+  caskSpare,
   closeCallPay,
   CURSES,
   endPeril,
@@ -86,7 +87,6 @@ const POPUP_MS = 1200;
 /** How long night shows the lit castle and its coins before the night panel opens, in milliseconds. */
 const PANEL_DELAY_MS = 1500;
 
-/** A pay multiplier with two decimals, like 1.25 (1,25 in German). */
 /**
  * How much of a puppet that flies in from beyond the designed frame (a bat, the owl) shows at `x`:
  * none where it starts, `margin` outside the frame, and all of it once inside, so it doesn't pop
@@ -94,6 +94,7 @@ const PANEL_DELAY_MS = 1500;
  */
 const edgeFade = (x: number, margin: number) => Phaser.Math.Clamp(Math.min(x + margin, VIEW.w + margin - x) / margin, 0, 1);
 
+/** A pay multiplier with two decimals, like 1.25 (1,25 in German). */
 const mult2 = (n: number) => formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type TextOpts = { size: number; color?: string; bold?: boolean; glow?: boolean; stroke?: boolean };
@@ -313,7 +314,7 @@ export class GameScene extends Phaser.Scene {
     LANTERN_SPOTS.forEach(({ x, y }, i) => {
       const glow = this.add.image(x, y, 'glow').setDepth(3).setBlendMode(Phaser.BlendModes.ADD);
       const lamp = this.sprite(x, y, 'lantern-dark').setDepth(5);
-      lamp.setOrigin(0.5, 36 / 56);
+      lamp.setOrigin(0.5, lampOriginY('plain'));
       const flame = this.sprite(x, y, 'flame').setDepth(5);
       const bg = this.add.image(-42 - PAD, -11 - PAD, 'save-tag').setOrigin(0).setScale(1 / RES);
       const tagText = this.label(0, 0, '', { size: 11, bold: true, color: '#ffc890', glow: true }).setOrigin(0.5);
@@ -672,7 +673,8 @@ export class GameScene extends Phaser.Scene {
       parts.hit.setPosition(x, y);
       parts.tag.setX(x);
       const kind = lantern.kind === 'plain' ? '' : `${lantern.kind}-`;
-      parts.lamp.setTexture(`lantern-${kind}${lantern.lit ? 'lit' : 'dark'}`);
+      // setTexture keeps the origin's fraction, so re-anchor it for the taller special textures.
+      parts.lamp.setTexture(`lantern-${kind}${lantern.lit ? 'lit' : 'dark'}`).setOrigin(0.5, lampOriginY(lantern.kind));
       if (lantern.kind !== 'plain') {
         parts.kindLabel.setVisible(true).setPosition(x, y + 38).setText(t(LANTERN_KINDS[lantern.kind].name));
       }
@@ -699,7 +701,8 @@ export class GameScene extends Phaser.Scene {
       } else if (!lantern.lit && !lantern.claimed && s.phase === 'dusk') this.holes(g, x, y, 23, 0, 0xffffff, 1.3);
       this.queueBadge(i, queued);
       // A nearly dry lantern with no moth on its way: a refill now is a close call.
-      if (s.phase === 'dusk' && lantern.lit && !lantern.claimed && f < CLOSE_CALL) {
+      // With the cask dry (or every fill spoken for) no refill can be sent, so nothing invites one.
+      if (s.phase === 'dusk' && lantern.lit && !lantern.claimed && f < CLOSE_CALL && caskSpare(s)) {
         const pulse = still ? 1 : 0.65 + 0.35 * Math.sin(this.clock / 120);
         g.lineStyle(1.8, 0xff8c3c, 0.95 * pulse).strokeCircle(x, y, 25);
         g.lineStyle(1.8, 0xff8c3c, 0.4 * pulse).strokeCircle(x, y, 31);
@@ -1046,8 +1049,8 @@ export class GameScene extends Phaser.Scene {
       this.nightTitle.setText(t('nightFalls', { n: s.night }));
       const verdict = t(r.lostHearth ? 'verdictLost' : r.lit === r.count ? 'verdictAll' : 'verdictHeld');
       const mult = s.kind === 'feast' ? FEAST_PAY : 1;
-      const order = r.orderMet ? t('orderKeptLine', { n: s.order.reward }) : t('orderMissedLine');
-      const chains = r.chains ? t('chainsLit', { n: r.chains, coins: r.chains * CHAIN_BONUS * mult }) : '';
+      const order = r.orderMet ? t('orderKeptLine', { n: Math.round(s.order.reward * s.paidMult) }) : t('orderMissedLine');
+      const chains = r.chains ? t('chainsLit', { n: r.chains, coins: Math.round(r.chains * CHAIN_BONUS * mult * s.paidMult) }) : '';
       const peril = s.paidMult > 1 ? t('cursesPaid', { mult: mult2(s.paidMult) }) : '';
       const during = [s.closeCalls ? t('closeCallsEarned', { n: s.closeCalls * closeCallPay(s) }) : '', s.callsKept ? t('windowsEarned', { n: s.callsKept * callPay(s) }) : '']
         .filter(Boolean)
@@ -1150,7 +1153,7 @@ export class GameScene extends Phaser.Scene {
       const [a, , b] = chainsOf(s)[i].lanterns.map((l) => s.lanterns[l]);
       this.popup((a.x + b.x) / 2, (a.y + b.y) / 2 + 4, t('chainPay', { n: Math.round(CHAIN_BONUS * mult) }), '#ffd890', 15);
     }
-    if (r.orderMet) this.popup(this.orderAt.x + ORDER.w - 24, this.orderAt.y + ORDER.h + 14, t('orderPay', { n: this.state.order.reward }), '#ffc870', 15);
+    if (r.orderMet) this.popup(this.orderAt.x + ORDER.w - 24, this.orderAt.y + ORDER.h + 14, t('orderPay', { n: Math.round(s.order.reward * s.paidMult) }), '#ffc870', 15);
   }
 
   /** The order's text, naming the lanterns of the district the night is played in. */

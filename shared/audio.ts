@@ -440,6 +440,8 @@ function drum(context: AudioContext, out: AudioNode, kind: 'k' | 's' | 'h', at: 
 
 let current: { song: Song; player: Player } | null = null;
 let wanted: { song: Song; part: string } | null = null;
+/** How many stings are playing; the music stays lowered until the last one ends. */
+let stings = 0;
 
 /**
  * Plays `song` from its `part`, looping. Called again with the same song, it switches to the new
@@ -455,13 +457,18 @@ function startMusic(song: Song, part: string) {
   if (current?.song === song) return current.player.switchTo(part);
   current?.player.stop();
   current = { song, player: new Player(ctx, song, part, true) };
+  if (stings > 0) current.player.duck(true);
 }
 
 /** Plays a part once (a win, a game over), with the music lowered under it. */
 export function playSting(song: Song, part: string) {
   if (!ctx || ctx.state !== 'running' || volumes.muted) return;
+  stings++;
   current?.player.duck(true);
-  new Player(ctx, song, part, false, () => current?.player.duck(false));
+  new Player(ctx, song, part, false, () => {
+    stings--;
+    if (stings === 0) current?.player.duck(false);
+  });
 }
 
 export function stopMusic() {

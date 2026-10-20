@@ -121,11 +121,14 @@ const de: Translation<typeof en> = {
   workbench: 'Werkbank',
   herbalist: 'Kräuterladen',
   examFailed: 'Prüfung nicht bestanden',
-  examFailedText: 'Verkauft mit {moves} Zügen übrig: die Gilde wollte {stars} Sterne ({need}+ Züge übrig).',
+  examFailedText: {
+    one: 'Verkauft mit {n} Zug übrig: die Gilde wollte {stars} Sterne ({need}+ Züge übrig).',
+    other: 'Verkauft mit {n} Zügen übrig: die Gilde wollte {stars} Sterne ({need}+ Züge übrig).',
+  },
   examPassed: 'Prüfung bestanden!',
   allSeals: 'Alle Gildensiegel verdient: {seals} von {exams}',
   seal: 'Gildensiegel {seals} von {exams}',
-  earned: '+{price} Münzen, +{bonus} für {moves} übrige Züge',
+  earned: { one: '+{price} Münzen, +{bonus} für {n} übrigen Zug', other: '+{price} Münzen, +{bonus} für {n} übrige Züge' },
   speedBonus: '+{n}, weil {potion} zuerst fertig war',
   keptInPantry: '{list} in den Vorrat gelegt',
   crownedRank: '{title}! {n} Sterne insgesamt',
@@ -139,7 +142,7 @@ const de: Translation<typeof en> = {
   sold: '{potion} verkauft!',
 
   // The herbalist and the workbench
-  coinsToSpend: '{n} Münzen zum Ausgeben',
+  coinsToSpend: { one: '{n} Münze zum Ausgeben', other: '{n} Münzen zum Ausgeben' },
   buyFor: 'Kaufen für {cost}',
   buyHerb: 'Kauf: {cost}',
   full: 'Voll',

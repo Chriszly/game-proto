@@ -34,7 +34,7 @@ the town and plague cards, the orders and the hands) are a little see-through.
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
 | Touch: put a finger down and drag | A steering stick appears where the finger went down and the doctor walks the way you drag; it follows a finger that goes past its rim. A tap without dragging still walks to the spot |
-| Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered |
+| Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered and the same in every shop |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Tap a slot in the hands bar (bottom of the screen) | Throw that item away; a small bin on each full slot shows it |
@@ -364,22 +364,32 @@ tap it again to walk in; the top bar's button goes back to the map, and the map'
 apothecary. Every shop and the apothecary keep working while you are elsewhere, and while the game
 is closed.
 
-A shop's yard works like the apothecary's: gardens at the left, harvested by walking past them,
-stations in a row with drop, work and pick-up markers, and the shop at the right, where goods
-dropped at the counter go on its shelves and the doctor behind it serves the customers who come
-in from the street. The bakery grows wheat and honeycomb, mills wheat into flour and bakes two flour
-into bread (24 coins) or flour and honeycomb into honey cake (39). Every station and the counter
-have their own purple markers for a level, workers and pixies, dearer in each shop than in the one
-before (three times as much a shop) but nothing like the shop itself:
+A shop's yard works like the apothecary's: gardens of sixteen beds, four by four, harvested by
+walking past them, stations with drop, work and pick-up markers, and a small storefront by the
+street, where goods dropped outside its back wall go on its shelves and the doctor (or up to two
+shopkeepers) behind the counter serves the customers who come in from the street. Every shop's yard
+is a place of its own: the bakery is a village green, its gardens across the top, a line down either
+side, the guild on the green and a duck pond by the shop; the chandlery climbs a hillside in
+terraces, its lines stepping down to the shop; the dye house has a river between its gardens and its
+works, crossed by three bridges; the smithy's woods and mines feed a cobbled forge yard in the
+middle; and the tavern's lines run around a lake, with a beer garden by its door. The bakery grows
+wheat and honeycomb, mills wheat into flour and bakes two flour into bread (24 coins) or flour and
+honeycomb into honey cake (39). Every station and the counter have their own purple markers for a
+level, workers and pixies, dearer in each shop than in the one before (three times as much a shop)
+but nothing like the shop itself:
 
 | Bakery | Cost |
 | --- | --- |
 | Station or counter level (4 levels: a station works half again as fast a level, the counter sells 15% dearer) | 60, 120, 240, 480 |
-| Baker (2 per station) or shopkeeper (1) | 90, then 180 |
+| Baker (2 per station) or shopkeeper (2 at the counter) | 90, then 180 |
 | Pixies: field to mill, hives to oven, orchard to oven, mill to oven, oven to the shelves | 180, 180, 180, 300, 450 |
 | Outfitter: pack, boots, sickle (one level each) | 360, 300, 300 |
 | Study: crafting order, price signs | 120, 180 |
 | Study: apple tart, then fruit cake | 180, 360 |
+| Guild: join | 450 |
+| Guild: growth, pixies, prices (2 levels each) | 180, 360; 270, 540; 180, 360 |
+| Guild: storage (3 levels), slots (1), customers (2), herbalist (1) | 225, 450, 900; 270; 225, 450; 360 |
+| Second line | 1,500 |
 
 Between its gardens and its first station, every shop has a little market of its own, like the
 apothecary's. Its **outfitter** sells one more level of the doctor's pack, boots and sickle, which
@@ -406,6 +416,59 @@ shop as in the one before:
 
 ![The bakery's orchard, planted with the apple tart learned, and the fruit cake for sale at its study](docs/screenshots/shop-recipes.webp)
 
+Every shop also has a **guild**, like the apothecary's. Join it once, and its seven upgrades go up
+for sale: growth (its beds grow a quarter faster a level), pixies (half again as fast a level),
+storage (6 more of each good on every pallet and shelf a level, from 12), prices (a quarter dearer a
+level), slots (a fourth customer at the counter), customers (they come in as often again a level)
+and the herbalist (the blight never takes its beds). They count only in that shop, and cost three
+times as much in each shop as in the one before.
+
+![The smithy's guild, joined, with its upgrades for sale and the herbalist in a row of its own](docs/screenshots/shop-guild.webp)
+
+Every good a shop sells has a **fine window** too: the last quarter of its station's bar is gold,
+and picked up by hand then (step off the work spot and onto the pick-up marker), it comes out
+Fine, with a sparkle on its icon. Customers and households take the fine ones first, and pay half
+again as much for them. From day 4 each shop also has a **contract** of its own, shown under the
+top bar: sell so many of one of its goods today (4 at first, one more for every contract kept, up
+to 12) and its reward goes into the till. A new one comes with every day, for another good.
+
+![The bakery's contract card under the top bar, with two Fine loaves in hand](docs/screenshots/shop-contract.webp)
+
+A shop's day runs like the apothecary's, and the **town card** at the top right shows it: the day's
+weather, the shop's reputation and tomorrow's weather.
+
+- **Weather.** Rain makes its beds grow half again as fast, a drought slows them to 60%, and on a
+  fair day customers come half again as often.
+- **Tips and reputation.** Every customer brings a tip, a quarter of what their order pays, which
+  shrinks while they wait (the ring around the coin on their bubble) and goes into the till when
+  their order is filled. A filled order raises the shop's reputation and one who walks off lowers
+  it, and a good name brings customers more often. A sale off a Cheap shelf raises it too.
+- **Regulars.** A customer served with half their tip still left comes back now and then as a
+  regular, with a star on their bubble, for the same goods, and pays a fifth more for them. A shop
+  remembers four.
+- **Market days.** Every fourth day a crowd of five comes in at midday. They take every free place
+  at the counter first and wait in the street for the rest, and serving all of them pays a bonus,
+  half of what their goods are worth; one walking off, or still waiting at dusk, loses it.
+- **Blight.** From day 3 rain can blight a bed. It stops growing, its pixies pass it by, and it
+  blights a neighbour now and then until the doctor's sickle clears it. The guild's herbalist keeps
+  every bed clear.
+- **Overstock.** Past 5 of a good on the shelf, each one sells for less, down to half on a full
+  shelf, as at the apothecary; the cut price shows in orange under the shelf.
+- **Two-good contracts.** Every third day from day 4, as at the apothecary, the contract asks for
+  two goods, the total split between them.
+
+![The tavern on a market day: a two-good contract, the crowd at the counter with their tips, and the town card](docs/screenshots/shop-market-day.webp)
+
+![The bakery in the rain, with blighted beds in its wheat field and a blighted hive](docs/screenshots/shop-blight.webp)
+
+Below the guild, every shop has room for a **second line**, like the apothecary's expansion. Bought
+once at its marker (1,500 coins at the bakery, three times as much in each shop after), it builds a
+copy of each station in a row under the first, which levels and hires on its own, and a second set
+of pixie routes from the same gardens (their markers stand under the first line's) to the same
+shelves.
+
+![The bakery's second line, with its pixies flying and a baker at the second oven](docs/screenshots/shop-line2.webp)
+
 ![A shop's market: the outfitter's three markers and the study's two lessons](docs/screenshots/town-market.webp)
 
 The till's coins are picked up at the counter, and the map shows what waits in each shop's till.
@@ -428,10 +491,10 @@ wick (117). Its prices are three times the bakery's:
 | Chandlery | Cost |
 | --- | --- |
 | Station or counter level | 180, 360, 720, 1,440 |
-| Chandler (2 per station) or shopkeeper (1) | 270, then 540 |
+| Chandler (2 per station) or shopkeeper (2 at the counter) | 270, then 540 |
 | Pixies: hives to press, flax to wheel, lavender to vat, press to vat, wheel to vat, vat to the shelves | 540, 540, 540, 900, 900, 1,350 |
 
-![The chandlery's dipping vat with tapers first, and candles sold dear](docs/screenshots/chandlery.webp)
+![The chandlery's terraces stepping down the hillside](docs/screenshots/chandlery.webp)
 
 The third shop is the **dye house** (100,000 coins). Its looms weave two flax into linen, and its
 dye mill grinds woad leaves into blue dye. The dye vat makes blue cloth from a linen and a dye (216
@@ -441,10 +504,10 @@ which also want blue cloth and cloaks.
 | Dye house | Cost |
 | --- | --- |
 | Station or counter level | 540, 1,080, 2,160, 4,320 |
-| Dyer (2 per station) or shopkeeper (1) | 810, then 1,620 |
+| Dyer (2 per station) or shopkeeper (2 at the counter) | 810, then 1,620 |
 | Pixies: flax to loom, woad to mill, madder to mill, loom to vat, mill to vat, vat to the shelves | 1,620, 1,620, 1,620, 2,700, 2,700, 4,050 |
 
-![The dye house's vat and shop](docs/screenshots/dye-house.webp)
+![The dye house's river, its bridges and its drying line](docs/screenshots/dye-house.webp)
 
 The fourth shop is the **smithy** (1,000,000 coins). Its coppice grows timber, burned into charcoal
 at the charcoal kiln, and its ore pit gives iron ore, which the bloomery smelts with charcoal into
@@ -454,10 +517,10 @@ district of mansions grows into palaces, which also want horseshoes and iron pot
 | Smithy | Cost |
 | --- | --- |
 | Station or counter level | 1,620, 3,240, 6,480, 12,960 |
-| Smith (2 per station) or shopkeeper (1) | 2,430, then 4,860 |
+| Smith (2 per station) or shopkeeper (2 at the counter) | 2,430, then 4,860 |
 | Pixies: coppice to kiln, ore to bloomery, copper to anvil, kiln to bloomery, bloomery to anvil, anvil to the shelves | 4,860, 4,860, 4,860, 8,100, 8,100, 12,150 |
 
-![The smithy's anvil and shop](docs/screenshots/smithy.webp)
+![The smithy's woods, mines and cobbled forge yard](docs/screenshots/smithy.webp)
 
 The fifth shop is the **tavern** (10,000,000 coins). Its barley field gives barley, malted at the
 maltings, and its hop garden gives hops, dried at the oast. The brew kettle makes ale from a malt and
@@ -467,10 +530,10 @@ grows into castles, which also want ale and stout.
 | Tavern | Cost |
 | --- | --- |
 | Station or counter level | 4,860, 9,720, 19,440, 38,880 |
-| Brewer (2 per station) or shopkeeper (1) | 7,290, then 14,580 |
+| Brewer (2 per station) or shopkeeper (2 at the counter) | 7,290, then 14,580 |
 | Pixies: barley to maltings, hops to oast, orchard to kettle, maltings to kettle, oast to kettle, kettle to the shelves | 14,580, 14,580, 14,580, 24,300, 24,300, 36,450 |
 
-![The tavern's brew kettle and shop](docs/screenshots/tavern.webp)
+![The tavern's lines around its lake](docs/screenshots/tavern.webp)
 
 Once every district is full of castles, the town map says the town has become a city: the
 game's second ending, after the cure of the plague.
@@ -479,7 +542,9 @@ game's second ending, after the cure of the plague.
 
 ![The town map with the apothecary and the bakery](docs/screenshots/town-map.webp)
 
-![The bakery's yard](docs/screenshots/bakery.webp)
+![The bakery's village green, with its duck pond by the shop](docs/screenshots/bakery.webp)
+
+![The bakery's storefront, with two shopkeepers behind the counter](docs/screenshots/shop-storefront.webp)
 
 You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back and show in the hands bar at the bottom of the screen. Progress is saved in the browser automatically.
 

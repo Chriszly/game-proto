@@ -1,5 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
 import type { TextKey } from '../i18n';
+import { VIEW } from '../scenes/layout';
 import { DISTRICTS, type DistrictId, JARS, LANTERN_SPOTS, mothRest } from './places';
 
 // The rules in plain TypeScript, with no Phaser. Each night begins with a dusk: tap a lantern and
@@ -14,8 +15,8 @@ import { DISTRICTS, type DistrictId, JARS, LANTERN_SPOTS, mothRest } from './pla
 // refills draw on a cask of oil topped up between nights, from the fourth some spots hold a
 // beacon, a candle or a bell, every fifth night the Great Owl sweeps a row of lanterns, and at
 // every fifth nightfall the keep can move to another district with its own spots and rule. Late
-// nights add tired moths (from the sixth), a second jar to buy, lost hearths to rekindle and, after
-// the Festival, curses to pick that raise the pay.
+// nights add tired moths (from the sixth), a second jar to buy, lost hearths to rekindle and, from
+// the tenth nightfall, curses to pick that raise the pay.
 
 export const UPGRADE_IDS = ['wick', 'oil', 'moths', 'wings', 'firefly', 'nectar', 'jar'] as const;
 export type UpgradeId = (typeof UPGRADE_IDS)[number];
@@ -83,8 +84,6 @@ function drawOffer(): CurseId[] {
   return [first, ids[Math.floor(Math.random() * ids.length)]];
 }
 
-/** The view's width in pixels, where bats and the owl come in and leave. */
-const VIEW_W = 960;
 /** How long each dusk lasts before night falls, in milliseconds. */
 export const DUSK_MS = 45_000;
 /** Hearths the keep starts with; a night with too few lanterns lit puts one out. */
@@ -104,11 +103,11 @@ export const baseBurnMs = () => byDifficulty(26_000, 20_000, 16_000);
  * the first night's three moths are one of each. Each multiplies the base speed, wick time and oil.
  */
 export const MOTH_KINDS = {
-  fast: { name: 'Fast', speed: 1.5, wick: 1.3, oil: 1 },
-  slow: { name: 'Slow', speed: 0.75, wick: 0.7, oil: 1 },
-  heavy: { name: 'Heavy', speed: 0.8, wick: 1, oil: 1.5 },
+  fast: { speed: 1.5, wick: 1.3, oil: 1 },
+  slow: { speed: 0.75, wick: 0.7, oil: 1 },
+  heavy: { speed: 0.8, wick: 1, oil: 1.5 },
   /** Bought with the Firefly upgrade, not part of KIND_ORDER: lights a second lantern before flying home. */
-  firefly: { name: 'Firefly', speed: 1.1, wick: 1, oil: 1 },
+  firefly: { speed: 1.1, wick: 1, oil: 1 },
 } as const;
 export type MothKind = keyof typeof MOTH_KINDS;
 export const KIND_ORDER: readonly MothKind[] = ['fast', 'slow', 'heavy'];
@@ -198,6 +197,15 @@ export const CASK_MAX = 6;
 export const CASK_COST = 3;
 /** True once refills draw on the cask. */
 export const usesCask = (s: GameState) => s.night >= CASK_NIGHT;
+/**
+ * True when a refill can be sent now: before CASK_NIGHT always, after it while the cask holds a
+ * fill that no moth (other than `except`) already flying to or refilling a lit lantern will draw.
+ */
+export function caskSpare(s: GameState, except?: Moth) {
+  if (!usesCask(s)) return true;
+  const reserved = s.moths.filter((m) => m !== except && (m.task === 'out' || m.task === 'lighting') && s.lanterns[m.target]?.lit).length;
+  return s.cask - reserved > 0;
+}
 
 /** Districts (LK10): at every MOVE_EVERY nightfalls the keep can move to another district. */
 export const MOVE_EVERY = 5;
@@ -592,6 +600,8 @@ function dispatch(s: GameState, moth: Moth, i: number, hops = moth.kind === 'fir
 
 /** A firefly's next stop after lighting a lantern: the oldest queued tap, else the nearest dark lantern no moth has, else -1. */
 function nextHop(s: GameState, m: Moth) {
+  // A queued refill with the cask spoken for is dropped, as the tap would now be refused.
+  s.queue = s.queue.filter((i) => !s.lanterns[i].lit || caskSpare(s, m));
   const queued = s.queue.findIndex((i) => !s.lanterns[i].claimed);
   if (queued >= 0) return s.queue.splice(queued, 1)[0];
   let best = -1;
@@ -615,7 +625,7 @@ function nextHop(s: GameState, m: Moth) {
 export function send(s: GameState, i: number) {
   const lantern = s.lanterns[i];
   if (s.phase !== 'dusk' || !lantern || lantern.claimed || s.queue.includes(i)) return false;
-  if (lantern.lit && usesCask(s) && s.cask <= 0) return false;
+  if (lantern.lit && !caskSpare(s)) return false;
   // An idle firefly goes first, so its second lantern is not wasted.
   const moth = s.moths.find((m) => m.task === 'idle' && m.kind === 'firefly') ?? s.moths.find((m) => m.task === 'idle');
   if (moth) {
@@ -699,12 +709,12 @@ function raiders(s: GameState, dt: number) {
     // With no lantern lit there is nothing to snuff, and the bat stays away.
     if (target >= 0) {
       const fromLeft = (s.night + s.nextBat) % 2 === 0;
-      s.bats.push({ id: s.nextBat++, x: fromLeft ? -24 : VIEW_W + 24, y: BAT_Y, target, task: 'fly' });
+      s.bats.push({ id: s.nextBat++, x: fromLeft ? -24 : VIEW.w + 24, y: BAT_Y, target, task: 'fly' });
     }
   }
   for (const bat of s.bats) {
     if (bat.task === 'flee') {
-      bat.x += ((bat.x < VIEW_W / 2 ? -1 : 1) * BAT_SPEED * BAT_FLEE * dt) / 1000;
+      bat.x += ((bat.x < VIEW.w / 2 ? -1 : 1) * BAT_SPEED * BAT_FLEE * dt) / 1000;
       bat.y -= (BAT_SPEED * BAT_FLEE * 0.6 * dt) / 1000;
       continue;
     }
@@ -730,7 +740,7 @@ function raiders(s: GameState, dt: number) {
       bat.task = 'flee';
     }
   }
-  s.bats = s.bats.filter((b) => b.x > -60 && b.x < VIEW_W + 60 && b.y > -60);
+  s.bats = s.bats.filter((b) => b.x > -60 && b.x < VIEW.w + 60 && b.y > -60);
 }
 
 /** Sends a guarding moth home and frees its lantern. */
@@ -749,8 +759,10 @@ function releaseGuards(s: GameState) {
 function blow(s: GameState, i: number) {
   const lantern = s.lanterns[i];
   const shielded = sitting(s, i);
+  // A lantern that went dark before the gust came, with no moth on it, has nothing to blow out.
+  if (!lantern.lit && !shielded) return;
   if (shielded) s.shields++;
-  else if (lantern.lit) {
+  else {
     lantern.lit = false;
     lantern.oilMs = 0;
   }
@@ -813,7 +825,7 @@ function greatOwl(s: GameState, dt: number) {
     }
     s.events.push({ type: 'owl', lantern: i, shielded });
   }
-  if (owl.x > VIEW_W + 40) {
+  if (owl.x > VIEW.w + 40) {
     s.owl = null;
     releaseGuards(s);
   }
@@ -887,16 +899,21 @@ export function tick(s: GameState, dt: number) {
       m.lightingMs += dt;
       if (m.lightingMs >= mothLightMs(s, m)) {
         const lantern = s.lanterns[m.target];
-        // A refill draws a fill from the cask; with the cask dry the moth leaves the lantern as it is.
-        const refill = lantern.lit && usesCask(s);
+        const fill = burnMs * MOTH_KINDS[m.kind].oil * LANTERN_KINDS[lantern.kind].oil;
+        // A refill that adds oil draws a fill from the cask; with the cask dry the moth leaves the
+        // lantern as it is. One that would add none (a guard tap on a full lantern) never lowers it.
+        const adds = !lantern.lit || fill > lantern.oilMs;
+        const refill = lantern.lit && adds && usesCask(s);
         if (refill && s.cask <= 0) {
           s.events.push({ type: 'dry', lantern: m.target });
           m.closeCall = false;
         } else {
           if (refill) s.cask--;
           lantern.lit = true;
-          lantern.oilMs = burnMs * MOTH_KINDS[m.kind].oil * LANTERN_KINDS[lantern.kind].oil;
-          lantern.oilMaxMs = lantern.oilMs;
+          if (adds) {
+            lantern.oilMs = fill;
+            lantern.oilMaxMs = fill;
+          }
           if (m.closeCall) {
             const coins = closeCallPay(s);
             s.coins += coins;
@@ -958,7 +975,8 @@ export function tick(s: GameState, dt: number) {
   for (const moth of s.moths) {
     if (moth.task !== 'idle' || s.queue.length === 0) continue;
     const i = s.queue.shift()!;
-    if (!s.lanterns[i].claimed) dispatch(s, moth, i);
+    // A queued refill with the cask spoken for is dropped, as the tap would now be refused.
+    if (!s.lanterns[i].claimed && (!s.lanterns[i].lit || caskSpare(s))) dispatch(s, moth, i);
   }
   s.duskMs = Math.max(0, s.duskMs - dt);
   if (s.duskMs === 0) nightfall(s);
@@ -1047,7 +1065,7 @@ export function buy(s: GameState, id: UpgradeId) {
   if (s.phase !== 'night' || cost === null || s.coins < cost) return false;
   s.coins -= cost;
   s.levels[id]++;
-  // The second jar takes every other moth to start with; a tap on a resting moth swaps it.
+  // The second jar takes every other moth to start with; a tap on an idle moth on its jar swaps it.
   if (id === 'jar') s.homes = s.moths.map((_, i) => i % 2);
   return true;
 }

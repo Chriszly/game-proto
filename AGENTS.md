@@ -12,8 +12,8 @@ Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, C
 `games/beehive-baron/`, Wyrmrail, in `games/wyrmrail/`, Shrine Stack, in `games/shrine-stack/`,
 Mapmaker, in `games/mapmaker/`, Lanternkeep, in `games/lanternkeep/`, Space Wars, in
 `games/space-wars/`, Lane Brawl, in `games/lane-brawl/`, Colonizer, in `games/colonizer/`, Riftblade,
-in `games/riftblade/`, Scrapyard Titans, in `games/scrapyard-titans/`, and Bramblecrest, in
-`games/bramblecrest/`.
+in `games/riftblade/`, Scrapyard Titans, in `games/scrapyard-titans/`, Bramblecrest, in
+`games/bramblecrest/`, and Ninefold, in `games/ninefold/`.
 
 Each game's guide for agents, to read before changing it:
 
@@ -40,6 +40,7 @@ Each game's guide for agents, to read before changing it:
 | Riftblade | [games/riftblade/AGENTS.md](games/riftblade/AGENTS.md) |
 | Scrapyard Titans | [games/scrapyard-titans/AGENTS.md](games/scrapyard-titans/AGENTS.md) |
 | Bramblecrest | [games/bramblecrest/AGENTS.md](games/bramblecrest/AGENTS.md) |
+| Ninefold | [games/ninefold/AGENTS.md](games/ninefold/AGENTS.md) |
 
 ## Feedback and issues
 
@@ -122,7 +123,9 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   Game dropdown of the three issue forms in
   `.github/ISSUE_TEMPLATE/` (before `Hub page` and `Shared / all games`, then raise each form's
   `default` by one so it still preselects Shared), and its name and label to the map in
-  `.github/workflows/issue-labels.yml`. Once that is merged, start the **Project setup** workflow to create
+  `.github/workflows/issue-labels.yml`. Give it a two-letter progress file code in
+  `shared/saveCodes.ts` and draw its app icons with `node scripts/pwa-icons.mjs <name>` (the build
+  fails without either). Once that is merged, start the **Project setup** workflow to create
   the game's GitHub Project, then remind **Chriszly**, in the PR's "Notes for reviewers" and in your
   reply, to finish it by hand: the Auto-add workflow with the filter
   `is:issue,pr is:open label:<game>`, the "Item added to project" workflow set to Issue only with
@@ -176,6 +179,15 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   file's `keepEnglish`), and warns where a text is much longer than English; run
   `node scripts/check-translations.mjs` before pushing. Playthroughs and other tests run in British
   English, the default language (the browser's own language is not used).
+- **Every game is an app.** The hub and every game install as apps of their own that play offline
+  (`scripts/pwa.ts` makes each game's manifest from its `<title>` and background colour and writes
+  the service worker; `shared/install.ts` registers it from `setupGame`, and the shared start and
+  pause screens show its Install button, also opened by the Install on its hub card as `?install`),
+  so a game needs nothing for it beyond its code and icons (see "Add a game"). The hub's Updates
+  setting (`updates`) holds new versions back (`scripts/sw.js`), and Update now lets one through. Keep every file a game loads inside the build (no
+  files fetched from other sites), so it still plays offline. Its progress exports and imports from
+  the hub as an encrypted `.gh<code>` file (`shared/saveFile.ts`), which carries every storage key
+  with the game's prefix.
 - **Play counts come for free.** `setupGame` also bumps the game's public play counter
   (`shared/playCount.ts`, keyed by the game's folder name) and the hub shows the count on its card,
   so a new game needs nothing for it. Tests never count: browser automation skips it.
@@ -224,7 +236,8 @@ harvests, refines, brews and sells potions to a customer. The **Playthrough Apot
 (`.github/workflows/playthrough.yml`) runs on every PR (not on pushes to main) and reports one
 required check, `Playthrough`. It plays each game whose `games/<name>/` folder changed, so a PR for
 one game only plays that game, and a PR that only changes shared files plays none. If the workflow
-itself changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts`: the hub's own checks
+itself or the build setup (`package.json`, `package-lock.json`, `tsconfig.json`, `tsconfig.e2e.json`,
+`vite.config.ts`, `playwright.config.ts`) changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts`: the hub's own checks
 in one job, and opening each game from its card in one job per game, on a PR only for the games
 whose folder changed (every game when the hub page, its test or `shared/` changes). The
 playthrough is the check that the core loop can still be played, so it has to stay accurate.

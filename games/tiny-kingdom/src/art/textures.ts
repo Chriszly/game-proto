@@ -135,7 +135,7 @@ function background(view: { width: number; height: number }, frame: { x: number;
     ctx.fillRect(left, y, W, 120);
     grain(left, y, W, 120, '#7a5530', 10, 5, 0.18);
     ctx.fillStyle = 'rgba(80,50,20,0.25)';
-    ctx.fillRect(0, y + 118, W, 2);
+    ctx.fillRect(left, y + 118, W, 2);
   }
   // the decree sign: a cream plank with a navy crown token and the crowns' navy pill
   const R = { x: DECREE.x * 2, y: DECREE.y * 2, w: DECREE.w * 2, h: DECREE.h * 2 };

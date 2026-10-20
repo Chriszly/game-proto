@@ -130,6 +130,7 @@ const en = {
   undo: 'Undo last tile',
   undoUsed: 'Undo used this round',
   noRoom: 'No room: merge houses or finish',
+  noRoomWood: 'No room: clear a wood or finish',
   starsAt: 'Stars at {one}, {two} and {three}',
   todaysBest: "Today's best {n}",
   bestScore: 'Best score {n}',

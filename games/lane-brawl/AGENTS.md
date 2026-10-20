@@ -180,7 +180,8 @@ Implemented today:
   moves from the alpha to a pup still up, so the whole pack has to fall); when its time runs out it is missed. The next one
   starts 4 s later. A card under the top bar shows it (title, time left, the target's damage as a
   bar, the reward), a gold pill and dashed ring mark the target in the world and a star marks it on
-  the minimap.
+  the minimap. While the target is hidden from blue, the marker and the star go and the card's bar
+  keeps the damage last seen (`objSeen`).
 - Upgrade choice on level-up: levels 2, 3, 4, 5 and 7 (`UPGRADE_LEVELS`) of the player's champion
   each queue an offer of two upgrades (`upgradePairAt(champion, level)`, the matching pair in
   `UPGRADES`); two cards in the bottom bar (between the shop button
@@ -200,6 +201,8 @@ Implemented today:
   owned, 3)` at the first `s.mastery` of `UPGRADE_LEVELS`, else 2: the level's pair less what it
   owns, topped up from its other pairs, later ones first. `UpgradeOffer.options` is two or three
   ids; three show as slimmer cards (`upgradeCard(i, 3)`), the third with a gold edge, kept with 3.
+  Once one is kept, `chooseUpgrade` draws the offers still queued again with `offerFor`, so a card
+  borrowed from a later level never shows twice.
   The end panel counts a win once (`winCounted`) and shows the rank and the wins to the next; pick
   cards show one gold diamond per rank. The playthrough starts with no save, so it sees pairs.
 - Last hits: after every tick the enemy minion within the player's reach plus 140 px that its next
@@ -225,9 +228,9 @@ Implemented today:
   frame, as the camera moves under it.
 - Player input: click the ground to walk, click an enemy to attack it, hold Q/W/E/R to aim and let go
   to cast at the cursor,
-  D/H use item actives at the cursor, B or the Shop button opens the shop, Esc closes it, 1 and 2
-  pick an upgrade. Standing still
-  auto-attacks the nearest enemy.
+  D/H use item actives at the cursor, B or the Shop button opens the shop, Esc closes it, 1, 2 and 3
+  pick an upgrade (3 for mastery's third card). Clicking a watchstone walks to it rather than
+  attacking it. Standing still auto-attacks the nearest enemy. The shop closes when a Nexus falls.
 - HUD (bevelled slate panels with gold trim, system font): gold with the streak chip, the Nexus
   health and the clock in the top bar; the objective card under it (hidden while the shop is open)
   and a siege banner chip when it is up; at the bottom the champion's figure, health, XP, items,
@@ -327,7 +330,7 @@ File map (`src/`):
   cheaper than stroking every face. `CHAMP_CELL` is 76x98 to fit the hero heads and props. Sheets render at `RES` and are
   drawn at 1/RES: 2 on a screen that needs no scaling, up to 3 on a big or dense one (`sharpRes`
   in half steps, held to what the beast's sheet can load). Pick cards and the portrait scale by
-  `1.3 / RES` and `1.2 / RES`; each `*_CELL` gives a frame's size and where the feet sit.
+  `0.85 / RES` and `1.2 / RES`; each `*_CELL` gives a frame's size and where the feet sit.
 - `art/map.ts`: `paintMap` paints the world once on one canvas (`MAP_KEY`), `MAP_RES` canvas pixels
   per world pixel (1, up to about 1.7 on big screens; the tiles are sized back with
   `setDisplaySize`): faceted grass, flagstone
@@ -442,12 +445,14 @@ How it runs:
 - Input: `onPointerDown` checks the zones newest first (shop rows and upgrade cards before the
   bars, which block, and the objective card, which also blocks; the D, H and V buttons sit in the
   bottom bar, the Recall/Buy back button in the top bar). Anything else is a world click: a
-  hostile unit under the cursor becomes the player's target, otherwise the point becomes a move.
+  hostile unit under the cursor (not a watchstone, which can't be hit) becomes the player's target,
+  otherwise the point becomes a move.
   A world touch (`pointer.wasTouch`, never the mouse) also starts `stick` (view pixels); dragged
   past `STICK.drag` it goes `live` and `steer` calls `commandMove` each frame for a point
   `STICK.ahead` px from the champion the way knob minus base points (nothing inside `STICK.dead`;
   the base is dragged along past `STICK.r`). Letting go of a live stick stops the champion where
-  it stands. `addPointer(1)` lets a second finger press an ability box while steering; `drawStick`
+  it stands (`endStick`, on `pointerup` or `pointerupoutside`); `steer` also ends a stick whose
+  pointer is no longer down, as a release while the scene was paused is never heard. `addPointer(1)` lets a second finger press an ability box while steering; `drawStick`
   draws it in `drawHud`.
 
 Randomness and timing: `Math.random` only draws the rosters, in `createGame` (the test seeds it, with
@@ -461,8 +466,10 @@ All sound is made in code by `shared/audio.ts`; `audio.ts` holds the game's song
 rules stay free of audio: `sound(s, id, at?, mine?)` in `sim.ts` pushes a `SoundEvent` onto
 `s.sounds`, and `GameScene.playSounds` drains it each frame, playing the player's own (`mine`) and
 ones with no place (no `x`) always and the rest only within the camera's view (plus 60 px) and out of
-blue's fog. Others' attacks play at 0.55 volume; watching (`?watch`), the `BUSY` combat sounds are
-skipped. The player's buttons play their sound straight from the scene.
+blue's fog. Where the AI shares the player's code (attacks, casts, bolts striking, item actives,
+wards, arriving home), only `s.player`'s champion raises the sound (when watching, the champion the
+camera follows). Towers' and the beast's attacks play at 0.55 volume; watching (`?watch`), the
+`BUSY` combat sounds are skipped. The player's buttons play their sound straight from the scene.
 
 Song `SONG`, D Dorian, 128 BPM:
 
@@ -478,18 +485,18 @@ Effects (`sfx`), where they are raised:
 | Sound | Where |
 | --- | --- |
 | `pick` | a pick card pressed (`refreshZones`) |
-| `swing`, `shot`, `crit` | a champion's melee or ranged attack, a crit or ambush hit (`attack`) |
+| `swing`, `shot`, `crit` | the player's melee or ranged attack, a crit or ambush hit (`attack`) |
 | `towerShot`, `beastClaw` | a tower's or the beast's attack (`attack`); minions and camps are silent |
-| `burst`, `bolt`, `dash`, `ally`, `buff`, `zone` | a cast, by the ability's kind, once per cast (`cast`) |
-| `impact` | a bolt with a look striking (`updateProjectiles`) |
+| `burst`, `bolt`, `dash`, `ally`, `buff`, `zone` | the player's cast, by the ability's kind, once per cast (`cast`) |
+| `impact` | the player's bolt with a look striking (`updateProjectiles`) |
 | `lastHit` | the player's last hit (`kill`) |
 | `slain` / `youDie` | a champion falls / the player's falls (`kill`) |
 | `streak` | a kill that sets or claims a bounty (`kill`) |
 | `crash`, `wardBreak`, `nexus` | a tower or inhibitor, a ward, a Nexus falls (`kill`) |
 | `levelUp` | the player levels up (`gainXp`) |
 | `upgrade` | an upgrade card kept (`pickUpgrade`) |
-| `blink`, `flask`, `ward` | the Phase Boots dash, the flask, a ward planted (`useActive`, `plantWard`) |
-| `recall` / `recallHome` | the player starts a recall (`recall`) / anyone arrives home (`finishRecall`) |
+| `blink`, `flask`, `ward` | the player's Phase Boots dash, flask, ward planted (`useActive`, `plantWard`) |
+| `recall` / `recallHome` | the player starts a recall (`recall`) / arrives home (`finishRecall`) |
 | `respawn`, `buyBack` | the player's champion respawns (`updateUnit`) / buys back (`buyBack`) |
 | `wave` | a minion wave spawns (`tick`) |
 | `watchstone`, `growl`, `beastSlain`, `brute` | a watchstone taken, the beast waking or turning elder, the beast slain, a brute's buff taken |
@@ -506,8 +513,8 @@ Shared `ui` sounds: `click` for the Shop button, B and Play again; `coin` for a 
   applied through `dealt` in `sim.ts` to every red attacker (champions, minions and towers). Normal stays 1, which the playthrough expects.
 - `settings.reduceMotion` skips the effect rings, attack lines and skill effects (`collectFx`) and
   holds zones' and auras' motion still but keeps the
-  last-hit coins (they hold still instead of rising), turns off the hit flash, the objective
-  marker's bob and its ring's spin, and makes the camera follow without easing. The game has no
+  last-hit coins (they hold still instead of rising), holds the fountain's green motes still,
+  turns off the hit flash, the objective marker's bob and its ring's spin, and makes the camera follow without easing. The game has no
   camera shake or screen flashes.
 - Keep the Lane Brawl row of the difficulty table in the root README and the line in this game's
   README in step with `ENEMY_DAMAGE`.
@@ -606,7 +613,7 @@ Shared `ui` sounds: `click` for the Shop button, B and Play again; `coin` for a 
 - **Tune the fog**: `SIGHT` in `data.ts` (per unit kind) and `FOG_ALPHA` in `GameScene.ts`.
 - **Add an item**: add it to `ITEMS` with its stats, and `from` for a recipe. `refreshStats` applies
   the stat fields it knows (`dmg`, `armor`, `hp`, `speed`, `atk`, `cdr`). The shop holds sixteen
-  cards (4x4, thirteen used); put a new one into an AI build in `AI_BUILDS` if the AI should buy
+  cards (4x4) and `ITEMS` fills them all, so a new item needs a new shop layout; put a new one into an AI build in `AI_BUILDS` if the AI should buy
   it. A new active needs an
   `ActiveId`, an `ACTIVES` row with a free key, a branch in `useActive` and an icon in the bottom
   bar's active buttons (`activeButton`, 30 px wide; a fourth needs the row widened).
@@ -655,5 +662,7 @@ Shared `ui` sounds: `click` for the Shop button, B and Play again; `coin` for a 
   fixed camera draws it.
 - A sharper screen bakes bigger sheets and a bigger map, so the boot bake takes longer there (about
   1.8x at 4K); keep `RES` capped rather than raising it further.
-- Texts re-render their canvas when their string or colour changes; `t()` only sets what changed,
-  which keeps the canvas renderer (used by the test) fast.
+- Texts re-render their canvas when their string, colour, size or weight changes; `t()` only sets
+  what changed, which keeps the canvas renderer (used by the test) fast. Texts over one unit
+  (`UNIT_TEXT`: `lvl-`, `cname-`, `bounty-`, `recall-`, `stun-` and its id) are destroyed once the
+  unit is gone, so a new per-unit label belongs in that pattern.

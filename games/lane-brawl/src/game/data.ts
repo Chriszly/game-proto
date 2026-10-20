@@ -136,7 +136,7 @@ export const WATCHSTONES: Vec[] = [
 export const WATCH = { radius: 150, captureMs: 3000 };
 
 // ---------------------------------------------------------------------------------------------
-// Champions: ten classes, each with a passive and four abilities.
+// Champions: fifteen classes, each with a passive and four abilities.
 
 export type AbilityKey = 'Q' | 'W' | 'E' | 'R';
 export const ABILITY_KEYS: AbilityKey[] = ['Q', 'W', 'E', 'R'];

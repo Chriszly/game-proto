@@ -16,8 +16,7 @@ import { UPGRADES, UPGRADE_IDS, type UpgradeId } from './upgrades';
 // it to the hero once it falls.
 export const FIELD = { top: 286, bottom: 488 };
 export const SPAWN_X = 1_000;
-/** Where the hero stands on the ground behind the barricade, and where arrows leave the bow. */
-export const HERO = { x: 66, y: 387 };
+/** Where arrows leave the hero's bow. */
 export const BOW = { x: 88, y: 382 };
 /** A foe whose front reaches this far left has got to the hero, and the run is over. */
 export const HERO_FRONT = 96;
@@ -161,7 +160,6 @@ export interface Forts {
 export type Phase = 'break' | 'fighting' | 'over' | 'won';
 
 export interface GameState {
-  version: number;
   // Kept from run to run: the hero's level, experience and upgrades.
   level: number;
   xp: number;
@@ -239,7 +237,6 @@ export interface GameState {
   nextId: number;
 }
 
-export const VERSION = 1;
 /** Kills that charge Arrow Rain on wave 1; later waves need more (see `rainNeed` in sim.ts). */
 export const RAIN_KILLS = 4;
 /** Kills that charge the caltrops. */
@@ -326,7 +323,6 @@ export function newRun(progress: Progress, aimMode: AimMode = 'nearest', start =
   const s = stats(progress);
   const barricadeMax = s.barricadeMax;
   return {
-    version: VERSION,
     ...progress,
     ranks: { ...progress.ranks },
     relics: { ...progress.relics },

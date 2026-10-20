@@ -393,8 +393,6 @@ export function createGame(sides: SideSetup[], map: MapData, toLast = false): Ga
 
 // ---------------------------------------------------------------- helpers
 
-export const playerOf = (s: GameState, owner: number) => s.players[owner];
-
 export function affordable(p: Player, cost: Cost) {
   return (Object.keys(cost) as Resource[]).every((r) => p.res[r] >= (cost[r] ?? 0));
 }
@@ -464,12 +462,6 @@ export function unitDef(u: Unit): UnitDef {
   return UNITS[u.type];
 }
 
-export function ownedBy(s: GameState, owner: number) {
-  const units = [...s.units.values()].filter((u) => u.owner === owner);
-  const buildings = [...s.buildings.values()].filter((b) => b.owner === owner);
-  return { units, buildings };
-}
-
 export function getEntity(s: GameState, id: number): Unit | Building | undefined {
   return s.units.get(id) ?? s.buildings.get(id);
 }
@@ -480,12 +472,18 @@ export function footprintOf(s: GameState, id: number) {
   return e ? footprint(e) : null;
 }
 
-/** The entity under a tile or point, own entities first: units, then buildings, then nodes. */
-export function entityAt(s: GameState, x: number, y: number): { kind: 'unit' | 'building' | 'node'; id: number; owner: number } | null {
+/**
+ * The entity under a tile or point: units, then buildings, then nodes. Among units the nearest wins,
+ * or with `prefer` the nearest of that side's when one is there.
+ */
+export function entityAt(s: GameState, x: number, y: number, prefer?: number): { kind: 'unit' | 'building' | 'node'; id: number; owner: number } | null {
   let best: { kind: 'unit' | 'building' | 'node'; id: number; owner: number; d: number } | null = null;
   for (const u of s.units.values()) {
     const d = Math.hypot(u.x - x, u.y - y);
-    if (d <= 0.6 && (!best || d < best.d)) best = { kind: 'unit', id: u.id, owner: u.owner, d };
+    if (d > 0.6) continue;
+    const mine = u.owner === prefer;
+    const bestMine = best?.owner === prefer;
+    if (!best || (mine && !bestMine) || (mine === bestMine && d < best.d)) best = { kind: 'unit', id: u.id, owner: u.owner, d };
   }
   if (best) return best;
   for (const b of s.buildings.values()) {
@@ -1544,6 +1542,21 @@ function guardUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   if (away > 1.5) u.order = { t: 'move', x: post.x, y: post.y };
 }
 
+/**
+ * A builder whose site is finished (by its own work or a fellow builder's) goes on to work the new
+ * farm, or the next unfinished building close by (the rest of a palisade line), or else the nearest wood.
+ */
+function afterBuild(s: GameState, u: Unit, b: Building) {
+  const unbuilt = BUILDINGS[b.type].farm ? null : nearestUnbuilt(s, u.owner, u.x, u.y, 6);
+  if (unbuilt) {
+    u.order = { t: 'build', b: unbuilt.id };
+    return;
+  }
+  const next = BUILDINGS[b.type].farm ? { id: b.id } : nearestSource(s, u.owner, 'wood', u.x, u.y);
+  u.order = next ? { t: 'gather', node: next.id } : { t: 'idle' };
+  u.home = next ? next.id : null;
+}
+
 function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   const o = u.order;
   if (o.t === 'idle') {
@@ -1575,7 +1588,8 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   }
   if (o.t === 'build') {
     const b = s.buildings.get(o.b);
-    if (!b || b.built || b.hp <= 0) return void (u.order = { t: 'idle' });
+    if (b?.built && b.hp > 0) return void afterBuild(s, u, b);
+    if (!b || b.hp <= 0) return void (u.order = { t: 'idle' });
     const f = footprintOf(s, b.id);
     if (!f) return;
     if (gap(u.x, u.y, f) <= 0.6) {
@@ -1586,16 +1600,7 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       b.hp = Math.min(buildingHp(s, b), b.hp + (buildingHp(s, b) * dt) / BUILDINGS[b.type].time);
       if (b.buildLeft <= 0) {
         finish(s, b);
-        // A builder goes on to work the new farm, or the next unfinished building close by (the
-        // rest of a palisade line), or else the nearest wood.
-        const unbuilt = BUILDINGS[b.type].farm ? null : nearestUnbuilt(s, u.owner, u.x, u.y, 6);
-        if (unbuilt) {
-          u.order = { t: 'build', b: unbuilt.id };
-          return;
-        }
-        const next = BUILDINGS[b.type].farm ? { id: b.id } : nearestSource(s, u.owner, 'wood', u.x, u.y);
-        u.order = next ? { t: 'gather', node: next.id } : { t: 'idle' };
-        u.home = next ? next.id : null;
+        afterBuild(s, u, b);
       }
       return;
     }
@@ -1873,7 +1878,14 @@ function checkWinner(s: GameState) {
   // In a three-way match the others play on, and everything of a fallen side falls with it.
   for (const p of fallen) {
     for (const u of s.units.values()) if (u.owner === p.id) u.hp = 0;
-    for (const b of s.buildings.values()) if (b.owner === p.id) b.hp = 0;
+    // Its sheltering villagers fall with their shelters rather than walking out of them.
+    for (const b of s.buildings.values()) {
+      if (b.owner !== p.id) continue;
+      b.garrison = [];
+      b.hp = 0;
+    }
+    // A raid it was leading ends here, with no credit to its target for raiders it never fought.
+    if (s.raid?.by === p.id) s.raid = null;
     for (const c of s.camps) if (c.relic && c.holder === p.id) c.holder = null;
     say(s, p.id === PLAYER ? t('townFallen') : t('sideFallen', { faction: t(FACTIONS[p.faction].name) }));
   }

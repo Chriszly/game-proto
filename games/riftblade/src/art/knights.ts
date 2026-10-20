@@ -109,8 +109,8 @@ export function drawKnight(ctx: Ctx, id: HeroId, x: number, y: number, z: number
     ctx.stroke();
     blade(ctx, x + 22, y + 46, x + 46, y + 2, sch.bolt, 5, z);
   } else if (id === 'corvin') {
-    // Light brown robes with a darker belt, a beard, the blade held back.
-    shape(ctx, robe(ctx, x, y + 6, 46, 58), sch.body, '#e1c49a', 10, z);
+    // Red robes with a darker belt, a beard, the blade held back.
+    shape(ctx, robe(ctx, x, y + 6, 46, 58), sch.body, '#e8857a', 10, z);
     ctx.fillStyle = mark;
     ctx.fillRect(x - 23, y + 24, 46, 6);
     ctx.fillStyle = '#e8d2b0';
@@ -348,7 +348,7 @@ export function bakeKnights(scene: Phaser.Scene) {
       ctx.lineTo(28, 26);
     }, veyl.accent, 1.5, 4);
   });
-  // Kael's crimson wave (The Fall).
+  // Kael's teal wave (The Fall).
   paint(scene, 'rb-bolt-fallen', 30, 34, (ctx) => {
     outline(ctx, () => ctx.arc(4, 17, 18, -0.9, 0.9), schemeOf('kael', 1).bolt, 4, 12);
   });

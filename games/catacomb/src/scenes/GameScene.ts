@@ -15,7 +15,7 @@ import { ENEMIES, type StatusKind } from '../game/enemies';
 import { FLASKS, FLASK_SLOTS } from '../game/flasks';
 import { HEROES } from '../game/heroes';
 import { COLUMNS, ENTRANCE, reachable } from '../game/map';
-import { RELICS, type RelicId } from '../game/relics';
+import { RELICS, relicText, type RelicId } from '../game/relics';
 import { t, type TextKey } from '../i18n';
 import {
   actName,
@@ -36,7 +36,6 @@ import {
   endTurn,
   eventHere,
   foeHit,
-  intentOf,
   leaveShop,
   newRun,
   playCard,
@@ -310,9 +309,9 @@ export class GameScene extends Phaser.Scene {
     this.mapLayer.setVisible(onMap);
     this.fightLayer.setVisible(!onMap);
     // Pops first, so a killing blow's number still finds its foe before drawFight drops it.
-    this.drawPops();
+    this.drawPops(onMap);
     if (onMap) this.drawMap();
-    else this.drawFight();
+    else this.drawFight(dt);
     this.drawReward();
     this.drawShop();
     this.drawPanel();
@@ -383,7 +382,7 @@ export class GameScene extends Phaser.Scene {
       if (open) r.lineStyle(2, GOLD.light, 0.4 * (1 - pulse)).strokeCircle(room.x, room.y, ROOM_RADIUS + 6 + 4 * pulse);
     });
 
-    // The hero stands beside their room, or walks along the path to the next one.
+    // The hero stands just above their room, and walks along the path to the next one at the same height.
     const spot = (at: number | null) => (at === null ? ENTRANCE : { x: rooms[at].x, y: rooms[at].y });
     let pos = spot(s.at);
     if (s.walk) {
@@ -392,7 +391,7 @@ export class GameScene extends Phaser.Scene {
       const t = Math.min(1, s.walk.ms / WALK_MS);
       pos = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t - Math.abs(Math.sin(t * Math.PI * 4)) * 4 };
     }
-    this.token.setTexture(heroTexture(s.hero, true)).setPosition(pos.x, pos.y - (s.walk ? 0 : ROOM_RADIUS - 6));
+    this.token.setTexture(heroTexture(s.hero, true)).setPosition(pos.x, pos.y - (ROOM_RADIUS - 6));
     const hint = t(s.at === null ? 'enterHint' : 'goOnHint');
     this.mapHint.setText(s.phase === 'map' ? s.notice || hint : '');
   }
@@ -418,10 +417,8 @@ export class GameScene extends Phaser.Scene {
     orb.fillStyle(GOLD.mid).fillCircle(orbX - 3, orbY - 3, ENERGY_ORB.r - 6);
     orb.fillStyle(0xffffff, 0.35).fillCircle(orbX - 12, orbY - 14, 7);
     this.energyText = this.add.text(orbX, orbY, '', textStyle(24)).setOrigin(0.5);
-    // A view grown from 960x540 puts the draw pile over the orb, clear of the corner buttons.
-    const grown = this.W !== VIEW.w || this.H !== VIEW.h;
-    const drawY = grown ? orbY - ENERGY_ORB.r - 18 : PILES_Y + bottom;
-    this.drawText = this.add.text(orbX, drawY, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
+    // The draw pile's count sits over the orb, clear of the corner buttons under it.
+    this.drawText = this.add.text(orbX, orbY - ENERGY_ORB.r - 18, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
     this.discardText = this.add.text(END_TURN.x + right, PILES_Y + bottom, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
     this.endTurnButton = makeButton(this, END_TURN.x + right, END_TURN.y + bottom, t('endTurn'), () => this.act(endTurn(this.state), 'endTurn'), END_TURN.w);
     this.turnBanner = this.add.text(VIEW.w / 2, 150, '', textStyle(30, '#e6c766')).setOrigin(0.5);
@@ -431,7 +428,7 @@ export class GameScene extends Phaser.Scene {
     this.heroStatuses = new StatusRow(this, this.fightLayer);
   }
 
-  private drawFight() {
+  private drawFight(dt: number) {
     this.buildRooms();
     const s = this.state;
     const f = s.fight;
@@ -464,8 +461,8 @@ export class GameScene extends Phaser.Scene {
         foe = { sprite, intent, intentText, intentExtra, hp, statuses: new StatusRow(this, this.fightLayer), x: xs[i] };
         this.foes.set(e.id, foe);
       }
-      // Slide into place when the one in front falls.
-      foe.x += (xs[i] - foe.x) * 0.2;
+      // Slide into place when the one in front falls: a fifth of the way per 60th of a second, at any frame rate.
+      foe.x += (xs[i] - foe.x) * (1 - Math.pow(0.8, dt / (1000 / 60)));
       const lunge = e.actMs > 0 ? -Math.sin((e.actMs / 300) * Math.PI) * 30 : 0;
       const bob = settings.reduceMotion ? 0 : Math.sin(this.clock / 400 + e.id) * 2;
       foe.sprite.setPosition(foe.x + lunge, FOE_FEET_Y + bob);
@@ -513,7 +510,7 @@ export class GameScene extends Phaser.Scene {
 
   /** The foe's next move over its head: the real damage of an attack, the block, the strength or the status it puts on the hero. */
   private drawIntent(e: Enemy, foe: Foe, x: number, y: number) {
-    const intent = intentOf(e);
+    const intent = e.intent;
     foe.intent.setTexture(`intent-${intent.kind}`).setPosition(x - 12, y);
     const text =
       intent.kind === 'attack'
@@ -708,7 +705,7 @@ export class GameScene extends Phaser.Scene {
     };
     shop.relics.forEach((w, i) => {
       const r = RELICS[w.id];
-      box(SHOP.box.ys[i], relicIcon(w.id, true), t(r.name), t(r.text), w.price, w.sold, !w.sold && s.gold >= w.price, () => this.act(buyRelic(this.state, i), 'buy'));
+      box(SHOP.box.ys[i], relicIcon(w.id, true), t(r.name), relicText(w.id), w.price, w.sold, !w.sold && s.gold >= w.price, () => this.act(buyRelic(this.state, i), 'buy'));
     });
     box(SHOP.box.ys[2], 'room-rest', t('removeTitle'), t('removeText'), shop.removePrice, shop.removed, canBuyRemoval(s), () => {
       if (this.act(canBuyRemoval(this.state), 'click')) this.picking = 'sell';
@@ -874,15 +871,18 @@ export class GameScene extends Phaser.Scene {
 
   // Floating numbers and the top bar
 
-  private drawPops() {
+  /** The floating numbers, over the fighters, or over the map's hero token while the map is shown. */
+  private drawPops(onMap: boolean) {
     const s = this.state;
     const seen = new Set<number>();
+    const heroX = onMap ? this.token.x : HERO_FEET.x;
+    const heroTop = onMap ? this.token.y - this.token.displayHeight : HERO_FEET.y - this.hero.displayHeight;
     for (const p of s.pops) {
       seen.add(p.id);
       let text = this.pops.get(p.id);
       const foe = p.on === 'hero' ? null : this.foes.get(p.on);
-      const x = p.on === 'hero' ? HERO_FEET.x : foe?.x ?? text?.x ?? VIEW.w / 2;
-      const top = p.on === 'hero' ? HERO_FEET.y - this.hero.displayHeight : foe ? FOE_FEET_Y - foe.sprite.displayHeight : (text?.getData('top') ?? 200);
+      const x = p.on === 'hero' ? heroX : foe?.x ?? text?.x ?? VIEW.w / 2;
+      const top = p.on === 'hero' ? heroTop : foe ? FOE_FEET_Y - foe.sprite.displayHeight : (text?.getData('top') ?? 200);
       if (!text) {
         // Several numbers on the same target at once fan out a little.
         const spread = (s.pops.filter((q) => q.on === p.on && q.id < p.id).length % 3) * 22;
@@ -923,7 +923,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private relicTip(id: RelicId) {
-    this.showTip(`${t(RELICS[id].name)}: ${t(RELICS[id].text)}`);
+    this.showTip(`${t(RELICS[id].name)}: ${relicText(id)}`);
   }
 
   private drawHud() {

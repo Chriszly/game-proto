@@ -52,8 +52,9 @@ export const stats = () => st;
 // Starting and choosing
 
 /** Starts a run with the chosen hero, from a fresh state; `known` are the heroes unlocked before. */
-export function startRun(s: GameState, id: HeroId, known: HeroId[] = []) {
+export function startRun(s: GameState, id: HeroId, known: HeroId[] = [], ringOut = 0) {
   Object.assign(s, freshState());
+  s.ringOut = ringOut;
   const hero = HEROES[id];
   s.hero = id;
   s.known = [...known];
@@ -205,9 +206,12 @@ function buildGrid(s: GameState) {
   }
 }
 
+/** The widest body a foe other than the boss can have (an elite walker, the objective cache), px. */
+const MAX_FOE_R = 32;
+
 /** Calls `fn` for each living bot whose body reaches within `r` of a point, the boss included. */
 export function near(s: GameState, x: number, y: number, r: number, fn: (e: Enemy, d: number) => void) {
-  const reach = r + 20;
+  const reach = r + MAX_FOE_R;
   const x0 = Math.floor((x - reach) / CELL);
   const x1 = Math.floor((x + reach) / CELL);
   const y0 = Math.floor((y - reach) / CELL);
@@ -875,7 +879,7 @@ export function spawnAt(s: GameState, kind: EnemyKind, x: number, y: number, eli
 
 /** A point on the spawn ring around the hero, at `angle` or a random one. */
 export function ringPoint(s: GameState, angle = Math.random() * Math.PI * 2) {
-  const d = SPAWN_RING.min + Math.random() * (SPAWN_RING.max - SPAWN_RING.min);
+  const d = SPAWN_RING.min + s.ringOut + Math.random() * (SPAWN_RING.max - SPAWN_RING.min);
   return { x: s.player.x + Math.cos(angle) * d, y: s.player.y + Math.sin(angle) * d };
 }
 

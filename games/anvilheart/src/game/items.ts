@@ -38,7 +38,7 @@ export const validItem = (item: unknown): item is number =>
  * What `held` dropped on `there` makes, or null if they don't combine (they swap instead). Two
  * swords of a tier merge into the next (keeping a gem if either had one, and reforged whole if
  * either was battered), two bucklers of a tier merge into the next buckler, a gem sets into a plain
- * sword, and a Rusty Dagger repairs a battered sword.
+ * sword, and a Rusty Dagger repairs a battered sword (passing on its gem, if the sword has none).
  */
 export function combine(held: number, there: number): { item: number; merged: boolean; repaired?: boolean } | null {
   if (isShield(held) || isShield(there)) {
@@ -50,7 +50,13 @@ export function combine(held: number, there: number): { item: number; merged: bo
   if (a > 0 && a === b && a < MAX_TIER) return { item: sword(a + 1, isGemmed(held) || isGemmed(there)), merged: true };
   if (isGem(held) && b > 0 && !isGemmed(there)) return { item: there + SET, merged: false };
   if (isGem(there) && a > 0 && !isGemmed(held)) return { item: held + SET, merged: false };
-  if (a === 1 && !isBattered(held) && isBattered(there)) return { item: there - BATTERED, merged: false, repaired: true };
-  if (b === 1 && !isBattered(there) && isBattered(held)) return { item: held - BATTERED, merged: false, repaired: true };
+  if (a === 1 && !isBattered(held) && isBattered(there)) return repair(held, there);
+  if (b === 1 && !isBattered(there) && isBattered(held)) return repair(there, held);
   return null;
+}
+
+/** A Rusty Dagger repairing a battered sword: a gem set in the dagger moves over, unless the sword already has one. */
+function repair(dagger: number, worn: number) {
+  if (isGemmed(dagger) && isGemmed(worn)) return null;
+  return { item: worn - BATTERED + (isGemmed(dagger) ? SET : 0), merged: false, repaired: true };
 }

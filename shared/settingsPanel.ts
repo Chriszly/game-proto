@@ -2,20 +2,30 @@ import { DEFAULTS, SETTING_FIELDS, loadSettings, saveSettings, type Settings } f
 import { language, setLanguage, t } from './i18n';
 import { previewVolume } from './audio';
 import { clearAllProgress } from './progress';
+import { ALL, askToExport, askToImport, pickFile } from './saveFile';
+import { shareUpdates, updateNow } from './install';
 
 /**
  * Builds the hub's Settings panel inside `root` from `SETTING_FIELDS`, so a new setting shows up
  * without touching the page. Changes save at once and apply the next time a game opens, except
  * the language, which the hub switches to at once, and the hub-only settings: `onChange` is called
- * after every change to update the page. Below the settings, a Saved progress row deletes every
- * game's saves, and the panel ends with Restore defaults and Done, which closes the dialog.
+ * after every change to update the page. Below the settings, a Saved progress row exports the saves
+ * of every game in `games` (their folder names) and the settings to a `.gh` file
+ * (`saveFile.ts`), imports such a file (and reloads the page, since it brings its own settings) and
+ * deletes the saves, calling `onChange` too,
+ * and the panel ends with Restore defaults and Done, which closes the dialog.
  */
-export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Settings) => void = () => {}) {
+export function mountSettingsPanel(
+  root: HTMLElement,
+  onChange: (settings: Settings) => void = () => {},
+  games: string[] = [],
+) {
   let current = loadSettings();
   const set = (patch: Partial<Settings>) => {
     current = { ...current, ...patch };
     saveSettings(current);
     if (current.language !== language()) setLanguage(current.language);
+    shareUpdates(current.updates);
     onChange(current);
     render();
   };
@@ -32,13 +42,31 @@ export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Setti
   const progressHint = document.createElement('div');
   progressHint.className = 'setting-hint';
   const reset = action('reset-progress', () => {
-    if (confirm(t('resetProgressConfirm'))) clearAllProgress();
+    if (!confirm(t('resetProgressConfirm'))) return;
+    clearAllProgress(games);
+    onChange(current);
   });
+  const exportButton = action('export-progress', () => askToExport(ALL, games));
+  // Importing brings the file's settings along, so the page reloads to show them.
+  const importButton = action('import-progress', () =>
+    pickFile((file) => askToImport(file, ALL, games, '', () => location.reload())),
+  );
   const resetRow = document.createElement('div');
   resetRow.className = 'setting-choices';
-  resetRow.append(reset);
+  resetRow.append(exportButton, importButton, reset);
   progress.append(progressName, resetRow, progressHint);
   root.append(progress);
+
+  // Update now sits in the Updates row and lets one update through whatever the setting says.
+  const updateButton = action('update-now', async () => {
+    updateButton.disabled = true;
+    updateButton.textContent = t('updateChecking');
+    const result = await updateNow();
+    updateButton.disabled = false;
+    updateButton.textContent = t('updateNow');
+    if (result === 'updated') location.reload();
+    else alert(t(result === 'current' ? 'updatesCurrent' : 'updatesFailed'));
+  });
 
   const actions = document.createElement('div');
   actions.className = 'settings-actions';
@@ -52,6 +80,9 @@ export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Setti
     restore.textContent = t('restoreDefaults');
     done.textContent = t('done');
     reset.textContent = t('resetProgress');
+    if (!updateButton.disabled) updateButton.textContent = t('updateNow');
+    exportButton.textContent = t('exportAll');
+    importButton.textContent = t('importAll');
     progressName.textContent = t('savedProgress');
     progressHint.textContent = t('savedProgressHint');
     rows.replaceChildren(
@@ -90,6 +121,7 @@ export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Setti
           button.addEventListener('click', () => set({ [field.key]: option.value } as Partial<Settings>));
           choices.append(button);
         }
+        if (field.key === 'updates') choices.append(updateButton);
         row.append(name, choices, hint);
         return row;
       }),

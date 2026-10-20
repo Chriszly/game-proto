@@ -31,6 +31,7 @@ import {
   RECALL,
   SIGHT,
   WARD,
+  WATCH,
   bountyOf,
   upgradeById,
   ultRank,
@@ -184,6 +185,10 @@ const FOG_ALPHA = 0.72;
 const FOG_STEPS = 10;
 
 const noop = () => undefined;
+
+/** Texts kept over one unit, keyed by its id; dropped once the unit is gone. */
+const UNIT_TEXT = /^(?:lvl|cname|bounty|recall|stun)-(\d+)$/;
+
 /** The size of the map's tiles, in pixels. */
 const MAP_TILE = 400;
 
@@ -291,9 +296,10 @@ export class GameScene extends Phaser.Scene {
   private pickImages: Phaser.GameObjects.Image[] = [];
   private pickBg!: Phaser.GameObjects.Image;
   private texts = new Map<string, Phaser.GameObjects.Text>();
-  /** The names on the pick cards, drawn anew each time the pick screen opens. */
   /** The pick card under the pointer, or -1. */
   private hoverPick = -1;
+  /** The objective target's damage as blue last saw it, for the card while it is out of sight. */
+  private objSeen = { id: -1, progress: 0 };
   /** The fog of war: how much each cell is hidden from blue (0 clear, 1 hidden), and its images. */
   private fog = new Float32Array(FOG_COLS * FOG_ROWS);
   private fogG!: Phaser.GameObjects.Graphics;
@@ -396,13 +402,12 @@ export class GameScene extends Phaser.Scene {
     if (this.input.manager.pointersTotal < 3) this.input.addPointer(1);
     this.stick = null;
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.dragStick(p));
-    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
-      if (this.stick?.id !== p.id) return;
-      // Letting go stops the champion where it stands, rather than at the point it steered for.
-      const me = this.player();
-      if (this.stick.live && this.state && me && !me.dead) commandMove(this.state, me);
-      this.stick = null;
-    });
+    // A finger let go over the page's buttons, outside the canvas, also ends the stick.
+    for (const ev of ['pointerup', 'pointerupoutside']) {
+      this.input.on(ev, (p: Phaser.Input.Pointer) => {
+        if (this.stick?.id === p.id) this.endStick();
+      });
+    }
     this.cameras.main.centerOn(BASE.blue.x + 300, BASE.blue.y - 200);
     // Watching the AI skips the pick screen: a random champion plays for blue like the rest.
     if (watching) this.watchMatch();
@@ -425,6 +430,8 @@ export class GameScene extends Phaser.Scene {
         this.acc -= STEP;
       }
     }
+    // The match is over: the shop closes, so it never covers the end panel.
+    if (s && s.phase !== 'playing' && this.shopOpen) this.setShop(false);
     if (s) this.updateFog(s);
     if (s) this.collectFx(s, frameMs);
     if (s) this.playSounds(s);
@@ -611,7 +618,8 @@ export class GameScene extends Phaser.Scene {
     let foe: Unit | null = null;
     let best = Infinity;
     for (const u of this.state.units) {
-      if (u.dead || u.side === me.side || hiddenFrom(this.state, me.side, u)) continue;
+      // A watchstone can't be hit: clicking one walks to it, to take it.
+      if (u.dead || u.side === me.side || u.kind === 'watchstone' || hiddenFrom(this.state, me.side, u)) continue;
       const d = dist(u, w);
       if (d <= u.radius + 12 && d < best) {
         foe = u;
@@ -640,9 +648,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Letting go stops the champion where it stands, rather than at the point it steered for. */
+  private endStick() {
+    const me = this.player();
+    if (this.stick?.live && this.state && me && !me.dead) commandMove(this.state, me);
+    this.stick = null;
+  }
+
   /** While the stick steers, the champion walks for a point a little ahead the way it points. */
   private steer() {
     const st = this.stick;
+    // A release the scene never heard (it was paused, or the tab was left) still ends the stick.
+    if (st && !this.input.manager.pointers.find((p) => p.id === st.id)?.isDown) return this.endStick();
     const me = this.player();
     if (!st?.live || !this.state || this.phase !== 'playing' || !me || me.dead) return;
     const dx = st.x - st.ox;
@@ -731,8 +748,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Works out the fog of war over blue's view from the sight of every blue unit, and paints it
-   * into the fog's small canvas: one pixel per cell, dark where blue sees nothing, with soft edges.
+   * Works out the fog of war over blue's view from the sight of every blue unit, into `fog`: one
+   * value per cell, 1 where blue sees nothing, with soft edges (`paintFog` draws it).
    */
   private updateFog(s: GameState) {
     // Watching the AI, the whole map is in view.
@@ -894,7 +911,8 @@ export class GameScene extends Phaser.Scene {
       for (const u of s.units) {
         if (u.kind !== 'champion' || u.dead || u.hp >= u.maxHp || !atFountain(u) || this.hidden(s, u)) continue;
         for (let i = 0; i < 3; i++) {
-          const k = (s.time / 900 + i / 3 + u.id * 0.37) % 1;
+          // Reduced motion holds them still, spaced up the rise.
+          const k = settings.reduceMotion ? (i + 0.5) / 3 : (s.time / 900 + i / 3 + u.id * 0.37) % 1;
           const x = u.x + Math.sin(i * 2.3 + u.id) * 16, y = u.y - 20 - k * 40;
           const a = Math.sin(k * Math.PI);
           top.lineStyle(2.5, 0x62d86f, a).lineBetween(x - 5, y, x + 5, y).lineBetween(x, y - 5, x, y + 5);
@@ -995,9 +1013,9 @@ export class GameScene extends Phaser.Scene {
     if (u.kind === 'watchstone') {
       // The ring a team takes it within, and how far along a capture is.
       const color = u.side === 'neutral' ? SIDE_COLOR.neutral : SIDE_COLOR[u.side];
-      g.lineStyle(2, col(color), 0.5).strokeEllipse(u.x, u.y + 8, 300 * 0.98, 300 * 0.58);
+      g.lineStyle(2, col(color), 0.5).strokeEllipse(u.x, u.y + 8, WATCH.radius * 2 * 0.98, WATCH.radius * 2 * 0.58);
       if (u.capture) {
-        const k = Math.min(1, u.capture.ms / 3000);
+        const k = Math.min(1, u.capture.ms / WATCH.captureMs);
         g.lineStyle(5, col(SIDE_COLOR[u.capture.team]), 1).beginPath();
         g.arc(u.x, u.y - 72, 14, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2, false);
         g.strokePath();
@@ -1260,6 +1278,9 @@ export class GameScene extends Phaser.Scene {
     if (obj.originX !== xo) obj.setOrigin(xo, 0);
     obj.setPosition(x, y).setVisible(true).setAlpha(alpha);
     if (obj.style.color !== color) obj.setColor(color);
+    // A key shown at another size or weight than before (the upgrade cards, two or three).
+    if (obj.style.fontSize !== `${size}px`) obj.setFontSize(size);
+    if (obj.style.fontStyle !== (bold ? 'bold' : 'normal')) obj.setFontStyle(bold ? 'bold' : 'normal');
     if (obj.text !== str) obj.setText(str);
     this.used.add(key);
   }
@@ -1290,7 +1311,15 @@ export class GameScene extends Phaser.Scene {
     if (pick) this.drawPick(g);
     else if (this.state) this.drawPlaying(g, this.state);
     if (!pick) this.drawStick(g);
-    for (const [key, obj] of this.texts) if (!this.used.has(key)) obj.setVisible(false);
+    for (const [key, obj] of this.texts) {
+      if (this.used.has(key)) continue;
+      // A label over a unit that is gone (a minion stunned once, last match's champions) goes too.
+      const id = UNIT_TEXT.exec(key)?.[1];
+      if (id !== undefined && !(this.state && getUnit(this.state, Number(id)))) {
+        obj.destroy();
+        this.texts.delete(key);
+      } else obj.setVisible(false);
+    }
   }
 
   private drawPick(g: Phaser.GameObjects.Graphics) {
@@ -1396,7 +1425,9 @@ export class GameScene extends Phaser.Scene {
     const o = s.objective;
     if (o) {
       const target = getUnit(s, o.target);
-      const progress = target ? 1 - Math.max(0, target.hp) / target.maxHp : 1;
+      // Out of blue's sight, the bar keeps the damage last seen.
+      if (!target || !this.hidden(s, target)) this.objSeen = { id: o.target, progress: target ? 1 - Math.max(0, target.hp) / target.maxHp : 1 };
+      const progress = this.objSeen.id === o.target ? this.objSeen.progress : 0;
       this.t('obj-head', c.x + 14, c.y + 6, t('objectiveHead'), 10, UI.gold, 'left', true);
       this.t('obj-time', c.x + c.w - 10, c.y + 6, t('objectiveLeft', { time: clock(o.endsAt - s.time) }), 10, UI.dim, 'right', true);
       this.t('obj-title', c.x + 14, c.y + 20, objectiveTitle(o), 14, UI.text, 'left', true);
@@ -1731,7 +1762,7 @@ export class GameScene extends Phaser.Scene {
     // A gold star on the objective.
     const o = s.objective;
     const t = o && getUnit(s, o.target);
-    if (t && !t.dead) {
+    if (t && !t.dead && !this.hidden(s, t)) {
       const cx = mx(t.x), cy = my(t.y);
       const star = (r: number) =>
         Array.from({ length: 10 }, (_, i) => {

@@ -53,8 +53,8 @@ a star map between them.
   allies carry over; the clock resets per planet. Victory after the Lava boss; the end screen
   names the planet reached. Saved longest run, wins and furthest jump per hero, the heroes
   unlocked and the planets charted (landed on).
-- The field is endless: the camera follows the hero, foes spawn on a ring just off screen and
-  ones left far behind are brought round ahead again.
+- The field is endless: the camera follows the hero, foes spawn on a ring just past the view's
+  corners (whatever the screen's shape) and ones left far behind are brought round ahead again.
 - Sound effects and music (see Sound below).
 - Not built yet: Watch AI.
 - No TODOs or FIXMEs in the code.
@@ -82,7 +82,7 @@ a star map between them.
   and each hero's `schemes` (`HeroScheme`: `name`, `body`, `accent`, optional `mark`, `bolt`);
   `schemeOf(id, variant)` returns a scheme (Kael has a second, Fallen, used once he takes The
   Fall), `isKnight`. All hero colours come from here; each hero's accent is unique (Elara's red,
-  Triad-77's white). `locked` marks a hero that needs a deed (all but TR-9); Triad-77's `maxHp`
+  Triad-77's white), except Kael's Fallen scheme, which takes Lord Vharn's colours. `locked` marks a hero that needs a deed (all but TR-9); Triad-77's `maxHp`
   is the sum of its three bots' and its `r` the whole unit's.
 - `src/game/upgrades.ts`: `UPGRADES` (every path, pool skill and gear piece, with five tier lines),
   `MAX_TIER`, `MAX_ABILITIES`, `MAX_GEAR`, `FILLER`, `CAPSTONES`, `CROSSOVERS`, `capstonesOf`,
@@ -242,8 +242,11 @@ screen's shape, from 960x720 (4:3) to 1296x540 (2.4:1). `GameScene.create` calls
 `CENTER` (the hero) in the middle of the view, stretches `XP_BAR` across the top, keeps `TIMER`
 and `BOSS_BAR` centred, pins `LEVEL`, `PLANET_TAG` and `CREDITS_TAG` to the right edge and
 `SIG_BUTTON` to the bottom right corner (`HP_BAR` and `KIT` stay top left). The ground and the
-sound cues' "on screen" test use `SCREEN`, so the endless field just shows more of itself (the
-rules, the spawn ring included, are unchanged). Panels are still laid out in designed 960x540
+sound cues' "on screen" test use `SCREEN`, so the endless field just shows more of itself.
+`begin` hands `startRun` how much further the view's corners reach than 960x540's
+(`state.ringOut`, half the difference of the diagonals), and `ringPoint` moves the spawn ring out
+by it, so foes never appear inside a wide or tall view; at 960x540 it is 0 and the ring, and so
+the playthrough, is unchanged. Panels are still laid out in designed 960x540
 coordinates (`VIEW` and the card rectangles); `syncPanel` then calls `Panel.place(FRAME.x,
 FRAME.y)`, which moves every object and spot into the frame, except the backdrop (`dim` and
 `stars`, marked with `Panel.fixed`), which covers the whole `SCREEN`. `hover` takes the offset
@@ -272,7 +275,8 @@ instead opens the floating stick, `GameScene.stick`: its base sits where the fin
 knob follows that pointer id (`dragStick`, dragging the base along past the rim) and `moveInput`
 walks the way of knob minus base, full speed at `STICK.r`, nothing inside `STICK.dead`; `drawHud`
 draws it. A second touch pointer (`addPointer(1)`) lets the other thumb tap the signature. A pointerdown inside
-`SIG_BUTTON` (or Space) queues the signature. Panel cards are hit-tested with `viewPoint` against
+`SIG_BUTTON` (or Space) queues the signature for the next frame of the sim; a press it cannot take
+(during a level-up or a panel) is dropped. Panel cards are hit-tested with `viewPoint` against
 `panel.spots`. On the hero select, tapping a card (or 1-9, 0, then - and = for the last two) sets
 `GameScene.chosen` and tapping Fight (or Enter) starts the run, if the hero is unlocked. At a
 level-up 1-4 pick a card (as many as there are); elsewhere 1/2/3 pick (a planet on the space
@@ -288,7 +292,8 @@ saves load unchanged.
 
 - `riftblade-progress`: `{ bestMs, wins: { [heroId]: count }, furthest: { [heroId]: jump 1-4 },
   unlocked: HeroId[], charted: PlanetId[] }`. `bestMs` is the whole run's time (`runMs`). Older saves without
-  `furthest` load with `{}`, without `unlocked` or `charted` with `[]`; unknown ids are dropped.
+  `furthest` load with `{}`, without `unlocked` or `charted` with `[]`; unknown ids are dropped, and
+  so are `wins` and `furthest` values that are not finite numbers.
   `charted` gets a planet the first frame a run is on it (`recordCharted` in `GameScene.update`) and
   the route at the run's end (`recordRun`). A hero with a
   `furthest` world is open (so saves from when Rook and Bram were free keep them), and the deeds
@@ -318,7 +323,7 @@ Enemy bolts, blasts and hazards play only on screen. The scene plays the input s
 F# minor with chiming arpeggios (144, sine lead) and Storm in E minor driving (172, sawtooth
 lead). Each has its own `calm` part, and `tense`, `boss` and `pad` written once in D minor and moved
 into its key (`transpose`). `MENU_SONG` (90 BPM) has `select`, `map` and `shop`. `SoundCues.pickMusic`:
-hero select `select`; a fight `calm`, `tense` for 25 s after a ring wave and in the elite arena,
+hero select `select`; a fight `calm`, `tense` for 25 s after a ring wave (ended by a new planet) and in the elite arena,
 `boss` while a boss lives; level-up cards mid-fight `pad`, between planets `map`; star map and
 events `map` (the space map too); trader `shop`; the end screen stops the music. `STINGS`: `cleared` (a boss falls or
 the arena is won), `unlock` (a new hero), `win`, `lose`.

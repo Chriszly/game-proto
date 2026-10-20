@@ -1,31 +1,38 @@
 import Phaser from 'phaser';
 import { formatNumber } from '../../../../shared/i18n';
-import { playMusic, ui } from '../../../../shared/audio';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { scrollingCamera, splitHudCamera, viewPoint, viewSize } from '../../../../shared/scaling';
-import { SONG, sfx } from '../audio';
+import { settings } from '../../../../shared/settings';
+import { RUSH_SONG, SONG, sfx } from '../audio';
 import { pickUpPad, upgradePad, type UpgradeIcon } from '../art/markers';
 import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { PIXIE_FRAMES } from '../art/pixies';
 import { bakeYard, bedTexture, goodTexture, yardTexture } from '../art/town';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
-import { catchUp } from '../game/away';
 import { loadState } from '../game/save';
 import { tick, type Feedback } from '../game/sim';
-import { MAX_CARRY, SIGN_NAMES, carryCapacity, gearLevel, harvestReach, payBoost, payment, walkSpeed, type GameState, type Upgrade } from '../game/state';
+import { FINE_SHARE, MAX_CARRY, SIGN_NAMES, UPGRADES, WEATHER, carryCapacity, gearLevel, harvestReach, isMarketDay, payBoost, payment, tipLeft, tipNow, walkSpeed, weatherFor, type GameState, type Upgrade } from '../game/state';
 import {
   BEDS,
   OPEN_GARDENS,
   MAX_LEVEL,
   MAX_SHOPKEEPERS,
   MAX_WORKERS,
-  ROUTE_SPEED,
   SHOPS,
-  SHOP_STORAGE,
+  SHOP_GUILD,
+  SHOP_GUILD_UPGRADES,
   WALK_IN_MS,
   LESSONS,
   OUTFITTER_GEAR,
   gardenOpen,
+  isBlightedBed,
+  isLine2,
+  line1Id,
+  line2Cost,
+  lineOpen,
+  shopRoutes,
+  shopStations,
   gearCost,
   lessonCost,
   levelCost,
@@ -36,6 +43,10 @@ import {
   shopSignOf,
   shopStudied,
   routeCost,
+  guildCost,
+  guildJoinCost,
+  shopRouteSpeed,
+  shopStorage,
   workerCost,
   type GoodId,
   type RouteDef,
@@ -43,8 +54,12 @@ import {
   type ShopId,
   type ShopState,
   type StationDef,
+  plainGood,
+  sellsGood,
+  type Held,
 } from '../game/town';
 import {
+  clearShopBlight,
   collectShopTill,
   cycleShopPriority,
   cycleShopSign,
@@ -52,7 +67,13 @@ import {
   goodName,
   payLesson,
   payRecipe,
+  inShopFineWindow,
+  payGuildJoin,
+  payLine2,
+  payGuildUpgrade,
+  shopContractKept,
   shopPrice,
+  shopStockedPay,
   dropAtStation,
   harvestBed,
   isRipeBed,
@@ -69,7 +90,9 @@ import {
 import { t } from '../i18n';
 import { coined } from '../ui/coins';
 import { ProgressBar } from '../ui/ProgressBar';
-import { FENCE_Y, MARKET, SHOP_HUD, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
+import { SHOP_HUD, guildLayout, marketLayout, shopFence, shopStart, yardScenery, line2Layout, bedPosition, counterLayout, gardenLayout, routePath, shopWorld, stationLayout, type Point } from './shopLayout';
+import { addWeather } from './weather';
+import { setupZoom } from './zoom';
 import { TOWN_HUD_H, TOWN_TEXT, TOWN_UI_DEPTH, keepSaving, leaveFor, townCard, townTopBar } from './townKit';
 
 // A town shop's yard, built from its `ShopDef` the way the apothecary's is laid out by hand: the
@@ -91,12 +114,27 @@ const HANDS_BAR = { h: 40, gap: 40 };
 const CAPTION = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', stroke: TEXT_HALO, strokeThickness: 3, align: 'center', color: INK };
 const CAPTION_PAY = '#5a2c80';
 const COUNT = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
-/** Where the doctor starts in a shop's yard: in front of its first station. */
-const START = { dx: -40, y: 220 };
 /** Widths of a station's "First:" sign and a shelf's price sign, as the apothecary's. */
 const PRIORITY_SIGN_W = 92;
 const PRICE_SIGN_W = 48;
+/** The contract card under the top bar's purse. */
+const CONTRACT_W = 300;
+/** The town card at the top right under the top bar: the day's weather, the shop's reputation and the market day. */
+const TOWN_CARD = { w: 300, h: 44 };
+/**
+ * The screen band the top bar and the cards under it cover. The camera scrolls up past the yard's top
+ * so the yard below `SHOP_HUD` always shows below it, never under a card.
+ */
+const HUD_BAND = TOWN_HUD_H + 8 + TOWN_CARD.h + 4;
+/** The weather is drawn over everything standing in the yard and the pixies, under the bubbles and bars. */
+const WEATHER_DEPTH = WORLD_UI_DEPTH - 9;
+/** A blighted bed's plant, greyed purple as at the apothecary. */
+const BLIGHT_TINT = 0x8a7aa0;
+/** An order bubble: its size, how far above a customer's feet its middle is, and its tip ring's radius. */
+const BUBBLE = { w: 64, h: 30, above: 82, ring: 6 };
 const SIGN_COLOURS = { cheap: '#2f6a1a', fair: INK, dear: '#8a3a10' };
+/** A shelf's price while the overstock cut takes some off. */
+const CUT_COLOUR = '#b04a10';
 
 interface Marker {
   zone: Phaser.Geom.Rectangle;
@@ -142,8 +180,8 @@ export class ShopScene extends Phaser.Scene {
   }
 
   create(data: { shop: ShopId }) {
+    // Entered only through `leaveFor`, which saved a moment ago, so there is no time away to catch up on.
     this.state = loadState();
-    catchUp(this.state, Date.now());
     this.id = data.shop;
     this.def = SHOPS[this.id];
     this.markers = [];
@@ -160,23 +198,27 @@ export class ShopScene extends Phaser.Scene {
     const world = shopWorld(this.id);
     bakeYard(this, this.id);
     fit(this.add.image(0, 0, yardTexture(this.id)).setOrigin(0).setDepth(-1000));
-    this.physics.world.setBounds(0, SHOP_HUD, world.w, FENCE_Y - SHOP_HUD);
+    this.physics.world.setBounds(0, SHOP_HUD, world.w, shopFence(this.id) - SHOP_HUD);
     this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
     this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
     this.obstacles = this.physics.add.staticGroup();
 
+    this.createScenery();
     this.createGardens();
     this.createMarket();
-    this.def.stations.forEach((_, i) => this.createStation(i));
+    this.createGuild();
+    this.createLine2();
     this.createCounter();
     this.createPixies();
     this.createCustomers();
+    this.views.push(addWeather(this, world, WEATHER_DEPTH, () => this.state));
     this.createPlayer();
     this.createHud();
     this.createControls();
     this.createSound();
-    scrollingCamera(this.cameras.main).setBounds(0, 0, world.w, world.h).startFollow(this.player, true);
+    scrollingCamera(this.cameras.main).startFollow(this.player, true);
     splitHudCamera(this);
+    setupZoom(this, world, { band: HUD_BAND, under: SHOP_HUD });
     playMusic(SONG, 'calm');
     keepSaving(this, () => this.state);
   }
@@ -185,12 +227,19 @@ export class ShopScene extends Phaser.Scene {
 
   private sign(x: number, y: number, text: string) {
     const name = this.add.text(x, y, text, { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK }).setOrigin(0.5).setDepth(-900);
-    fit(this.add.image(x, y, signTexture(this, name.width + 16))).setDepth(-910);
+    return [name, fit(this.add.image(x, y, signTexture(this, name.width + 16))).setDepth(-910)] as const;
+  }
+
+  /** The yard's trees and bushes, standing like everything else, and the water and wells the doctor walks round. */
+  private createScenery() {
+    const { plants, blocks } = yardScenery(this.id);
+    for (const { key, x, y } of plants) fit(this.add.image(x, y, key)).setOrigin(0.5, key.startsWith('tree') ? 84 / 88 : 28 / 32).setDepth(y);
+    for (const b of blocks) this.addObstacle(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h);
   }
 
   private createGardens() {
     this.def.gardens.forEach((garden, g) => {
-      const layout = gardenLayout(g);
+      const layout = gardenLayout(this.id, g);
       this.sign(layout.sign.x, layout.sign.y, t(garden.name));
       const open = () => gardenOpen(this.shop, g);
       if (g >= OPEN_GARDENS) {
@@ -202,25 +251,29 @@ export class ShopScene extends Phaser.Scene {
         this.views.push(() => locked.setVisible(!open()));
       }
       for (let b = g * BEDS; b < (g + 1) * BEDS; b++) {
-        const at = bedPosition(b);
+        const at = bedPosition(this.id, b);
         fit(this.add.image(at.x, at.y, 'plot')).setDepth(-500);
         const texture = (stage: number) => bedTexture(garden.good, stage);
         const plant = fit(this.add.image(at.x, at.y + 10, texture(2)).setOrigin(0.5, 1).setDepth(at.y));
         let drawn = -1;
+        let blighted = false;
         this.views.push(() => {
           const grown = this.shop.beds[b] / garden.grow;
           const stage = grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0;
           if (stage !== drawn) plant.setTexture(texture((drawn = stage)));
           fit(plant).setVisible(open());
+          if (isBlightedBed(this.shop, b) !== blighted) plant.setTint((blighted = !blighted) ? BLIGHT_TINT : 0xffffff);
         });
       }
-      const route = this.def.routes.find((r) => 'garden' in r.from && r.from.garden === g);
-      if (route) this.addRouteMarker(layout.route, route, () => !open());
+      for (const route of shopRoutes(this.def).filter((r) => 'garden' in r.from && r.from.garden === g)) {
+        this.addRouteMarker(isLine2(route.id) ? layout.route2 : layout.route, route, () => !open() || !lineOpen(this.shop, route.id));
+      }
     });
   }
 
   /** The outfitter, with one level each of the doctor's pack, boots and sickle, and the study with its two lessons. */
   private createMarket() {
+    const MARKET = marketLayout(this.id);
     this.sign(MARKET.outfitter.x, MARKET.outfitter.y, t('outfitter'));
     for (const gear of OUTFITTER_GEAR) {
       const get = () => this.shop.outfitter[gear];
@@ -243,6 +296,26 @@ export class ShopScene extends Phaser.Scene {
     );
   }
 
+
+  /** The guild under the first stations: a marker to join it, then its six upgrades. */
+  private createGuild() {
+    const l = guildLayout(this.id);
+    const guild = () => this.shop.guild;
+    this.sign(l.sign.x, l.sign.y, t('guild'));
+    this.addLevelMarker(l.join, 'guild', () => guild().join, 1, () => guildJoinCost(this.id), () => payGuildJoin(this.state, this.id), (_lv, left) =>
+      t('buildCost', { name: t('joinGuild'), coins: formatNumber(left) }),
+    );
+    for (const id of SHOP_GUILD) {
+      const { max } = SHOP_GUILD_UPGRADES[id];
+      // A one-off upgrade, like the herbalist, has no level to show.
+      this.addLevelMarker(l.upgrade(id), id, () => guild()[id], max, (lv) => guildCost(this.id, id, lv), () => payGuildUpgrade(this.state, this.id, id), (lv, left) =>
+        max === 1
+          ? t('buildCost', { name: t(UPGRADES[id].name), coins: formatNumber(left) })
+          : t('levelCost', { name: t(UPGRADES[id].name), level: lv + 2, coins: formatNumber(left) }),
+        () => guild().join.level === 0,
+      );
+    }
+  }
 
   /** A small tappable sign; a tap calls `tap` and doesn't walk the doctor. Shown while `shown` holds. */
   private addTapSign(at: Point, w: number, tap: () => Feedback | null, shown: () => boolean) {
@@ -277,8 +350,31 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
-  private createStation(i: number) {
-    const def = this.def.stations[i];
+  /**
+   * The first line's stations, and the second line's once bought: until then its sign and the
+   * marker that buys it stand in the middle of its row.
+   */
+  private createLine2() {
+    this.def.stations.forEach((s) => this.createStation(s));
+    const l = line2Layout(this.id);
+    const sign = this.sign(l.sign.x, l.sign.y, t('secondLine'));
+    const bought = () => this.shop.line2.level > 0;
+    this.addLevelMarker(l.buy, 'land', () => this.shop.line2, 1, () => line2Cost(this.id), () => payLine2(this.state, this.id), (_lv, left) =>
+      t('buildCost', { name: t('secondLine'), coins: formatNumber(left) }),
+    );
+    let built = false;
+    const build = () => {
+      if (built || !bought()) return;
+      built = true;
+      for (const part of sign) part.setVisible(false);
+      for (const s of shopStations(this.def)) if (isLine2(s.id)) this.createStation(s);
+    };
+    build();
+    this.views.push(build);
+  }
+
+  private createStation(def: StationDef) {
+    const i = this.def.stations.findIndex((s) => s.id === line1Id(def.id));
     const l = stationLayout(this.id, def.id);
     const image = fit(this.add.image(l.at.x, l.at.y, def.texture));
     image.setDepth(l.at.y + image.displayHeight / 2);
@@ -289,7 +385,10 @@ export class ShopScene extends Phaser.Scene {
     this.addMarker(l.drop, 'pad-in', t('drop'), () => this.sounded(dropAtStation(this.state, this.id, def.id), 'drop'));
     this.addMarker(l.work, 'pad-work', t('work'), () => null, () => station().hired.level >= MAX_WORKERS);
     this.workSpots.push({ zone: new Phaser.Geom.Rectangle(l.work.x - 22, l.work.y - 22, 44, 44), at: def.id });
-    this.addMarker(l.pickUp, pickUpPad('sack'), t('pickUp'), () => this.sounded(pickUpFromStation(this.state, this.id, def.id), 'pickUp'));
+    this.addMarker(l.pickUp, pickUpPad('sack'), t('pickUp'), () => {
+      const fine = inShopFineWindow(this.def, station());
+      return this.sounded(pickUpFromStation(this.state, this.id, def.id), fine ? 'fine' : 'pickUp');
+    });
     const icon: UpgradeIcon = i === 0 ? 'refiner' : 'cauldron';
     this.addLevelMarker(l.level, icon, () => station().level, MAX_LEVEL, (lv) => levelCost(this.id, lv), () => payStationLevel(this.state, this.id, def.id), (lv, left) =>
       t('stationLevelCost', { level: lv + 2, coins: formatNumber(left) }),
@@ -297,7 +396,7 @@ export class ShopScene extends Phaser.Scene {
     this.addLevelMarker(l.hire, 'hire', () => station().hired, MAX_WORKERS, (n) => workerCost(this.id, n), () => payWorker(this.state, this.id, def.id), (_n, left) =>
       t('hireCost', { coins: formatNumber(left) }),
     );
-    const route = this.def.routes.find((r) => 'station' in r.from && r.from.station === def.id);
+    const route = shopRoutes(this.def).find((r) => 'station' in r.from && r.from.station === def.id);
     if (route) this.addRouteMarker(l.route, route);
     // Its goods in and out, each an icon and how many there are.
     const ins = [...new Set(def.recipes.flatMap((r) => r.inputs))];
@@ -305,6 +404,8 @@ export class ShopScene extends Phaser.Scene {
     ins.forEach((good, k) => this.addStock(l.stockIn(k), good, () => station().queue, () => shopMakes(this.shop, this.def, good)));
     outs.forEach((good, k) => this.addStock(l.stockOut(k), good, () => station().output, () => shopMakes(this.shop, this.def, good)));
     const bar = new ProgressBar(this, l.at.x, l.at.y - image.displayHeight / 2 - 12, 64, 0xc8741e, WORLD_UI_DEPTH, 8);
+    // Its last quarter is gold where it makes what the shop sells: picked up then, the good comes out fine.
+    if (def.recipes.some((r) => sellsGood(this.def, r.out))) bar.setZone(1 - FINE_SHARE, 0xe8b830);
     const workers = [0, 1].map((k) => {
       const at = l.workers(k);
       return fit(this.add.image(at.x, at.y, craftsmanTexture(k)).setOrigin(0.5, 1).setDepth(at.y));
@@ -317,13 +418,13 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /** A good standing by a station or on a shelf: its icon and how many there are, while `shown` holds. */
-  private addStock(at: Point, good: GoodId, list: () => GoodId[], shown: () => boolean = () => true) {
+  private addStock(at: Point, good: GoodId, list: () => Held[], shown: () => boolean = () => true) {
     const icon = fit(this.add.image(at.x - 8, at.y, goodTexture(good)), 1.3).setDepth(at.y);
     const text = this.add.text(at.x + 4, at.y, '', COUNT).setOrigin(0, 0.5).setDepth(at.y);
     this.views.push(() => {
-      const n = list().filter((g) => g === good).length;
+      const n = list().filter((g) => plainGood(g) === good).length;
       icon.setAlpha(n > 0 ? 1 : 0.4).setVisible(shown());
-      text.setText(`${n}/${SHOP_STORAGE}`).setVisible(shown());
+      text.setText(`${n}/${shopStorage(this.shop)}`).setVisible(shown());
     });
   }
 
@@ -339,7 +440,9 @@ export class ShopScene extends Phaser.Scene {
       const price = coined(this.add.text(at.x, at.y + 52, t('coinPrice', { n: this.def.sells[good]! }), { ...COUNT, fontSize: '11px' }).setOrigin(0.5, 0).setDepth(at.y));
       const icon = fit(this.add.image(at.x, at.y - 8, goodTexture(good)), 1.5).setDepth(at.y + 1);
       this.views.push(() => {
-        price.setText(t('coinPrice', { n: this.payFor(good) })).setVisible(known());
+        // What the next one sells for: less once the shelf holds more than a few (the overstock cut).
+        const full = shopPrice(this.shop, this.def, good), now = shopStockedPay(this.shop, good, full);
+        price.setText(t('coinPrice', { n: formatNumber(now) })).setColor(now < full ? CUT_COLOUR : INK).setVisible(known());
         icon.setVisible(known());
       });
       // Its price sign: Cheap, Fair or Dear, once the study has taught them.
@@ -368,13 +471,11 @@ export class ShopScene extends Phaser.Scene {
     this.addLevelMarker(l.hire, 'hire', () => c().hired, MAX_SHOPKEEPERS, (n) => workerCost(this.id, n), () => payShopkeeper(this.state, this.id), (_n, left) =>
       t('hireCost', { coins: formatNumber(left) }),
     );
-    const keeper = fit(this.add.image(l.shopkeeper.x, l.shopkeeper.y, craftsmanTexture(1)).setOrigin(0.5, 1).setDepth(l.shopkeeper.y));
-    this.views.push(() => keeper.setVisible(c().hired.level > 0));
-  }
-
-  /** What a customer pays for a good now, counter level and price sign included. */
-  private payFor(good: GoodId) {
-    return shopPrice(this.shop, this.def, good);
+    const keepers = [0, 1].map((k) => {
+      const at = l.shopkeepers(k);
+      return fit(this.add.image(at.x, at.y, craftsmanTexture(k + 1)).setOrigin(0.5, 1).setDepth(at.y));
+    });
+    this.views.push(() => keepers.forEach((keeper, k) => keeper.setVisible(k < c().hired.level)));
   }
 
   private addRouteMarker(at: Point, route: RouteDef, locked: () => boolean = () => false) {
@@ -412,20 +513,23 @@ export class ShopScene extends Phaser.Scene {
       }
       return pool[i];
     };
-    const paths = this.def.routes.map((r) => ({ route: r, path: routePath(this.id, r), ms: 0 }));
-    for (const p of paths) {
-      const [a, b] = p.path;
-      p.ms = (Math.hypot(b.x - a.x, b.y - a.y) / ROUTE_SPEED) * 1000;
-    }
+    const paths = shopRoutes(this.def).map((r) => {
+      const path = routePath(this.id, r);
+      return { route: r, path, length: Math.hypot(path[1].x - path[0].x, path[1].y - path[0].y) };
+    });
     this.views.push(() => {
       let n = 0;
-      for (const { route, path, ms } of paths) {
+      for (const { route, path, length } of paths) {
+        const ms = (length / shopRouteSpeed(this.shop)) * 1000;
         for (const item of this.shop.routes[route.id].items) {
           const k = Math.min(1, item.at / ms);
           const x = path[0].x + (path[1].x - path[0].x) * k;
-          const y = path[0].y + (path[1].y - path[0].y) * k - Math.sin(k * Math.PI) * 18 + Math.sin(this.time.now / 160 + n) * 2;
+          // Wings beat and the pixie bobs as it flies; with reduced motion it glides.
+          const bob = settings.reduceMotion ? 0 : Math.sin(this.time.now / 160 + n) * 2;
+          const y = path[0].y + (path[1].y - path[0].y) * k - Math.sin(k * Math.PI) * 18 + bob;
           const { pixie, good } = get(n++);
-          pixie.setVisible(true).setPosition(x, y).setTexture(PIXIE_FRAMES[Math.floor(this.time.now / 120 + n) % 2]).setFlipX(path[1].x < path[0].x);
+          const beat = settings.reduceMotion ? 0 : Math.floor(this.time.now / 120 + n) % 2;
+          pixie.setVisible(true).setPosition(x, y).setTexture(PIXIE_FRAMES[beat]).setFlipX(path[1].x < path[0].x);
           fit(pixie);
           good.setVisible(true).setPosition(x, y + 12).setTexture(goodTexture(item.good));
           fit(good);
@@ -438,40 +542,82 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
-  /** Customers walking up from the street to their place in front of the counter, each with a bubble of what they want. */
+  /**
+   * Customers walking up from the street to their place in front of the counter, each with a bubble
+   * of what they want, a coin in a ring that shrinks as their tip decays with the tip it would pay
+   * now above it, a star on a regular's, and their patience under their feet.
+   */
   private createCustomers() {
     const l = counterLayout(this.id);
-    const shown = new Map<number, { body: Phaser.GameObjects.Image; bubble: Phaser.GameObjects.Image; icons: Phaser.GameObjects.Image[]; bar: ProgressBar }>();
+    type Shown = {
+      body: Phaser.GameObjects.Image;
+      bubble: Phaser.GameObjects.Image;
+      icons: Phaser.GameObjects.Image[];
+      ring: Phaser.GameObjects.Graphics;
+      coin: Phaser.GameObjects.Image;
+      star: Phaser.GameObjects.Image;
+      tip: Phaser.GameObjects.Text;
+      bar: ProgressBar;
+      drawn: string;
+    };
+    const shown = new Map<number, Shown>();
     this.views.push(() => {
       const orders = this.shop.orders;
       for (const [id, c] of shown) {
         if (orders.some((o) => o.id === id)) continue;
-        for (const part of [c.body, c.bubble, ...c.icons]) part.destroy();
-        c.bar.set(null);
+        for (const part of [c.body, c.bubble, ...c.icons, c.ring, c.coin, c.star, c.tip]) part.destroy();
+        c.bar.destroy();
         shown.delete(id);
       }
       for (const order of orders) {
+        const to = l.place(order.spot);
+        const cy = to.y - BUBBLE.above, top = cy - BUBBLE.h / 2;
+        const ringX = to.x + BUBBLE.w / 2 - 2;
         let c = shown.get(order.id);
         if (!c) {
           const body = fit(this.add.image(0, 0, customerTexture(order.face)).setOrigin(0.5, 1));
-          const bubble = townCard(this, 0, 0, 'bubble', 24 + 20 * 2, 30).setDepth(WORLD_UI_DEPTH);
+          const bubble = townCard(this, to.x, cy, 'bubble', BUBBLE.w, BUBBLE.h).setDepth(WORLD_UI_DEPTH);
           const icons = [0, 1].map(() => fit(this.add.image(0, 0, goodTexture('bread')), 1.2).setDepth(WORLD_UI_DEPTH + 0.1));
-          c = { body, bubble, icons, bar: new ProgressBar(this, l.place(order.spot).x, l.place(order.spot).y + 6, 40, 0x5a9a4a, WORLD_UI_DEPTH, 6) };
+          const ring = this.add.graphics().setDepth(WORLD_UI_DEPTH + 0.2);
+          const coin = fit(this.add.image(ringX, top + 1, 'coin'), 0.8).setDepth(WORLD_UI_DEPTH + 0.3);
+          const star = fit(this.add.image(to.x - BUBBLE.w / 2 + 2, top + 1, 'regular')).setDepth(WORLD_UI_DEPTH + 0.3);
+          const tip = coined(this.add.text(to.x, top - 7, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#7a4a00', stroke: TEXT_HALO, strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(WORLD_UI_DEPTH + 0.3));
+          const bar = new ProgressBar(this, to.x, to.y + 6, 40, 0x5a9a4a, WORLD_UI_DEPTH, 6);
+          c = { body, bubble, icons, ring, coin, star, tip, bar, drawn: '' };
           shown.set(order.id, c);
         }
-        const from = l.street(order.spot), to = l.place(order.spot);
+        const from = l.street(order.spot);
         const k = 1 - order.walk / WALK_IN_MS;
         const x = from.x + (to.x - from.x) * k, y = from.y + (to.y - from.y) * k;
         c.body.setPosition(x, y).setDepth(y);
         const here = order.walk <= 0;
-        c.bubble.setVisible(here).setPosition(to.x, to.y - 82);
+        for (const part of [c.bubble, c.ring, c.coin, c.tip]) part.setVisible(here);
+        c.star.setVisible(here && !!order.regular);
         c.icons.forEach((icon, i) => {
           const want = order.wants[i];
           icon.setVisible(here && !!want);
-          if (want) icon.setTexture(goodTexture(want)).setPosition(to.x + (i - (order.wants.length - 1) / 2) * 20, to.y - 82);
+          if (want) icon.setTexture(goodTexture(want)).setPosition(to.x + (i - (order.wants.length - 1) / 2) * 20, cy);
           fit(icon, 1.2);
         });
         c.bar.set(here ? order.patience / order.maxPatience : null);
+        if (!here) continue;
+        const left01 = tipLeft(order), tip = tipNow(order);
+        // Just the coins, without the word: the places stand close and shops' tips run to four figures.
+        c.tip.setText(tip > 0 ? `+${t('coinPrice', { n: formatNumber(tip) })}` : '').setColor(left01 < 0.4 ? '#b04a10' : '#7a4a00');
+        // Redraw the ring only when it has visibly shrunk.
+        const key = `${Math.round(left01 * 48)}`;
+        if (key === c.drawn) continue;
+        c.drawn = key;
+        c.ring.clear();
+        c.ring.fillStyle(0xe6dcc4, 1).fillCircle(ringX, top + 1, BUBBLE.ring + 2);
+        c.ring.lineStyle(1, 0x2a1d14, 0.9).strokeCircle(ringX, top + 1, BUBBLE.ring + 2.5);
+        c.ring.lineStyle(2.4, 0x2a1d14, 0.15).strokeCircle(ringX, top + 1, BUBBLE.ring);
+        if (left01 > 0) {
+          c.ring.lineStyle(2.4, left01 < 0.4 ? 0xe98a2e : 0xe8b830, 1);
+          c.ring.beginPath();
+          c.ring.arc(ringX, top + 1, BUBBLE.ring, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left01, false);
+          c.ring.strokePath();
+        }
       }
     });
   }
@@ -505,8 +651,9 @@ export class ShopScene extends Phaser.Scene {
     cost: (level: number) => number,
     pay: () => Feedback | null,
     caption: (level: number, left: number) => string,
+    locked: () => boolean = () => false,
   ) {
-    const open = () => get().level < max;
+    const open = () => get().level < max && !locked();
     this.addMarker(
       at,
       upgradePad(icon),
@@ -566,8 +713,8 @@ export class ShopScene extends Phaser.Scene {
   // The doctor
 
   private createPlayer() {
-    const first = stationLayout(this.id, this.def.stations[0].id).at;
-    this.player = fit(this.physics.add.sprite(first.x + START.dx, START.y, 'doctor-idle'));
+    const start = shopStart(this.id);
+    this.player = fit(this.physics.add.sprite(start.x, start.y, 'doctor-idle'));
     const res = resOf('doctor-idle');
     this.player.body!.setSize(30 * res, 15 * res).setOffset(9 * res, 57 * res);
     this.player.setCollideWorldBounds(true);
@@ -580,6 +727,12 @@ export class ShopScene extends Phaser.Scene {
     this.cursors = keyboard.createCursorKeys();
     this.wasd = { up: keyboard.addKey('W'), down: keyboard.addKey('S'), left: keyboard.addKey('A'), right: keyboard.addKey('D') };
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      // A second finger starts a pinch: stop walking instead of heading for it.
+      if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        this.pointerTarget = null;
+        this.waypoint = null;
+        return;
+      }
       if (viewPoint(p).y < TOWN_HUD_H) return;
       const at = this.cameras.main.getWorldPoint(p.x, p.y);
       this.pointerTarget = this.reachable(new Phaser.Math.Vector2(at.x, at.y));
@@ -596,7 +749,7 @@ export class ShopScene extends Phaser.Scene {
     return to;
   }
 
-  /** A corner of the first station in the way to `to`, or null when the way is clear. */
+  /** A corner of the first station in the way to `to` (never the one the doctor stands on), or null when the way is clear. */
   private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
     const feet = this.player.body!.center;
     const from = new Phaser.Math.Vector2(feet.x, feet.y);
@@ -612,7 +765,7 @@ export class ShopScene extends Phaser.Scene {
       new Phaser.Math.Vector2(area.right, area.top),
       new Phaser.Math.Vector2(area.left, area.bottom),
       new Phaser.Math.Vector2(area.right, area.bottom),
-    ].filter((c) => bounds.contains(c.x, c.y) && !Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(from.x, from.y, c.x, c.y), inner(area)));
+    ].filter((c) => from.distance(c) >= 5 && bounds.contains(c.x, c.y) && !Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(from.x, from.y, c.x, c.y), inner(area)));
     corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
     return corners[0] ?? null;
   }
@@ -661,22 +814,29 @@ export class ShopScene extends Phaser.Scene {
     return this.player.displayHeight * harvestReach(this.state);
   }
 
-  /** Cuts the nearest ripe bed in the sickle's reach, one at a time; returns whether one is in reach with room to carry it. */
+  /**
+   * Cuts the nearest bed in the sickle's reach, one at a time: a blighted one first, hands full or
+   * not, then a ripe one while there is room to carry it. Returns whether one is in reach to cut.
+   */
   private autoHarvest() {
     const centre = new Phaser.Math.Vector2(this.player.x, this.player.y);
     const reach = this.reach();
-    if (this.state.town.hands.length >= carryCapacity(this.state)) return false;
+    const handsFull = this.state.town.hands.length >= carryCapacity(this.state);
     const near = this.shop.beds
-      .map((_, b) => ({ b, d: centre.distance(new Phaser.Math.Vector2(bedPosition(b).x, bedPosition(b).y)) }))
-      .filter(({ b, d }) => d <= reach && isRipeBed(this.state, this.id, b))
-      .sort((a, b) => a.d - b.d);
+      .map((_, b) => ({ b, d: centre.distance(new Phaser.Math.Vector2(bedPosition(this.id, b).x, bedPosition(this.id, b).y)), blighted: isBlightedBed(this.shop, b) }))
+      .filter(({ b, d, blighted }) => d <= reach && (blighted || (!handsFull && isRipeBed(this.state, this.id, b))))
+      .sort((a, b) => Number(b.blighted) - Number(a.blighted) || a.d - b.d);
     if (near.length === 0) return false;
     if (this.time.now >= this.nextHarvestAt) {
       this.nextHarvestAt = this.time.now + HARVEST_INTERVAL_MS;
-      const feedback = harvestBed(this.state, this.id, near[0].b);
+      const [{ b, blighted }] = near;
+      const feedback = blighted ? clearShopBlight(this.state, this.id, b) : harvestBed(this.state, this.id, b);
       if (feedback) {
-        sfx('swish');
-        sfx('pluck');
+        if (blighted) sfx('rasp');
+        else {
+          sfx('swish');
+          sfx('pluck');
+        }
         this.showFeedback(feedback);
       }
     }
@@ -701,6 +861,8 @@ export class ShopScene extends Phaser.Scene {
   private createHud() {
     const purse = townTopBar(this, () => this.state, t(this.def.name), { label: t('townMap'), onTap: () => leaveFor(this, this.state, 'Town') });
     this.views.push(purse);
+    this.createContract();
+    this.createTownCard();
     // The doctor's hands in this shop, at the bottom of the screen; tapping a slot throws its good away.
     const { width, height } = viewSize(this);
     const label = this.add.text(0, height - HANDS_BAR.h / 2 - 4, t('hands'), TOWN_TEXT).setOrigin(0, 0.5);
@@ -744,13 +906,123 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
-  /** Sounds of what the shop does on its own: a station done, a sale, an order filled or walked off. */
+  /**
+   * Today's contract, on a card under the top bar's purse: the good (and on a bundle day the second
+   * one), how many are handed over of how many, and the reward. The text shrinks to fit the card.
+   */
+  private createContract() {
+    const y = TOWN_HUD_H + 20;
+    const card = townCard(this, 12 + CONTRACT_W / 2, y, 'contract', CONTRACT_W, 28).setAlpha(0.72);
+    const icon = fit(this.add.image(28, y, goodTexture('bread')), 1.3);
+    const icon2 = fit(this.add.image(46, y, goodTexture('bread')), 1.3);
+    const text = coined(this.add.text(42, y, '', { ...TOWN_TEXT, fontSize: '13px' }).setOrigin(0, 0.5));
+    for (const [i, part] of [card, icon, icon2, text].entries()) part.setDepth(TOWN_UI_DEPTH + i * 0.01).setScrollFactor(0);
+    let kept = this.shop.kept;
+    let drawn = '';
+    this.views.push(() => {
+      const c = this.shop.contract;
+      for (const part of [card, icon, text]) part.setVisible(!!c);
+      icon2.setVisible(!!c?.bundle);
+      if (this.shop.kept > kept) playSting(SONG, 'kept');
+      kept = this.shop.kept;
+      if (!c) return;
+      const b = c.bundle;
+      let line: string;
+      if (shopContractKept(c)) line = t('shopContractKept', { coins: formatNumber(c.reward) });
+      else if (b) line = t('shopContractBundle', { item: goodName(c.good), made: c.made, need: c.need, item2: goodName(b.good), made2: b.made, need2: b.need, coins: formatNumber(c.reward) });
+      else line = t('shopContract', { item: goodName(c.good), made: c.made, need: c.need, coins: formatNumber(c.reward) });
+      if (line === drawn) return;
+      drawn = line;
+      fit(icon.setTexture(goodTexture(c.good)), 1.3);
+      if (b) fit(icon2.setTexture(goodTexture(b.good)), 1.3);
+      const x = b ? 60 : 42;
+      text.setX(x).setText(line).setFontSize(13);
+      for (let size = 13; size > 10 && text.width > CONTRACT_W + 4 - x; size--) text.setFontSize(size - 1);
+    });
+  }
+
+  /**
+   * The town card at the top right, as the apothecary's: today's weather and what it does, the
+   * shop's reputation as a bar, and tomorrow's weather, or on a market day how its crowd is doing.
+   * Below it, a note when the blight strikes or the crowd comes, is served or loses its bonus.
+   */
+  private createTownCard() {
+    const { width } = viewSize(this);
+    const { w, h } = TOWN_CARD;
+    const x = width - 12 - w, y = TOWN_HUD_H + 8;
+    const first = this.children.list.length;
+    townCard(this, x + w / 2, y + h / 2, 'town', w, h).setAlpha(0.72);
+    const icon = fit(this.add.image(x + 19, y + h / 2, 'weather-mild'));
+    const title = this.add.text(x + 36, y + 13, '', { ...TOWN_TEXT, fontSize: '13px' }).setOrigin(0, 0.5);
+    const label = this.add.text(x + 36, y + 31, t('reputation'), { ...TOWN_TEXT, fontSize: '12px', fontStyle: 'normal' }).setOrigin(0, 0.5);
+    const barW = 60;
+    const side = this.add.text(x + w - 10, y + 31, '', { ...TOWN_TEXT, fontSize: '12px' }).setOrigin(1, 0.5);
+    const note = this.add.text(x + w / 2, y + h + 12, '', { ...TOWN_TEXT, fontSize: '13px', stroke: TEXT_HALO, strokeThickness: 4 }).setOrigin(0.5).setAlpha(0);
+    const parts = this.children.list.slice(first) as (Phaser.GameObjects.Image & Phaser.GameObjects.Components.ScrollFactor)[];
+    parts.forEach((part, i) => part.setDepth(TOWN_UI_DEPTH + i * 0.01).setScrollFactor(0));
+    const reputation = new ProgressBar(this, label.x + label.width + 6 + barW / 2, y + 28, barW, 0x58a35a, TOWN_UI_DEPTH + 0.5).setScrollFactor(0);
+    const say = (text: string, good: boolean) => {
+      note.setText(text).setColor(good ? '#2f6a1a' : '#8a3a10').setAlpha(1);
+      this.tweens.killTweensOf(note);
+      this.tweens.add({ targets: note, alpha: 0, delay: 2_500, duration: 800 });
+    };
+    let rushSeen = JSON.stringify(this.shop.rush);
+    let blightSeen = this.shop.blight.length;
+    let drawn = '';
+    this.views.push(() => {
+      const { rush } = this.shop;
+      const day = this.state.contract.day;
+      if (this.shop.blight.length > blightSeen) say(t('blightInShop'), false);
+      blightSeen = this.shop.blight.length;
+      const rushNow = JSON.stringify(rush);
+      if (rushNow !== rushSeen && rush) {
+        const before = rushSeen === 'null' ? null : (JSON.parse(rushSeen) as typeof rush);
+        const sameRush = before?.day === rush.day;
+        if (rush.paid && !(sameRush && before.paid)) say(t('crowdBonus', { n: formatNumber(rush.bonus) }), true);
+        else if (rush.lost && !(sameRush && before.lost)) say(t('crowdWalkedOff'), false);
+        else if (!sameRush) say(t('crowdComes'), true);
+      }
+      rushSeen = rushNow;
+      let status: string;
+      if (!isMarketDay(day)) status = t('tomorrow', { weather: t(WEATHER[weatherFor(day + 1)].name) });
+      else if (rush?.day !== day) status = t('crowdAtMidday');
+      else if (rush.paid) status = t('crowdServed');
+      else if (rush.lost) status = t('crowdLost');
+      else status = t('crowdCount', { served: rush.served, size: rush.size });
+      reputation.set(this.shop.reputation / 100);
+      const key = `${day}:${status}`;
+      if (key === drawn) return;
+      drawn = key;
+      fit(icon.setTexture(`weather-${weatherFor(day)}`));
+      title.setText(t(isMarketDay(day) ? 'marketDayWeather' : 'dayWeather', { day, weather: t(WEATHER[weatherFor(day)].today) })).setFontSize(13);
+      for (let size = 13; size > 10 && title.width > w - 46; size--) title.setFontSize(size - 1);
+      side.setText(status);
+    });
+  }
+
+  /**
+   * Sounds of what the shop does on its own: a station done, a sale, an order filled or walked off,
+   * the blight striking and a market crowd coming in; and the music, the rush's while a crowd waits.
+   */
   private createSound() {
-    let made = this.def.stations.map((s) => this.shop.stations[s.id].output.length);
+    let made = shopStations(this.def).map((s) => this.shop.stations[s.id].output.length);
     let sold = this.shop.sold;
     let orders = [...this.shop.orders];
+    let blighted = this.shop.blight.length;
+    let rushDay = this.shop.rush?.day;
+    let rushing = false;
     this.views.push(() => {
-      const now = this.def.stations.map((s) => this.shop.stations[s.id].output.length);
+      if (this.shop.blight.length > blighted) sfx('blight');
+      blighted = this.shop.blight.length;
+      if (this.shop.rush && this.shop.rush.day !== rushDay) sfx('rush');
+      rushDay = this.shop.rush?.day;
+      const crowd = this.shop.orders.some((o) => o.rush) || (this.shop.rush?.waiting ?? 0) > 0;
+      if (crowd !== rushing) {
+        rushing = crowd;
+        if (crowd) playMusic(RUSH_SONG, 'rush');
+        else playMusic(SONG, 'calm');
+      }
+      const now = shopStations(this.def).map((s) => this.shop.stations[s.id].output.length);
       if (now.some((n, i) => n > made[i])) sfx('bubble');
       made = now;
       const gone = orders.filter((o) => !this.shop.orders.includes(o));

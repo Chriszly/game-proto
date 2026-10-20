@@ -44,8 +44,12 @@ export const MARCH = { w: 150, h: 26, step: 160 };
 export const HEAT = { x: 398, y: 58, w: 68, h: 20 };
 /** The "Chilled bow" chip over the hero while the Frost Giant's roar slows the shots, by its centre. */
 export const ROAR_CHIP = { x: 300, y: 236, w: 150, h: 20 };
-/** The tap area of each guard slot on the barricade, round the guard's feet (`GUARD_SLOTS` in state.ts). */
-export const GUARD_HIT = { w: 56, h: 70 };
+/**
+ * The tap area of each guard slot on the barricade, round the guard's feet (`GUARD_SLOTS` in
+ * state.ts), reaching `below` under them. The slots stand 60 apart in height, so no taller, or the
+ * third slot's area would cover the feet of the other two.
+ */
+export const GUARD_HIT = { w: 56, h: 60, below: 8 };
 /** The hire panel beside a slot: its size and how far right of the slot its centre is. */
 export const HIRE = { w: 320, h: 212, dx: 200 };
 /** The two road cards after a boss, by their centres. */

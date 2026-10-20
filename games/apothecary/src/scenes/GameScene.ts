@@ -4,7 +4,7 @@ import { settings as hubSettings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { RUSH_SONG, SONG, sfx, type SfxName } from '../audio';
-import { renderScale, scrollingCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
+import { scrollingCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
 import { PIXIE_FRAMES, drawFairyPaths, laneOffset, pointAlong } from '../art/pixies';
 import { plantTexture } from '../art/garden';
 import { EXPANSION_IMAGE, WALLS_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
@@ -50,6 +50,8 @@ import { clearSave, loadState, saveState } from '../game/save';
 import { townOpen } from '../game/town';
 import { tickTown } from '../game/townSim';
 import { leaveFor } from './townKit';
+import { addWeather } from './weather';
+import { setupZoom } from './zoom';
 import {
   BELTS,
   BELT_COST,
@@ -100,8 +102,6 @@ import {
   WEATHER,
   isMarketDay,
   weatherFor,
-  type Weather,
-  DAY_MS as DAY,
   GARDEN_NAMES,
   GARDEN_NAMES_IN,
   SEAL_PRICE,
@@ -256,7 +256,6 @@ const DAY_BAR = { left: -140, right: 90 };
 const HUD_ICON_BUTTON = 36;
 /** The hands card at the bottom of the screen: its height and the slots' spacing. */
 const HANDS_BAR = { h: 40, gap: 40 };
-/** Where the contract card and the away chip sit on screen, below the top bar. */
 /** Pixies fly above everything standing in the world, under the order bubbles and bars. */
 const PIXIE_DEPTH = 5000;
 /** How long before the end of its route a pixie turns off towards the pallet or shelf its goods go on. */
@@ -274,12 +273,6 @@ const BELT_TARGET: Record<BeltId, StationId> = {
 const ORDER_STRIP = { x: 8, y: 50, w: 44, h: 34, gap: 4 };
 /** The weather is drawn over everything standing in the world and the pixies, under the bubbles and bars. */
 const WEATHER_DEPTH = 9990;
-/** The evening light: from this share of the day on, deepening to this alpha at dusk. */
-const DUSK_FROM = 0.6;
-const DUSK_ALPHA = 0.45;
-/** How many rain streaks and heat waves are in view at once. */
-const RAIN_STREAKS = 140;
-const HEAT_WAVES = 22;
 const CONTRACT_CARD = { x: 313, y: 50, w: 300, h: 44 };
 /** The town card, right of the contract: the day's weather, the street's reputation and the market day. */
 const TOWN_CARD = { x: 626, y: 50, w: 316, h: 44 };
@@ -290,17 +283,6 @@ const BUBBLE = { h: 30, above: 58, icon: 15, ring: 6 };
 const REFINING_BAR = 0xc8741e;
 /** The refining bars' height, a little taller than the 6px default so they read under the table. */
 const REFINING_BAR_H = 8;
-
-/**
- * Closest and farthest the view zooms: out until the whole yard is tall enough to fit, but never past
- * the world's width (see `setZoom`), in to double size.
- */
-const MIN_ZOOM = 0.62;
-const MAX_ZOOM = 2;
-/** How much one mouse wheel notch or key press zooms. */
-const ZOOM_STEP = 1.1;
-/** Where the zoom is kept between visits; it's a view preference, so "New game" keeps it. */
-const ZOOM_KEY = 'apothecary-zoom';
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -379,8 +361,6 @@ export class GameScene extends Phaser.Scene {
   private views: (() => void)[] = [];
   /** Draws the top bar and panels at a fixed size, while the main camera zooms the world. */
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
-  /** The finger spread and zoom when a two-finger pinch began, or null while there is no pinch. */
-  private pinch: { spread: number; zoom: number } | null = null;
   /** What the craftsmen and belts earned while the player was away, shown on a chip until tapped. */
   away: AwaySummary | null = null;
   /** The panel shown once the town is cured, until tapped away. */
@@ -436,12 +416,12 @@ export class GameScene extends Phaser.Scene {
     this.createWagon();
     this.createHerbMarket();
     this.createOrderStrip();
-    this.createWeather();
+    this.views.push(addWeather(this, WORLD, WEATHER_DEPTH, () => this.state));
     this.createAwayChip();
     this.createSound();
     this.createUiCamera();
     this.createControls();
-    this.createZoom();
+    setupZoom(this, WORLD);
     this.setUpSaving();
   }
 
@@ -487,45 +467,6 @@ export class GameScene extends Phaser.Scene {
     const world = this.cameras.main.id;
     const ui = this.uiCamera.id;
     for (const obj of this.children.list) obj.cameraFilter = (obj as unknown as { depth: number }).depth >= UI_DEPTH ? world : ui;
-  }
-
-  /** Zoom with the mouse wheel, the + and - keys, or a two-finger pinch. */
-  private createZoom() {
-    this.setZoom(Number(readZoom()) || 1);
-    this.input.on('wheel', (_p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
-      if (dy !== 0) this.setZoom(this.zoom * (dy < 0 ? ZOOM_STEP : 1 / ZOOM_STEP));
-    });
-    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
-      if (e.key === '+' || e.key === '=') this.setZoom(this.zoom * ZOOM_STEP);
-      if (e.key === '-' || e.key === '_') this.setZoom(this.zoom / ZOOM_STEP);
-    });
-    // A second touch pointer, so two fingers can pinch.
-    if (this.input.manager.pointersTotal < 3) this.input.addPointer(1);
-    this.input.on('pointermove', () => {
-      const [a, b] = [this.input.pointer1, this.input.pointer2];
-      if (!a.isDown || !b.isDown) return;
-      const spread = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
-      if (!this.pinch) this.pinch = { spread, zoom: this.zoom };
-      else if (this.pinch.spread > 0) this.setZoom((this.pinch.zoom * spread) / this.pinch.spread);
-    });
-    this.input.on('pointerup', () => {
-      if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) this.pinch = null;
-    });
-  }
-
-  /** The player's zoom; the main camera's own zoom also includes the screen's `renderScale`. */
-  private get zoom() {
-    return this.cameras.main.zoom / renderScale;
-  }
-
-  private setZoom(zoom: number) {
-    // Never out past the world's width or height, so the map always fills the view (a 4:3 view is taller than 540).
-    const view = viewSize(this);
-    const clamped = Phaser.Math.Clamp(zoom, Math.max(MIN_ZOOM, view.width / WORLD.w, view.height / WORLD.h), MAX_ZOOM);
-    // A view wider than the world even at the closest zoom (never at 960x540) widens the bounds evenly on both sides.
-    const w = Math.max(WORLD.w, view.width / clamped);
-    this.cameras.main.setZoom(clamped * renderScale).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
-    writeZoom(clamped);
   }
 
   /** A painted piece of ground laid flat, its top-left corner at (x, y). */
@@ -1388,7 +1329,7 @@ export class GameScene extends Phaser.Scene {
     const x = CONTRACT_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+    this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
     const icon = fit(this.add.image(x + 22, y + h / 2 + 1, itemTexture('sleepingTonic')), 1.8).setDepth(d + 0.1);
     const title = this.add.text(x + 42, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const pips = this.add.graphics().setDepth(d + 0.1);
@@ -1480,7 +1421,7 @@ export class GameScene extends Phaser.Scene {
     const x = PLAGUE_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+    const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
     const bell = fit(this.add.image(x + 19, y + h / 2, 'bell')).setDepth(d + 0.1);
     const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const pips = this.add.graphics().setDepth(d + 0.1);
@@ -1539,7 +1480,7 @@ export class GameScene extends Phaser.Scene {
       }
       seen = { stage: plague.stage, relapses: plague.relapses, cured: plague.cured, season };
       const stage = plagueStage(this.state);
-      const key = `${season}:${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${this.state.seals}:${Math.ceil(plague.left / (DAY / 4))}`;
+      const key = `${season}:${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${this.state.seals}:${Math.ceil(plague.left / (DAY_MS / 4))}`;
       if (key === drawn) return;
       drawn = key;
       for (const part of parts) part.setVisible(true);
@@ -1574,7 +1515,7 @@ export class GameScene extends Phaser.Scene {
           pips.lineStyle(1.1, 0x2a1d14, k < plague.made ? 0.95 : 0.5).strokeCircle(px, y + 31, r);
         }
         count.setText(`${plague.made}/${plague.need}`).setX(x + 48 + plague.need * gap - gap / 2 + 4);
-        const days = plague.left / DAY;
+        const days = plague.left / DAY_MS;
         side.setText(days >= 1 ? t('daysLeft', { n: Math.ceil(days) }) : t('lastDay'));
       }
     });
@@ -1750,7 +1691,7 @@ export class GameScene extends Phaser.Scene {
     const x = TOWN_CARD.x + viewFrame(this).x;
     const d = UI_DEPTH;
     const first = this.children.list.length;
-    this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+    this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
     const icon = fit(this.add.image(x + 19, y + h / 2, 'weather-mild')).setDepth(d + 0.1);
     const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const label = this.add.text(x + 36, y + 31, t('reputation'), { ...HUD_TEXT, fontSize: '12px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
@@ -1807,64 +1748,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * "While you were away: +32 coins, 9 potions" on a violet chip under the top bar, after the
-   * automation caught up on the time away; tapping it puts it away.
-   */
-  /**
-   * Today's weather over the yard: a grey-blue dusk and falling rain on a rainy day, a warm haze with
-   * heat rising in wavy lines in a drought, a little golden light on a fair day, and nothing on a
-   * mild one. It is drawn in the world over everything standing, under the bubbles and bars, across
-   * what the camera sees. With reduced motion the tint stays and nothing moves.
-   */
-  private createWeather() {
-    const tint = this.add.rectangle(0, 0, WORLD.w, WORLD.h, 0, 0).setOrigin(0).setDepth(WEATHER_DEPTH);
-    const fx = this.add.graphics().setDepth(WEATHER_DEPTH + 0.1);
-    // Evening light over the last part of the day: warm at first, then deepening towards dusk.
-    const dusk = this.add.rectangle(0, 0, WORLD.w, WORLD.h, 0, 0).setOrigin(0).setDepth(WEATHER_DEPTH + 0.05);
-    const TINTS: Record<Weather, [number, number]> = { mild: [0, 0], rain: [0x2a3a58, 0.22], fair: [0xffd870, 0.08], drought: [0xe0782a, 0.14] };
-    // Where each streak or wave starts, spread evenly but not in rows: a fixed scatter, so the weather
-    // never touches Math.random.
-    const scatter = (i: number, k: number) => ((Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1 + 1) % 1;
-    this.views.push(() => {
-      const weather = weatherFor(this.state.contract.day);
-      const [color, alpha] = TINTS[weather];
-      tint.setFillStyle(color, alpha);
-      const evening = Phaser.Math.Clamp((1 - this.state.contract.dayLeft / DAY_MS - DUSK_FROM) / (1 - DUSK_FROM), 0, 1);
-      const light = Phaser.Display.Color.Interpolate.ColorWithColor(Phaser.Display.Color.ValueToColor(0xe8903a), Phaser.Display.Color.ValueToColor(0x1c2050), 1, evening);
-      dusk.setFillStyle(Phaser.Display.Color.GetColor(light.r, light.g, light.b), evening * DUSK_ALPHA);
-      fx.clear();
-      if (hubSettings.reduceMotion || (weather !== 'rain' && weather !== 'drought')) return;
-      const view = this.cameras.main.worldView;
-      const t = this.time.now;
-      if (weather === 'rain') {
-        // Streaks falling fast and slanting a little, wrapping round the view.
-        fx.lineStyle(1.2, 0xc8d8f0, 0.55);
-        for (let i = 0; i < RAIN_STREAKS; i++) {
-          const x = view.x + scatter(i, 1) * (view.width + 40) - 20;
-          const fall = (scatter(i, 2) * view.height + t * (0.55 + scatter(i, 3) * 0.25)) % (view.height + 30);
-          const y = view.y + fall - 15;
-          fx.lineBetween(x, y, x - 3, y + 12);
-        }
-      } else {
-        // Heat: faint wavy lines drifting up from the ground.
-        fx.lineStyle(1.4, 0xfff0c8, 0.3);
-        for (let i = 0; i < HEAT_WAVES; i++) {
-          const x = view.x + scatter(i, 4) * view.width;
-          const rise = (scatter(i, 5) * view.height + t * 0.04) % view.height;
-          const y = view.y + view.height - rise;
-          fx.beginPath();
-          for (let k = 0; k <= 8; k++) {
-            const px = x + k * 5, py = y + Math.sin(k * 0.9 + t / 300 + i) * 2.5;
-            if (k === 0) fx.moveTo(px, py);
-            else fx.lineTo(px, py);
-          }
-          fx.strokePath();
-        }
-      }
-    });
-  }
-
-  /**
    * Every customer's order, always on screen: a row of small cards under the top bar on the left,
    * one per customer in the order they came, each with the potions still owed and, once they wait at
    * the counter, how much patience they have left.
@@ -1876,7 +1759,7 @@ export class GameScene extends Phaser.Scene {
     const key = cardTexture(this, 'chip', w, h);
     const chips = Array.from({ length: MAX_ORDER_SLOTS }, (_, i) => {
       const cx = x + i * (w + gap) + w / 2;
-      const card = this.card(cx, y + h / 2, 'chip', key).setDepth(d).setAlpha(HUD_CARD_ALPHA);
+      const card = this.card(cx, y + h / 2, 'chip', key).setDepth(d).setAlpha(HUD_CARD_ALPHA).setInteractive().on('pointerdown', this.stopTaps);
       const icons = [0, 1].map(() => fit(this.add.image(0, y + 12, itemTexture('healingDraught'))).setDepth(d + 0.1));
       const patience = new ProgressBar(this, cx, y + h - 10, w - 10, 0x58a35a, d + 0.1);
       return { cx, card, icons, patience };
@@ -1897,13 +1780,17 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * "While you were away: +32 coins, 9 potions" on a violet chip under the top bar, after the
+   * automation caught up on the time away; tapping it puts it away.
+   */
   private createAwayChip() {
     const away = this.away;
     if (!away) return;
     // The chip keeps its right edge and grows to the left when the numbers are long.
     const { y, h } = AWAY_CHIP;
     const d = UI_DEPTH;
-        const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const sum = coined(this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1));
     const w = Math.max(AWAY_CHIP.w, Math.ceil(lead.width + sum.width + 46));
     const x = viewFrame(this).x + AWAY_CHIP.x + AWAY_CHIP.w - w;
@@ -1924,16 +1811,11 @@ export class GameScene extends Phaser.Scene {
   private createHud() {
     const { width, height } = viewSize(this);
     const first = this.children.list.length;
-    // Taps on the bar stop here rather than falling through to a priority sign in the world below.
-    const stopTaps = (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-      e.stopPropagation();
-      this.pinching();
-    };
     fit(this.add.image(0, 0, cardTexture(this, 'bar', width, HUD_HEIGHT)))
       .setOrigin(0)
       .setDepth(UI_DEPTH)
       .setInteractive()
-      .on('pointerdown', stopTaps);
+      .on('pointerdown', this.stopTaps);
     const style = HUD_TEXT;
     fit(this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin'), 1.6).setDepth(UI_DEPTH);
     const coins = this.add.text(42, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
@@ -1976,7 +1858,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH)
       .setAlpha(HUD_CARD_ALPHA)
       .setInteractive()
-      .on('pointerdown', stopTaps);
+      .on('pointerdown', this.stopTaps);
     label.setX(barX + 12);
     const frames: Phaser.GameObjects.Image[] = [];
     const bins: Phaser.GameObjects.Image[] = [];
@@ -2091,6 +1973,12 @@ export class GameScene extends Phaser.Scene {
       });
     return [button, text] as const;
   }
+
+  /** Stops a tap on a HUD card here rather than letting it fall through to a sign in the world below. */
+  private readonly stopTaps = (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+    e.stopPropagation();
+    this.pinching();
+  };
 
   /** True while two fingers are down, which starts a pinch; it also cancels the walk. */
   private pinching() {
@@ -2604,22 +2492,6 @@ function walkTowards(obj: Phaser.GameObjects.Image, to: Point, step: number, lea
   else obj.setX(along(obj.x, to.x));
   obj.setDepth(obj.y);
   return obj.x === to.x && obj.y === to.y;
-}
-
-function readZoom() {
-  try {
-    return localStorage.getItem(ZOOM_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeZoom(zoom: number) {
-  try {
-    localStorage.setItem(ZOOM_KEY, String(zoom));
-  } catch {
-    // Without storage the zoom just isn't remembered.
-  }
 }
 
 /** How wide an order bubble is for `n` potions: their icons and a margin. */

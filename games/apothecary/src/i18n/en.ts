@@ -125,6 +125,8 @@ const en = {
   notOnShelf: 'Not on the shelf yet',
   serveInShop: 'Step into the shop to serve',
   landBought: 'New land bought!',
+  secondLine: 'Second line',
+  line2Built: 'Second line built!',
   tableBuilt: 'Refining table built!',
   cauldronBuilt: 'Cauldron built!',
   fieldPlanted: 'Field planted!',
@@ -306,6 +308,12 @@ const en = {
   ale: 'Ale',
   stout: 'Stout',
   brewer: 'Brewer',
+  // A shop's fine goods and contracts
+  fineGood: 'Fine {item}',
+  shopContract: 'Contract: {item} {made}/{need}, {coins}{coin}',
+  shopContractBundle: 'Contract: {item} {made}/{need} + {item2} {made2}/{need2}, {coins}{coin}',
+  blightInShop: 'Blight in the beds! Clear it with the sickle',
+  shopContractKept: 'Contract kept! +{coins}{coin}',
   // The recipes each shop's study teaches, and their gardens
   orchard: 'Orchard',
   apple: 'Apple',

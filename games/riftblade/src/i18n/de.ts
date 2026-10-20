@@ -263,7 +263,7 @@ const de: Translation<typeof en> = {
   theFall2: 'Voller Zorn: doppelter Schaden, halbes Heilen',
   theFall3: 'Heilen zehrt nicht mehr am Zorn',
   theFall4: '+15 % Tempo, Hiebe treffen 20 % härter',
-  theFall5: 'Bei vollem Zorn werfen Hiebe eine purpurne Welle',
+  theFall5: 'Bei vollem Zorn werfen Hiebe eine türkise Welle',
   // dread
   dreadName: 'Grauen',
   dreadBlurb: 'Eine Aura, die Gegner bremst; schwache fliehen.',

@@ -374,8 +374,8 @@ export class GameScene extends Phaser.Scene {
 
   /** An enemy's hull, as a little scale bar over it once it has been hit. */
   private drawHpBar(ship: Ship, escort: boolean) {
-    // A prize's bar is always shown, in green; the flagship's too, so it reads as the big one.
-    if (ship.hp >= ship.maxHp && !escort && ship.kind !== 'flagship') return;
+    // A prize's bar is always shown, in green; the flagships' too (the admiral's included), so they read as the big ones.
+    if (ship.hp >= ship.maxHp && !escort && ship.kind !== 'flagship' && ship.kind !== 'admiral') return;
     const at = this.place(ship);
     const x = Math.round(at.x - HP_BAR_W / 2);
     const y = Math.round(at.y - lookOf(ship, this.state.hull).length / 2 - 14);
@@ -528,7 +528,7 @@ export class GameScene extends Phaser.Scene {
     if (s.phase !== 'fighting') return;
     this.drawShells();
     for (const e of s.enemies) {
-      const pts = detourCourse(s, e);
+      const pts = detourCourse(e);
       if (pts.length < 2) continue;
       const at = this.place(e);
       const screen = pts.map((p) => ({ x: at.x + p.x - e.x, y: at.y + p.y - e.y }));
@@ -1045,6 +1045,14 @@ export class GameScene extends Phaser.Scene {
     }
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.held.delete(pointer.id));
     this.input.on('gameout', () => this.held.clear());
+    // A pointer let go while the shared pause screen was up never reaches this scene, so let go of
+    // every control on resume, and start the clock afresh rather than jumping a whole step.
+    const resume = () => {
+      this.held.clear();
+      this.lastFrame = null;
+    };
+    this.events.on(Phaser.Scenes.Events.RESUME, resume);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off(Phaser.Scenes.Events.RESUME, resume));
     this.controls = this.add.graphics().setScrollFactor(0).setDepth(UI_DEPTH + 1);
   }
 

@@ -155,8 +155,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pools: ['blade', 'current'],
     schemes: [
       { name: 'Prodigy', body: '#1d2f6b', accent: '#ff4fd8', mark: '#2b2018', bolt: '#ff4fd8' },
-      // On The Fall path his blade darkens to crimson.
-      { name: 'Fallen', body: '#1a1626', accent: '#d4145a', mark: '#120c14', bolt: '#d4145a' },
+      // On The Fall path he takes his master Lord Vharn's colours.
+      { name: 'Fallen', body: '#33363f', accent: '#2ee6d0', mark: '#0f3a3a', bolt: '#2ee6d0' },
     ],
     maxHp: 165,
     speed: 168,
@@ -230,7 +230,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     short: 'corvinShort',
     weapon: 'corvinWeapon',
     pools: ['blade', 'current'],
-    schemes: [{ name: 'Elder', body: '#a98763', accent: '#5fd0ff', mark: '#6e5233', bolt: '#5fd0ff' }],
+    schemes: [{ name: 'Elder', body: '#a8282c', accent: '#5fd0ff', mark: '#5c1418', bolt: '#5fd0ff' }],
     maxHp: 115,
     speed: 140,
     aim: 'spin',

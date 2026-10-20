@@ -58,7 +58,8 @@ in code.
    - **Weak** (a broken sword): attacks deal a quarter less. Wears off by one each time its owner
      acts.
    - **Vulnerable** (a cracked shield): takes half as much damage again from attacks. Wears off by
-     one at the end of each round.
+     one at the end of each round; put on the hero during the foes' turn, it starts wearing off a
+     round later, so it lasts as many foe turns as its number.
    - **Poison** (a green drop): loses that much health at the start of its turn, ignoring block,
      then the poison drops by one.
 7. **Gold and rewards**: every fight drops gold (each foe has its own amount) and offers one of
@@ -69,7 +70,8 @@ in code.
    sells two. Keep one for the boss, or drink it now.
 9. **Powers** are cards that stay in play once played, shown in purple rings by the hero: Bulwark
    (3 block each turn), Thorns (deal 3 back to any foe that hits you), Battle Rage (1 Strength each
-   turn, added to every hit) and Venom Veil (poison on one foe splashes half onto the rest).
+   turn, added to every hit) and Venom Veil (poison on one foe splashes half onto the rest). A second
+   copy of a power in play adds its effect again.
 10. **Curses** are grey cards that can't be played and only leave the deck when burnt or removed:
     Rust clogs a slot in the hand, Wound costs 2 health when drawn (it never kills), and Doubt makes
     the first card each turn cost 1 more while in hand. Elites threaten them as a move, and the

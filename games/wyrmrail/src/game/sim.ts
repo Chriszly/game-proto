@@ -278,8 +278,9 @@ function setSwitchFor(s: GameState, from: Tile | null, at: Tile, next: Tile) {
 
 /**
  * A way along the line from `a` to `b`, without `a`, for a wyrm that came to `a` from `from`; null
- * if there is none. It searches (tile, came-from) pairs: it goes straight over a crossing, and it
- * only turns back at a station, at the end of a line, or where it starts. Loose, it is the shortest
+ * if there is none. It searches (tile, came-from) pairs: it goes straight over a crossing (any way
+ * from one it starts on with no `from`), and it only turns back at a station, at the end of a line,
+ * or where it starts with no `from`. Loose, it is the shortest
  * such way, switches or not. Strict, it is the shortest way the switches leave open: it never uses a
  * junction's barred arm.
  */
@@ -298,12 +299,12 @@ export function route(s: GameState, a: Tile, b: Tile, from: Tile | null = null, 
     }
     const closed = s.switches[key(step.t)];
     const out = arms(s, step.t);
-    const crossing = step.back && step.prev && isCrossing(s, step.t) ? opposite(step.t, step.prev) : null;
+    const crossing = step.prev && isCrossing(s, step.t) ? opposite(step.t, step.prev) : null;
     for (const n of out) {
       if (seen.has(id(n, step.t))) continue;
       if (crossing && !sameTile(n, crossing)) continue;
       const back = step.prev && sameTile(n, step.prev);
-      if (back && step.back && out.length > 1 && !isStation(s, step.t)) continue;
+      if (back && out.length > 1 && !isStation(s, step.t)) continue;
       if (strict && closed && (closed === key(n) || (step.prev && closed === key(step.prev)))) continue;
       seen.add(id(n, step.t));
       queue.push({ t: n, prev: step.t, back: step });
@@ -320,7 +321,7 @@ function planRoute(s: GameState, w: Wyrm, b: Tile) {
 /** Whether a wyrm could fetch and deliver this order along the track laid so far. */
 export function routable(s: GameState, o: Order) {
   const from = villages(s)[o.from];
-  return s.wyrms.some((w) => route(s, w.at, from) !== null) && route(s, from, villages(s)[o.to]) !== null;
+  return s.wyrms.some((w) => route(s, w.at, from, w.from) !== null) && route(s, from, villages(s)[o.to]) !== null;
 }
 
 /** Sends the wyrms for a waiting order; they fetch and deliver sent orders nearest stop first. */
@@ -533,6 +534,8 @@ function tickHazard(s: GameState, dt: number) {
 /** The hazard takes its tile's track, once no wyrm is on it or about to cross it; the wyrms heading over it stop short and think again. */
 function strikeHazard(s: GameState) {
   const h = s.hazard!;
+  // A wyrm idling on the tile, waiting for its next job, steps off it so the hazard can strike.
+  for (const w of s.wyrms) if (sameTile(w.at, h.tile) && !w.job && !w.path.length && w.progress === 0) stepOff(s, w);
   if (s.wyrms.some((w) => sameTile(w.at, h.tile) || (w.progress > 0 && w.path.length && sameTile(w.path[0], h.tile)))) {
     h.ms = 500;
     return;
@@ -546,8 +549,24 @@ function strikeHazard(s: GameState) {
     const i = w.path.findIndex((t) => sameTile(t, h.tile));
     if (i < 0) continue;
     w.path = w.path.slice(0, i);
+    if (!w.path.length) stopWaiting(w);
     dropJob(s, w);
   }
+}
+
+/** An idle wyrm moves one tile on, straight ahead if it can, else back the way it came, else any way. */
+function stepOff(s: GameState, w: Wyrm) {
+  const out = arms(s, w.at);
+  const ahead = w.from && out.find((n) => sameTile(n, opposite(w.at, w.from!)));
+  const back = w.from && out.find((n) => sameTile(n, w.from!));
+  const next = ahead || back || out[0];
+  if (next) w.path = [next];
+}
+
+/** A wyrm that has nowhere left to go stops waiting at a junction or a switch. */
+function stopWaiting(w: Wyrm) {
+  w.waitMs = 0;
+  w.switchMs = 0;
 }
 
 /** A wyrm gives up the stop it was heading for: a pickup goes back to the queue, cargo stays aboard. */
@@ -615,14 +634,15 @@ function stopForSwitch(s: GameState, w: Wyrm) {
 
 /**
  * Whether a wyrm about to move on has to wait: the tile ahead is a junction the other wyrm is on or
- * heading into. It waits `JUNCTION_WAIT_MS` at most, so two wyrms never block each other for good.
+ * moving into (one waiting before it doesn't count, so of two wyrms meeting there one goes first).
+ * It waits `JUNCTION_WAIT_MS` at most, so two wyrms never block each other for good.
  */
 function waitForOther(s: GameState, i: number, dt: number) {
   const w = s.wyrms[i];
   const next = w.path[0];
   const held =
     !!s.switches[key(next)] &&
-    s.wyrms.some((o, j) => j !== i && (sameTile(o.at, next) || (o.path.length > 0 && sameTile(o.path[0], next))));
+    s.wyrms.some((o, j) => j !== i && (sameTile(o.at, next) || (o.progress > 0 && o.path.length > 0 && sameTile(o.path[0], next))));
   if (!held || w.waitMs >= JUNCTION_WAIT_MS) {
     w.waitMs = 0;
     return false;
@@ -643,7 +663,7 @@ function nextStop(s: GameState, i: number) {
     if (path) {
       w.job = { leg: 'feed' };
       w.path = path;
-      if (!path.length) arrive(s, i);
+      // Already on the Roost: `moveWyrm` has it arrive, like any stop.
       return;
     }
   }
@@ -792,6 +812,7 @@ function failOrder(s: GameState, o: Order) {
     w.loadMs = 0;
     // It stops at the next tile it reaches.
     w.path = w.progress > 0 ? w.path.slice(0, 1) : [];
+    if (!w.path.length) stopWaiting(w);
   }
   s.hearts--;
   pop(s, tr('late', { cargo: tr(CARGO_NAMES[o.cargo].name) }), villages(s)[o.to], '#f08a6a');
@@ -824,6 +845,7 @@ function addOrder(s: GameState, from: number, to: number, made = false, passenge
     status: 'waiting',
     wyrm: null,
     made,
+    mood,
   });
 }
 

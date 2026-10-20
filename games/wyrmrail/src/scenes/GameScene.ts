@@ -308,9 +308,10 @@ export class GameScene extends Phaser.Scene {
    */
   private onGridPointer(p: Phaser.Input.Pointer, down: boolean) {
     // The camera never scrolls, so the world point is the point in the view.
-    if (p.worldX < BOARD.x || p.worldX >= BOARD.x + BOARD.w || p.worldY < BOARD.y || p.worldY >= BOARD.y + BOARD.h) return;
     const t = tileAt(p.worldX, p.worldY);
-    if (!inGrid(t)) return;
+    const onBoard = p.worldX >= BOARD.x && p.worldX < BOARD.x + BOARD.w && p.worldY >= BOARD.y && p.worldY < BOARD.y + BOARD.h;
+    // A press on a village that slides off the board or the grid is no courier call.
+    if (!onBoard || !inGrid(t)) return void (this.pressedVillage = null);
     if (!down && (this.dragTile === null || this.dragTile === key(t))) return;
     this.dragTile = key(t);
     if (down) this.dragLaid = 0;
@@ -970,8 +971,8 @@ export class GameScene extends Phaser.Scene {
     const pay = this.add.text(PANEL.w / 2 - 8, -26, t('coins', { n: orderPay(s, o) }), textStyle(14, '#f3c64e')).setOrigin(1, 0);
     const route = this.add.text(left, -8, t('route', { from: vs[o.from].name, to: vs[o.to].name }), textStyle(11, '#d8c7a6'));
     const status = this.add.text(left, 5, t(ok ? STATUS_TEXT[o.status] : 'noTrack'), textStyle(11, ok ? '#c9e8c0' : '#a8957a'));
-    // What the sending village's mood did to the order: a sulking village wants it fast, a happy one pays more.
-    const mood = moodOf(s, o.from);
+    // What the sending village's mood did to the order when it was made: a sulking village wants it fast, a happy one pays more.
+    const mood = o.mood;
     const tag = this.add
       .text(PANEL.w / 2 - 8, 5, mood < 0 ? t('rushOrder') : mood > 0 ? t('morePay', { n: Math.round((MOOD_PAY[mood] - 1) * 100) }) : '', textStyle(11, mood < 0 ? '#e8b040' : '#9be883'))
       .setOrigin(1, 0);

@@ -42,8 +42,6 @@ export interface EnemyType {
   gold: number;
   /** The moves it draws its intents from; the first is always its opening move. */
   moves: Intent[];
-  elite?: boolean;
-  boss?: boolean;
 }
 
 export const ENEMIES: Record<EnemyKind, EnemyType> = {
@@ -76,21 +74,18 @@ export const ENEMIES: Record<EnemyKind, EnemyType> = {
     name: 'graveKnightFoe',
     hp: 58,
     gold: 40,
-    elite: true,
     moves: [{ kind: 'block', block: 10 }, { kind: 'attack', damage: 13 }, { kind: 'attack', damage: 6, hits: 2, apply: { status: 'vulnerable', amount: 2 } }, { kind: 'curse', curse: 'wound' }],
   },
   bogWitch: {
     name: 'bogWitchFoe',
     hp: 46,
     gold: 40,
-    elite: true,
     moves: [{ kind: 'debuff', status: 'weak', amount: 2 }, { kind: 'attack', damage: 7, apply: { status: 'poison', amount: 3 } }, { kind: 'attack', damage: 11 }, { kind: 'buff', strength: 2 }, { kind: 'curse', curse: 'doubt' }],
   },
   boneKing: {
     name: 'boneKingFoe',
     hp: 90,
     gold: 60,
-    boss: true,
     moves: [
       { kind: 'attack', damage: 10 },
       { kind: 'block', block: 12 },
@@ -128,14 +123,12 @@ export const ENEMIES: Record<EnemyKind, EnemyType> = {
     name: 'gargoyleFoe',
     hp: 82,
     gold: 50,
-    elite: true,
     moves: [{ kind: 'block', block: 16 }, { kind: 'attack', damage: 17 }, { kind: 'attack', damage: 5, hits: 3 }, { kind: 'curse', curse: 'rust' }],
   },
   hollowQueen: {
     name: 'hollowQueenFoe',
     hp: 130,
     gold: 100,
-    boss: true,
     moves: [
       { kind: 'debuff', status: 'poison', amount: 4 },
       { kind: 'attack', damage: 15 },

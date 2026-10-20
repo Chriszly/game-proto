@@ -16,15 +16,23 @@ export interface Progress {
   unlocked: HeroId[];
 }
 
-const object = (v: unknown) => (typeof v === 'object' && v ? v : {});
+/** A saved count per hero, keeping only known heroes with a finite number. */
+const perHero = (v: unknown): Partial<Record<HeroId, number>> => {
+  const out: Partial<Record<HeroId, number>> = {};
+  if (typeof v !== 'object' || !v) return out;
+  for (const [id, n] of Object.entries(v)) {
+    if (HERO_IDS.includes(id as HeroId) && typeof n === 'number' && Number.isFinite(n)) out[id as HeroId] = n;
+  }
+  return out;
+};
 
 export function loadProgress(): Progress {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}') ?? {};
     return {
       bestMs: typeof saved.bestMs === 'number' ? saved.bestMs : 0,
-      wins: object(saved.wins),
-      furthest: object(saved.furthest),
+      wins: perHero(saved.wins),
+      furthest: perHero(saved.furthest),
       unlocked: Array.isArray(saved.unlocked) ? saved.unlocked.filter((id: unknown) => HERO_IDS.includes(id as HeroId)) : [],
       charted: Array.isArray(saved.charted) ? saved.charted.filter((id: unknown) => typeof id === 'string') : [],
     };

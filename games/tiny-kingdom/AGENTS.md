@@ -23,7 +23,8 @@ Implemented today:
 - The hand (`HAND` = 3): `drawHand` draws three tiles from the pouch (which still counts them)
   with a generator seeded by the island and `draws`, so a kingdom's hands never touch
   `Math.random` and an undone placement redraws the same hand; when no drawn tile has room but a
-  pouch tile has, the first is swapped for one that has. `hand` is sorted in `BUILDINGS` order.
+  pouch tile has, the first is swapped for one that has (a lumber camp counts as having room while
+  a wood beside a camp could be cleared, `playable`). `hand` is sorted in `BUILDINGS` order.
   `select`, `previewPlacement` and `place` only take kinds in the hand (`inHand`); `place`, `clear`
   and `trade` draw the next hand; `merge` and `chooseGift` keep it unless none of it has room while
   a pouch tile has (`keepHandPlayable` then redraws, so a full board can't get stuck). `shownKinds` gives one tile button per
@@ -112,8 +113,9 @@ Implemented today:
   buttons.
 - Royal decrees (`src/game/decree.ts`): one per round, from `decreeFor`. Three kinds: `shore`
   (farms beside a named lake), `wood` (houses beside a named wood) and `watch` (one tower with 3
-  houses around it). `need` is what the board already has plus `ASK` (3 farms, 2 houses; 3 for
-  watch), so a decree never starts fulfilled. Round 1 always asks for 3 more farms on the lake with
+  houses around it). For shore and wood, `need` is what the board already has plus `ASK` (3 farms,
+  2 houses); a watch decree's `need` is a flat 3, offered only while no tower has 3 homes around
+  it, so a decree never starts fulfilled. Round 1 always asks for 3 more farms on the lake with
   the most open shore; later rounds draw a kind and a place from a generator seeded by island and
   round, never repeating the last round's kind and place. Lakes and woods are named by
   `namedPlaces` from where their centre lies (North, South, East, West or Mid, plus mere / pool /
@@ -121,7 +123,9 @@ Implemented today:
   `Decree.place` and `Omen.place`; `placeName` in `src/i18n.ts` shows it in the hub's language
   (Ostweiher, Nordwald). A decree holds no text either: the scene's `decreeLine` words it from
   `kind`, `place` and `need`. Progress (`decreeMarks`) is always
-  counted from the board. Fulfilling it pays `DECREE_BONUS` (8) into `state.bonus` and a crown
+  counted from the board, and the lake or wood itself too: `decreeRegion` keeps only the
+  `Decree.cells` that are still lake or forest, so a wood cell cleared by a lumber camp drops out of
+  the outline and its edge. Fulfilling it pays `DECREE_BONUS` (8) into `state.bonus` and a crown
   (`state.crowns`, saved). An unfulfilled decree lapses when the round ends. The board outlines the
   lake or wood (or the best tower's 3x3) with a yellow dashed line, shows the name on a navy pill,
   ticks counted buildings and marks open grass spots with a dashed box holding a small farm or
@@ -154,17 +158,20 @@ Implemented today:
   (the approved mockup's scale, `.../next5/tiny-kingdom/style-wooden-toy.png` and its `woodtoy.js`),
   baked at `RES` texture pixels per view pixel (the screen's `renderScale`, up to 4 on a 4K
   screen) and shown at view size by `addArt`. Fonts are the system sans stack (`FONT`), weights 700 to 900.
-- The game ends when the pouch is empty, or when no tile has room (`anyPlace`) and no two houses
-  could merge (`housesCanMerge`, which ignores the phase). When only a merge is left, the undo
-  button reads "No room: merge houses or finish" and calls `finish`. A reached goal first gets its
-  gift, unless the island is full and no two houses could merge. `end` pays
+- The game ends when the pouch is empty, or when no pouch tile has a use (`pouchPlayable`: room
+  to go, or for a lumber camp a wood beside a camp to clear) and no two houses could merge
+  (`housesCanMerge`, which ignores the phase). When no tile has room (`anyPlace`) but a merge or
+  clearing is left and nothing can be undone, the undo button reads "No room: merge houses or
+  finish" (or "No room: clear a wood or finish" when no houses can merge) and calls `finish`; while
+  the last placement can still be undone, it stays Undo. A reached goal first gets its gift, unless
+  the island is full and no two houses could merge nor a lumber camp tile clear a wood. `end` pays
   the castle bonus; the best final score, the crowns, the daily best and the campaign stars
   persist (`gameEnded`).
 
 Missing or rough:
 
 - No title screen or menu. The sound has not had a listen on real speakers yet; retune `src/audio.ts` by ear.
-- The campaign's star scores come from a greedy bot (`previewScore` for every kind in the hand and
+- The campaign's star scores come from a greedy bot (`previewPlacement(...).gained` for every kind in the hand and
   every cell, merging when it gains, taking the second gift, the castle bonus included), not from
   human play; retune `LEVELS` if they feel off. The bot never trades or clears woods.
 - The castle bonus can be large on a crowded island (a greedy bot joins 40 to 50 buildings), since
@@ -173,7 +180,7 @@ Missing or rough:
   for enough tiles in the pouch.
 - The decree outline is drawn cell edge by cell edge (dashed, square corners), not as one rounded
   shape like the mockup.
-- `restart` does not clear running popups or the round banner tween.
+- `start` does not clear running score popups (it does stop the round banner).
 - The cover, `island-324.webp`, `island-7409.webp`, `windmill.webp` and `game-over.webp` are not
   made by the test: they were taken with a scratch Playwright script against the dev server (the
   cover and game-over set `state` fields through `window.game` to the mockup's round-3 board, then
@@ -231,11 +238,12 @@ File map (`src/`):
 - `game/state.ts`: `GameState`, `Snapshot`, `Share`, `Preview`, `Placed`, `FIRST_POUCH`,
   `ROUND_POUCH`, `HAND`, `TRADE_GIVE`, `goalFor`, `season`, `newGame(best, crowns, island?,
   kingdom?)`, `inHand`, `cellParts`, `cellScore`, `boardScore`, `canPlace(s, col, row, kind?)`,
-  `previewPlacement`, `previewScore`, `select`, `place`, `canClear`, `previewClear`, `clear`,
+  `previewPlacement`, `select`, `place`, `canClear`, `previewClear`, `clear`,
   `canTrade`, `tradeGives`, `trade`, `canMerge`, `mergeable`, `previewMerge`, `merge`, `anyPlace`,
   `finish`, `canUndo`, `undo`, `chooseGift`, `shownKinds` and `handCount`; `settle` is the shared
   tail of `place`, `clear` and `merge`, `drawHand` draws the next hand, `keepHandPlayable` redraws
-  a stuck one after a merge or gift, `housesCanMerge` checks for a merge whatever the phase and
+  a stuck one after a merge or gift, `playable` and `pouchPlayable` tell whether a tile has a use
+  (room, or a wood to clear), `housesCanMerge` (exported for the undo button's label) checks for a merge whatever the phase and
   `end` finishes the kingdom. No Phaser; `goalFor` reads `byDifficulty` from `shared/settings.ts`.
 - `game/omens.ts`: `OMEN_FROM`, `OmenKind`, `Omen`, `Struck`, `omenFor` and `strike`.
 - `game/castle.ts`: `castleAt`, `joinedCells` and `joinedCount`.
@@ -244,7 +252,7 @@ File map (`src/`):
 - `game/islands.ts`: `Mode`, `Kingdom`, `Level`, `LEVELS`, `starScores` (reads `byDifficulty`), `starsFor`, `levelOpen`, `today`,
   `dailyIsland` and `parseIsland`.
 - `game/decree.ts`: `DECREE_BONUS`, `Decree`, `DecreeMarks`, `At`, `regions`, `namedPlaces`,
-  `decreeMarks` and `decreeFor`.
+  `decreeRegion`, `decreeMarks` and `decreeFor`.
 - `game/gifts.ts`: `GIFTS`, `Gift`, `GIFT_INFO` (label and line as `TextKey`s, icon, tiles),
   `giftsFor` and `newSpecial`.
 - `game/save.ts`: `loadBest`, `saveBest`, `loadCrowns`, `saveCrowns`, `loadDailyBest`,
@@ -276,7 +284,8 @@ How it runs:
   `newGame(loadBest(), loadCrowns())` (a random island) and builds all objects once.
 - There is no `update` method and no tick. The game is event driven: state only changes on a
   tap. Phaser's tweens animate the popups (`POPUP_MS`), the decree's "+8" and the round banner
-  (`BANNER_MS`), so the only time-dependent part is cosmetic.
+  (`BANNER_MS`), so the only time-dependent part is cosmetic. The popups and the "+8" sit at
+  `POPUP_DEPTH`, above the gift card that opens on the same placement.
 - Input: one interactive zone covers the board. `pointermove` calls `hoverPointer`, which turns
   the pointer into layout pixels with `cameras.main.getWorldPoint` and calls `hoverAt`, which sets
   `preview` from `previewPlacement` and redraws the hover; `pointerdown` calls `tapAt`, which maps
@@ -528,7 +537,7 @@ valid island number. Hovering makes no sound. The game has no `?watch` mode.
 - Season bonuses are banked into `bonus` at placement, so they are in the undo `Snapshot`; a
   manor's merge never gets one.
 - `checkEnd` counts a possible merge as a reason to go on (`housesCanMerge`, not `mergeable`, which
-  needs the playing phase); `finish` is the way out then.
+  needs the playing phase), and a possible clearing too (`pouchPlayable`); `finish` is the way out then.
 - Canvas shadows ignore the canvas transform: use `shadow()` in `wood.ts`, which converts art
   units to canvas pixels (`RES / ART`).
 - Show baked textures with `addArt`, never `this.add.image`: a texture is `RES` times its view
@@ -542,9 +551,9 @@ valid island number. Hovering makes no sound. The game has no `?watch` mode.
   added to `Snapshot` too if an undoable placement changes it. Decree payouts are never undoable
   for that reason (`bonus` and `crowns` are not in the snapshot).
 - `state.best` is updated when the game ends but only written to storage by the scene;
-  `restart` keeps the higher of the stored and current best and crowns, so they survive blocked
+  `start` keeps the higher of the stored and current best and crowns, so they survive blocked
   storage.
-- `previewPlacement` returns null when the pouch for that kind is empty, so the hover outline shows
-  but no ghost.
+- `previewPlacement` returns null when the kind is not in the hand (or can't go on that cell), so
+  the hover outline shows but no ghost.
 - In the `'gift'` phase `round` and `goal` already show the next round; the card's title uses
   `round - giftsDue` for the round whose goal was reached.

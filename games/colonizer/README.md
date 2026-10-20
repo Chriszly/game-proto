@@ -87,7 +87,7 @@ the last one on the first page of the build list.
 | S | Stop the selected units |
 | B | Open the build list for the selected villagers, then click a spot to place it (drag a line for a palisade) |
 | 1 to 9 | Select a control group; Ctrl with a number saves the selection to it |
-| Arrow keys, or the screen edge | Scroll the map |
+| Arrow keys, or the screen edge (mouse) | Scroll the map |
 | Click the minimap | Look at that part of the map |
 | Click the horn toast | Look at the raid or the attack it names |
 | Click a camp | Say what it holds and who has it |

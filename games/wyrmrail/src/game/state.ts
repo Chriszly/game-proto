@@ -143,6 +143,8 @@ export interface Order {
   wyrm: number | null;
   /** Made by a workshop from goods the wyrm brought it. */
   made: boolean;
+  /** The sending village's mood when the order was made, which set its pay or its time (0 before moods count). */
+  mood: number;
 }
 
 /** Passengers fill both wagons: a wyrm carrying them loads nothing else. */

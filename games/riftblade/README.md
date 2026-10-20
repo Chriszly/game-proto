@@ -41,7 +41,7 @@ foes and bolts.
 | Captain Rook (slate armour, bronze markings) | Twin pistols: alternating shots at the two nearest bots | **Rally Order**: 5 s of +50% fire rate (12 s) | Gunslinger, Commander, Demolitions |
 | Legionary TR-9 (charcoal armour, orange lenses) | Spread rifle: three wide, inaccurate bolts at the nearest bot. 150 health, slow | **Brace**: 3 s without damage, knocks bots back (20 s) | Suppressor, Riot Shield, Drop Squad |
 | Corporal Bram-17 (sand armour, pink markings) | Carbine: straight bolts at the nearest bot | **Frag Out**: a grenade that clears a circle (9 s) | Marksman, Jump Trooper, Brothers in Arms |
-| Kael Varro (magenta blade) | Slashes in front. Fast and reckless; Temper fills as he kills and drains as he heals | **Leap Strike**: leaps onto the strongest foe and slashes all round (10 s) | Prodigy, Ace Pilot, The Fall (turns him crimson and to the Hollow) |
+| Kael Varro (magenta blade) | Slashes in front. Fast and reckless; Temper fills as he kills and drains as he heals | **Leap Strike**: leaps onto the strongest foe and slashes all round (10 s) | Prodigy, Ace Pilot, The Fall (turns him to Lord Vharn's teal and to the Hollow) |
 | Lord Vharn (turquoise blade) | Throws his blade, which flies out and back. 160 health, armoured, slow | **Grip**: lifts the 5 nearest foes and crushes them (12 s) | Dread, Iron Grip, Life Support |
 | Master Oom (golden blade) | A Current push ripples out around him. Tiny, very fast, 240 health, lightly armoured | **Somersault**: a spinning leap that cuts through foes (8 s) | Stillness, Whirlwind, Old Teacher |
 | Elder Corvin Hale (sky blue blade) | A defensive spin hits every foe close by | **Deflect**: 3 s of foe bolts flying back, and foes that touch him thrown off (11 s) | Bulwark, Persuasion, Vantage |
@@ -197,7 +197,7 @@ it or press its number):
 - **Rest**: heal half your max health.
 - **Event**: a choice with a twist, one of: a **stranded bot** (take it along as a turret drone
   for the next world, or strip it for 20 credits), a **derelict cache** (40 credits, or a random
-  gear piece for 15% of your max health), a **shrine of the Current** (give a tier of one ability
+  gear piece for 15% of your max health; with no gear left to give, 40 credits at no cost), a **shrine of the Current** (give a tier of one ability
   for two tiers of another) or a **lumen well** (a free level-up, or 25 credits).
 
 Then the next world begins. Credits come from elites (6 each), the bosses (30) and each world

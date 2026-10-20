@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 // The hub lists every game and each card opens its game.
 const GAMES = [
@@ -23,6 +24,7 @@ const GAMES = [
   { name: 'Colonizer', path: '/games/colonizer/' },
   { name: 'Riftblade', path: '/games/riftblade/' },
   { name: 'Bramblecrest', path: '/games/bramblecrest/' },
+  { name: 'Ninefold', path: '/games/ninefold/' },
 ];
 
 // The games with a Watch AI mode (`?watch`, see shared/watch.ts); there is no hub link to it.
@@ -117,6 +119,8 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     effects: 80,
     muted: false,
     genreFilter: false,
+    // Desktop Chromium can't tell WiFi from mobile data, so Wi-Fi only isn't offered.
+    updates: 'auto',
   });
   await expect(dialog.getByRole('slider', { name: 'Music' })).toHaveValue('35');
 
@@ -136,13 +140,21 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   await page.keyboard.press('Enter');
   await expect.poll(fullscreen).toBe(true);
 
-  // Delete all progress clears the games' saves and keeps the settings.
+  // Delete all progress clears the games' saves and Continue playing, keeps the settings, and leaves
+  // other sites' keys on the same origin alone.
   await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('apothecary-save', '{}'));
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{}');
+    localStorage.setItem('other-site-data', '1');
+  });
+  await page.reload();
+  const recent = page.getByRole('navigation', { name: 'Continue playing' });
+  await expect(recent.getByRole('link')).toHaveText(['Apothecary']);
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await dialog.getByRole('button', { name: 'Delete all progress' }).click();
-  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['hub-settings']);
+  expect((await page.evaluate(() => Object.keys(localStorage))).sort()).toEqual(['hub-settings', 'other-site-data']);
+  await expect(recent).toBeHidden();
 
   await dialog.getByRole('button', { name: 'Restore defaults' }).click();
   await expect(choice('Difficulty', 'Normal')).toHaveAttribute('aria-pressed', 'true');
@@ -170,6 +182,7 @@ test('hub game settings, continue playing and genre filter', async ({ page }, te
   const dialog = page.getByRole('dialog', { name: 'Apothecary' });
   await expect(dialog).toContainText('This game has progress saved on this device');
   await expect(dialog.getByRole('link', { name: 'Play' })).toHaveAttribute('href', 'games/apothecary/');
+  await expect(dialog.getByRole('link', { name: 'Install' })).toHaveAttribute('href', 'games/apothecary/?install');
   testInfo.attach('game settings', { body: await dialog.screenshot({ path: testInfo.outputPath('game-settings.png') }), contentType: 'image/png' });
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: "Delete this game's progress" }).click();
@@ -188,8 +201,8 @@ test('hub game settings, continue playing and genre filter', async ({ page }, te
   await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
   await genres.getByRole('button', { name: 'Puzzle' }).click();
   await expect(genres.getByRole('button', { name: 'Puzzle' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.game:visible h2')).toContainText(['Lanternkeep', 'Mapmaker', 'Shrine Stack', 'TinctureTinker', 'Tiny Kingdom', 'Wyrmrail']);
-  await expect(page.locator('.game:visible')).toHaveCount(6);
+  await expect(page.locator('.game:visible h2')).toContainText(['Lanternkeep', 'Mapmaker', 'Ninefold', 'Shrine Stack', 'TinctureTinker', 'Tiny Kingdom', 'Wyrmrail']);
+  await expect(page.locator('.game:visible')).toHaveCount(7);
   testInfo.attach('genre filter', { body: await page.screenshot({ path: testInfo.outputPath('genre-filter.png') }), contentType: 'image/png' });
   await genres.getByRole('button', { name: 'All' }).click();
   await expect(page.locator('.game:visible')).toHaveCount(GAMES.length);
@@ -286,6 +299,8 @@ test('games have start and pause screens', async ({ page }, testInfo) => {
   await expect(page.locator('.game-start-button')).toBeVisible();
   await expect(page.locator('.game-overlay-title')).toHaveText('Apothecary');
   expect(await running(), 'paused on the start screen').toBe(false);
+  // Install shows only where the browser can install the page, which a test browser can't.
+  await expect(page.getByRole('button', { name: 'Install as an app' })).toBeHidden();
   testInfo.attach('start', { body: await page.screenshot({ path: testInfo.outputPath('start.png') }), contentType: 'image/png' });
 
   // How to play opens from the start screen, keeps the game paused, and Esc goes back.
@@ -391,4 +406,165 @@ test('hub switches language', async ({ page }, testInfo) => {
   expect(await formats('en')).toEqual(['1,234.5', '17/10/2026']);
   expect(await formats('en-US')).toEqual(['1,234.5', '10/17/2026']);
   expect(await formats('de')).toEqual(['1.234,5', '17.10.2026']);
+});
+
+// Progress files: a game's ⚙ exports just its progress to an encrypted file ending in .gh and the
+// game's code, and imports it back; another game's file or an edited one is refused. Settings
+// exports every game's progress and the settings to a .gh file and imports it back.
+test('hub progress files', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{"coins":42}');
+    localStorage.setItem('palisade-best', '7');
+    localStorage.setItem('other-site-data', '1');
+  });
+  await page.reload();
+  const alerts: string[] = [];
+  page.on('dialog', (d) => {
+    if (d.type() === 'alert') alerts.push(d.message());
+    d.accept();
+  });
+  const save = async (button: ReturnType<Page['getByRole']>) => {
+    const download = page.waitForEvent('download');
+    await button.click();
+    const file = await download;
+    return { name: file.suggestedFilename(), path: (await file.path())! };
+  };
+  const load = async (button: ReturnType<Page['getByRole']>, path: string) => {
+    const chooser = page.waitForEvent('filechooser');
+    await button.click();
+    await (await chooser).setFiles(path);
+  };
+  const stored = (key: string) => page.evaluate((k) => localStorage.getItem(k), key);
+
+  // One game's file holds its progress, encrypted.
+  await page.getByRole('button', { name: 'Settings for Palisade' }).click();
+  const palisade = page.getByRole('dialog', { name: 'Palisade' });
+  const palisadeFile = await save(palisade.getByRole('button', { name: 'Export progress' }));
+  expect(palisadeFile.name).toMatch(/^palisade-\d{4}-\d\d-\d\d\.ghpa$/);
+  await palisade.getByRole('button', { name: 'Close' }).click();
+
+  await page.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Apothecary' });
+  testInfo.attach('game progress file', { body: await dialog.screenshot({ path: testInfo.outputPath('game-progress-file.png') }), contentType: 'image/png' });
+  const file = await save(dialog.getByRole('button', { name: 'Export progress' }));
+  expect(file.name).toMatch(/^apothecary-\d{4}-\d\d-\d\d\.ghap$/);
+  const bytes = readFileSync(file.path);
+  expect(bytes.toString('latin1')).not.toContain('coins');
+
+  // Importing it brings the progress back, and leaves the other games alone.
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{"coins":1}');
+    localStorage.setItem('apothecary-extra', '1');
+  });
+  await load(dialog.getByRole('button', { name: 'Import progress' }), file.path);
+  await expect.poll(() => stored('apothecary-save')).toBe('{"coins":42}');
+  expect(await stored('apothecary-extra')).toBeNull();
+  expect(await stored('palisade-best')).toBe('7');
+  expect(alerts).toEqual([]);
+
+  // Another game's file and an edited file are refused.
+  await load(dialog.getByRole('button', { name: 'Import progress' }), palisadeFile.path);
+  await expect.poll(() => alerts).toEqual(['This is not a progress file for Apothecary, or it was changed.']);
+  const edited = testInfo.outputPath('edited.ghap');
+  bytes[bytes.length - 1] ^= 1;
+  writeFileSync(edited, bytes);
+  await load(dialog.getByRole('button', { name: 'Import progress' }), edited);
+  await expect.poll(() => alerts.length).toBe(2);
+  expect(await stored('apothecary-save')).toBe('{"coins":42}');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Export all and Import all carry every game and the settings, and nothing of other sites.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('group', { name: 'Difficulty' }).getByRole('button', { name: 'Hard' }).click();
+  const progressRow = settings.locator('.setting').filter({ has: page.locator('#export-progress') });
+  testInfo.attach('progress files', { body: await progressRow.screenshot({ path: testInfo.outputPath('progress-files.png') }), contentType: 'image/png' });
+  const all = await save(settings.getByRole('button', { name: 'Export all' }));
+  expect(all.name).toMatch(/^game-hub-progress-\d{4}-\d\d-\d\d\.gh$/);
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('other-site-data', '2');
+  });
+  // It reloads the hub, since the settings may have changed.
+  const reloaded = page.waitForEvent('load');
+  await load(settings.getByRole('button', { name: 'Import all' }), all.path);
+  await reloaded;
+  expect(await stored('palisade-best')).toBe('7');
+  expect(await stored('apothecary-save')).toBe('{"coins":42}');
+  expect(await stored('other-site-data')).toBe('2');
+  expect(JSON.parse((await stored('hub-settings'))!).difficulty).toBe('hard');
+  // A game's file is not a hub file.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await load(settings.getByRole('button', { name: 'Import all' }), file.path);
+  await expect.poll(() => alerts.at(-1)).toBe('This is not a .gh progress file, or it was changed.');
+});
+
+// The hub and every game link their own web app manifest, so each installs as an app of its own.
+test('hub and games install as apps', async ({ page, request }) => {
+  for (const [path, name] of [['/', 'Game hub'], ...GAMES.map((g) => [g.path, g.name])]) {
+    await page.goto(path);
+    const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+    const url = new URL(href!, page.url()).href;
+    const manifest = await (await request.get(url)).json();
+    expect(manifest.name).toBe(name);
+    expect(new URL(manifest.start_url, url).pathname).toBe(path);
+    for (const icon of manifest.icons) expect((await request.get(new URL(icon.src, url).href)).ok()).toBe(true);
+  }
+});
+
+// The Install on a game's hub card opens the game with ?install: its start screen shows Install as
+// the main button in every browser, and where the browser has no install prompt it says how.
+test('a game installs from its start screen', async ({ page }, testInfo) => {
+  await page.addInitScript(() => Object.assign(window, { showStartScreen: true }));
+  await page.goto('/games/apothecary/?install');
+  const install = page.getByRole('button', { name: 'Install as an app' });
+  await expect(install).toBeVisible();
+  await expect(install).toHaveClass(/game-overlay-button/);
+  testInfo.attach('install', { body: await page.screenshot({ path: testInfo.outputPath('install.png') }), contentType: 'image/png' });
+  let hint = '';
+  page.once('dialog', (d) => {
+    hint = d.message();
+    d.accept();
+  });
+  await install.click();
+  await expect.poll(() => hint).toBe("To install, pick Install app or Add to Home Screen in your browser's menu.");
+  await page.locator('.game-start-button').click();
+  await expect(install).toBeHidden();
+});
+
+// The Updates setting says when the installed apps download a new version, and Update now checks
+// at once; the dev server has no service worker, so it finds the latest version in place.
+test('hub update settings', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const updates = page.getByRole('dialog', { name: 'Settings' }).getByRole('group', { name: 'Updates' });
+  // Desktop Chromium can't tell WiFi from mobile data, so it isn't offered Wi-Fi only.
+  await expect(updates.getByRole('button', { name: 'Automatic' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(updates.getByRole('button', { name: 'Wi-Fi only' })).toHaveCount(0);
+  await updates.getByRole('button', { name: 'Off' }).click();
+  await expect(updates.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+  const row = updates.locator('xpath=..');
+  testInfo.attach('updates', { body: await row.screenshot({ path: testInfo.outputPath('updates.png') }), contentType: 'image/png' });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-settings')!).updates)).toBe('off');
+  let message = '';
+  page.once('dialog', (d) => {
+    message = d.message();
+    d.accept();
+  });
+  await updates.getByRole('button', { name: 'Update now' }).click();
+  await expect.poll(() => message).toBe('You have the latest version.');
+});
+
+// A browser that tells WiFi from mobile data, like Chrome on Android, offers Wi-Fi only and picks it first.
+test('hub offers Wi-Fi only updates where the connection type is known', async ({ page }) => {
+  await page.addInitScript(() => {
+    const connection = (navigator as { connection?: object }).connection!;
+    Object.defineProperty(Object.getPrototypeOf(connection), 'type', { get: () => 'wifi', configurable: true });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const updates = page.getByRole('dialog', { name: 'Settings' }).getByRole('group', { name: 'Updates' });
+  await expect(updates.getByRole('button', { name: 'Wi-Fi only' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Wi-Fi only waits while you are on mobile data.', { exact: false })).toBeVisible();
 });

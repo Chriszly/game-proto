@@ -100,19 +100,19 @@ const de: Translation<typeof en> = {
 
   // Relics
   oakWardName: 'Eichenschutz',
-  oakWardText: 'Beginne jeden Zug mit 3 Block.',
+  oakWardText: 'Beginne jeden Zug mit {n} Block.',
   whetstoneName: 'Wetzstein',
-  whetstoneText: 'Deine Angriffe verursachen 2 Schaden mehr pro Treffer.',
+  whetstoneText: 'Deine Angriffe verursachen {n} Schaden mehr pro Treffer.',
   emberLanternName: 'Glutlaterne',
-  emberLanternText: 'Im ersten Zug jedes Kampfes 1 Energie mehr.',
+  emberLanternText: 'Im ersten Zug jedes Kampfes {n} Energie mehr.',
   mendingMossName: 'Heilmoos',
-  mendingMossText: 'Heile 5 nach jedem gewonnenen Kampf.',
+  mendingMossText: 'Heile {n} nach jedem gewonnenen Kampf.',
   goldenIdolName: 'Goldener Götze',
   goldenIdolText: 'Kämpfe bringen anderthalbmal so viel Gold.',
   boneCharmName: 'Knochenamulett',
-  boneCharmText: 'Jeder Feind beginnt jeden Kampf mit 2 Verwundbar.',
+  boneCharmText: 'Jeder Feind beginnt jeden Kampf mit {n} Verwundbar.',
   venomGlandName: 'Giftdrüse',
-  venomGlandText: 'Dein Gift ist um 2 stärker.',
+  venomGlandText: 'Dein Gift ist um {n} stärker.',
 
   // Mystery rooms
   altarTitle: 'Ein blutbefleckter Altar',

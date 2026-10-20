@@ -14,7 +14,10 @@ export const MAX_SHARDS = 300;
 /** The hero's body radius and base shard pickup radius, px. */
 export const HERO_R = 13;
 export const PICKUP_R = 60;
-/** How far from the hero new bots appear: just past the corners of the view. */
+/**
+ * How far from the hero new bots appear: just past the corners of the view. The numbers fit
+ * 960x540; a larger view moves the whole ring out by `GameState.ringOut`.
+ */
 export const SPAWN_RING = { min: 570, max: 640 };
 /** Bots further than this from the hero are brought back around to the spawn ring. */
 export const LEASH = 900;
@@ -493,6 +496,8 @@ export interface GameState {
   escort: boolean;
   /** Max health kept after the cache's cost (1 = all of it). */
   maxHpMod: number;
+  /** How much further the view's corners reach than 960x540's, px, set at `startRun`; the spawn ring moves out by it. */
+  ringOut: number;
   /** Whether every arena elite fell. */
   arenaWon: boolean;
   /** Counts for the end screen and the test. */
@@ -599,6 +604,7 @@ export function freshState(): GameState {
     event: null,
     escort: false,
     maxHpMod: 1,
+    ringOut: 0,
     arenaWon: false,
     kills: 0,
     elitesKilled: 0,

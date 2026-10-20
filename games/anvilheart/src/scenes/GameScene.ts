@@ -146,6 +146,8 @@ interface Visitor {
   setSword: Phaser.GameObjects.Image | null;
   setShield: Phaser.GameObjects.Image | null;
   ticks: Phaser.GameObjects.Image[];
+  /** The order card's price, kept up to date since spending guild stars lowers it. */
+  price: Phaser.GameObjects.Text;
   tag: Phaser.GameObjects.Container;
   tagImage: Phaser.GameObjects.Image;
   tagTop: Phaser.GameObjects.Text;
@@ -313,10 +315,16 @@ export class GameScene extends Phaser.Scene {
     // An offer still waiting from the last visit opens at once.
     this.chooser.setVisible(this.state.choosing);
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pickUp(p));
+    // A press on a button or link is that control's own, even one that just closed its window and
+    // left a sword under the pointer.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      if (over.length === 0) this.pickUp(p);
+    });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.held?.sprite.setPosition(p.worldX, p.worldY));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.putDown(p));
     this.input.on('gameout', () => this.putDown(null));
+    // The release of a drag that the shared pause interrupted never arrives, so the sword goes back.
+    this.events.on('pause', () => this.putDown(null));
     this.musicPart = '';
     this.playPart();
   }
@@ -336,8 +344,8 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     this.clock += dt;
     tick(this.state, dt);
-    // The Auto Forge forges inside tick, rust drops tiers, heroes bring swords back and walk-offs
-    // cost reputation; keep them.
+    // Forging (the Forge button's or the Auto Forge's inside tick), rust dropping tiers, heroes
+    // bringing swords back and walk-offs costing reputation are kept here.
     if (this.state.events.some((e) => e.kind === 'forged' || e.kind === 'rusted' || e.kind === 'returned' || e.kind === 'left')) this.save();
 
     this.drawSwords();
@@ -351,9 +359,10 @@ export class GameScene extends Phaser.Scene {
     this.playPart();
   }
 
+  /** Forges from the button; `update` saves on the `forged` event. */
   private forge() {
-    if (forge(this.state)) this.save();
-    else ui('refuse');
+    if (this.windowOpen) return;
+    if (!forge(this.state)) ui('refuse');
   }
 
   private switchMode() {
@@ -503,10 +512,7 @@ export class GameScene extends Phaser.Scene {
     const card = this.image(ORDER.x - 13, ORDER.y - 2, 'order-card').setOrigin(0);
     // A gem order shows the gemmed sword, a loose gem beside it and the doubled price; a set order
     // shows the sword and the buckler side by side, and what the two pay before the set bonus.
-    const coins = set
-      ? t('setCoins', { n: orderPrice(a, this.state) + shieldPrice(a, this.state) })
-      : t(a.gem ? 'gemCoins' : 'orderCoins', { n: orderPrice(a, this.state) });
-    const price = this.add.text(mid, ORDER.y + 17, coins, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' }).setOrigin(0.5);
+    const price = this.add.text(mid, ORDER.y + 17, this.orderCoins(a), { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' }).setOrigin(0.5);
     const wants = this.image(set ? mid - 30 : mid, ORDER.y + 49, swordTexture(a.wants, a.gem), swordScale(set ? 0.7 : 0.82));
     const gem = this.image(mid + 50, ORDER.y + 52, 'gem', 0.5).setVisible(a.gem);
     const buckler = set ? this.image(mid + 34, ORDER.y + 50, shieldTexture(a.shield), 0.5) : null;
@@ -526,7 +532,13 @@ export class GameScene extends Phaser.Scene {
     const root = this.add.container(b.x, b.y, parts).setDepth(20).setScale(deskScale(desks));
     root.setAlpha(0);
     this.tweens.add({ targets: root, alpha: 1, duration: 300 });
-    return { root, setSword: set ? wants : null, setShield: buckler, ticks, tag, tagImage, tagTop, tagBottom };
+    return { root, setSword: set ? wants : null, setShield: buckler, ticks, price, tag, tagImage, tagTop, tagBottom };
+  }
+
+  /** The order card's price: what the asked-for sword (and buckler, for a set) pays at today's prices. */
+  private orderCoins(a: Adventurer) {
+    const s = this.state;
+    return a.shield > 0 ? t('setCoins', { n: orderPrice(a, s) + shieldPrice(a, s) }) : t(a.gem ? 'gemCoins' : 'orderCoins', { n: orderPrice(a, s) });
   }
 
   /**
@@ -701,9 +713,11 @@ export class GameScene extends Phaser.Scene {
   private commissionDone(reward: number, won: boolean) {
     const bx = BANNER.x + BANNER.w / 2;
     const by = this.edge.top + BANNER.y + BANNER.h / 2;
-    const halo = this.image(bx, by, 'halo').setDepth(UI_DEPTH + 1).setScale(shown('halo', 2.4), shown('halo', 0.8));
-    this.tweens.add({ targets: halo, alpha: 0, delay: 400, duration: 900, onComplete: () => halo.destroy() });
-    if (!settings.reduceMotion) this.tweens.add({ targets: this.banner.root, scale: 1.06, duration: 160, yoyo: true });
+    if (!settings.reduceMotion) {
+      const halo = this.image(bx, by, 'halo').setDepth(UI_DEPTH + 1).setScale(shown('halo', 2.4), shown('halo', 0.8));
+      this.tweens.add({ targets: halo, alpha: 0, delay: 400, duration: 900, onComplete: () => halo.destroy() });
+      this.tweens.add({ targets: this.banner.root, scale: 1.06, duration: 160, yoyo: true });
+    }
     this.float(bx, by + 70, t('commissionDone', { n: reward }), '#ffd36a', 2400);
     if (won) this.win.setVisible(true);
     else if (this.state.choosing) this.chooser.setVisible(true);
@@ -784,6 +798,8 @@ export class GameScene extends Phaser.Scene {
       const buys = fit !== 'short';
       if (buys) buyers.add(a.desk);
       if (!v) continue;
+      const coins = this.orderCoins(a);
+      if (v.price.text !== coins) v.price.setText(coins);
       // A set order ticks off the half already handed over.
       v.setSword?.setAlpha(a.given.sword !== null ? 0.35 : 1);
       v.setShield?.setAlpha(a.given.shield !== null ? 0.35 : 1);

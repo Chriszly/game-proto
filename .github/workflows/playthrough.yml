@@ -2,7 +2,8 @@ name: Playthrough
 
 # One required check for every game's playthrough (games/<name>/e2e/playthrough.spec.ts). Each game
 # whose folder changed in the PR is played; a game that did not change is not played. If this workflow
-# changes, every game is played. The "Playthrough" check passes when none failed, so it can be required
+# or the build setup (package.json, the lockfile, tsconfig, the Vite or Playwright config) changes,
+# every game is played. The "Playthrough" check passes when none failed, so it can be required
 # on main. It runs on pull requests only, not on pushes to main, so a merge doesn't replay it.
 on:
   pull_request:
@@ -34,7 +35,7 @@ jobs:
             changed=$all # workflow_dispatch: play every game
           else
             files=$(git diff --name-only "$BASE" HEAD)
-            if echo "$files" | grep -qx '.github/workflows/playthrough.yml'; then
+            if echo "$files" | grep -qE '^(\.github/workflows/playthrough\.yml$|package(-lock)?\.json$|tsconfig(\.e2e)?\.json$|playwright\.config\.ts$|vite\.config\.ts$)'; then
               changed=$all
             else
               changed=$(for g in $all; do if echo "$files" | grep -q "^games/$g/"; then echo "$g"; fi; done)

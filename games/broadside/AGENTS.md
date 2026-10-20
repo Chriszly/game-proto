@@ -28,7 +28,8 @@ and the player chooses a ship.
   over the ledger until `pickPerk` moves one to `perks` and empties `draft` (`setSail` refuses
   while a draft is open); the perks' rules live in `sim.ts` (`ricochet` in `fire`/`moveBalls`
   via `Ball.skip`, `salvage` in `sink`, `gunners` in `escortBroadsides`, `mortar` in `ownMortar`
-  with `GameState.mortarMs`, `grapnels` in `boardMs`/`prizeCrew`, `swivels` in `stats().arc`,
+  with `GameState.mortarMs`, which holds fire while the landing spot is near the player, where she
+  will be, or a prize, `grapnels` in `boardMs`/`prizeCrew`, `swivels` in `stats().arc`,
   `carronades` in `firePlayer`). Perk ranks: `perks` lists a perk once per rank taken
   (`perkRank`, `MAX_PERK_RANK` 2); `drawDraft(taken, size)` fills the draft with new perks first
   and then the second rank of held ones, and each perk's numbers are arrays by rank read through
@@ -44,7 +45,7 @@ and the player chooses a ship.
   `GameState.moored` (richest first); `keep` buys `moored[0]` back for `keepCost` (her sale price),
   sends `prizeCrew` across and puts her in `consorts` with `Ship.kept`, `keepBlocked` says why it
   can't (`none`, `full` at `CONSORT_MAX`, `gold`, `crew`); `setSail` moves `consorts` into
-  `escorts` (`station`: in line astern), and the next `reachHarbor` pays `consortWage` each (into
+  `escorts` (`station`: in line astern, further back if an island is in the way), and the next `reachHarbor` pays `consortWage` each (into
   `wages`) and patches them, or sells one it can't pay. Convoys (`src/game/convoy.ts`): on
   `isConvoyWave` `setSail` adds a `merchant` to `escorts` and sets `GameState.convoy` (her id, an
   island at least `CONVOY_FAR` off, `convoyCargo`, `state`); `sailConvoy` steers her for the island
@@ -99,7 +100,8 @@ and the player chooses a ship.
   as a dotted line), and a lookout bears off any beach ahead and shortens sail to come about in
   time. Broadsides lead their target, and enemy aim has a random spread. Loot drifts toward the
   player and expires; when a wave's last enemy sinks, every barrel still afloat is hauled in at
-  once. There is a harbor shop with five upgrades plus a paid repair and the two loading buttons, a
+  once. There is a harbor shop with five upgrades plus a paid repair, the hire and keep rows, the two
+  loading buttons and the sail (or course) buttons, a
   game-over panel with the Admiralty's rewards and "Sail again", and off-screen arrows pointing to
   enemies (rust), prizes (green) and loot (ochre). The sea wraps around at every edge
   like a globe: sailing off the north edge comes back in at the south, and off the west edge in at
@@ -108,9 +110,10 @@ and the player chooses a ship.
   pushed off, glances away and takes `AGROUND_DAMAGE`.
 - **Screens:** there is only `GameScene`. The wave banner, the captain's order card, the bounty
   line, the wind rose, the scuttle button, the harbor panel (ledger or prize draft) and the
-  game-over panel (also the haven's end card) are overlays drawn on top of it. There is no title screen, pause
-  or in-game settings; the shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen)
-  are set on the hub page.
+  game-over panel (also the haven's end card) are overlays drawn on top of it. The start and pause
+  screens, the sound button and the P key come from `setupGame` (`shared/startScreen.ts`); the other
+  shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen) are set on the
+  hub page.
 - **Persistence:** the best wave beaten, the banked medals and the ship chosen are saved. Each
   run starts fresh at wave 1, plus any starting upgrades bought with medals.
 - **Sound:** music and sound effects, made in code (see "Sound" below).
@@ -193,7 +196,9 @@ File map (all under `src/`, plus the shared files it imports):
   own mortar (`ownMortar`), enemy broadsides and mortars (`enemyBroadsides`, `mortar`), the
   forts' shelling (`fortsFire`), `fire`, `lobAt`/`lob` (shells), balls (chain shot sets `slowMs`,
   grapeshot `jamMs` and kills crew; forts are hit too), shells (`landShells`), blasts (`blast`),
-  fireships ramming (`ram`), sinking (`sink`, with Salvage), razing (`raze`), loot (`haulIn`),
+  fireships ramming (`ram`), sinking (`sink`, with Salvage, which can't save a player sunk the
+  same tick), razing (`raze`, after the sinking, so a fort a fireship's blast brings down is paid
+  that tick), loot (`haulIn`),
   reaching the harbor (`reachHarbor`: prizes sold and crews back, the bounty paid, the draft set)
   and winning at the haven. `hurt` and `kill` are the only places hull and crew are taken off.
   `detourCourse`, `speedOf`, `boardable`, `canBoard`, `prizeCrew`, `boardMs`, `scuttleGold`,
@@ -273,8 +278,10 @@ How it runs:
   id to control), and its own `pointerup` releases only that control (`gameout` releases all), so
   one thumb can steer while the other fires. A fire control pressed and released within one frame
   still counts as held for that frame (`tapped`), so a quick tap fires an uncharged broadside.
-  Harbor rows, the draft's cards and the "Set sail" button call `buy`, `repair`, `hire`,
-  `pickPerk`, `loadShot` or `setSail` through `GameScene.harborAction`.
+  On the scene's `RESUME` event (after the shared pause) `held` is cleared and `lastFrame` reset:
+  a release made while paused never reaches the scene, so the ship would turn on, or a side charge
+  forever, otherwise. Harbor rows, the draft's cards and the sail buttons call `buy`, `repair`,
+  `hire`, `keep`, `pickPerk`, `loadShot` or `setSail` through `GameScene.harborAction`.
 - **Broadsides:** in `aimBroadsides`, a held side whose reload has run out adds `dt / CHARGE_MS`
   to `charge[side]` (from null to 0..1). On the first tick it is not held, a non-null charge
   fires: `firePlayer` works out the reach (`reachOf`: `REACH_MIN` of the range at 0, all of it at
@@ -317,9 +324,10 @@ How it runs:
   so, `roundIsland` works out both ways round in the zone's unit-circle space (tangent point,
   sweep round the coast, rough length) and `planDetour` picks the shorter, keeping to the side it
   already chose unless the other is a quarter shorter. The ship steers for a point 0.35 rad
-  further round the coast than the tangent, so it follows the shore. `e.detour` holds the island
-  and side for the scene, which draws `detourCourse` dotted with an arrow and labels the first
-  one. In every mode `fend` turns a wanted heading that would reach a beach within the lookout
+  further round the coast than the tangent, so it follows the shore. `e.detour` holds the island,
+  the side and where the ship is bound (`to`: the target's position when planned, so a sloop
+  hunting the convoy draws its course toward her) for the scene, which draws `detourCourse(e)`
+  dotted with an arrow and labels the first one. In every mode `fend` turns a wanted heading that would reach a beach within the lookout
   (`shoalAhead`: radius + `LOOKOUT` + the turning circle `speed / turn`) to run along the coast,
   and a ship with a beach ahead on its present heading sails at `SHORTEN_SAIL` of its speed.
 
@@ -369,7 +377,7 @@ a stored number that is not finite and positive loads as 0 (rounded down otherwi
 Randomness and timing: `Math.random` is used in `spawn` (the angle at which an enemy appears), in
 `fire` (one call per shot, even for the player, whose spread is 0; grapeshot makes three per gun,
 and from wave 3 brigs and bigger ships fire it up close), in `lobAt` (two per shell: ketches,
-forts and the player's own mortar) and `lob` with a spread (the Bomb Ketch's mortar uses none),
+forts and the player's own mortar; the Bomb Ketch's mortar calls `lob` directly, with no spread),
 and once each in `setSail` for `drawOrder`, the wind, `drawBounty`, each fort's island and a convoy's
 island, and in `reachHarbor` for `drawDraft` (once per card), never before wave 1 is beaten, which is why the
 first order, wind and draft are fixed and wave 1 has no bounty, forts or grapeshot from enemies.
@@ -422,8 +430,8 @@ Data tables, where to tune:
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
-  then `setupScaling(game)` from `shared/scaling.ts`: the canvas has `renderScale` canvas pixels
+- `src/main.ts` calls `setupGame(game, { howToPlay })` from `shared/setupGame.ts` right after
+  creating the game, then `setupScaling(game, { fill: true })` from `shared/scaling.ts`: the canvas has `renderScale` canvas pixels
   per game pixel and the main camera is zoomed to match from its top-left corner, so `setScroll`
   still names the screen's top-left in the sea (kept as `topLeft`, since `worldView` lags a
   frame) and HUD objects at scroll factor 0 stay where they are placed, with no second camera.
@@ -440,8 +448,9 @@ Data tables, where to tune:
   `this.scale` or `pointer.x/y`, which are canvas pixels); a new screen-fixed element gets its
   designed spot in `layout.ts` and a line in `fitLayout`. `e2e/screens.spec.ts` at the root opens
   the game on five screens.
-  It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
-  no-ops; this game uses neither).
+  `setupGame` applies the frame cap, the FPS readout, reduced motion and full screen (camera shake
+  and flash become no-ops; this game uses neither), the sound button and the shared start and pause
+  screens.
 - Difficulty scales one number: enemy hp (forts' too). `spawn` in `game/sim.ts` multiplies
   `ENEMIES[kind].hp * hpScale(wave)` by `byDifficulty(0.75, 1, 1.3)` (Easy 0.75, Normal 1, Hard
   1.3) from `shared/settings.ts`, before rounding, and `setSail` does the same for `FORT.hp`.

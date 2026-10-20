@@ -4,7 +4,7 @@ import type { TextKey } from '../i18n';
 import { findFeatures } from './island';
 import { GRID, WRECK_SUPPLIES, indexOf, maxSupplies, type Clue, type GameState, type Ground, type Riddle } from './state';
 
-// The whole game is saved whenever it reaches the port or the harbor, and on every survey, so a
+// The whole game is saved after every successful action, so a
 // reload carries on where it left off. The best Royal Atlas (fewest voyages) is kept apart, so it
 // outlives a new game, and so is the sheet's theme.
 const KEY = 'mapmaker-save';
@@ -124,14 +124,16 @@ export function loadBest(): number | null {
   }
 }
 
-/** Records a completed Royal Atlas's voyages when they beat the best so far. */
+/** Records a completed Royal Atlas's voyages when they beat the best so far, and says whether they did. */
 export function saveBest(voyages: number) {
+  const best = loadBest();
+  if (best !== null && voyages >= best) return false;
   try {
-    const best = loadBest();
-    if (best === null || voyages < best) localStorage.setItem(BEST_KEY, String(voyages));
+    localStorage.setItem(BEST_KEY, String(voyages));
   } catch {
     // Storage can be full or blocked; the best is simply not kept.
   }
+  return true;
 }
 
 /** The theme picked in the game, or the device's dark-mode preference until one is picked. */

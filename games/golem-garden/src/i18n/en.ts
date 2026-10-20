@@ -96,6 +96,7 @@ const en = {
   squashEvery: 'squash every pest',
   waveComing: 'Wave {n}...',
   stillComing: 'still coming in',
+  squashQueen: 'squash the queen',
   gardenLost: 'Garden lost',
 
   // Golem menu chips

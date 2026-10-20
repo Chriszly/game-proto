@@ -1,15 +1,18 @@
 import Phaser from 'phaser';
-import type { GoodId, ShopId } from '../game/town';
-import { counterLayout, gardenLayout, shopWorld, FENCE_Y, SHOP_HUD } from '../scenes/shopLayout';
+import { SHOPS, isFineGood, type GoodId, type Held, type ShopId } from '../game/town';
+import { counterLayout, shopFence, shopWorld, yardScenery, type Point, type PropKind, type Rect } from '../scenes/shopLayout';
 import { plantTexture } from './garden';
 import { itemTexture } from './items';
-import { WASH, both, chance, ellPts, hatch, ink, paint, paper, rectPts, rr, shadow, wash, type Ctx, type Pt } from './paint';
+import { WASH, both, chance, ellPts, hatch, ink, paint, paper, pathOf, rectPts, rr, shadow, sparkle, wash, wob, type Ctx, type Pt } from './paint';
 
 // The town's art, in the same ink and watercolour as the apothecary's: the town shops' goods, the
 // bakery's mill, oven and beehives, each shop yard's painted ground, and the houses on the town map.
 
 /** A good's icon: the apothecary's own for wheat and flour, the town's for the rest. 16x16 as shown. */
-export const goodTexture = (good: GoodId) => (good === 'wheat' || good === 'flour' ? itemTexture(good) : `good-${good}`);
+export const goodTexture = (held: Held): string => {
+  if (isFineGood(held)) return `good-${held}`;
+  return held === 'wheat' || held === 'flour' ? itemTexture(held) : `good-${held}`;
+};
 /** A beehive bed's skep, from empty to full of honey. */
 export const hiveTexture = (stage: number) => `hive-${stage}`;
 export const yardTexture = (shop: ShopId) => `yard-${shop}`;
@@ -600,35 +603,202 @@ function drawOven(c: Ctx) {
  * A shop yard's ground: grass, the earth of the yard the doctor works, the shop's plank floor, and the
  * cobbled street along the bottom with a low fence between the yard and it.
  */
+const pt = (p: Point): Pt => [p.x, p.y];
+const WATER = '#3f6478';
+const WATER_LIGHT = '#8fb4c4';
+const PATH = 'rgba(122,92,64,0.8)';
+
+/** A footpath of packed earth along a line, its edges darker. */
+function drawPath(c: Ctx, line: Point[]) {
+  c.save();
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  for (const [w, col] of [[38, 'rgba(46,32,22,0.25)'], [30, PATH]] as const) {
+    c.lineWidth = w;
+    c.strokeStyle = col;
+    pathOf(c, wob(line.map(pt), 1.5, false, 12), false);
+    c.stroke();
+  }
+  c.fillStyle = 'rgba(42,29,20,0.35)';
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = line[i], b = line[i + 1];
+    for (let k = 0; k < Math.hypot(b.x - a.x, b.y - a.y) / 12; k++) {
+      const t = rr(0, 1);
+      c.beginPath();
+      c.arc(a.x + (b.x - a.x) * t + rr(-12, 12), a.y + (b.y - a.y) * t + rr(-12, 12), rr(0.6, 1.4), 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+  c.restore();
+}
+
+/** Cobbles laid in a rectangle, like the street's. */
+function drawCobbles(c: Ctx, r: Rect) {
+  both(c, rectPts(r.x, r.y, r.w, r.h, 10), WASH.stoneDark, { layers: 2, alpha: 0.6, edge: 0 }, { w: 1.2, alpha: 0.6 });
+  for (let y = r.y + 6; y < r.y + r.h - 10; y += 14) {
+    for (let x = r.x + ((y / 14) % 2 ? 2 : 10); x < r.x + r.w - 14; x += 16) {
+      both(c, rectPts(x, y, 14, 12, 3), chance(0.5) ? WASH.stone : WASH.stoneDark, { layers: 1, spread: 0.4, edge: 0, alpha: 0.7 }, { w: 0.5, alpha: 0.5 });
+    }
+  }
+}
+
+/** A pond or lake when round, else a stream's run: deep water under a lighter shimmer and ripples. */
+function drawWater(c: Ctx, w: Rect & { round?: boolean }) {
+  const outline = w.round ? ellPts(w.x + w.w / 2, w.y + w.h / 2, w.w / 2, w.h / 2, 60) : wob(rectPts(w.x, w.y, w.w, w.h), 3, true, 14);
+  const bank = w.round ? ellPts(w.x + w.w / 2, w.y + w.h / 2, w.w / 2 + 8, w.h / 2 + 7, 60) : rectPts(w.x - 7, w.y, w.w + 14, w.h);
+  wash(c, bank, '#6b5a3c', { layers: 2, alpha: 0.7, edge: 0 });
+  wash(c, outline, WATER, { layers: 4, spread: 1.5, bloom: 3, cx: w.x + w.w * 0.35, cy: w.y + w.h * 0.3, edge: 3 });
+  c.save();
+  pathOf(c, outline);
+  c.clip();
+  c.strokeStyle = WATER_LIGHT;
+  c.lineWidth = 1.2;
+  for (let i = 0; i < (w.w * w.h) / 1600; i++) {
+    const x = rr(w.x, w.x + w.w), y = rr(w.y, w.y + w.h), len = rr(6, 14);
+    c.globalAlpha = rr(0.25, 0.6);
+    c.beginPath();
+    c.moveTo(x - len, y);
+    c.quadraticCurveTo(x, y - 3, x + len, y);
+    c.stroke();
+  }
+  c.restore();
+  ink(c, outline, { w: 1.3, wob: 0.5 });
+}
+
+/** A plank bridge across a stream, its planks across the way over and a rail along each side. */
+function drawBridge(c: Ctx, r: Rect) {
+  shadow(c, r.x + r.w / 2, r.y + r.h + 4, r.w / 2, 4, 0.3);
+  both(c, rectPts(r.x, r.y, r.w, r.h, 2), WASH.planks, { layers: 2 }, { w: 1.2 });
+  for (let x = r.x + 8; x < r.x + r.w - 4; x += 8) ink(c, [[x, r.y + 2], [x, r.y + r.h - 2]], { closed: false, w: 0.6, alpha: 0.55 });
+  for (const y of [r.y + 3, r.y + r.h - 3]) both(c, rectPts(r.x - 2, y - 2.5, r.w + 4, 5, 2), WASH.woodDark, { layers: 1 }, { w: 0.9 });
+}
+
+/** A stone well with its winding beam. 48x52 as painted, foot at its middle. */
+function drawWell(c: Ctx, x: number, y: number) {
+  shadow(c, x + 4, y + 10, 26, 6, 0.25);
+  both(c, ellPts(x, y, 22, 14, 28), WASH.stone, { layers: 2 }, { w: 1.2 });
+  both(c, ellPts(x, y - 2, 14, 8, 24), '#1e2a30', { layers: 2, edge: 0 }, { w: 0.8 });
+  for (const px of [x - 20, x + 17]) both(c, rectPts(px, y - 40, 4, 38, 1), WASH.woodDark, { layers: 1 }, { w: 0.8 });
+  both(c, rectPts(x - 24, y - 44, 48, 6, 2), WASH.wood, { layers: 1 }, { w: 0.9 });
+  ink(c, [[x, y - 38], [x, y - 8]], { closed: false, w: 0.6 });
+}
+
+/** A beer garden table with a bench either side. */
+function drawTable(c: Ctx, x: number, y: number) {
+  shadow(c, x + 4, y + 22, 40, 5, 0.25);
+  for (const by of [y - 22, y + 14]) both(c, rectPts(x - 34, by, 68, 8, 2), WASH.woodDark, { layers: 1 }, { w: 0.9 });
+  both(c, rectPts(x - 38, y - 10, 76, 20, 3), WASH.wood, { layers: 2 }, { w: 1.1 });
+  ink(c, [[x - 36, y], [x + 36, y]], { closed: false, w: 0.5, alpha: 0.5 });
+  // Two tankards on it.
+  for (const tx of [x - 14, x + 12]) both(c, rectPts(tx, y - 8, 7, 9, 1), '#d8c8a2', { layers: 1 }, { w: 0.6 });
+}
+
+/** A drying line between two posts, hung with lengths of dyed cloth. */
+function drawDryingLine(c: Ctx, x: number, y: number) {
+  for (const px of [x - 120, x + 116]) {
+    shadow(c, px + 2, y + 2, 6, 2, 0.3);
+    both(c, rectPts(px, y - 70, 5, 70, 1), WASH.woodDark, { layers: 1 }, { w: 0.8 });
+  }
+  ink(c, [[x - 118, y - 66], [x, y - 60], [x + 118, y - 66]], { closed: false, w: 0.8 });
+  const cloths = ['#3a5a9a', '#9a3a34', '#5a7ab8', '#b0523a', '#2f4a80'];
+  cloths.forEach((col, i) => {
+    const cx = x - 100 + i * 46;
+    both(c, wob(rectPts(cx, y - 62, 34, 46), 0.8), col, { layers: 2, bloom: 1, cx: cx + 10, cy: y - 50 }, { w: 0.8 });
+    hatch(c, rectPts(cx + 22, y - 60, 12, 42), { gap: 2.4, alpha: 0.25, w: 0.5 });
+  });
+}
+
+/** A heap of boulders. */
+function drawRocks(c: Ctx, x: number, y: number) {
+  shadow(c, x + 6, y + 10, 40, 8, 0.25);
+  const rocks: [number, number, number][] = [[-22, 0, 16], [6, -6, 20], [28, 4, 13], [-6, 10, 11], [18, 14, 9]];
+  for (const [dx, dy, r] of rocks) {
+    const blob = ellPts(x + dx, y + dy, r, r * 0.75, 18).map(([a, b], i) => [a + Math.sin(i * 2.1) * 1.5, b + Math.cos(i * 1.7) * 1.5] as Pt);
+    both(c, blob, chance(0.5) ? WASH.stone : WASH.stoneDark, { layers: 2, bloom: 1, cx: x + dx - r / 3, cy: y + dy - r / 3 }, { w: 1 });
+    hatch(c, ellPts(x + dx + r / 3, y + dy + r / 4, r / 2, r / 3, 12), { gap: 2.2, alpha: 0.3, w: 0.5 });
+  }
+}
+
+/** A plank jetty from the shore, `y` at its foot, out into the water. */
+function drawJetty(c: Ctx, x: number, y: number) {
+  both(c, rectPts(x - 22, y - 110, 44, 110, 2), WASH.planks, { layers: 2 }, { w: 1.1 });
+  for (let py = y - 102; py < y; py += 9) ink(c, [[x - 20, py], [x + 20, py]], { closed: false, w: 0.6, alpha: 0.55 });
+  for (const [px, py] of [[x - 24, y - 112], [x + 20, y - 112], [x - 24, y - 60], [x + 20, y - 60]]) both(c, rectPts(px, py, 5, 7, 1), WASH.woodDeep, { layers: 1 }, { w: 0.6 });
+}
+
+/** A terrace's dry stone wall, from one point to another. */
+function drawWall(c: Ctx, a: Point, b: Point) {
+  const n = Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 14);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+    both(c, rectPts(x - 8, y - 6 + rr(-1, 1), 16, 12, 3), chance(0.5) ? WASH.stone : WASH.stoneDark, { layers: 1, edge: 0 }, { w: 0.7 });
+  }
+}
+
+/** A clump of reeds at the water's edge. */
+function drawReeds(c: Ctx, x: number, y: number) {
+  for (let i = 0; i < 9; i++) {
+    const bx = x + rr(-14, 14), h = rr(14, 26), lean = rr(-4, 4);
+    ink(c, [[bx, y], [bx + lean, y - h]], { closed: false, w: 1.2, col: '#4f7a34' });
+    if (chance(0.5)) both(c, ellPts(bx + lean, y - h - 3, 1.8, 4, 10), '#6e4426', { layers: 1, edge: 0 }, { w: 0.5 });
+  }
+}
+
+const PROPS: Record<PropKind, (c: Ctx, x: number, y: number, to?: Point) => void> = {
+  well: drawWell,
+  table: drawTable,
+  cloth: drawDryingLine,
+  rocks: drawRocks,
+  jetty: drawJetty,
+  wall: (c, x, y, to) => drawWall(c, { x, y }, to!),
+  reeds: drawReeds,
+};
+
 function drawYard(c: Ctx, shop: ShopId) {
   const { w, h } = shopWorld(shop);
+  const FENCE_Y = shopFence(shop);
+  const scenery = yardScenery(shop);
   paper(c, 0, 0, w, h);
   wash(c, rectPts(-10, -10, w + 20, h + 20), WASH.grass, { layers: 4, spread: 3, alpha: 0.85, edge: 0 });
-  const floor = counterLayout(shop).floor;
-  // The yard's earth, from the gardens to the shop.
-  const yard = rectPts(gardenLayout(0).area.x + 150, SHOP_HUD + 70, floor.x - 170, FENCE_Y - SHOP_HUD - 80, 18);
-  wash(c, yard, WASH.dirt, { layers: 5, spread: 2.5, alpha: 0.85, bloom: 5, cx: w / 2, cy: 240, edge: 3 });
-  for (let i = 0; i < 260; i++) {
-    c.fillStyle = `rgba(42,29,20,${rr(0.15, 0.4)})`;
-    c.beginPath();
-    c.arc(rr(gardenLayout(0).area.x + 160, floor.x - 20), rr(SHOP_HUD + 80, FENCE_Y - 20), rr(0.4, 1.1), 0, Math.PI * 2);
-    c.fill();
+  // The yard's earth, where its work is done.
+  for (const poly of scenery.earth) {
+    const outline = poly.map(pt);
+    wash(c, outline, WASH.dirt, { layers: 5, spread: 2.5, alpha: 0.85, bloom: 4, cx: poly[0].x + 120, cy: poly[0].y + 120, edge: 3 });
+    c.save();
+    pathOf(c, outline);
+    c.clip();
+    const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y);
+    for (let i = 0; i < 160; i++) {
+      c.fillStyle = `rgba(42,29,20,${rr(0.15, 0.4)})`;
+      c.beginPath();
+      c.arc(rr(Math.min(...xs), Math.max(...xs)), rr(Math.min(...ys), Math.max(...ys)), rr(0.4, 1.1), 0, Math.PI * 2);
+      c.fill();
+    }
+    c.restore();
+    ink(c, outline, { w: 1.4, wob: 0.8 });
   }
-  ink(c, yard, { w: 1.5, wob: 0.8 });
+  for (const line of scenery.paths) drawPath(c, line);
+  for (const r of scenery.cobbles) drawCobbles(c, r);
+  for (const water of scenery.water) drawWater(c, water);
+  for (const bridge of scenery.bridges) drawBridge(c, bridge);
+  for (const prop of scenery.props) PROPS[prop.kind](c, prop.x, prop.y, prop.to);
   // The street.
   const street = rectPts(-10, FENCE_Y + 70, w + 20, h - FENCE_Y - 60);
   wash(c, street, '#7a6a55', { layers: 3, spread: 1, alpha: 0.95, edge: 0 });
   for (let y = FENCE_Y + 78; y < h; y += 14) {
     for (let x = (y / 14) % 2 ? -6 : 2; x < w; x += 16) both(c, rectPts(x, y, 14, 12, 3), chance(0.5) ? WASH.stone : WASH.stoneDark, { layers: 1, spread: 0.4, edge: 0 }, { w: 0.5, alpha: 0.6 });
   }
-  // The shop's plank floor and its back wall.
+  // The shop's plank floor, its back wall and its side walls down to the counter.
+  const floor = counterLayout(shop).floor;
   both(c, rectPts(floor.x, floor.y, floor.w, floor.h, 4), WASH.planks, { layers: 3, bloom: 2, cx: floor.x + 60, cy: floor.y + 60 }, { w: 1.4 });
   for (let y = floor.y + 16; y < floor.y + floor.h; y += 16) ink(c, [[floor.x + 4, y], [floor.x + floor.w - 4, y]], { closed: false, w: 0.5, alpha: 0.45 });
   both(c, rectPts(floor.x - 6, floor.y - 10, floor.w + 12, 16, 3), WASH.stoneDark, { layers: 2 }, { w: 1.2 });
   // A low fence along the yard's edge, over the grass between it and the street.
   for (let x = 6; x < floor.x - 10; x += 22) both(c, rectPts(x, FENCE_Y + 22, 5, 22, 1), WASH.woodDark, { layers: 1 }, { w: 0.7 });
-  both(c, rectPts(0, FENCE_Y + 28, floor.x - 8, 5, 1), WASH.wood, { layers: 1 }, { w: 0.8 });
+  if (floor.x > 20) both(c, rectPts(0, FENCE_Y + 28, floor.x - 8, 5, 1), WASH.wood, { layers: 1 }, { w: 0.8 });
   for (let x = floor.x + floor.w + 14; x < w; x += 22) both(c, rectPts(x, FENCE_Y + 22, 5, 22, 1), WASH.woodDark, { layers: 1 }, { w: 0.7 });
+  if (floor.x + floor.w + 20 < w) both(c, rectPts(floor.x + floor.w + 8, FENCE_Y + 28, w - floor.x - floor.w - 8, 5, 1), WASH.wood, { layers: 1 }, { w: 0.8 });
 }
 
 /** A town house front: timber and plaster under a roof, with the shop's sign hung out. 96x84 as shown. */
@@ -728,6 +898,16 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, 'maltings', 88, 60, drawMaltings, 3);
   paint(scene, 'oast', 72, 68, drawOast, 3);
   paint(scene, 'kettle', 88, 64, drawKettle, 3);
+  // Each good a shop sells, fine: its icon with a gold sparkle, like the apothecary's fine potions.
+  for (const id of Object.keys(SHOPS) as ShopId[]) {
+    for (const good of Object.keys(SHOPS[id].sells) as GoodId[]) {
+      const plain = scene.textures.get(goodTexture(good)).getSourceImage() as CanvasImageSource;
+      paint(scene, goodTexture(`${good}-fine`), 16, 16, (c) => {
+        c.drawImage(plain, 0, 0, 16, 16);
+        sparkle(c, 13, 3.2, 3);
+      }, 4);
+    }
+  }
   paint(scene, lotTexture('apothecary'), 96, 84, (c) =>
     drawLot(c, '#5e6e46', '#d8c8a2', (s) => {
       // A green bottle on the sign.

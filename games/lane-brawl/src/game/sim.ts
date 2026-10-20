@@ -146,9 +146,15 @@ export function chooseUpgrade(s: GameState, choice: number): boolean {
   const p = getUnit(s, s.player);
   const offer = s.upgradeOffers[0];
   if (!p || !offer || !(choice >= 0 && choice < offer.options.length)) return false;
-  // Offers queued together can share a borrowed card; one already kept is not kept twice.
+  // An offer can borrow a card another level offers; one already kept is not kept twice.
   if (!p.upgrades.includes(offer.options[choice])) p.upgrades.push(offer.options[choice]);
   s.upgradeOffers.shift();
+  // The offers still queued are drawn again, so none shows the card just kept.
+  if (p.champ) {
+    const id = p.champ.id;
+    const rest = s.upgradeOffers.map((o) => ({ level: o.level, options: offerFor(id, o.level, p.upgrades, UPGRADE_LEVELS.indexOf(o.level) < s.mastery ? 3 : 2) }));
+    s.upgradeOffers = rest.filter((o) => o.options.length);
+  }
   return true;
 }
 
@@ -375,7 +381,7 @@ export function useActive(s: GameState, u: Unit, id: ActiveId, aim: Vec): boolea
   if (id === 'dash') {
     const to = towards(u, aim, def.range ?? 0);
     s.fx.push({ kind: 'line', x: u.x, y: u.y, x2: to.x, y2: to.y, color: '#7fb6ff', ms: 250 });
-    sound(s, 'blink', u, u.player);
+    if (u.id === s.player) sound(s, 'blink', u, true);
     if (dist(u, to) > 1) u.facing = Math.atan2(to.y - u.y, to.x - u.x);
     u.x = to.x;
     u.y = to.y;
@@ -383,7 +389,7 @@ export function useActive(s: GameState, u: Unit, id: ActiveId, aim: Vec): boolea
   } else {
     u.hp = Math.min(u.maxHp, u.hp + (def.heal ?? 0));
     s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 34, color: '#62d86f', ms: 500 });
-    sound(s, 'flask', u, u.player);
+    if (u.id === s.player) sound(s, 'flask', u, true);
   }
   return true;
 }
@@ -398,7 +404,7 @@ export function plantWard(s: GameState, u: Unit, aim: Vec): boolean {
   if (dist(u, at) > 1) u.facing = Math.atan2(at.y - u.y, at.x - u.x);
   u.castMs = 300;
   s.fx.push({ kind: 'ring', x: at.x, y: at.y, r: 30, color: SIDE_COLOR[u.side], ms: 500 });
-  sound(s, 'ward', at, u.player);
+  if (u.id === s.player) sound(s, 'ward', at, true);
   return true;
 }
 
@@ -423,7 +429,7 @@ function finishRecall(s: GameState, u: Unit) {
   u.moveTo = null;
   if (u.path) u.wp = 1;
   s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 40, color: '#9fd8ff', ms: 500 });
-  sound(s, 'recallHome', u, u.player);
+  if (u.id === s.player) sound(s, 'recallHome', u, true);
   if (!u.player) aiLog(u.side, `${shortName(u.name)} recalls home`);
 }
 
@@ -485,8 +491,8 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
   const dmg = abilityDamage(s, caster, ab.damage ?? 0);
   const look = lookOf(caster, key);
   const shot = (at: Vec, r: number) => s.fx.push({ kind: 'skill', look, x: at.x, y: at.y, x2: caster.x, y2: caster.y, r, a: caster.facing, color, ms: 600 });
-  // One sound per cast, by the ability's kind, however many bolts it throws.
-  sound(s, ab.kind, caster, caster.player);
+  // One sound per cast, by the ability's kind, however many bolts it throws; only the player's.
+  if (caster.id === s.player) sound(s, ab.kind, caster, true);
 
   switch (ab.kind) {
     case 'burst': {
@@ -1514,9 +1520,11 @@ function attack(s: GameState, u: Unit, t: Unit) {
     s.fx.push({ kind: 'arc', x: u.x, y: u.y, r: u.radius + 14, a: u.facing, color: '#ffffff', ms: 180 });
     s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 12, color: '#ffffff', ms: 120 });
   }
-  // Minions and camps fight too often to be heard; champions, towers and the beast are.
-  if (u.kind === 'champion') sound(s, crit ? 'crit' : u.range > 80 ? 'shot' : 'swing', u, u.player);
-  else if (u.kind === 'tower') sound(s, 'towerShot', u);
+  // Minions and camps fight too often to be heard; towers, the beast and the player's champion are
+  // (the AI champions share this code, so theirs stay silent).
+  if (u.kind === 'champion') {
+    if (u.id === s.player) sound(s, crit ? 'crit' : u.range > 80 ? 'shot' : 'swing', u, true);
+  } else if (u.kind === 'tower') sound(s, 'towerShot', u);
   else if (u.kind === 'beast') sound(s, 'beastClaw', u);
   // Minions of the team that slew the beast hit harder while its buff lasts.
   const empowered = u.kind === 'minion' && u.side !== 'neutral' && s.beastBuff[u.side] > s.time;
@@ -1596,7 +1604,7 @@ function updateProjectiles(s: GameState, dt: number) {
       const owner = getUnit(s, p.owner);
       if (p.look) {
         s.fx.push({ kind: 'skill', look: `${p.look}>hit`, x: e.x, y: e.y, x2: p.x, y2: p.y, r: 0, a: Math.atan2(p.vy, p.vx), color: p.color, ms: 400 });
-        sound(s, 'impact', e, owner?.player);
+        if (owner && owner.id === s.player) sound(s, 'impact', e, true);
       }
       if (owner && owner.kind === 'champion') abilityHit(s, owner, e, p.damage, p);
       else damage(s, e, p.damage, p.owner);

@@ -28,6 +28,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Riftblade](games/riftblade/README.md) | Fight across four worlds as a blaster soldier or a blade knight: survive five minutes on each, beat its boss, and choose your way on the star map between them; every level-up offers a new skill. |
 | [Scrapyard Titans](games/scrapyard-titans/README.md) | Build a squad of junk-built robots on an 8x8 board, bolt on parts and watch them brawl it out against seven rival commanders. |
 | [Bramblecrest](games/bramblecrest/README.md) | A small knight explores an overgrown kingdom by lamplight, finding a new tool in every dungeon that opens more of the world. |
+| [Ninefold](games/ninefold/README.md) | Fill every row, column and box with each digit once: a daily puzzle, Classic boards at three levels, and Delve, a run of ever bigger boards with hearts and relics, in nine unlockable art styles. |
 
 ## Settings
 
@@ -70,6 +71,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Colonizer | the AI gathers 25% slower | the AI gathers 25% faster |
   | Riftblade | foes have 25% less health and come 25% slower | foes have 35% more health and come 25% faster |
   | Bramblecrest | 5 hearts, and the bosses call in foes 25% less often | 2 hearts, and the bosses call in foes 30% more often |
+  | Ninefold | 5 hints a Classic board, 4 hearts a Delve run | 2 hints a Classic board, 2 hearts a Delve run |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
@@ -79,11 +81,25 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 - **Genre filter** (off by default, hub only): a row of genres above the cards (Action, Strategy,
   Management, Puzzle, Adventure) that lists just the games of one. Each card's genres are its
   `data-genres` in `index.html`.
-- **Saved progress**: **Delete all progress** erases every game's saves and keeps the settings.
+- **Updates**: when the installed apps download a new version. **Automatic** updates on the next
+  visit online, **Wi-Fi only** waits while the phone is on mobile data or Data Saver, and **Off** keeps
+  the version in place. Wi-Fi only is offered, and picked by default, only where the browser can tell
+  WiFi from mobile data (Chrome and other Chromium browsers on Android); elsewhere Automatic is the
+  default. **Update now** fetches a new version at once whatever the setting says.
+
+  ![The Updates setting](docs/screenshots/hub-updates.webp)
+- **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
+  and **Import all** loads one back, on this or another device. **Delete all progress** erases every
+  game's saves and the Continue playing row, and keeps the settings and any other site's storage on
+  the same origin.
+
+![Export all, Import all and Delete all progress](docs/screenshots/hub-progress-files.webp)
 - **Restore defaults** puts the settings back, and **Done** closes the panel.
 
 Each card also has a **⚙** in its corner that opens that game's own settings: whether it has
-anything saved on this device, **Delete this game's progress** (its storage keys, which all start
+anything saved on this device, **Export progress** and **Import progress** for just that game's
+progress (see Progress files), **Install**, which opens the game ready to install as an app (see
+Install as an app), **Delete this game's progress** (its storage keys, which all start
 with its folder name, see `shared/progress.ts`) and **Play**.
 
 ![A game's own settings](docs/screenshots/hub-game-settings.webp)
@@ -129,9 +145,9 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `audio.ts`, the sound effects and music made in code, `corner.ts`, the corner buttons, `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion, full screen and the sound button
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files, that the hub and every game have an app manifest, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks
@@ -168,16 +184,54 @@ each card's count as "N plays". Only the built site counts: the dev server, brow
 the playthroughs and e2e tests) and `?watch` matches never do. If the service can't be reached, the
 games play as usual and the cards simply show no count. Nothing else is sent.
 
+## Install as an app
+
+The hub and every game install as apps of their own (PWAs) that play offline: open the hub or a
+game on the site and pick **Install** (Chrome and Edge, on phones and computers) or **Share > Add to
+Home Screen** (Safari on iPhone and iPad). The hub shows an **Install** button next to Settings, and
+every game one on its start and pause screens, where the browser can install it; the **Install** in
+a game's ⚙ on the hub opens the game with `?install`, which shows that button as the main one in
+every browser (and says how to install from the browser's menu where there is no prompt). Each app
+has its own name and icon, drawn from its favicon on its background colour.
+
+![A game's start screen opened from Install on its hub card](docs/screenshots/game-install.webp)
+
+![The hub's and every game's app icons](docs/screenshots/app-icons.webp)
+
+- `scripts/pwa.ts`, a Vite plugin, links every page to its manifest: the hub's is
+  `public/manifest.webmanifest`, and each game's is made from its title and background colour. It
+  also writes `sw.js` into the build, the service worker from `scripts/sw.js` with every file of the
+  build and a hash of its content, so a deploy is a new version that replaces the old cache. An
+  update downloads only the files whose content changed and copies the rest from the old cache, so
+  it costs phones little data. The Updates setting can hold updates back: the service worker can't read
+  the settings, so `shared/install.ts` copies it into a cache of its own, and while updates are held
+  back the new version's install fails on purpose and pages load from the cache, so the version in
+  place keeps playing. Pages load from the network while online and from the cache offline,
+  so a player sees an update the next time they open the app online.
+- `shared/install.ts` registers the service worker (from the hub and from `setupGame`, only in the
+  built site and never under browser automation), shows the Install buttons, and in the
+  installed app asks the browser to keep its storage.
+- `node scripts/pwa-icons.mjs [game...]` draws the icons into `public/icons/` from the favicons.
+  The build fails for a game without icons.
+
+Saves stay in the browser's storage on the device. On Android and computers the installed apps and
+the website share it; on iPhones each home screen app keeps its own, and private browsing forgets
+everything when the window closes.
+
+## Progress files
+
+A player can carry progress to another device, or between the website and an app, as a file:
+the ⚙ on a game's card exports and imports just that game's progress as
+`<game>-<date>.gh<code>` (`.ghap` for Apothecary, codes in `shared/saveCodes.ts`), and the Settings
+panel exports and imports every game's progress and the settings as `game-hub-progress-<date>.gh`.
+The files are encrypted (AES-GCM, `shared/saveFile.ts`), so they can't be read or edited by hand:
+an edited file, or another game's, is refused. The key ships with the code, so this keeps out
+casual editing, not a determined player. The installed hub on a computer also opens these files
+directly.
+
 ## Play online
 
 Every push to main builds the hub and its games and publishes them on GitHub Pages, at
 [chriszly.github.io/game-proto](https://chriszly.github.io/game-proto/), with the hub as the start
 page (`.github/workflows/deploy.yml`). Paths in the build are relative, so it works under the
 `/game-proto/` subpath.
-
-## Container image
-
-Every push to main also builds the hub and its games into a container image (`Dockerfile`: the
-build served by nginx on port 8080) for arm64 and amd64, and publishes it as
-`ghcr.io/chriszly/game-proto:latest` (and `:sha-<commit>`). Pull requests only check that the
-image builds.

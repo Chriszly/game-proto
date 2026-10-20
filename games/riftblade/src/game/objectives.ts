@@ -9,7 +9,7 @@ import { t as tr, type TextKey } from '../i18n';
 import { PLANETS } from './planets';
 import {
   HERO_OBJECTIVES, OBJECTIVE_AT, SHARED_OBJECTIVES, WORLD_OBJECTIVES, isStructure,
-  type Enemy, type GameState, type Objective, type ObjectiveId, type StructureKind,
+  type GameState, type Objective, type ObjectiveId, type StructureKind,
 } from './state';
 import { addHazard, explode, gainXp, near, pop, spawnAt, spawnElite, spawnGroup } from './sim';
 
@@ -372,9 +372,4 @@ export function cancelObjective(s: GameState) {
   if (!o) return;
   s.objective = null;
   for (const e of s.enemies) if (o.ids.includes(e.id) && isStructure(e.kind)) e.hp = 0;
-}
-
-/** A structure or the marked elite falls (the objective counts it on its next step). */
-export function isObjectiveFoe(s: GameState, e: Enemy) {
-  return !!s.objective && s.objective.ids.includes(e.id);
 }

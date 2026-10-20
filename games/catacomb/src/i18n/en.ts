@@ -97,19 +97,19 @@ const en = {
 
   // Relics
   oakWardName: 'Oak Ward',
-  oakWardText: 'Start each turn with 3 block.',
+  oakWardText: 'Start each turn with {n} block.',
   whetstoneName: 'Whetstone',
-  whetstoneText: 'Your attacks deal 2 more damage per hit.',
+  whetstoneText: 'Your attacks deal {n} more damage per hit.',
   emberLanternName: 'Ember Lantern',
-  emberLanternText: 'Gain 1 more energy on the first turn of each fight.',
+  emberLanternText: 'Gain {n} more energy on the first turn of each fight.',
   mendingMossName: 'Mending Moss',
-  mendingMossText: 'Heal 5 after each fight you win.',
+  mendingMossText: 'Heal {n} after each fight you win.',
   goldenIdolName: 'Golden Idol',
   goldenIdolText: 'Fights drop half as much gold again.',
   boneCharmName: 'Bone Charm',
-  boneCharmText: 'Every foe starts each fight with 2 Vulnerable.',
+  boneCharmText: 'Every foe starts each fight with {n} Vulnerable.',
   venomGlandName: 'Venom Gland',
-  venomGlandText: 'Poison you apply is 2 higher.',
+  venomGlandText: 'Poison you apply is {n} higher.',
 
   // Mystery rooms
   altarTitle: 'A bloodstained altar',

@@ -1,4 +1,4 @@
-# Weekly npm and monthly GitHub Actions and Docker update PRs. Minor and patch
+# Weekly npm and monthly GitHub Actions update PRs. Minor and patch
 # updates of each kind come grouped in one PR; a major update gets its own. Each
 # PR carries a Type and a Game label from .github/labels.json, so the
 # type-and-game check passes. PR Links and the template check skip Dependabot's
@@ -22,8 +22,3 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: monthly
-    labels: [ci, shared]

@@ -160,13 +160,14 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   smashes the cell, Funnel picks `funnelFrom` and then swaps it with the next cell. Otherwise the first tap sets
   `selected`, a tap on a neighbour calls `swap`, a tap on the same tile clears it. `pointerMove`
   swaps once a drag goes half a cell. `swap` clears the drag start, so a held second tap of a
-  tap-tap swap that drags after the board settles does not swap again. A swap with a jar or resin
-  tile does nothing. Input is ignored while `busy` or when `state.phase` is not `play`.
+  tap-tap swap that drags after the board settles does not swap again. A swap with a jar, resin or
+  mould tile does nothing but play `ui('refuse')`. Input is ignored while `busy` or when `state.phase` is not `play`.
 - **Rules then animation:** `swap` calls `trySwap`, which mutates `state` right away (board, moves,
   `got` and the counters, phase, coins, stars). The scene then queues `Anim`s: a slide, the slide
   back if there was no match, or for each `Step` a pop of the cleared tiles (wanted ones fly to
   their need row, by the step's own `needs`; the fired rows', columns' and Bloom squares' bands
-  blink; brewed, melted and scrubbed tiles swap texture) and a `moveTo` of the new board; a step
+  blink; brewed, melted and scrubbed tiles swap texture; a Pestle step that only melts or scrubs
+  swaps their texture with its sizzle or scrub) and a `moveTo` of the new board; a step
   with `spread` swells the tile mould crept onto, one with `served` or `stage` shows a note over the
   board (and a new stage rebuilds the label); then `settle`.
 - **Catalysts:** `gather` in `sim.ts` takes `findRuns`, adds the whole row of every matched
@@ -244,7 +245,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   random free tile of the new board.
 - **Bench tools:** four buttons in `TOOL_ORDER`, `TOOL.gap` apart. `useTool` (a button's
   `pointerdown`) checks `canUse`; Stir calls `stir` and saves; the others toggle `armed`. Sift's
-  board tap calls `siftRow`, which calls `sift` (new tiles for the row, specials, jars and resin
+  board tap calls `siftRow`, which calls `sift` (new tiles for the row, specials, jars, resin and mould
   kept, rerolled until nothing matches and a move is left, else a shuffle), saves and animates the
   row fading out and growing back. Pestle's tap calls `pestle` and Funnel's second tap `funnel`;
   both go through `resolve` with no move spent (so a tool can sell the order) and the scene plays
@@ -269,7 +270,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   follow the stage on a royal commission), `got` (per-kind counts for this order or stage),
   `moves`, `phase` (`play`, `sold`, `failed`), `earned`, `orderStars` (0 until sold), `brewed` and
   `fired` (Catalysts this order), `bloomed` and `bloomsFired`, `opened` (jars), `melted` (resin),
-  `scrubbed` (mould), `penalties` (moves lost to the forbidden kind), `stage`, `served`,
+  `scrubbed` (mould), `penalties` (moves lost to the forbidden kind; `fired`, `bloomsFired`, `opened`,
+  `melted`, `scrubbed` and `penalties` are only kept for debugging and the test's log), `stage`, `served`,
   `speedBonus`, `fromPantry`, `toPantry`, `startPantry`, `passed` (an examination sold with its
   stars), `board` and `nextId`.
 - `Board` is `Tile[][]`, rows from the top. Each `Tile` has a unique `id` from `nextId`, which
@@ -515,8 +517,9 @@ triangle lead, a thin `pulse12` arpeggio and a triangle bass. It is written at `
   `matched` mirror `findRuns` / `findMatches`. Changing what counts as a match needs both updated.
 - Don't rotate tile sprites: in headless Chromium's software WebGL, slightly rotated canvas
   textures render torn, which is why the hint swells instead of wiggling.
-- Progress is saved in `settle` (after the sale animation), in `useTool` / `siftRow` and in `buy`,
-  not in `trySwap`. A twin order's speed bonus is added to `coins` only on the sale.
+- Progress is saved in `settle` (after the sale animation), in `useTool` / `siftRow`, in `playTool`
+  (Pestle and Funnel), in `buy`, `buyHerb` and `pick`, not in `trySwap`. A sale clears `rich`, so a
+  rich pick lasts one order. A twin order's speed bonus is added to `coins` only on the sale.
 - `got` counts only the kinds in `needs`; the pop animation uses the step's own `needs` (a royal
   commission's needs change between steps), so a tile of another kind never moves a bar.
 - Mould never matches, so it can't be swapped into a run, but a Catalyst row, a Bloom square or the

@@ -30,10 +30,11 @@ body:
         - Riftblade
         - Scrapyard Titans
         - Bramblecrest
+        - Ninefold
         - Hub page
         - Shared / all games
       # Preselect Shared, so a report never lands on a game by accident.
-      default: 22
+      default: 23
     validations:
       required: true
   - type: dropdown

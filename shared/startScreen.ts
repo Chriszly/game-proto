@@ -4,6 +4,7 @@ import { t } from './i18n';
 import type { HowToPlay } from './howToPlay';
 import { cornerBar, volumeSliders } from './corner';
 import { resumeAudio, suspendAudio, ui, unlockAudio } from './audio';
+import { mountInstallButton } from './install';
 
 /** The key that pauses the game and resumes it. Esc is left to the games, some of which close panels with it. */
 const PAUSE_KEY = 'p';
@@ -25,6 +26,8 @@ const HELP_KEY = 'h';
  *   P, Enter, Space or Esc resume.
  * - How to play: when the game hands over its `howToPlay`, the start and pause screens get a How to
  *   play button (and the H key) that shows it in place of the card; Back, H or Esc go back.
+ * - Install: where the game can be installed as an app, the start and pause screens show an Install
+ *   button (`install.ts`).
  * While a screen is up, keys go to it and not to the game.
  */
 export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
@@ -39,6 +42,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     `<button type="button" class="game-overlay-button game-start-button">${escapeHtml(t('start'))}</button>` +
     `<button type="button" class="game-overlay-button game-resume-button">${escapeHtml(t('resume'))}</button>` +
     (howToPlay ? `<button type="button" class="game-overlay-link game-help-button">${escapeHtml(t('howToPlay'))}</button>` : '') +
+    `<button type="button" class="game-overlay-link game-install-button" hidden>${escapeHtml(t('installGame'))}</button>` +
     '<div class="game-overlay-volumes"></div>' +
     '<div class="game-overlay-hint"></div>' +
     `<a class="game-overlay-hub" href="../../">${escapeHtml(t('allGames'))}</a>` +
@@ -50,6 +54,12 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   const hint = overlay.querySelector<HTMLDivElement>('.game-overlay-hint')!;
   const help = overlay.querySelector<HTMLElement>('.game-help-body');
   overlay.querySelector('.game-overlay-volumes')!.append(...volumeSliders('pause'));
+  // Install the game as an app of its own; opened with ?install (the Install on its hub card), the
+  // button shows in every browser and stands out as the main button.
+  const installButton = overlay.querySelector<HTMLButtonElement>('.game-install-button')!;
+  const installAsked = new URLSearchParams(location.search).has('install');
+  if (installAsked) installButton.className = 'game-overlay-button game-install-button';
+  mountInstallButton(installButton, installAsked);
 
   const pauseButton = document.createElement('button');
   pauseButton.type = 'button';
@@ -102,7 +112,13 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     game.sound.pauseAll();
   };
   const play = () => {
-    for (const scene of held) if (scene.sys.isPaused()) scene.sys.resume();
+    for (const scene of held) {
+      if (!scene.sys.isPaused()) continue;
+      // A paused scene misses the key-ups of the keys let go behind the screen, so its keys start
+      // again from up, as after the tab lost the focus.
+      scene.input?.keyboard?.resetKeys();
+      scene.sys.resume();
+    }
     held = [];
     game.sound.resumeAll();
     // Start and Resume are a tap or a key press, which lets the browser play sound.
@@ -142,6 +158,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   overlay.querySelector('.game-help-back')?.addEventListener('click', closeHelp);
 
   // Captured on window, before the game's own listeners, so a screen that is up keeps its keys.
+  // Key-ups always reach the game, so a key held when the screen came up is let go there too.
   window.addEventListener(
     'keydown',
     (e) => {
@@ -175,7 +192,6 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     },
     { capture: true },
   );
-  window.addEventListener('keyup', (e) => mode !== 'playing' && e.stopPropagation(), { capture: true });
   // The music plays on behind the pause screen, so its volume can be heard as it is set, but stops
   // with the tab out of sight.
   document.addEventListener('visibilitychange', () => {
@@ -297,7 +313,9 @@ function injectStyles() {
 .game-overlay:not(.start) .game-start-button,
 .game-overlay:not(.paused) .game-resume-button,
 .game-overlay:not(.paused) .game-overlay-hub,
-.game-overlay:not(.start):not(.paused) .game-help-button { display: none; }
+.game-overlay:not(.start):not(.paused) .game-help-button,
+.game-overlay:not(.start):not(.paused) .game-install-button { display: none; }
+.game-install-button[hidden] { display: none; }
 ${settings.reduceMotion ? '.game-overlay-loading span { animation: none; }' : ''}
 `;
   document.head.append(style);

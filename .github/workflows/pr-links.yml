@@ -37,16 +37,22 @@ jobs:
             // check the title and description it started with.
             const pull_number = (context.payload.pull_request || context.payload.issue).number;
             const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number });
+            // A pull_request or pull_request_review run from a fork gets a read-only
+            // token, so setting the status fails there; the job's own result then
+            // reports the check. The issue_comment run on main can always set it.
+            const fromFork = pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`;
+            const setStatus = async (status) => {
+              try {
+                await github.rest.repos.createCommitStatus({ ...context.repo, sha: pr.head.sha, context: 'PR Links', ...status });
+              } catch (e) {
+                if (!fromFork) throw e;
+                console.log(`Fork PR, the "PR Links" status could not be set (${e.status}); the job's result reports the check.`);
+              }
+            };
             // Dependabot's descriptions and commits quote release notes from other
             // sites, so its PRs are not checked.
             if (pr.user.login === 'dependabot[bot]') {
-              await github.rest.repos.createCommitStatus({
-                ...context.repo,
-                sha: pr.head.sha,
-                context: 'PR Links',
-                state: 'success',
-                description: 'Not checked on Dependabot PRs'
-              });
+              await setStatus({ state: 'success', description: 'Not checked on Dependabot PRs' });
               console.log('Dependabot PR, links not checked.');
               return;
             }
@@ -95,10 +101,7 @@ jobs:
             ];
 
             // The status shows the result on the PR whichever event ran the check.
-            await github.rest.repos.createCommitStatus({
-              ...context.repo,
-              sha: pr.head.sha,
-              context: 'PR Links',
+            await setStatus({
               state: hits.length > 0 ? 'failure' : 'success',
               description: hits.length > 0 ? `${hits.length} link(s) outside GitHub` : 'Links only to GitHub',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`

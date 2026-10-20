@@ -85,7 +85,7 @@ in.
   controls or the first round change.
 - `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
   English source, `i18n/de.ts` the German (with `keepEnglish` for the texts that stay the same) and
-  `i18n/en-US.ts` only "Armory". `t(key, vars)` shows a text in the hub's language; `TextKey` types
+  `i18n/en-US.ts` only "Armory" and "The Armory". `t(key, vars)` shows a text in the hub's language; `TextKey` types
   the keys. Every text on screen goes through `t`, and the catalogues (`BOONS`, `PAIRS`,
   `ARMOURY`, `BOSS`, `ROADS`, `TERRAIN`, `DARE_TEXT`) and the sim's word effects name their texts
   by key, never by English words. Numbers come out formatted for the language (2,000 m or
@@ -148,7 +148,7 @@ in.
   `HUD_SHIFT` (how far the HUD's middle and right-hand items moved),
   `FRAME` (the miniature's gold frame), `TRACK` (the run track), `TAG` (the stage's tag),
   `DARE_TAG` (the dare's strip under it), `STAGE_TITLE`, `ARMOURY_PANEL`, `STREAK_CHIP`, `MARGIN`
-  (the scrollwork and caption), `CARDS` (card size and the centres for two or three cards),
+  (the scrollwork and caption), `CARDS` (card size and the centres for one, two or three cards),
   `BUTTON`, `ACTION_BUTTONS` (the touch Slide and Jump buttons), `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a Georgia serif stack)).
 - `src/ui/BoonCards.ts`: the checkpoint overlay and its vellum cards: two or three boon cards (a
   cursed boon's card is edged in madder; a paired boon's card carries the pair's hint), then the
@@ -230,7 +230,8 @@ in.
 - Dares (`dared`, `meetDare`): a stomp, a coin or a streak multiplier reached moves the stage's
   dare on; at its goal it is `done`, `DARE.reward` is paid and a pop says so. A no-hit dare is
   `failed` by any hit and met at the checkpoint otherwise. `rollChoices` deals three cards when
-  `dare.done`.
+  `dare.done`. It pads with at most one Field Dressing, so once every other boon is at its max rank
+  it deals fewer cards (`CARDS.xs` has a one-card centre too); the shop then shows `shopNoneLeft`.
 - Roads: `pick` takes the boon and, when `roadChoiceDue`, sets `roads` and stays in `checkpoint`;
   `pickRoad` sets `road` and starts the next stage. `buildStage` reads `road` for the pool, the
   gaps, the coins and the shrine; `buildBossStage` clears it. Nothing else changes by road but the
@@ -243,6 +244,9 @@ in.
   as it reaches the side lands on it, even if a long frame takes the feet below the top.
 - Input: a `pointerdown` on the scene with nothing interactive under it calls `jump` when
   `viewPoint(pointer).y` is above `TAP_SPLIT_Y` and `slide` below it. Keys: Space, Up, W jump; Down, S slide.
+  A key's auto-repeat (`event.repeat`) is ignored, so holding Space never fires the Second Leap and
+  holding Down never keeps the slide going. On the scene's `RESUME` (the shared pause and Start let
+  go) `lastFrame` is cleared, so the first frame back is a 0 ms step rather than a 100 ms catch-up.
   On a touch screen (`device.input.touch`, or once a pointer `wasTouch`) `createActionButtons`
   shows two round buttons in the margin's bottom right (`ACTION_BUTTONS`: Slide at 780, Jump at
   890, y 490, radius 40; textures `action-slide`/`action-jump` and their madder `-down` press,
@@ -290,6 +294,8 @@ in.
 - `GameState.phase` is `'running' | 'checkpoint' | 'over'`. Nothing moves outside `running`;
   `jump`, `slide` return false and `pick` and `pickRoad` need `checkpoint`. A checkpoint holds
   `choices` first and, once the boon is taken and a road is due, `roads` instead.
+  A fall (`hurt` setting `over`) ends that `tick` at once: nothing is stomped, touched or picked
+  up after it, so the banked coins match the game-over line.
 - Coordinates: x is course pixels, left to right; `distance` is the middle of the knight's box.
   Heights (`runner.h`, coin `h`, trap and ledge `h`) are pixels up from the road, and
   `TRAP_SPAN` is up from the trap's own `h`. On a ledge the knight's feet are at the ledge's `h`;
@@ -317,8 +323,8 @@ in.
   sputtering for the 300 before).
 - `shrines: Shrine[]` (`x`, `w` 46, `used` once it gave a heart, `tried` once slid into without
   one): at most one per stage, on the road, from stage 2.
-- `streak`: coins taken in a row since the last hit (stomps count). `streakMult(streak)` is
-  `min(5, 1 + floor(streak / 10))`.
+- `streak`: coins taken in a row since the last hit (stomps count). `streakMult(streak, cap)` is
+  `min(cap, 1 + floor(streak / 10))`, with the cap from `streakMax(road)` (5, or 7 on the High Road).
 - `course: Coin[]` (the coins; `pulled` once a lodestone catches one). `effects: Effect[]` are
   short visual timers (`coin`, `hit`, `block`, `dust`, `skid`, `stomp`, and `pop`, `heal`, `refuse`,
   which carry their words in `text`).
@@ -468,7 +474,9 @@ the stage), at most one sound of each kind a frame, so a row of coins or a volle
   toggled every 80 ms) is held at a steady 0.6 alpha, the Aegis nimbus's pulse is held at a fixed
   alpha, the "+N" coin pops and the shrine's "+1 heart" stay where they appear instead of rising,
   the streak's sparkle trail is not drawn, the Gatekeeper's flash after a stomp is held at 0.6
-  alpha, and the snow and wind streaks are drawn still.
+  alpha, the snow and wind streaks, the dragon's tail lash bob, the boulders' roll and the
+  rockfall's dust are drawn still, the lit fire vents and the dragon's rolling fire keep one frame
+  (`flames-lit0`, `fire-0`) instead of flickering, and the bats keep one wing frame with no bob.
 - Normal must stay exactly as designed: the playthrough runs on Normal and its `STAGE_1` expects 3
   hearts.
 - Keep the README's difficulty line (5 hearts on Easy, 2 on Hard) in sync with `byDifficulty`.

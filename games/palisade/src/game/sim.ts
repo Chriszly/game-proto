@@ -269,7 +269,7 @@ function moveMissiles(state: GameState, s: Stats, dt: number) {
     let target = state.enemies.find((e) => e.id === m.target);
     // A foe that fell before the arrow got there: turn to the nearest one not yet hit.
     if (!target && m.target !== null) {
-      target = nearest(state.enemies.filter((e) => !m.hit.includes(e.id)), m.x, m.y);
+      target = nearest(targets(state, 'nearest').filter((e) => !m.hit.includes(e.id)), m.x, m.y);
       m.target = target?.id ?? null;
     }
     if (target) {
@@ -307,7 +307,7 @@ function moveMissiles(state: GameState, s: Stats, dt: number) {
     // An arrow that glances off a shield goes no further.
     if (m.pierce > 0 && !blocked) {
       m.pierce--;
-      const next = nearest(state.enemies.filter((e) => !m.hit.includes(e.id) && e.x > m.x - 20), m.x, m.y);
+      const next = nearest(targets(state, 'nearest').filter((e) => !m.hit.includes(e.id) && e.x > m.x - 20), m.x, m.y);
       m.target = next?.id ?? null;
     } else gone.add(m.id);
   }
@@ -384,8 +384,9 @@ function hurt(foe: Enemy, damage: number, armored: boolean) {
 
 function moveEnemies(state: GameState, s: Stats, dt: number) {
   const barricadeUp = state.barricade.hp > 0;
-  // Once the barricade is down, a bought stake line behind it is the next thing foes hack at.
-  const stakesUp = !barricadeUp && state.forts.stakeHp > 0;
+  // A bought stake line behind the barricade is what foes hack at once it is down, or once they
+  // are past its face (the barricade was mended while they stood at the stakes).
+  const stakesUp = state.forts.stakeHp > 0;
   // A Golden Road and Rich Plunder both hurry the foes.
   const roadSpeed = roadEffects(state.road).speed * omenEffects(state.omen).speed;
   for (const e of state.enemies) {
@@ -407,19 +408,23 @@ function moveEnemies(state: GameState, s: Stats, dt: number) {
       if (e.slowMs === 0) e.slow = 0;
     }
     if (type.healer && e.x < VIEW_RIGHT) heal(state, e, dt);
-    // Flyers go over the barricade (and the stake line), straight at the hero.
-    const wall = type.flying ? null : barricadeUp ? BARRICADE_FRONT : stakesUp ? STAKE_FRONT : null;
-    const stop = (wall ?? HERO_FRONT) + type.radius;
     // Only a foe at the barricade's face hacks at it: one that got behind it while it was down
-    // (and was then repaired) keeps walking to the hero. A foe walking up oversteps the face by
-    // at most one substep's walk, so that is how far behind it still counts as at the face.
-    const arrived = e.x <= stop && e.x >= stop - (type.speed * roadSpeed * rage * SUBSTEP_MS) / 1000;
+    // (and was then repaired) goes on to the stake line, or to the hero when there is none. A foe
+    // walking up oversteps a face by at most one substep's walk, so that is how far behind it still
+    // counts as at the face.
+    const overstep = (type.speed * roadSpeed * rage * SUBSTEP_MS) / 1000;
+    const atBarricade = barricadeUp && e.x >= BARRICADE_FRONT + type.radius - overstep;
+    // Flyers go over the barricade (and the stake line), straight at the hero.
+    const wall = type.flying ? null : atBarricade ? BARRICADE_FRONT : stakesUp ? STAKE_FRONT : null;
+    const stop = (wall ?? HERO_FRONT) + type.radius;
+    const arrived = e.x <= stop && e.x >= stop - overstep;
     e.attacking = wall !== null && arrived;
     if (e.attacking) {
       e.x = stop;
+      const hacksBarricade = wall === BARRICADE_FRONT;
       // An oil pot bursts over the first foe to reach the barricade.
-      if (barricadeUp && state.forts.oil) burstOil(state, e);
-      if (barricadeUp) state.barricade.hp = Math.max(0, state.barricade.hp - (type.dps * pace * dt) / 1000);
+      if (hacksBarricade && state.forts.oil) burstOil(state, e);
+      if (hacksBarricade) state.barricade.hp = Math.max(0, state.barricade.hp - (type.dps * pace * dt) / 1000);
       else state.forts.stakeHp = Math.max(0, state.forts.stakeHp - (type.dps * pace * dt) / 1000);
       // Spiked Stakes prick every foe hacking at the barricade.
       e.hp -= (s.stakes * dt) / 1000;

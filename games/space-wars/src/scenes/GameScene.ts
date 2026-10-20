@@ -19,6 +19,7 @@ import {
   BACKDROP_KEY, BEACON_KEY, CRYSTAL_KEYS, GLOW_BLUE_KEY, GLOW_KEY, RES, SHARD_KEY, SHIP_ZOOM, bakeAll, bakeBackdrop, buildingKey, facing, flameKey, shipKey,
 } from '../art/textures';
 import { settings } from '../../../../shared/settings';
+import { formatNumber } from '../../../../shared/i18n';
 import { playMusic, playSting, stopMusic, ui } from '../../../../shared/audio';
 import { LASER_PITCH, SONG, sfx, type Sfx } from '../audio';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
@@ -84,7 +85,6 @@ const EXPANSION_SCALE = 0.8;
 /** The flagship is drawn as its faction's heavy at this scale, over a gold ring. */
 const FLAGSHIP_SCALE = 1.45;
 const FLAGSHIP_GOLD = 0xffd36a;
-/** How many hack hits take a turret over, for the ring that fills on a hacked turret. */
 /**
  * Attack alerts: a rival's hit on the player within ALERT_NEAR battlefield pixels of a live alert
  * refreshes it, and an alert lasts ALERT_MS of game time after its last hit. ALERT_COLOR is a hot
@@ -110,6 +110,7 @@ const RALLY_GRAB = 22;
 /** The minimap's canvas texture, and how often it is repainted (in frames). */
 const MINI_KEY = 'space-wars-minimap';
 const MINI_EVERY = 6;
+/** How many hack hits take a turret over, for the ring that fills on a hacked turret. */
 const TAKEOVER = FACTIONS.map((f) => f.units.gunship.ability).find((a) => a?.kind === 'hack')?.takeover ?? 1;
 
 /** A place where a rival is hitting the player: a ring on the map, and an arrow on the map's edge while it is off screen. */
@@ -383,8 +384,11 @@ export class GameScene extends Phaser.Scene {
         name: t(b.x + 31, b.y + 3, 12, INK_CSS.chocolate, true),
         cost: t(b.x + 31, b.y + 16, 10, INK_CSS.rust),
       };
-    // The Flagship button, last in BUTTONS, gets its caption with the board's texts below.
-    this.captions = BUTTONS.filter((b) => b.key !== 'flagship' && b.key !== 'rally').map(caption);
+    // Captions are kept by their button's index in BUTTONS. The Flagship and Rally buttons get theirs
+    // with the board's texts below.
+    const late = (b: Button) => b.key === 'flagship' || b.key === 'rally';
+    this.captions = [];
+    BUTTONS.forEach((b, i) => { if (!late(b)) this.captions[i] = caption(b); });
     this.drawChrome();
 
     this.input.mouse?.disableContextMenu();
@@ -407,8 +411,7 @@ export class GameScene extends Phaser.Scene {
     // it too: these are made on a generator of their own, so a seeded battle plays as it did before them.
     const random = Math.random;
     Math.random = localRandom(0.5);
-    this.captions.push(caption(BUTTONS.find((b) => b.key === 'flagship')!));
-    this.captions.push(caption(BUTTONS.find((b) => b.key === 'rally')!));
+    BUTTONS.forEach((b, i) => { if (late(b)) this.captions[i] = caption(b); });
     // The minimap: a canvas of one pixel a fog cell for the explored space, and the dots drawn over it.
     this.miniTex = this.textures.exists(MINI_KEY)
       ? this.textures.get(MINI_KEY) as Phaser.Textures.CanvasTexture
@@ -663,7 +666,7 @@ export class GameScene extends Phaser.Scene {
       if (this.heard.has(b)) continue;
       this.heard.add(b);
       // A rank-up's gold ring is no explosion: it has its own sound.
-      if (b.color === 0xffd36a && b.r === 14) continue;
+      if (b.kind === 'rank') continue;
       if (this.inSight(b.x, b.y) && (!boom || (b.r ?? 0) > (boom.r ?? 0))) boom = b;
     }
     const quiet = watching ? 0.45 : 1;
@@ -746,7 +749,7 @@ export class GameScene extends Phaser.Scene {
       this.scrollTo(this.camera.scrollX + dx * step, this.camera.scrollY + dy * step);
     }
     if (Phaser.Input.Keyboard.JustDown(k.H)) this.centreOnHub();
-    if (!this.picking && !watching) {
+    if (!this.picking && !watching && this.state.phase === 'playing') {
       // B falls the selection back (F is the shared full screen key); T opens and closes the rivals panel.
       if (Phaser.Input.Keyboard.JustDown(k.B)) this.press(BUTTONS.find((b) => b.key === 'fallback')!);
       if (Phaser.Input.Keyboard.JustDown(k.T)) {
@@ -1635,11 +1638,11 @@ export class GameScene extends Phaser.Scene {
       h.faction.setText(faction).setFontSize(14);
       for (let size = 13; h.faction.width > FACTION_W && size >= 10; size--) h.faction.setFontSize(size);
     }
-    this.setText(h.crystal, String(side.crystal));
-    this.setText(h.gain, `+${this.flash.amount}`);
+    this.setText(h.crystal, formatNumber(side.crystal));
+    this.setText(h.gain, `+${formatNumber(this.flash.amount)}`);
     h.gain.setVisible(this.flash.ms > 0).setX(h.crystal.x + h.crystal.width + 6);
     this.setText(h.harvesters, tr('harvesters', { n: s.count(PLAYER, 'harvester') }));
-    this.setText(h.army, tr('army', { n: s.units.filter((u) => u.faction === PLAYER && u.type !== 'harvester').length }));
+    this.setText(h.army, tr('army', { n: s.fleet().length }));
     this.setText(h.clock, `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`);
 
     // The contract pill: a tangerine tag, then the contract's title, progress and reward on cream.
@@ -1807,12 +1810,14 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * The contract board, while it is up: a header with the countdown over two cards, each with the
-   * contract's title, reward, rank perk and goal. The first is taken when the time runs out.
+   * contract's title, reward, rank perk and goal. The first is taken when the time runs out. It
+   * stands aside while the rivals panel is open, which it would overlap (the top bar's pill keeps
+   * the countdown).
    */
   private drawBoard() {
     const s = this.state;
     const c = s.contract;
-    const show = !this.picking && !s.watch && s.phase === 'playing' && !c.goal && c.offer.length > 0;
+    const show = !this.picking && !s.watch && !this.rivalsOpen && s.phase === 'playing' && !c.goal && c.offer.length > 0;
     this.boardHead.setVisible(show);
     const total = c.offer.length * BOARD.w + (c.offer.length - 1) * BOARD.gap;
     this.boardCards = show ? c.offer.map((goal, k) => ({ x: (VIEW.w - total) / 2 + k * (BOARD.w + BOARD.gap), y: BOARD.cardY, w: BOARD.w, h: BOARD.h, goal })) : [];

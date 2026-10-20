@@ -44,6 +44,7 @@ import {
   seasonNo,
   touching,
   withWax,
+  type Bee,
   type Cell,
   type GameState,
 } from './state';
@@ -89,7 +90,7 @@ export function tick(s: GameState, dt: number) {
   orders(s, dt);
   contracts(s, dt);
   swarm(s, dt);
-  if (s.ranks.dance > 0) send(s);
+  if (s.ranks.dance > 0) dance(s);
 }
 
 /**
@@ -157,9 +158,24 @@ function eat(s: GameState) {
     return s.events.push({ kind: 'ate', what: 'cell', slot });
   }
   if (s.bees.length <= 1) return;
-  const gone = [...s.bees].sort((a, b) => Number(atHome(b)) - Number(atHome(a)))[0];
+  // Bees at home starve first, then foragers out, and bees lent to the orchard last.
+  const gone = [...s.bees].sort((a, b) => busy(b) - busy(a))[0];
   s.bees = s.bees.filter((b) => b !== gone);
+  recountLent(s);
   s.events.push({ kind: 'ate', what: 'bee', slot: null });
+}
+
+/** How busy a bee is: 2 lent to the orchard, 1 out foraging, 0 at home. */
+const busy = (b: Bee) => (b.lent ? 2 : atHome(b) ? 0 : 1);
+
+/** A contract's bee count follows its lent bees when some are lost, and a contract with none left ends. */
+function recountLent(s: GameState) {
+  const c = s.contract;
+  if (c?.phase !== 'lent') return;
+  c.bees = s.bees.filter((b) => b.lent).length;
+  if (c.bees > 0) return;
+  s.contract = null;
+  s.contractIn = CONTRACT_GAP_MS;
 }
 
 /** A brood cell counts down to its next bee while the hive has room for one; brood rests in winter. */
@@ -222,14 +238,33 @@ export function send(s: GameState) {
   if (room(s) === 0 || isWinter(s)) return false;
   const home = s.bees.filter(atHome);
   if (home.length === 0) return false;
-  const trip = tripMs(s);
-  for (const b of home) {
-    b.trip = trip;
-    b.tripMs = trip;
-    b.kind = s.forage;
-    b.flower = Math.floor(Math.random() * FLOWERS);
-  }
+  for (const b of home) fly(s, b);
   return true;
+}
+
+/**
+ * The Waggle Dance: bees at home set off by themselves, but only as many as the comb has room for
+ * beyond what the foragers out already carry, and while the farmer's offer stands enough of them
+ * stay home to take it. In winter they stay in.
+ */
+function dance(s: GameState) {
+  if (isWinter(s)) return;
+  let free = room(s) - s.bees.reduce((n, b) => n + (b.tripMs > 0 ? beeCarry(s, b) : 0), 0);
+  const stay = s.contract?.phase === 'offer' ? s.contract.bees : 0;
+  for (const b of s.bees.filter(atHome).slice(stay)) {
+    if (free <= 0) return;
+    fly(s, b);
+    free -= beeCarry(s, b);
+  }
+}
+
+/** One bee sets off for the nectar the hive forages now, to a flower picked at random. */
+function fly(s: GameState, b: Bee) {
+  const trip = tripMs(s);
+  b.trip = trip;
+  b.tripMs = trip;
+  b.kind = s.forage;
+  b.flower = Math.floor(Math.random() * FLOWERS);
 }
 
 /** Chooses where the foragers go next: a kind whose meadow is open. Bees already out finish their trip. */
@@ -255,6 +290,7 @@ export function harvest(s: GameState, slot: number) {
  * and unlocks each meadow whose goal that reaches.
  */
 export function sell(s: GameState) {
+  const fair = fairOn(s);
   const mead = meadReady(s);
   const jars = jarCount(s) + mead.length * CASK_JARS;
   if (jars === 0) return false;
@@ -280,6 +316,8 @@ export function sell(s: GameState) {
     s.events.push({ kind: 'unlocked', meadow: s.meadows });
     s.meadows++;
   }
+  // The meadow that opens the fair can come during its last minute of summer, between two ticks.
+  if (!fair && fairOn(s)) s.events.push({ kind: 'fair-open' });
   return true;
 }
 
@@ -419,10 +457,11 @@ function swarm(s: GameState, dt: number) {
   if (s.swarmIn > 0) return;
   s.swarmIn = SWARM_MS;
   const keep = Math.ceil(s.bees.length / 2);
-  // The bees at home leave first; foragers out and bees lent finish what they do.
-  const stay = [...s.bees].sort((a, b) => Number(atHome(a)) - Number(atHome(b))).slice(0, keep);
+  // The bees at home leave first; bees lent and then foragers out finish what they do.
+  const stay = [...s.bees].sort((a, b) => busy(b) - busy(a)).slice(0, keep);
   const lost = s.bees.length - keep;
   s.bees = s.bees.filter((b) => stay.includes(b));
+  recountLent(s);
   s.events.push({ kind: 'swarmed', lost });
 }
 

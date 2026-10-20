@@ -27,6 +27,21 @@ export type Language = (typeof LANGUAGES)[number];
 /** Each language's own name, the same whatever language is chosen. */
 export const LANGUAGE_NAMES: Record<Language, string> = { en: 'English (UK)', 'en-US': 'English (US)', de: 'Deutsch' };
 
+/**
+ * When the installed apps download a new version (`install.ts`, `scripts/sw.js`): always, only on
+ * WiFi (on mobile data or Data Saver they wait), or never until Update now is pressed.
+ */
+export const UPDATE_MODES = ['auto', 'wifi', 'off'] as const;
+export type UpdateMode = (typeof UPDATE_MODES)[number];
+/**
+ * Whether this browser tells WiFi from mobile data (`navigator.connection.type`, which only Android
+ * browsers built on Chrome have). Elsewhere Wi-Fi only isn't offered, and a saved one reads as Automatic.
+ */
+export const WIFI_KNOWN =
+  typeof navigator !== 'undefined' && 'type' in ((navigator as { connection?: object }).connection ?? {});
+const UPDATE_CHOICES = UPDATE_MODES.filter((u) => u !== 'wifi' || WIFI_KNOWN);
+const UPDATE_LABELS = { auto: 'updatesAuto', wifi: 'updatesWifi', off: 'off' } as const;
+
 export interface Settings {
   /** How hard every game plays; each game decides what that scales. Normal is the game as designed. */
   difficulty: Difficulty;
@@ -46,6 +61,8 @@ export interface Settings {
   muted: boolean;
   /** Hub only: shows a row of genres above the games to filter the cards by. */
   genreFilter: boolean;
+  /** When the installed apps download a new version. */
+  updates: UpdateMode;
 }
 
 export const DEFAULTS: Settings = {
@@ -58,6 +75,7 @@ export const DEFAULTS: Settings = {
   effects: 80,
   muted: false,
   genreFilter: false,
+  updates: WIFI_KNOWN ? 'wifi' : 'auto',
 };
 
 /**
@@ -101,6 +119,13 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   { key: 'effects', label: 'settingEffects', hint: 'settingEffectsHint', ...VOLUME },
   { key: 'muted', label: 'settingMuted', hint: 'settingMutedHint', kind: 'toggle' },
   { key: 'genreFilter', label: 'settingGenreFilter', hint: 'settingGenreFilterHint', kind: 'toggle' },
+  {
+    key: 'updates',
+    label: 'settingUpdates',
+    hint: WIFI_KNOWN ? 'settingUpdatesWifiHint' : 'settingUpdatesHint',
+    kind: 'choice',
+    options: UPDATE_CHOICES.map((u) => ({ value: u, label: UPDATE_LABELS[u] })),
+  },
 ];
 
 export const SETTINGS_KEY = 'hub-settings';
@@ -123,6 +148,10 @@ export function loadSettings(): Settings {
     effects: volume(saved.effects, DEFAULTS.effects),
     muted: typeof saved.muted === 'boolean' ? saved.muted : DEFAULTS.muted,
     genreFilter: typeof saved.genreFilter === 'boolean' ? saved.genreFilter : DEFAULTS.genreFilter,
+    updates:
+      saved.updates === 'wifi' && !WIFI_KNOWN
+        ? 'auto'
+        : (UPDATE_CHOICES.find((u) => u === saved.updates) ?? DEFAULTS.updates),
   };
 }
 

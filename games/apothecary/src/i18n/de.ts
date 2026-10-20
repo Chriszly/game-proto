@@ -128,6 +128,8 @@ const de: Translation<typeof en> = {
   notOnShelf: 'Noch nicht im Regal',
   serveInShop: 'Zum Bedienen in den Laden gehen',
   landBought: 'Neues Land gekauft!',
+  secondLine: 'Zweite Werkstatt',
+  line2Built: 'Zweite Werkstatt gebaut!',
   tableBuilt: 'Mahltisch gebaut!',
   cauldronBuilt: 'Kessel gebaut!',
   fieldPlanted: 'Feld bepflanzt!',
@@ -309,6 +311,12 @@ const de: Translation<typeof en> = {
   ale: 'Bier',
   stout: 'Starkbier',
   brewer: 'Brauer',
+  // A shop's fine goods and contracts
+  fineGood: '{item} (fein)',
+  shopContract: 'Auftrag: {item} {made}/{need}, {coins}{coin}',
+  shopContractBundle: 'Auftrag: {item} {made}/{need} + {item2} {made2}/{need2}, {coins}{coin}',
+  blightInShop: 'Fäule in den Beeten! Beseitige sie mit der Sichel',
+  shopContractKept: 'Auftrag erfüllt! +{coins}{coin}',
   // The recipes each shop's study teaches, and their gardens
   orchard: 'Obstgarten',
   apple: 'Apfel',

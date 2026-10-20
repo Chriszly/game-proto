@@ -32,7 +32,7 @@ const en: HowToPlay = {
     'From wave 3, unspent sap earns a little compost interest each wave.',
     'Crows fly over hedges, moles tunnel out of reach, and snails shrug off small hits.',
     'Wave 30 is the harvest: stars for the leaves you kept unlock new gardens.',
-    'After every Queen Slug you pick one of three boons for the rest of the garden.',
+    'After every Queen Slug you squash you pick one of three boons for the rest of the garden.',
     'Three stars on a garden open its thorny variant; harvest it to win a laurel.',
   ],
 };
@@ -67,7 +67,7 @@ const de: HowToPlay = {
     'Ab Welle 3 bringt übriger Saft mit jeder Welle ein wenig Kompostzins.',
     'Krähen fliegen über Hecken, Maulwürfe graben sich außer Reichweite, und Schnecken stecken kleine Treffer weg.',
     'Welle 30 ist die Ernte: Sterne für die behaltenen Blätter schalten neue Gärten frei.',
-    'Nach jeder Schneckenkönigin wählst du eine von drei Gaben für den Rest des Gartens.',
+    'Nach jeder zerquetschten Schneckenkönigin wählst du eine von drei Gaben für den Rest des Gartens.',
     'Drei Sterne auf einem Garten öffnen seine dornige Variante; ernte sie, um einen Lorbeer zu gewinnen.',
   ],
 };
