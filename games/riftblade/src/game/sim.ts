@@ -718,7 +718,7 @@ export function suppressorHalf(s: GameState) {
 
 /** Half the angle the Riot Shield covers, radians. */
 export function shieldHalf(s: GameState) {
-  return (s.ranks['riot-shield'] ?? 0) >= 4 ? 1.3 : 0.9;
+  return (s.ranks['riot-shield'] ?? 0) >= 4 ? 1.0 : 0.7;
 }
 
 /** Where the three Phalanx shields are around the hero. */
