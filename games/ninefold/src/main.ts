@@ -18,7 +18,7 @@ const game = new Phaser.Game({
   scene: [GameScene],
 });
 setupGame(game, { howToPlay });
-setupScaling(game, { fill: true });
+setupScaling(game, { fill: true, bothWays: true });
 
 // Handy for poking at state from the browser console during development, and read by the
 // playthrough test.
