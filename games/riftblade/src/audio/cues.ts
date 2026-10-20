@@ -93,6 +93,14 @@ export class SoundCues {
     this.pickMusic(s);
   }
 
+  /** A saved run picked up again: count from where it stands, with no sound for getting there. */
+  resume(s: GameState) {
+    this.rebase(s);
+    this.phase = s.phase;
+    this.planet = s.planet;
+    this.arena = s.arena;
+  }
+
   /** A new run: start counting from it. */
   private rebase(s: GameState) {
     this.lastId = s.nextId;

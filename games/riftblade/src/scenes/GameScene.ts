@@ -9,7 +9,9 @@ import { bubble, rebuildTime } from '../game/squad';
 import { buy, chooseEvent, chooseNode, chooseWorld, chartOptions, frame, leave, reroll } from '../game/voyage';
 import { ARENA_MS, BOSSES, CHAMPION, PLANETS, SIEGE, STRIKE, VENT, planetLabel } from '../game/planets';
 import { UPGRADES, MAX_TIER } from '../game/upgrades';
-import { isUnlocked, loadProgress, recordCharted, recordRun, recordUnlocks, unlockedHeroes, type Progress } from '../game/save';
+import {
+  clearRun, isResumable, isUnlocked, loadProgress, loadRun, recordCharted, recordRun, recordUnlocks, saveRun, unlockedHeroes, type Progress,
+} from '../game/save';
 import { C, hex } from '../art/glow';
 import { heroKey } from '../art/sprites';
 import { t } from '../i18n';
@@ -67,6 +69,9 @@ const HERO_LIKE: readonly GameState['allies'][number]['kind'][] = ['trooper', 'l
 /** The hero art's centre within its texture (see HERO_BOX in sprites.ts). */
 const HERO_ORIGIN = { x: 0.5, y: 52 / 120 };
 
+/** How often a run under way is saved while fighting, ms of run time (panels save as they open). */
+const RUN_SAVE_MS = 5000;
+
 /** Cheap repeatable noise for the ground's decorations (Math.random is left to the rules). */
 function hash(x: number, y: number, k = 0) {
   const n = Math.sin(x * 127.1 + y * 311.7 + k * 74.7) * 43758.5453;
@@ -92,6 +97,8 @@ export class GameScene extends Phaser.Scene {
   private recorded = false;
   /** Plays the run's sounds and music by watching the state frame to frame. */
   private cues = new SoundCues();
+  /** The run time of the last save of the run under way. */
+  private savedAt = 0;
 
   private ground!: Phaser.GameObjects.Graphics;
   private under!: Phaser.GameObjects.Graphics;
@@ -183,6 +190,7 @@ export class GameScene extends Phaser.Scene {
       else if (this.state.phase === 'select') this.begin(this.chosen);
       else this.leave();
     });
+    this.setUpSaving();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
     // A second touch pointer, so a thumb can hit the signature button while the other steers.
     this.input.addPointer(1);
@@ -194,7 +202,42 @@ export class GameScene extends Phaser.Scene {
       if (this.stick?.id === p.id) this.dragStick(viewPoint(p));
       else this.panel?.hover(viewPoint(p));
     });
+    const saved = loadRun();
+    if (saved) this.resume(saved);
     this.syncPanel();
+  }
+
+  /** Saves the run under way every few seconds and when the page is hidden or closed. */
+  private setUpSaving() {
+    const save = () => this.saveRun();
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', save);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', save);
+    });
+  }
+
+  private saveRun() {
+    if (!isResumable(this.state)) return;
+    saveRun(this.state);
+    this.savedAt = this.state.runMs;
+  }
+
+  /** Picks up a run saved when the game was closed, where it stood. */
+  private resume(s: GameState) {
+    // The screen may have another shape now: the spawn ring follows the view's corners.
+    s.ringOut = (Math.hypot(SCREEN.w, SCREEN.h) - Math.hypot(VIEW.w, VIEW.h)) / 2;
+    this.state = s;
+    this.chosen = s.hero!;
+    this.savedDeeds = s.deeds.length;
+    this.recorded = false;
+    this.savedAt = s.runMs;
+    this.hero.setTexture(heroKey(s.hero!, heroVariant(s))).setVisible(true);
+    this.cues.resume(s);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -295,6 +338,7 @@ export class GameScene extends Phaser.Scene {
     startRun(this.state, id, unlockedHeroes(this.progress), (Math.hypot(SCREEN.w, SCREEN.h) - Math.hypot(VIEW.w, VIEW.h)) / 2);
     this.savedDeeds = 0;
     this.recorded = false;
+    this.saveRun();
     this.hero.setTexture(heroKey(id)).setVisible(true);
     this.walking = false;
     this.stick = null;
@@ -372,6 +416,7 @@ export class GameScene extends Phaser.Scene {
     const here = this.state.hero ? PLANETS[this.state.planet].id : null;
     if (here && this.state.phase === 'run' && !this.progress.charted.includes(here)) this.progress = recordCharted(here);
     if (this.panelKey() !== this.shown) this.syncPanel();
+    else if (this.state.phase === 'run' && this.state.runMs - this.savedAt >= RUN_SAVE_MS) this.saveRun();
     this.draw();
   }
 
@@ -391,7 +436,10 @@ export class GameScene extends Phaser.Scene {
     if ((s.phase === 'won' || s.phase === 'lost') && !this.recorded) {
       this.recorded = true;
       this.progress = recordRun(s.hero!, s.runMs, s.phase === 'won', s.stage + 1, s.route.map((i) => PLANETS[i].id));
+      clearRun();
     }
+    // Every other panel (a level-up, the maps, the trader, an event) saves the run as it opens.
+    else this.saveRun();
     if (this.unlocking.length) this.panel = unlockPanel(this, this.unlocking[0]);
     else if (s.phase === 'select') this.panel = heroSelect(this, this.progress, this.chosen);
     else if (s.phase === 'levelup') this.panel = levelUp(this, s);

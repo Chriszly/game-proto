@@ -1,7 +1,11 @@
 /** Lasting progress, in local storage under a key prefixed with the game's name. */
 import { HEROES, HERO_IDS, type HeroId } from './heroes';
+import { PLANETS } from './planets';
+import { freshHero, freshState, type GameState, type Phase } from './state';
 
 export const SAVE_KEY = 'riftblade-progress';
+/** The run under way, so closing the game mid-run and opening it again carries on with it. */
+export const RUN_KEY = 'riftblade-run';
 
 export interface Progress {
   /** The longest run survived, ms over every planet (a win counts its full time). */
@@ -95,3 +99,44 @@ export function isUnlocked(progress: Progress, id: HeroId) {
 
 /** The heroes open to pick. */
 export const unlockedHeroes = (progress: Progress) => HERO_IDS.filter((id) => isUnlocked(progress, id));
+
+/** The phases a run can be saved in and picked up from (`cleared` and `travel` pass within a frame). */
+const RESUMABLE: readonly Phase[] = ['run', 'levelup', 'chart', 'map', 'trader', 'event'];
+export const isResumable = (s: GameState) => s.hero !== null && RESUMABLE.includes(s.phase);
+
+/** JSON has no Infinity (`nextElite` and `objectiveAt` once none are left), so it is kept as text. */
+const keepInfinity = (_key: string, v: unknown) => (typeof v === 'number' && !Number.isFinite(v) ? String(v) : v);
+const readInfinity = (_key: string, v: unknown) => (v === 'Infinity' ? Infinity : v === '-Infinity' ? -Infinity : v);
+
+/** Saves the run under way (the whole state: it is plain data). */
+export function saveRun(s: GameState) {
+  try {
+    localStorage.setItem(RUN_KEY, JSON.stringify(s, keepInfinity));
+  } catch {
+    // Blocked or full storage: the run then lasts until the page closes.
+  }
+}
+
+export function clearRun() {
+  try {
+    localStorage.removeItem(RUN_KEY);
+  } catch {
+    // Blocked storage holds no run to clear.
+  }
+}
+
+/**
+ * The saved run, or null for none (or one that no longer fits the game). Fields added to the state
+ * since it was saved take their fresh values.
+ */
+export function loadRun(): GameState | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RUN_KEY) ?? 'null', readInfinity);
+    if (typeof saved !== 'object' || !saved || typeof saved.player !== 'object' || !saved.player) return null;
+    const s: GameState = { ...freshState(), ...saved, player: { ...freshHero(), ...saved.player } };
+    if (!HERO_IDS.includes(s.hero as HeroId) || !isResumable(s) || !PLANETS[s.planet]) return null;
+    return s;
+  } catch {
+    return null;
+  }
+}
