@@ -170,7 +170,8 @@ left, under bevelled slate panels.
     champion and in the button, then you appear at your Nexus to shop and heal. Any damage, or
     moving, attacking, casting or using an active, cancels it. AI champions recall when they are
     low with no enemy about, or carry 900 gold and have something to buy, at most once a minute.
-15. **Dying** sends the champion back to its Nexus after a short wait that grows with its level;
+15. **Dying** sends the champion back to its Nexus after a short wait that grows with its level
+    (your cooldowns and buffs keep running down while you are out, and your passive gold keeps coming);
     the shop stays open to you the whole time you are down. **Buy back**: while dead, X (or the
     Buy back button that takes the Recall button's place) pays 100 gold plus 50 per level to
     respawn at once, then not again for 2:30. An AI champion buys back when an enemy champion

@@ -118,8 +118,10 @@ Implemented today:
   it buys `nextBuy(u)`, the first item of `AI_BUILDS[AI_BUILD_FOR[role] ?? 'fighter']` not owned
   and not a part of an owned item, when it can pay (the build order is kept, so gold is saved for
   the next item); with the build done, an elixir (`AI_ELIXIR` by build: tank Iron, fighter Wrath,
-  caster Swift) when it has none and `ELIXIR.aiSpare` gold over its price; else a ward when it
-  carries none. Every build starts with the Healing Flask, which
+  caster Swift) when it has none and `ELIXIR.aiSpare` gold over its price; and whenever it buys
+  neither (the next build item is not paid for yet, or the build is done), a ward when it carries
+  none. So at 0:00 every AI champion buys the Healing Flask and, unable to pay the next item, a
+  ward at once. Every build starts with the Healing Flask, which
   `aiAct` drinks under 40% health. `aiLog` reports each purchase.
 - Buy back (LB10, round 2): `buyBack` lets a dead champion pay `buybackCost` (`BUYBACK.base` plus
   `perLevel` per level) to `revive` at once, then sets `buybackReadyAt` `BUYBACK.cd` ahead. The
@@ -181,7 +183,7 @@ Implemented today:
   starts 4 s later. A card under the top bar shows it (title, time left, the target's damage as a
   bar, the reward), a gold pill and dashed ring mark the target in the world and a star marks it on
   the minimap. While the target is hidden from blue, the marker and the star go and the card's bar
-  keeps the damage last seen (`objSeen`).
+  keeps the damage last seen (`objSeen`, reset by `startMatch` since unit ids repeat each match).
 - Upgrade choice on level-up: levels 2, 3, 4, 5 and 7 (`UPGRADE_LEVELS`) of the player's champion
   each queue an offer of two upgrades (`upgradePairAt(champion, level)`, the matching pair in
   `UPGRADES`); two cards in the bottom bar (between the shop button
@@ -396,7 +398,9 @@ State model:
 - `units` holds every Nexus, inhibitor, tower, camp, the beast, champion, minion and ward. Dead
   minions and wards are removed each tick; dead champions, camps and the beast respawn at
   `spawnX`/`spawnY`; towers, inhibitors and Nexuses stay dead (drawn as rubble). A ward keeps
-  `expiresAt`.
+  `expiresAt`. A dead unit's countdowns keep running (`countDown` in `updateUnit`: attack
+  cooldown, shield, buffs, and a champion's ability and item cooldowns, aggro and passive gold),
+  so a champion respawns with them run down; only a recall needs it alive.
 - `Unit.lane` is the lane of a tower, inhibitor, minion or lane champion; `power` a minion's
   super multiplier.
 - `sounds` holds the `SoundEvent`s (`SoundId`, an optional world point, `mine` for the player's
@@ -546,9 +550,9 @@ Shared `ui` sounds: `click` for the Shop button, B and Play again; `coin` for a 
   language), the objective paid and the siege banner after
   the tower falls, the camp objective, at least one last hit and a streak, level 2's offer, and
   Wide Gatefall (`wide-slam`) kept from the card.
-- Round 2 stays out of the first round: the AI buys only a Healing Flask at 0:00 (its wards and
-  recalls change nothing the test asserts), `GANK.firstAt` keeps bounty hunts past it, and the
-  player never recalls, wards or buys back.
+- Round 2 stays out of the first round: the AI buys only a Healing Flask and a ward at 0:00 (its
+  wards and recalls change nothing the test asserts), `GANK.firstAt` keeps bounty hunts past it,
+  and the player never recalls, wards or buys back.
 - On the way to the tower the Warden waits out of its reach until a blue minion reaches it (and
   steps back out when none is left there, until the tower is under 200 health), and hits back (with
   Gatefall) at a red champion that comes within 240 px out of the tower's reach. It casts Gatefall on the camp too.
