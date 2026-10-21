@@ -759,8 +759,8 @@ export class GameScene extends Phaser.Scene {
         s.placing = !s.placing;
         ui('click');
       } else if (this.hud.onKit(x, y)) {
-        // Sandbags only go down in a wave, and only with some in the kit; any other tap on the kit
-        // panel does nothing (and never aims the squad).
+        // Sandbags only go down in a wave, and only with some in the kit; any other tap on the
+        // shown kit panel does nothing (and never aims the squad). A hidden panel takes no taps.
         ui('refuse');
       } else if (s.placing) {
         // A tap on the road puts the wall in that lane; anywhere else puts the sandbags away.
@@ -872,7 +872,9 @@ export class GameScene extends Phaser.Scene {
     this.moveDrums(dt);
     this.moveAcid(dt);
     this.moveWalls(dt);
-    this.moveSurvivors(dt);
+    // A rescue that opens the role pick holds the rest of the frame, so nothing (a companion crate
+    // shot open by this frame's bullets) can fill the squad under the pick.
+    if (this.moveSurvivors(dt)) return;
     this.hitTargets();
     this.tickFlamer(dt);
     this.tickFrenzy(dt);
@@ -1107,12 +1109,13 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Survivors walk down the nearest seam between two lanes, out of the horde's columns, so the
-   * player can keep the squad's fire off them. One who reaches the sandbags is rescued.
+   * player can keep the squad's fire off them. One who reaches the sandbags is rescued. Returns
+   * whether a rescue opened the role pick.
    */
   private moveSurvivors(dt: number) {
     for (const v of this.survivors.all) {
       // A second survivor reaching the line while the first picks a role waits for the next frame.
-      if (this.state.phase === 'role') return;
+      if (this.state.phase === 'role') return true;
       if (!v.alive) continue;
       v.y += (SURVIVOR.speed * dt) / 1000;
       const maxStep = (SURVIVOR.steer * dt) / 1000;
@@ -1120,11 +1123,15 @@ export class GameScene extends Phaser.Scene {
       const seen = this.visibility(v.x, v.y);
       v.sprite.setPosition(v.x, v.y).setDepth(DEPTH.enemies + v.y / VIEW.h).setAlpha(seen);
       v.label.setPosition(v.x, v.y - SURVIVOR.radius - 30).setAlpha(seen);
-      if (v.y + SURVIVOR.radius >= REACH_Y) this.rescue(v);
+      if (v.y + SURVIVOR.radius >= REACH_Y && this.rescue(v)) return true;
     }
+    return false;
   }
 
-  /** A survivor made it: they join the squad (picking a role first), or hand over scrap when it is full. */
+  /**
+   * A survivor made it: they join the squad (picking a role first), or hand over scrap when it is
+   * full. Returns whether the role pick opened.
+   */
   private rescue(v: Survivor) {
     this.survivors.release(v);
     this.state.survivorsSaved++;
@@ -1135,11 +1142,13 @@ export class GameScene extends Phaser.Scene {
       this.state.placing = false;
       this.pointerTarget = null;
       this.showRoles();
-    } else {
-      this.state.scrap += SURVIVOR.scrap;
-      this.pop(tr(this.style === 'comic' ? 'survivorSaved' : 'nvSurvivorSaved', { n: SURVIVOR.scrap }), SURVIVOR_COLOR);
+      this.refreshBackdrop();
+      return true;
     }
+    this.state.scrap += SURVIVOR.scrap;
+    this.pop(tr(this.style === 'comic' ? 'survivorSaved' : 'nvSurvivorSaved', { n: SURVIVOR.scrap }), SURVIVOR_COLOR);
     this.refreshBackdrop();
+    return false;
   }
 
   /** A bullet hits a survivor: it hurts them, and the squad's fire can kill them. */
@@ -1236,16 +1245,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * A bunch of `n` zombies of a kind comes out round a boss, in two staggered rows. The rows stay
-   * `PACK_CLEAR` short of the sandbags, so a boss killed or calling at the line can't put them
-   * behind it with nothing to shoot.
+   * A bunch of `n` zombies of a kind comes out round a boss, in two staggered rows: below it, or
+   * above it once the boss is within `FLAMER.trigger` of the sandbags, so a pack called or burst
+   * at the line still gives the squad time to shoot. The rows also stay `PACK_CLEAR` short of the
+   * sandbags, so nothing is ever put behind them.
    */
   private spawnPack(boss: Enemy, kind: EnemyKind, n: number, step: number) {
     const hp = Math.round(ENEMIES[kind].hp * toughness(this.state.wave));
     const maxY = REACH_Y - ENEMIES[kind].radius - PACK_CLEAR;
+    const bossR = ENEMIES[boss.kind].radius, near = boss.y + bossR >= REACH_Y - FLAMER.trigger;
     for (let i = 0; i < n; i++) {
       const x = Phaser.Math.Clamp(boss.x + (i - (n - 1) / 2) * step, LANES[0].x0 + 10, LANES[2].x1 - 10);
-      this.addEnemy(kind, hp, x, Math.min(boss.y + 26 + (i % 2) * 12, maxY));
+      const y = near ? boss.y - bossR - 10 - (i % 2) * 12 : boss.y + 26 + (i % 2) * 12;
+      this.addEnemy(kind, hp, x, Math.min(y, maxY));
     }
     this.state.waveTotal += n;
   }
@@ -1383,8 +1395,9 @@ export class GameScene extends Phaser.Scene {
   private hitTargets() {
     const perks = this.state.perks;
     const fire = perks.includes('fire'), headshots = perks.includes('headshot');
-    // One `hit` for the whole pass, not one per bullet, and only for a zombie the player can see.
-    let struck = false;
+    // One `hit`, `block` and `ricochet` for the whole pass, not one per bullet, and only for what the
+    // player can see.
+    let struck = false, blocked = false, bounced = false;
     for (const b of this.bullets.all) {
       if (!b.alive) continue;
       const damage = this.state.stats.damage * b.mult;
@@ -1415,7 +1428,9 @@ export class GameScene extends Phaser.Scene {
         }
         if (!('kind' in e)) this.hurtSurvivor(e, damage);
         // A riot shield stops a bullet without pierce, and takes the hit itself.
-        else if (e.shield > 0 && !b.pierces) this.chipShield(e, damage);
+        else if (e.shield > 0 && !b.pierces) {
+          if (this.chipShield(e, damage) && this.visibility(e.x, e.y) > 0) blocked = true;
+        }
         else {
           last = e;
           // Headshots: every so many hits lands triple. Fire rounds set the zombie burning.
@@ -1450,7 +1465,7 @@ export class GameScene extends Phaser.Scene {
           b.vx = Math.sin(ang) * BULLET.speed;
           b.vy = Math.cos(ang) * BULLET.speed;
           b.sprite.setPosition(b.x, b.y).setRotation(ang);
-          sfx('ricochet');
+          if (this.visibility(from.x, from.y) > 0) bounced = true;
           this.effect('', from.x, from.y - 16, { life: 400, rise: 20, text: tr(this.style === 'comic' ? 'fxRicochet' : 'nvFxRicochet') });
           continue;
         }
@@ -1477,6 +1492,8 @@ export class GameScene extends Phaser.Scene {
       if (b.hitsLeft <= 0) this.bullets.release(b);
     }
     if (struck) sfx('hit');
+    if (blocked) sfx('block');
+    if (bounced) sfx('ricochet');
   }
 
   /** A grenadier's grenade bursts: every zombie within `GRENADE.radius` takes its damage, past any shield. */
@@ -1502,18 +1519,21 @@ export class GameScene extends Phaser.Scene {
     return best;
   }
 
-  /** A bullet on a riot shield: it chips the shield, and the shield breaks at 0. */
+  /**
+   * A bullet on a riot shield: it chips the shield, and the shield breaks at 0. Returns whether the
+   * shield held, so `hitTargets` plays one `block` for the pass.
+   */
   private chipShield(e: Enemy, damage: number) {
     e.shield = Math.max(0, e.shield - damage);
     const r = ENEMIES[e.kind].radius;
     if (e.shield > 0) {
-      sfx('block');
       if (this.volleys % 3 === 0) this.effect('', e.x, e.y + r, { life: 360, rise: 20, text: tr(this.style === 'comic' ? 'fxBlock' : 'nvFxBlock') });
-      return;
+      return true;
     }
-    sfx('shieldDown');
+    if (this.visibility(e.x, e.y) > 0) sfx('shieldDown');
     this.skin(e.sprite, 'riot-bare');
     this.effect('', e.x, e.y - r - 10, { life: 700, rise: 30, text: tr(this.style === 'comic' ? 'fxShieldDown' : 'nvFxShieldDown') });
+    return false;
   }
 
   /** Takes hit points off an enemy, with a little damage number, and kills it at 0. */

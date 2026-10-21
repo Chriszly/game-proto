@@ -209,8 +209,9 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   itself over `chargeMs`; `moveEnemies` doesn't move a busy boss), lobs a big acid pool
   (`spitRadius(kind)`: the Bloater's is `BLOATER.spitRadius`) or calls
   the pack (`callPack`: `BOSS.pack` runners, or `BROOD.pack` crawlers for the Brood Mother, placed
-  by `spawnPack`, which adds them to `waveTotal` and keeps them at least `PACK_CLEAR` above the
-  sandbags, so a boss at the line can't put a pack behind them). A medkit push ends a charge. In `kill`, a
+  by `spawnPack`, which adds them to `waveTotal`, puts them above the boss instead of below it once
+  the boss is within `FLAMER.trigger` of `REACH_Y`, and keeps them at least `PACK_CLEAR` above the
+  sandbags, so a boss at the line can't put a pack behind them or right on them). A medkit push ends a charge. In `kill`, a
   Brood Mother bursts into `BROOD.burst` crawlers (`spawnPack` again) and a Bloater lobs a
   `BLOATER.poolRadius` acid pool at the hero's x that burns for `BLOATER.poolMs`; the boss is
   released to its pool only after that, since `Pool.take` hands out the last released object and
@@ -250,7 +251,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   spitter doesn't steer in `moveEnemies`. The banner and the condition chip name it.
 - **Squad roles:** `state.roles` holds each companion's `Role`, in `squad` order; `addCompanions`
   fills any missing ones as Gunners. `rescue` (squad not full) saves the phase in `rolePrev` and
-  moves to `'role'`; `showRoles` draws three cards (`roleCards`, keys 1/2/3) and `pickRole` adds
+  moves to `'role'`, and `update` stops that frame right after `moveSurvivors`, so no crate opened
+  by the frame's bullets fills the squad under the pick; `showRoles` draws three cards (`roleCards`, keys 1/2/3) and `pickRole` adds
   the companion with that role and goes back to `rolePrev`. While the pick is up, `moveSurvivors`
   holds every other survivor. In `fire` a marksman only shoots every `MARKSMAN.every`th volley, at
   `toughestEnemy` (a bullet with `mult` and extra pierce), a grenadier's every `GRENADE.every`th
@@ -311,7 +313,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   `switchStyle` and nothing else; the V key does the same. In `'over'` it runs a `shop` button's
   `act` or restarts, in `'supply'` it picks a card (1, 2, 3, or 4 for the extraction card), in
   `'role'` a role card (1, 2, 3), on the kit panel it toggles placing (outside a wave, or in a
-  wave with no sandbags, it only plays `ui('refuse')` and never aims), and while placing it places a wall. Otherwise `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
+  wave with no sandbags, it only plays `ui('refuse')` and never aims; `Hud.onKit` is false while
+  the panel is hidden, `kitShown`, so a tap there then aims as anywhere else), and while placing it places a wall. Otherwise `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
   `pointerdown`, and on `pointermove` while held (unless the press was used by any of the above:
   `pressOnUi`). `moveHero` walks towards it at `HERO.speed` and clears it
   on arrival; it re-clamps `pointerTarget` to `heroRange()` first, since a new companion can narrow
@@ -348,8 +351,10 @@ imports it. Under browser automation it all does nothing, so the playthrough is 
   and a restart's `startWave(1)` goes back to `battle`.
 - **Effects** (`SOUNDS`, played with `sfx(name)`): `shot` once per volley (`fire`), `hit` once per
   `hitTargets` pass when any bullet hurt a zombie that lives and can be seen (not per pellet, and
-  not for burn ticks, flames, grenades or blasts, which have their own sounds), `block` and `shieldDown`
-  (`chipShield`), `ricochet` (`hitTargets`), `kill` pitched by kind with `KILL_PITCH` and
+  not for burn ticks, flames, grenades or blasts, which have their own sounds), `block` (once per
+  `hitTargets` pass when a shield the player can see held a bullet), `shieldDown` (`chipShield`,
+  only when the shield can be seen), `ricochet` (once per `hitTargets` pass, for a ricochet off a
+  zombie that can be seen), `kill` pitched by kind with `KILL_PITCH` and
   `bossKill` (`kill`, only when the zombie can be seen in a blackout), `frenzy` (`kill`), `boom` (`explode`), `grenade` (`grenade`), `flame`
   (`tickFlamer`), `crate` and `perk` (`collect`), `wall` (`placeWall`) and `wallSmash`
   (`smashWall`), `spit` (`lobAcid`, only when the thrower can be seen in a blackout) and `sizzle`

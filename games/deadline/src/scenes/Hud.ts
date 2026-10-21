@@ -95,6 +95,8 @@ export class Hud {
   private statValues: Text[];
   private style: ArtStyle = 'comic';
   private drawn = '';
+  /** Whether the kit panel is drawn; a hidden panel takes no taps. */
+  private kitShown = false;
 
   constructor(scene: Phaser.Scene) {
     fitHud();
@@ -116,10 +118,10 @@ export class Hud {
     return x >= s.x - 6 && x <= s.x + s.w + 6 && y >= s.y - 6 && y <= s.y + s.h + 6;
   }
 
-  /** Whether a tap at x, y lands on the kit panel. */
+  /** Whether a tap at x, y lands on the kit panel (never while the panel is hidden). */
   onKit(x: number, y: number) {
     const k = KIT_PANEL;
-    return x >= k.x - 4 && x <= k.x + k.w + 4 && y >= k.y - 4 && y <= k.y + k.h + 4;
+    return this.kitShown && x >= k.x - 4 && x <= k.x + k.w + 4 && y >= k.y - 4 && y <= k.y + k.h + 4;
   }
 
   setStyle(style: ArtStyle) {
@@ -176,6 +178,7 @@ export class Hud {
     const ready = d.sandbags > 0, hint = ready || d.placing;
     const line2 = hint ? '' : perks, line3 = hint && perks ? [perks, list].filter(Boolean).join(' · ') : list;
     const show = hint || list !== '' || perks !== '';
+    this.kitShown = show;
     [t.kit, t.kitHint, t.kitList].forEach((o) => o.setVisible(show));
     if (show) {
       const bag = CRATE_COLORS.sandbag, title = ready ? tr(comic ? 'kitSandbags' : 'nvKitSandbags', { n: d.sandbags }) : tr(perks && !list ? 'kitPerks' : 'kit');
