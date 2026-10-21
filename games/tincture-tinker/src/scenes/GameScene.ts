@@ -8,7 +8,7 @@ import { adjacent, COLS, inBoard, ROWS, special, stuck, validMoves, type Board, 
 import { EXAMS } from '../game/exams';
 import { formatNumber } from '../../../../shared/i18n';
 import { KIND_COUNTS, KIND_NAMES, KINDS, type Kind } from '../game/kinds';
-import { MOVE_BONUS, orderFor, POTION_NAMES, RICH_BLOCKERS, RICH_MOVES, RICH_SHARE, riskFor, RUSH_COINS, RUSH_MOVES, TWIN_BONUS } from '../game/orders';
+import { blockersFor, MOVE_BONUS, orderFor, POTION_NAMES, RICH_BLOCKERS, RICH_MOVES, RICH_SHARE, riskFor, RUSH_COINS, RUSH_MOVES, TWIN_BONUS } from '../game/orders';
 import { RANKS, rankOf, starsFor, STARS_2, STARS_3 } from '../game/ranks';
 import { loadProgress, saveProgress } from '../game/save';
 import { canUse, funnel, nextExam, nextOrder, pestle, sift, stir, TOOL_ORDER, TOOLS, trySwap, type Step, type Tool } from '../game/sim';
@@ -216,8 +216,10 @@ export class GameScene extends Phaser.Scene {
     if (this.armed === 'sift') return this.siftRow(cell.row);
     if (this.armed === 'pestle') return this.usePestle(cell);
     if (this.armed === 'funnel') return this.pickFunnel(cell);
-    this.dragFrom = { cell, x: p.worldX, y: p.worldY };
     const picked = this.selected;
+    // Jars, resin and mould hold their tiles: they can't be picked up, and a pick survives a tap on one.
+    if (stuck(this.state.board[cell.row][cell.col])) return ui('refuse');
+    this.dragFrom = { cell, x: p.worldX, y: p.worldY };
     if (picked && adjacent(picked, cell)) this.swap(picked, cell);
     else {
       this.selected = picked && picked.row === cell.row && picked.col === cell.col ? null : cell;
@@ -243,15 +245,15 @@ export class GameScene extends Phaser.Scene {
   private swap(a: Cell, b: Cell) {
     // A held second tap of a tap-tap swap must not drag a second swap once the board settles.
     this.dragFrom = null;
-    this.selected = null;
     this.clearHint();
     const ta = this.state.board[a.row][a.col];
     const tb = this.state.board[b.row][b.col];
-    // Jars, resin and mould hold their tiles: they don't move at all.
+    // Jars, resin and mould hold their tiles: they don't move at all, and the pick stays.
     if (stuck(ta) || stuck(tb)) {
       ui('refuse');
       return this.drawCursor();
     }
+    this.selected = null;
     const steps = trySwap(this.state, a, b);
     this.busy = true;
     this.showBands(false);
@@ -409,13 +411,15 @@ export class GameScene extends Phaser.Scene {
           this.refreshNeeds();
         },
       });
-    } else if (step.melted.length + step.scrubbed.length > 0) {
-      // A Pestle on a resin or mould tile with nothing beside it to gather: the coat or fuzz comes off in place.
+    } else if (step.brewed.length + step.melted.length + step.scrubbed.length > 0) {
+      // A Pestle on a resin or mould tile with nothing beside it to gather, or a run whose other tiles are all
+      // resin-held: the coat or fuzz comes off in place, and a special the run brewed shows.
       let freeing: Phaser.GameObjects.Image[] = [];
       this.queue.push({
         ms: CLEAR_MS,
         start: () => {
-          freeing = [...step.melted, ...step.scrubbed].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
+          freeing = [...step.brewed, ...step.melted, ...step.scrubbed].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
+          if (step.brewed.length > 0) sfx('brew');
           if (step.melted.length > 0) sfx('sizzle');
           if (step.scrubbed.length > 0) sfx('scrub');
         },
@@ -789,7 +793,7 @@ export class GameScene extends Phaser.Scene {
       const have = Math.min(this.shown[kind] ?? 0, n);
       const y = this.rowY(i);
       const done = have >= n;
-      this.needTexts.get(kind)?.setText(`${have}/${n}`).setColor(done ? '#3d6a32' : SEPIA);
+      this.needTexts.get(kind)?.setText(`${formatNumber(have)}/${formatNumber(n)}`).setColor(done ? '#3d6a32' : SEPIA);
       this.bar(NEEDS.barX - 1.5, y - 5.5, NEEDS.barW + 3, NEEDS.barH + 3, have / n, done ? MOSS : OCHRE, this.bars);
     });
   }
@@ -834,7 +838,7 @@ export class GameScene extends Phaser.Scene {
     const barX = Math.max(RIBBON.barX, this.rankTitle.x + this.rankTitle.width + 10);
     this.rankBar.clear();
     this.bar(barX, RIBBON.y + 7.5, RIBBON.barW, 8, next ? stars / next.stars : 1, OCHRE, this.rankBar);
-    this.rankCount.setText(next ? `${stars}/${next.stars}` : `${stars}`).setX(barX + RIBBON.barW + 7);
+    this.rankCount.setText(next ? `${formatNumber(stars)}/${formatNumber(next.stars)}` : formatNumber(stars)).setX(barX + RIBBON.barW + 7);
     this.rankNext
       .setText(next ? t('nextRank', { rank: t(next.title) }) : t(this.state.royal ? 'guildSeals' : 'allRecipes'))
       .setX(this.rankCount.x + this.rankCount.width + 9);
@@ -875,7 +879,7 @@ export class GameScene extends Phaser.Scene {
     else if (s.current.rich)
       text = s.current.rich === 'moves'
         ? t('captionRichMoves', { share: RICH_SHARE * 100, moves: RICH_MOVES })
-        : t('captionRichBlockers', { share: RICH_SHARE * 100, blockers: RICH_BLOCKERS });
+        : t(s.current.mould > 0 ? 'captionRichBlockersMould' : 'captionRichBlockers', { share: RICH_SHARE * 100, blockers: RICH_BLOCKERS });
     else if (s.current.stages) text = t('captionRoyal');
     else if (s.current.second) text = t('captionTwin', { coins: TWIN_BONUS });
     else if (forbid) text = t('captionForbid', { kind: t(KIND_NAMES[forbid]) });
@@ -980,7 +984,7 @@ export class GameScene extends Phaser.Scene {
     const risk = riskFor(this.state.order);
     this.resultCaption = risk === 'moves'
       ? t('captionPickRichMoves', { share: RICH_SHARE * 100, moves: RICH_MOVES })
-      : t('captionPickRichBlockers', { share: RICH_SHARE * 100, blockers: RICH_BLOCKERS });
+      : t(blockersFor(this.state.order).mould > 0 ? 'captionPickRichBlockersMould' : 'captionPickRichBlockers', { share: RICH_SHARE * 100, blockers: RICH_BLOCKERS });
     return [
       { label: t('modestOrder'), act: () => this.pick(false) },
       { label: t('richOrder'), act: () => this.pick(true) },
@@ -1044,7 +1048,7 @@ export class GameScene extends Phaser.Scene {
       const have = pantry[kind] ?? 0;
       this.herbRows!.add(shown(this.add.image(x, -34, needTexture(kind)), 0.8));
       this.herbRows!.add(this.add.text(x, -8, t(KIND_NAMES[kind]), ink(11, BROWN, 'italic bold')).setOrigin(0.5));
-      this.herbRows!.add(this.add.text(x, 10, `${have}/${PANTRY_MAX}`, ink(15, SEPIA, 'bold')).setOrigin(0.5));
+      this.herbRows!.add(this.add.text(x, 10, `${formatNumber(have)}/${formatNumber(PANTRY_MAX)}`, ink(15, SEPIA, 'bold')).setOrigin(0.5));
       const can = have < PANTRY_MAX && this.state.coins >= HERB_COST;
       const buy = this.add.text(x, 32, have < PANTRY_MAX ? t('buyHerb', { cost: HERB_COST }) : t('full'), ink(12, RUST, 'italic bold')).setOrigin(0.5);
       if (can) buy.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.buyHerb(kind));

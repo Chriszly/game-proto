@@ -157,17 +157,19 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - **Input:** the scene's `pointerdown` listener skips taps on a game object (a tool button or the
   result button), so the same tap doesn't also pick a tile. `pointerDown` maps the pointer to a cell
   with `cellAt`, from `pointer.worldX/Y` (game pixels; `pointer.x/y` are canvas pixels). While a tool is `armed`, the tap goes to it: Sift rerolls the cell's row, Pestle
-  smashes the cell, Funnel picks `funnelFrom` and then swaps it with the next cell. Otherwise the first tap sets
+  smashes the cell, Funnel picks `funnelFrom` and then swaps it with the next cell. Otherwise a tap on a jar, resin or
+  mould tile plays `ui('refuse')` and changes nothing (no pick, and a pick already made stays), the first tap sets
   `selected`, a tap on a neighbour calls `swap`, a tap on the same tile clears it. `pointerMove`
   swaps once a drag goes half a cell. `swap` clears the drag start, so a held second tap of a
-  tap-tap swap that drags after the board settles does not swap again. A swap with a jar, resin or
-  mould tile does nothing but play `ui('refuse')`. Input is ignored while `busy` or when `state.phase` is not `play`.
+  tap-tap swap that drags after the board settles does not swap again. A swap (or drag) with a jar, resin or
+  mould tile does nothing but play `ui('refuse')`, and keeps `selected`. Input is ignored while `busy` or when `state.phase` is not `play`.
 - **Rules then animation:** `swap` calls `trySwap`, which mutates `state` right away (board, moves,
   `got` and the counters, phase, coins, stars). The scene then queues `Anim`s: a slide, the slide
   back if there was no match, or for each `Step` a pop of the cleared tiles (wanted ones fly to
   their need row, by the step's own `needs`; the fired rows', columns' and Bloom squares' bands
-  blink; brewed, melted and scrubbed tiles swap texture; a Pestle step that only melts or scrubs
-  swaps their texture with its sizzle or scrub) and a `moveTo` of the new board; a step
+  blink; brewed, melted and scrubbed tiles swap texture; a step that clears nothing (a Pestle
+  that only melts or scrubs, or a run whose other tiles were all resin-held) swaps the brewed, melted
+  and scrubbed tiles' texture with its brew, sizzle or scrub) and a `moveTo` of the new board; a step
   with `spread` swells the tile mould crept onto, one with `served` or `stage` shows a note over the
   board (and a new stage rebuilds the label); then `settle`.
 - **Catalysts:** `gather` in `sim.ts` takes `findRuns`, adds the whole row of every matched
@@ -226,7 +228,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - **Rich orders:** `orderFor` reads `standing.rich` (never on order 1) and `riskFor(number)`: it
   takes `RICH_MOVES` off or adds `RICH_BLOCKERS` jars and resin (and one mould when the order has
   mould), then adds `RICH_SHARE` of the price; `rich` on the order says which. The label's price
-  line says "rich order" and the caption names the risk.
+  line says "rich order" and the caption names the risk (`captionRichBlockersMould` and
+  `captionPickRichBlockersMould` add the mould patch when that order has mould).
 - **Herbalist:** `openHerbs` (the result card's link) shows a column per kind; `buyHerb` in
   `state.ts` adds one to `heldPantry(s)` (the pantry after a sale, `startPantry` after a failure,
   which is what `progressOf` saves) and the scene saves and redraws. Kinds the next order needs
@@ -246,7 +249,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - **Bench tools:** four buttons in `TOOL_ORDER`, `TOOL.gap` apart. `useTool` (a button's
   `pointerdown`) checks `canUse`; Stir calls `stir` and saves; the others toggle `armed`. Sift's
   board tap calls `siftRow`, which calls `sift` (new tiles for the row, specials, jars, resin and mould
-  kept, rerolled until nothing matches and a move is left, else a shuffle), saves and animates the
+  kept, rerolled until nothing matches and a move is left, else a shuffle; a row with nothing but kept
+  tiles is refused and costs nothing), saves and animates the
   row fading out and growing back. Pestle's tap calls `pestle` and Funnel's second tap `funnel`;
   both go through `resolve` with no move spent (so a tool can sell the order) and the scene plays
   them in `playTool`. Buttons show `on`, `off` (not affordable or not playing) or `armed`; hovering
@@ -438,7 +442,7 @@ triangle lead, a thin `pulse12` arpeggio and a triangle bass. It is written at `
 | `hint` | the idle hint appearing (`updateHint`) |
 | `ui('click')` | a tool picked up or put down, the result card's buttons and links, Back |
 | `ui('coin')` | a workbench upgrade or a herb bought |
-| `ui('refuse')` | a swap with a jar, resin or mould tile, a tool that can't be used or afforded, a Pestle or Funnel tap that can't act, a Sift that can't reroll, an upgrade not affordable |
+| `ui('refuse')` | a swap with a jar, resin or mould tile, a tool that can't be used or afforded, a Pestle or Funnel tap that can't act, a Sift that can't reroll (or a row with nothing to reroll), an upgrade not affordable |
 
 ## Making common changes
 

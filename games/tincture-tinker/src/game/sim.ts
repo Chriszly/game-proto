@@ -334,13 +334,16 @@ export function stir(s: GameState): boolean {
 
 /**
  * Sift: every tile in `row` but its specials, jars, resin and mould is replaced by a new one, with no match
- * made and a move left on the board. Returns the tiles taken out, or null if it can't be bought.
+ * made and a move left on the board. Returns the tiles taken out, or null if it can't be bought or the row
+ * has nothing to reroll.
  */
 export function sift(s: GameState, row: number): Tile[] | null {
   if (!canUse(s, 'sift') || row < 0 || row >= s.board.length) return null;
   const newTile = tileMaker(s);
   const keep = (t: Tile) => special(t) || stuck(t);
   const old = s.board[row].filter((t) => !keep(t));
+  // A row of nothing but kept tiles can't change, so it costs nothing.
+  if (old.length === 0) return null;
   let next: Board = s.board;
   for (let attempt = 0; attempt < 30; attempt++) {
     next = s.board.map((r) => [...r]);
