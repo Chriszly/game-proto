@@ -32,7 +32,8 @@ Implemented today:
   each kind's jar price now; tapping an open kind calls `forage`. With two or more kinds open,
   `demand` picks one in turn every `MARKET_MS` (60s of game time, `marketMs`, not saved) whose
   base price is multiplied by `DEMAND` (1.5); a `demand` event floats a message when it moves
-  (`tick` samples it before the year turns, so a meadow shutting or opening with the season is announced too).
+  (`tick` samples it before the year turns, so a meadow shutting or opening with the season is announced too, and `sell` compares it
+  before and after a meadow it unlocks).
 - Village orders (`src/game/orders.ts`): from `ORDERS_FROM` (3) jars sold, an order for 3 to 5
   jars of an open kind comes `ORDER_GAP_MS` (20s) after the last one ended and lapses after
   `ORDER_MS` (2 min), or sooner when its meadow shuts (`openLeft`; a kind is only ordered while its
@@ -97,7 +98,8 @@ Implemented today:
   "wilted". Saved.
 - Swarming (`src/game/swarm.ts`): `crowded` is one hive, every spot built and `maxBees` bees.
   While it holds, `swarmIn` counts down from `SWARM_MS` (45s; a `swarm-ready` event when it
-  starts) and the swarm chip (`SWARM`, in the away chip's place) shows it; at 0 half the bees leave
+  starts) and the swarm chip (`SWARM`, over the meadow's foot just above the button board, clear of the
+  market) shows it; at 0 half the bees leave
   (`swarmed`, bees at home first; lent bees stay first, and `recountLent` keeps the contract's
   `bees` right) and it restarts. A tap on the chip calls `catchSwarm`
   (`CATCH_PRICE`, 180 coins): `hives` becomes 2 (`MAX_HIVES`), `cells` grows by `SLOTS` nulls, and
@@ -315,14 +317,15 @@ State model (`src/game/state.ts`):
   then marks the saved contract's bees lent.
 - `room` is the nectar of the foraged kind the filling cells can still take; `send` refuses when it
   is 0 or no bee is home, and `gatherAway` never adds more than it.
-- `wasps`, `waspIn`, `order`, `orderIn`, `contractIn`, `swarmIn`, `eatIn` and `marketMs` live
+- `wasps`, `waspIn`, `order`, `orderIn`, `contractIn`, `swarmIn` and `marketMs` live
   only in the running state, and `contract` too while it is an offer.
 - Only `src/game/sim.ts` changes rules state; the scene replaces `state` wholesale only on load and
   on "New hive".
 
 Persistence: one key of its own, `beehive-baron-progress`, holding `Progress` as JSON (`coins`,
 `cells`, `bees`, `jars` per kind, `wax`, `sold`, `ranks`, `meadows`, `forage`, `seasonMs`,
-`years`, `casks`, `hives`, `queen`, `queenBees`, `fair`, `fairs`, `golds`, `baron`, `tired`, `wilted`,
+`eatIn` (the time to the bees' next winter meal, clamped to 1 to `WINTER_EAT_MS`, so a reload
+can't put a meal off), `years`, `casks`, `hives`, `queen`, `queenBees`, `fair`, `fairs`, `golds`, `baron`, `tired`, `wilted`,
 `lent`, `seen`). Saves from before the yearly fair load with `fairs` and `golds` 1 for a Baron. `seen` is the `Date.now()` of the last save, 0
 for a hive never saved (no away nectar then). Bee trips, `spilled`, wasps, orders, contract offers, the
 swarm, the market's clock and events are not saved. Saves from before the honey kinds load with
@@ -458,7 +461,7 @@ only `GameScene` (and the refusal buzz in `ui/Button.ts`) plays them, so the sim
 - Add or change a text: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
   without it) and, where US spelling differs, `i18n/en-US.ts`; run
   `node scripts/check-translations.mjs`. German runs longer than English: the Send button, the
-  order and contract cards, the queen buttons' second line, the meadow tag and the swarm chip are
+  order and contract cards, the queen buttons' second line and the meadow tag are
   the tightest spots, so check a new text with `?lang=de`. A new honey kind needs its five keys
   (see `i18n.ts` above), a new upgrade, meadow or queen its name and blurb keys.
 - Add an upgrade: add the id to `UpgradeId` and `UPGRADES` in `src/game/upgrades.ts`, its rank 0
@@ -514,8 +517,8 @@ only `GameScene` (and the refusal buzz in `ui/Button.ts`) plays them, so the sim
   tint 0.5, hive 1, hive tabs and plaque 1.5, cells 2, comb graphics 2.5, casks 3 to 4, goal card
   20, buttons and the order and contract cards 30 to 31, bees 50, wasps 51, the market
   `UI_DEPTH - 2`, HUD, the away chip and the swarm chip near `UI_DEPTH`, the end card
-  `UI_DEPTH + 5`. The away chip covers the market while it shows, and the swarm chip waits for
-  it. Anything new on the board or meadow must sit above `bg-front` (and below the season tint
+  `UI_DEPTH + 5`. The away chip covers the market while it shows (a tap hides it); the swarm
+  chip sits above the button board, so the market stays in reach while a swarm gathers. Anything new on the board or meadow must sit above `bg-front` (and below the season tint
   if the season should colour it).
 - `homeSpot` fits eight bees on the landing board and stacks the rest above it; `MAX_BEES` is 12
   per hive, so two hives stack three rows.

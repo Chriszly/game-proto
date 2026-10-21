@@ -295,6 +295,8 @@ export function sell(s: GameState) {
   const mead = meadReady(s);
   const jars = jarCount(s) + mead.length * CASK_JARS;
   if (jars === 0) return false;
+  // A meadow this sale unlocks opens a kind, which can start or move the demand between two ticks.
+  const wanted = demand(s);
   let coins = 0;
   for (const k of Object.keys(s.jars) as Kind[]) coins += s.jars[k] * jarPrice(s, k);
   for (const c of mead) coins += c.value;
@@ -317,6 +319,8 @@ export function sell(s: GameState) {
     s.events.push({ kind: 'unlocked', meadow: s.meadows });
     s.meadows++;
   }
+  const now = demand(s);
+  if (now && now !== wanted) s.events.push({ kind: 'demand', honey: now });
   // The meadow that opens the fair can come during its last minute of summer, between two ticks.
   if (!fair && fairOn(s)) s.events.push({ kind: 'fair-open' });
   return true;

@@ -26,7 +26,7 @@ gold makes you the Beehive Baron, and each year after asks for more.
 4. **Sell**: tap **Sell** to sell every jar on the shelf. A clover jar is worth 15 coins, plus the
    comb bonus, plus 5 once the Sunflower Ridge is open; other kinds and the market change that.
 5. **The hive is kept**: the comb, coins, jars, wax, bees, upgrades, unlocked meadows, where
-   the bees forage, the season, the casks, the hives and the queen, the fair entries and fairs held,
+   the bees forage, the season and the bees' next winter meal, the casks, the hives and the queen, the fair entries and fairs held,
    the tired meadows and the bees lent to the orchard are saved in the browser. Bees out foraging come home when the page reloads, and
    wasps, the market's timer, village orders, contract offers and a gathering swarm start afresh. **New hive**, in the bottom
    right corner, starts over.
@@ -175,7 +175,7 @@ Idle bees get a second job.
 
 ### Swarming into a second hive
 
-A hive with every spot built and 12 bees is crowded, and a swarm gathers: a chip under the hive
+A hive with every spot built and 12 bees is crowded, and a swarm gathers: a chip above the buttons
 counts down 45 seconds, after which half the bees leave. Tap the chip before then to catch the
 swarm into a **second hive** for 180 coins, and pick its queen. It has its own comb of 20 spots (its first cell free,
 then the same rising prices), its own comb bonus (added to the plaque), and the hive can now hold
