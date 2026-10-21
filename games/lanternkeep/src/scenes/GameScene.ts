@@ -660,6 +660,8 @@ export class GameScene extends Phaser.Scene {
     this.lamps.forEach((parts, i) => {
       const lantern = s.lanterns[i];
       parts.lamp.setVisible(!!lantern);
+      // A spot the night has no lantern on takes no taps and shows no hand cursor.
+      parts.hit.setVisible(!!lantern);
       parts.glow.setVisible(!!lantern?.lit);
       parts.flame.setVisible(!!lantern?.lit);
       parts.tag.setVisible(false);

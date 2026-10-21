@@ -38,6 +38,7 @@ export function snapshot(s: GameState): Snapshot {
 export function frameSounds(before: Snapshot, s: GameState, events: GameEvent[]) {
   let fizzle = false;
   const darkened = new Set<number>();
+  const dried = new Set<number>();
   for (const e of events) {
     switch (e.type) {
       case 'closeCall':
@@ -47,6 +48,7 @@ export function frameSounds(before: Snapshot, s: GameState, events: GameEvent[])
       case 'dry':
         sfx('clunk');
         ui('refuse');
+        dried.add(e.lantern);
         break;
       case 'gust':
         sfx('gust');
@@ -81,12 +83,12 @@ export function frameSounds(before: Snapshot, s: GameState, events: GameEvent[])
         break;
     }
   }
-  // A lantern a moth just finished lighting or refilling.
+  // A lantern a moth just finished lighting or refilling (not one it left as it was, the cask dry).
   let lit = false;
   before.moths.forEach((was, i) => {
     const m = s.moths[i];
     if (was.task !== 'lighting' || !m || (m.task === 'lighting' && m.target === was.target)) return;
-    if (s.lanterns[was.target]?.lit) lit = true;
+    if (s.lanterns[was.target]?.lit && !dried.has(was.target)) lit = true;
   });
   if (lit) {
     sfx('strike');
