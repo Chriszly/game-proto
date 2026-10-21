@@ -241,6 +241,17 @@ export interface Building {
   buildMs: number;
 }
 
+/** A rival building as the player last saw it: drawn from this while it is under the fog. */
+export interface SeenBuilding {
+  id: number;
+  faction: number;
+  type: Role;
+  x: number;
+  y: number;
+  done: boolean;
+  expansion: boolean;
+}
+
 /** A hidden mine a Mine Lattice laid; an enemy ship that comes close sets it off. */
 export interface Mine extends Point {
   id: number;
@@ -527,8 +538,11 @@ export class World {
   pops: Pop[] = [];
   /** What the player can see: cells in sight now and cells explored before. */
   readonly fog = new Fog();
-  /** Rival buildings the player has seen, which stay drawn under the fog. */
-  readonly known = new Set<number>();
+  /**
+   * Rival buildings the player has seen, by id, as last seen: under the fog they stay drawn from
+   * this (even once fallen, taken or finished), until their spot is in sight again.
+   */
+  readonly known = new Map<number, SeenBuilding>();
   /** The contract chain's place: which contract is current or on the board, and how far along it is. */
   contract: ContractState = { index: 0, progress: 0, goal: 'barracks', offer: [], boardMs: 0, done: [], taken: ['barracks'] };
   /** Where the convoy contract's harvesters are flying (a crystal node), while one is under way. */
@@ -1469,9 +1483,32 @@ export class World {
       // Watching, the whole battlefield is in sight.
       fog.visible.fill(1);
       fog.explored.fill(1);
-      for (const b of this.buildings) this.known.add(b.id);
-      return;
+    } else {
+      this.stampFog();
     }
+    // A rival building in sight is remembered as it is now; under the fog it stays as last seen.
+    const known = this.known;
+    for (const b of this.buildings) {
+      if (b.faction === PLAYER || !fog.sees(b)) continue;
+      const seen = known.get(b.id);
+      if (seen) {
+        seen.faction = b.faction;
+        seen.done = b.done;
+      } else {
+        known.set(b.id, { id: b.id, faction: b.faction, type: b.type, x: b.x, y: b.y, done: b.done, expansion: b.expansion });
+      }
+    }
+    // One whose spot is in sight but that is no longer there as a rival's (fallen, or taken by the player) is forgotten.
+    for (const [id, seen] of known) {
+      if (!fog.sees(seen)) continue;
+      const b = this.building(id);
+      if (!b || b.faction === PLAYER) known.delete(id);
+    }
+  }
+
+  /** Stamps the player's sight into the fog: its ships, its buildings and claimed sensors. */
+  private stampFog() {
+    const fog = this.fog;
     fog.clear();
     for (const u of this.units) {
       if (u.faction !== PLAYER) continue;
@@ -1483,8 +1520,6 @@ export class World {
       fog.stamp(b.x, b.y, b.type === 'hub' ? HUB_VISION : buildingStats(this.sides[PLAYER], b.type).radius + BUILDING_VISION);
     }
     for (const d of this.derelicts) if (d.perk === 'sensors' && d.owner === PLAYER) fog.stamp(d.x, d.y, SENSOR_RANGE);
-    // A rival building, once seen, stays drawn where it was seen.
-    for (const b of this.buildings) if (b.faction !== PLAYER && fog.sees(b)) this.known.add(b.id);
   }
 
   /** The share of a shot that reaches a unit: a Halo Cruiser's shield lets through half, from friends in range. */
@@ -1866,13 +1901,13 @@ export class World {
     }
   }
 
-  /** Counts one more toward the current contract when it is of `goal`. */
   /** Scores a rival building the player razed: a raze, and a Mine Lattice for the lattice contract. */
   private scoreRaze(b: Building) {
     this.score('razes');
     if (this.abilityOf(b)?.kind === 'mines') this.score('lattice');
   }
 
+  /** Counts one more toward the current contract when it is of `goal`. */
   private score(goal: 'kills' | 'razes' | 'hubs' | 'lattice' | 'convoy') {
     if (this.contract.goal === goal) this.contract.progress += 1;
   }
@@ -2021,6 +2056,11 @@ export class World {
   /** Starts a contract from the board: a convoy sets off, a raid comes. */
   private startContract(goal: Goal) {
     const state = this.contract;
+    // With every rival at peace or held by tribute since the board went up, no raid would come.
+    if (goal === 'survive' && !this.contractOpen('survive')) {
+      this.failContract(t('noRaiders'));
+      return;
+    }
     state.goal = goal;
     state.offer = [];
     state.boardMs = 0;
@@ -2046,6 +2086,8 @@ export class World {
     if (goal === 'lattice') return rivals.some((s) => s.def.buildings.turret.ability?.kind === 'mines');
     if (goal === 'convoy') return !!this.convoyField();
     if (goal === 'derelicts') return this.derelicts.filter((d) => d.owner === PLAYER).length < 2;
+    // The raid needs a rival that can come: one not under truce and not held by tribute.
+    if (goal === 'survive') return rivals.some((s) => !this.atPeace(PLAYER, s.index) && s.grudgeLockMs <= 0);
     return rivals.length > 0;
   }
 

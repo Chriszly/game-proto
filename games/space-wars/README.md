@@ -108,7 +108,7 @@ progress made while a contract is current counts.
 | Hold a nebula 45 s | II | Keep a warship in a nebula no enemy warship is in, 45 s in all | 140 | Ships see 20% further |
 | Break a Mine Lattice | III | Destroy a Veil Syndicate Mine Lattice | 180 | Turret damage +25% |
 | Raze an outpost | III | Destroy 3 enemy buildings | 200 | Ship hulls +15% (new ships) |
-| Survive the raid 90 s | III | Every rival not under truce or held by your tribute turns on you and sends its fleet at your hub at once; keep the hub for 90 s | 220 | Ships cost 10% less |
+| Survive the raid 90 s | III | Every rival not under truce or held by your tribute turns on you and sends its fleet at your hub at once; keep the hub for 90 s (not offered, and failed if taken, while every rival is at peace or paid off) | 220 | Ships cost 10% less |
 | Topple a hub | IV | Destroy a rival hub | 300 | Ship damage +10% |
 
 A kill or a razed building counts for you when your ship or turret landed the last hit. A convoy
@@ -181,7 +181,8 @@ rises from the beacon each time it pays you.
 ### Fog of war
 
 You only see what your ships and buildings see. Space you have never seen is near black; space you
-have seen before is dimmed, with rival buildings shown where you last saw them, and rival ships
+have seen before is dimmed, with rival buildings shown as you last saw them (one that has fallen,
+been finished or changed hands since looks the same until you see its spot again), and rival ships
 show only while in sight. Scouts see furthest (1.6 times their weapon sight), other warships 1.2
 times, harvesters 80 pixels, a hub 175 and other buildings 110 past their edge. The relay beacon
 and the crystal fields show once you have seen them, and you can only build on ground you have

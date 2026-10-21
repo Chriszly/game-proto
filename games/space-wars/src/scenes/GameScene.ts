@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { ARENA, BUILD_RANGE, NODE_AMOUNT } from '../game/arena';
-import { generateMap, localRandom, type MapLayout } from '../game/map';
+import { DERELICT_KINDS, generateMap, localRandom, type MapLayout } from '../game/map';
 import { FACTIONS, type Role, type UnitId } from '../game/factions';
 import { CONTRACT_STEPS, FLAGSHIP_STEP, RANKS, contractOf, type Goal } from '../game/contracts';
 import { SECTORS, keptFor, loadCampaign, saveCampaign, sectorText, winSector, type Campaign } from '../game/campaign';
 import {
   BEACON_PAY, BEACON_RADIUS, BRIBE_COST, BRIBE_MS, DERELICT_DEFS, DERELICT_RADIUS, EXPANSION_GAP, FLAGSHIP_MS, PLAYER, POP_MS, SENSOR_RANGE, TRUCE_MS,
-  TRUCE_TRIBUTE, VETERAN_NAMES, World, buildInfo, flagshipStats, researchCost, unitStats, type Build, type Cue, type Derelict, type Effect, type Struck,
+  TRUCE_TRIBUTE, VETERAN_NAMES, World, buildInfo, flagshipStats, researchCost, unitStats, type Build, type Building, type Cue, type Derelict, type Effect, type SeenBuilding, type Struck,
 } from '../game/world';
 import {
   buildingLines, derelictLines, expansionLines, factionLines, fallBackLines, flagshipLines, rallyLines, researchLines, unitLines,
@@ -431,6 +431,9 @@ export class GameScene extends Phaser.Scene {
       sub: t(0, 0, 10, INK_CSS.cocoa, false, 31).setWordWrapWidth(KEEP.w - 16).setMaxLines(3),
     }));
     this.pactBanner = t(8, TOP.h + 8, 11, INK_CSS.cream, true, 22).setPadding(8, 4, 8, 4).setBackgroundColor(INK_CSS.rust).setVisible(false);
+    // One label for each derelict station (a map has one of each kind), placed and filled in drawDerelicts.
+    this.derelictLabels = DERELICT_KINDS.map(() => this.onMap(this.text(0, 0, 10, INK_CSS.chocolate, true)
+      .setBackgroundColor(INK_CSS.cream).setPadding(6, 3, 6, 3).setDepth(DEPTH.label).setVisible(false)));
     this.convoyLabel = this.onMap(this.text(0, 0, 10, INK_CSS.chocolate, true).setBackgroundColor(INK_CSS.mustard).setPadding(6, 3, 6, 3)
       .setDepth(DEPTH.label).setVisible(false).setText(tr('convoyField')));
     const st = SECTOR_STRIP;
@@ -557,9 +560,6 @@ export class GameScene extends Phaser.Scene {
     const bc = this.state.beacon;
     this.beaconImg.setPosition(bc.x, bc.y - 4);
     this.beaconGlow.setPosition(bc.x, bc.y - 10);
-    for (const l of this.derelictLabels) l.destroy();
-    this.derelictLabels = this.state.derelicts.map((d) => this.onMap(this.text(d.x + DERELICT_RADIUS * 0.72, d.y + DERELICT_RADIUS * 0.5, 10, INK_CSS.chocolate, true)
-      .setBackgroundColor(INK_CSS.cream).setPadding(6, 3, 6, 3).setDepth(DEPTH.label).setVisible(false)));
     const art = this.art(PLAYER);
     this.captions.forEach((c, i) => {
       const b = BUTTONS[i];
@@ -873,8 +873,7 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1, s.beacon.owner >= 0 ? s.sides[s.beacon.owner].def.color : INK.cream, 1);
       g.strokeCircle(q.x, q.y, 3);
     }
-    for (const b of s.buildings) {
-      if (!s.knowsBuilding(b)) continue;
+    for (const [b] of this.shownBuildings()) {
       const q = at(b);
       const r = b.type === 'hub' ? 3.5 : 2;
       g.fillStyle(s.sides[b.faction].def.color, 1);
@@ -1021,7 +1020,7 @@ export class GameScene extends Phaser.Scene {
       const who = d.owner === PLAYER ? tr('yours') : d.owner >= 0 ? tr('heldBy', { faction: tr(s.sides[d.owner].def.name) }) : tr('holdClaim', { pct });
       const text = `${tr('derelictLabel', { name: tr(def.name).toUpperCase() })}\n${who}`;
       if (label.text !== text) label.setText(text);
-      label.setVisible(!this.picking);
+      label.setPosition(d.x + DERELICT_RADIUS * 0.72, d.y + DERELICT_RADIUS * 0.5).setVisible(!this.picking);
     });
   }
 
@@ -1170,32 +1169,43 @@ export class GameScene extends Phaser.Scene {
     this.beaconLabel.setPosition(bc.x + BEACON_RADIUS * 0.72, bc.y + BEACON_RADIUS * 0.55).setVisible(!this.picking);
   }
 
+  /**
+   * The buildings the player's map shows, each with the live building when it is in sight: the
+   * player's own and rivals' in sight as they are, rivals' under the fog as last seen (`known`),
+   * even if they have fallen or changed hands since.
+   */
+  private shownBuildings(): [SeenBuilding, Building | null][] {
+    const s = this.state;
+    const shown: [SeenBuilding, Building | null][] = [];
+    for (const b of s.buildings) if (b.faction === PLAYER) shown.push([b, b]);
+    for (const v of s.known.values()) shown.push([v, s.fog.sees(v) ? s.building(v.id) ?? null : null]);
+    return shown;
+  }
+
   private drawBuildings() {
     const seen = new Set<number>();
-    for (const b of this.state.buildings) {
-      // Rival buildings show once the player has seen them; under the fog they show as last seen.
-      if (!this.state.knowsBuilding(b)) continue;
-      seen.add(b.id);
-      const side = this.state.sides[b.faction];
-      const def = side.def.buildings[b.type];
+    for (const [v, live] of this.shownBuildings()) {
+      seen.add(v.id);
+      const side = this.state.sides[v.faction];
+      const def = side.def.buildings[v.type];
       // A hacked turret changes faction, and with it its look.
-      const key = buildingKey(this.art(b.faction), b.type);
-      let img = this.houses.get(b.id);
+      const key = buildingKey(this.art(v.faction), v.type);
+      let img = this.houses.get(v.id);
       if (!img) {
-        img = this.onMap(this.add.image(b.x, b.y, key).setScale((b.expansion ? EXPANSION_SCALE : 1) / RES).setDepth(DEPTH.building));
-        this.houses.set(b.id, img);
+        img = this.onMap(this.add.image(v.x, v.y, key).setScale((v.expansion ? EXPANSION_SCALE : 1) / RES).setDepth(DEPTH.building));
+        this.houses.set(v.id, img);
       } else if (img.texture.key !== key) {
         img.setTexture(key);
       }
-      const inSight = b.faction === PLAYER || this.state.fog.sees(b);
-      const floats = side.def.name === 'solarConcord' && b.type === 'turret' && !settings.reduceMotion;
-      img.setPosition(b.x, b.y + (floats ? Math.sin(this.clock / 500 + b.id) * 1.6 : 0));
-      img.setAlpha(!b.done ? 0.5 : inSight && b.disabledMs > 0 ? 0.45 : 1);
+      const floats = side.def.name === 'solarConcord' && v.type === 'turret' && !settings.reduceMotion;
+      img.setPosition(v.x, v.y + (floats ? Math.sin(this.clock / 500 + v.id) * 1.6 : 0));
+      img.setAlpha(!v.done ? 0.5 : live && live.disabledMs > 0 ? 0.45 : 1);
       const r = def.radius;
       // A soft faction-coloured pad under every building, so a base reads as its faction's at a glance.
       this.underGfx.fillStyle(side.def.color, 0.16);
-      this.underGfx.fillEllipse(b.x, b.y + 2, r * 2.6, r * 1.7);
-      if (!inSight) continue;
+      this.underGfx.fillEllipse(v.x, v.y + 2, r * 2.6, r * 1.7);
+      if (!live) continue;
+      const b = live;
       if (!b.done) {
         drawProgress(this.gfx, b.x, b.y + r + 6, 34, 1 - b.buildLeft / b.buildMs, side.def.color);
       } else if (b.hp < b.maxHp) {
@@ -1414,7 +1424,7 @@ export class GameScene extends Phaser.Scene {
       label.setVisible(false);
       return;
     }
-    const side = this.state.sides[target.faction];
+    let side = this.state.sides[target.faction];
     let text: string;
     let at: { x: number; y: number };
     if (target.kind === 'unit') {
@@ -1427,9 +1437,10 @@ export class GameScene extends Phaser.Scene {
       at = u;
     } else {
       const b = this.state.building(target.id)!;
-      const name = b.expansion ? buildInfo(side, 'expansion').name : tr(side.def.buildings[b.type].name);
-      // A rival building under the fog shows its name and role only, not its hit points now.
+      // A rival building under the fog shows as last seen: its name and role then, not its owner or hit points now.
       const inSight = b.faction === PLAYER || this.state.fog.sees(b);
+      if (!inSight) side = this.state.sides[this.state.known.get(b.id)?.faction ?? b.faction];
+      const name = b.expansion ? buildInfo(side, 'expansion').name : tr(side.def.buildings[b.type].name);
       const hp = inSight ? ` · ${tr('hp', { hp: Math.ceil(b.hp), max: b.maxHp })}` : '';
       const head = `${name} · ${tr(ROLE_LABEL[b.expansion ? 'expansion' : b.type])}${hp}`;
       text = [head, ...(b.expansion ? expansionLines(side) : buildingLines(side, b.type))].join('\n');
