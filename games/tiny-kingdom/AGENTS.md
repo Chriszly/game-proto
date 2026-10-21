@@ -57,8 +57,8 @@ Implemented today:
   placement (undoable). `previewClear` gives the (usually negative) change; the hover shows a
   grass ghost, the bubble and a "Clear the wood" hint.
 - Market trades: `canTrade` needs the playing phase, a market on the board, no trade this round
-  (`tradedIn !== round`), a special won and a kind with `TRADE_GIVE` (2) in the pouch
-  (`tradeGives`). A tap on a market (hover hint "Tap to trade") opens the trade card
+  (`tradedIn !== round`) and a kind with `TRADE_GIVE` (2) in the pouch (`tradeGives`) to give
+  for a different special won (a lone windmill pair with only the windmill won is no trade). A tap on a market (hover hint "Tap to trade") opens the trade card
   (`TRADE_CARD`, `createTradeCard` / `refreshTrade`): a row of chips to give two of, a row of the
   specials won to take one of, and a Trade button once both are picked. `trade(s, give, take)`
   moves the tiles, sets `tradedIn`, clears the undo snapshot and draws a new hand. The pouch line
@@ -302,7 +302,9 @@ How it runs:
   `redrawCells`; `refresh` rewrites the panel (pouch line, omen strip, castle count), rebuilds the
   tile buttons when the hand's kinds change, redraws the goal bar, the decree banner and marks
   (`refreshDecree`), the omen mark and chain beads (`refreshBoardMarks`) and the gift row and
-  card (`refreshGifts`), and closes the trade card outside the playing phase.
+  card (`refreshGifts`), and closes the trade card outside the playing phase. The undo button and
+  the tile buttons (outside the trade card's dim) close the trade card first, so it never shows
+  chips for a pouch that changed under it.
 
 State model (`GameState` in `src/game/state.ts`):
 

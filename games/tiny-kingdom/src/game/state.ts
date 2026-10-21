@@ -464,9 +464,9 @@ export function clear(s: GameState, col: number, row: number): Placed | null {
   return placed;
 }
 
-/** Whether a market trade can be made now: a market stands, none was made this round, and a gift building has been won. */
+/** Whether a market trade can be made now: a market stands, none was made this round, and the pouch has two of a kind to give for a different gift building already won. */
 export function canTrade(s: GameState) {
-  return s.phase === 'playing' && s.tradedIn !== s.round && s.unlocked.length > 0 && s.grid.some((cells) => cells.includes('market')) && tradeGives(s).length > 0;
+  return s.phase === 'playing' && s.tradedIn !== s.round && s.grid.some((cells) => cells.includes('market')) && tradeGives(s).some((g) => s.unlocked.some((t) => t !== g));
 }
 
 /** The kinds the pouch could give two of in a trade. */
