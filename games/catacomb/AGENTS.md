@@ -276,7 +276,8 @@ Data tables (where to tune):
   reward, merchant, panel and picker containers sit at the frame (`fx`, `fy`) and keep their
   960x540 `layout.ts` positions inside it; their backdrops sit at `-fx, -fy` and the overlays'
   dimmers (`dimmer`) cover the whole view. The top bar spans the view (room text on its right
-  edge), the fight's orb and draw pile count are pinned to the bottom-left corner, End turn and the
+  edge; the foes' names leave it, measured by `roomText.width` once per change in `barKey`, when
+  it would run into the relic row, since they are over the foes' heads anyway), the fight's orb and draw pile count are pinned to the bottom-left corner, End turn and the
   discard pile to the bottom-right, the hand to the bottom edge (`handLayer` at `fy` inside the
   fight), the flasks and powers to the left edge and the picker's Back to the right. The draw
   pile's count sits over the orb, clear of the corner buttons under it.
@@ -333,7 +334,7 @@ Sound table (`src/audio/sounds.ts`) and where each plays:
 | `drip` | now and then on the hero panel and the map (every 2.6 to 6.8s, steady pattern) |
 | `descend` | the descent panel's Descend |
 | `fight`, `stab` | arriving at a fight; `stab` too for an elite or a boss |
-| `draw` | cards are drawn (each turn's draw, a card that draws, even one that only replaces itself, the Foresight Flask) |
+| `draw` | cards are drawn (each turn's draw, the opening hand of a fight included, a card that draws, even one that only replaces itself, the Foresight Flask) |
 | `shuffle` | the discard pile shuffled into the draw pile |
 | `attack`, `skill`, `power` | a hand card played, by its kind |
 | `hit` | a damage pop on a foe |

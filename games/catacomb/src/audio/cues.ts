@@ -75,10 +75,12 @@ export class Cues {
 
     // Draws, reshuffles and fallen foes.
     const f = s.fight;
-    if (f && f === this.fight) {
-      if (f.enemies.length < this.foes) heard.add('die');
-      if (f.drawn > this.drawn) heard.add('draw');
-      if (f.draw.length > this.draw) heard.add('shuffle');
+    if (f) {
+      // A new fight starts from nothing drawn, so its opening hand flicks too.
+      const same = f === this.fight;
+      if (same && f.enemies.length < this.foes) heard.add('die');
+      if (f.drawn > (same ? this.drawn : 0)) heard.add('draw');
+      if (same && f.draw.length > this.draw) heard.add('shuffle');
     }
     this.fight = f;
     this.foes = f?.enemies.length ?? 0;
