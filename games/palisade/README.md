@@ -37,7 +37,7 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up and road countdowns stay 10 real seconds, and an omen card's break stays 6 |
 | Skill book (in the top bar) | Open the skill book; the battle waits until Back |
 | Hover over (or tap) the barricade's bar | Show its health, what Stout Timber adds and how much it mends after each wave |
-| Fight again / New hero | After a fall: start again keeping the hero, or with a new one; the "Next run at" row picks the heat and the "Start at" row the wave (a forced march) |
+| Fight again / New hero | After a fall: start again keeping the hero, or with a new one (tap New hero twice); the "Next run at" row picks the heat and the "Start at" row the wave (a forced march) |
 | Retire | After a fall or on the victory panel, once every skill is learned or the siege lifted: start a new hero from scratch who keeps a legacy picked from three |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
@@ -52,7 +52,7 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
    after 10 seconds without a tap, one of them is taken at random.
 4. **The hero is kept**: level, experience, every upgrade picked and every relic won carry over to
    the next run, which starts again at wave 1 (or, on a forced march, at a later road). They are
-   saved in the browser. "New hero" starts from scratch, keeping only what retired heroes left.
+   saved in the browser. "New hero" starts from scratch, keeping only what retired heroes left; it asks for a second tap first.
 
 ![Three upgrades to pick from](docs/screenshots/playthrough-1-level-up.webp)
 

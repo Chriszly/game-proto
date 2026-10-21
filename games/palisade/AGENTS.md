@@ -81,10 +81,12 @@ seconds without a tap.
   sets `accepted`, refuse clears `omen`, and either cuts the break to at most `BREAK_MS`. When the
   break ends an undecided omen is cleared (refused). `omenEffects(omen)` gives what an accepted one
   changes: `sight` (Night: `sightOf` caps it at `NIGHT_X`, so `targets` only takes foes left of
-  it, and with it the arrows (and their turn to a new foe when theirs dies or they pierce one),
-  lightning's leaps, fireballs, the mage and `crowdSpot`; `loose` and `strew` clamp to it, so no
-  volley or patch lands in the dark; the scene hides foes right of it, darkens the field with
-  `nightG` and draws no `death`, `xp` or `orb` effect there), `elites` (Blood Moon doubles `eliteChance` in `spawn`), `coins` and `speed` (Rich
+  it, and with it the arrows (and their turn to a new foe when theirs dies, they pierce one or
+  they fly on with none, every step until one is seen), lightning's leaps, fireballs, the mage and
+  `crowdSpot`; `moveMissiles` only lets an arrow, fireball or magic bolt strike a foe left of
+  `sightOf`, so a stray one flies on through the dark; `loose` and `strew` clamp to it through
+  `fieldSpot`, so no volley or patch lands in the dark; the scene hides foes right of it, darkens
+  the field with `nightG` and draws no effect (nor a shaman's healing mote) there), `elites` (Blood Moon doubles `eliteChance` in `spawn`), `coins` and `speed` (Rich
   Plunder, in `removeDead` and `moveEnemies` with the road's), and `xp` (`OMEN_XP`, 1.3, on every
   kill's base experience). The chip at `OMEN_CHIP` names an accepted omen until the wave is cleared,
   when `clearWave` replaces it.
@@ -356,7 +358,8 @@ seconds without a tap.
   Without a tap, `tick` picks after `AUTO_PICK_MS` (10 s). Arrow Rain: a `pointerdown` on the
   button's hit circle while `rainReady()` sets `aim`; the scene-wide `pointermove` moves it; a
   `pointerup` (or `pointerupoutside`) calls `loose(state, x, y)` if `onField` (right of the
-  barricade, on the road) and clears `aim` either way. The caltrops button works the same way with
+  barricade, on the road) and clears `aim` either way. While dragged, the arc and ring are drawn at
+  `fieldSpot(state, x, y)`, the clamped spot where `loose` and `strew` land. The caltrops button works the same way with
   `aimKind` `'caltrops'`, calling `strew` on release. R and Space call `loose` at `crowdSpot`, C
   calls `strew` 40px in front of it. A level-up, a fall, the open skill book or hire panel clears
   `aim`. A tap on a guard slot's zone (depth `UI_DEPTH - 3`, under every overlay) opens
@@ -365,8 +368,10 @@ seconds without a tap.
   closes it on a level-up or a fall, and a tap beside the panel (not on it) closes it. A tap on the Fortify button (always shown; not after a fall or during a level-up) opens
   `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the battle while it is open and
   closes it on a level-up or a fall, and a tap beside the panel (not on it) closes it. A tap on the Repair button calls `repair`, and Accept or Refuse
-  on the omen card `decideOmen`. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
-  `restart`, the heat buttons on the game-over panel and "Heat N" on the victory panel call
+  on the omen card `decideOmen`. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" calls
+  `restart`, "New hero" arms itself on the first tap (`armNewHero`: its caption becomes "Sure? Tap
+  again" and `newHeroNote` says what is lost; any other tap on the panel or leaving it disarms it)
+  and calls `restart` on the second, the heat buttons on the game-over panel and "Heat N" on the victory panel call
   `restartAt`, a "Start at" button sets `startWave`, "Retire" calls `openRetire` and a legacy card
   `GameScene.retire`, and "Keep fighting" calls `keepFighting`. The "Skill book" button opens `SkillBook`; Back or a tap beside the book closes it.
   While it is open `GameScene.update` skips `tick` and its `clock`, so the battle, effects and the
@@ -459,7 +464,7 @@ them alone. `palisade-progress` holds JSON of `Progress`, relics, `heat`, `heatU
 `freshProgress()` (dropping unknown upgrade and relic ids, and `choices` unless they are three known
 upgrades with a level-up pending; an older save gets heat 0 and no legacy, and the legacy's fields are
 checked one by one) and falls back to fresh on any error.
-"New hero" calls `clearProgress`, which also drops the relics and the heats, then saves a fresh hero
+"New hero" (on its confirming second tap) calls `clearProgress`, which also drops the relics and the heats, then saves a fresh hero
 with the legacy kept. The run itself (wave, foes,
 barricade, Arrow Rain and caltrops charge, streak, coins, guards, road, fortifications, repairs, omen) is never saved, so a reload
 starts at wave 1.
@@ -548,7 +553,7 @@ nothing plays for it. The player's own taps play from `GameScene` and the panels
   `rainLand` (`rain`), `pick` (`autoPick`), `ready` (Arrow Rain or the caltrops just charged),
   `chop` (every `CHOP_MS` while the barricade or stake line loses health), `crash` (either reaches
   0), `levelUp` (the level went up), `cleared` (a wave cleared into a break) and `relic` (with the
-  chest). Effects right of a Night wave's `sight` stay silent.
+  chest). Effects at or right of a Night wave's `sight` stay silent, the same line past which the scene hides them.
 - **The player's taps:** `rainLoose` and `caltrops` when `loose`/`strew` succeed (drag, R, Space,
   C), `pick` for a card, a road or a legacy, `build` with `ui('coin')` for `hire`, `train`,
   `fortify` and `repair`, `omen` for an accepted omen, `ui('click')` for every `makeButton`, the aim

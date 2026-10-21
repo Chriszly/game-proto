@@ -206,7 +206,7 @@ function targets(state: GameState, mode: AimMode = state.aimMode) {
 }
 
 /** How far right foes can be seen and struck: the view's edge, or mid-field on a Night wave. */
-function sightOf(state: GameState) {
+export function sightOf(state: GameState) {
   return Math.min(VIEW_RIGHT, omenEffects(state.omen).sight);
 }
 
@@ -272,8 +272,9 @@ function moveMissiles(state: GameState, s: Stats, dt: number) {
     }
     const speed = m.kind === 'arrow' ? ARROW_SPEED : m.kind === 'magic' ? MAGIC_SPEED : FIREBALL_SPEED;
     let target = state.enemies.find((e) => e.id === m.target);
-    // A foe that fell before the arrow got there: turn to the nearest one not yet hit.
-    if (!target && m.target !== null) {
+    // A foe that fell before the arrow got there, or none was left to turn to: turn to the nearest
+    // seen one not yet hit.
+    if (!target) {
       target = nearest(targets(state, 'nearest').filter((e) => !m.hit.includes(e.id)), m.x, m.y);
       m.target = target?.id ?? null;
     }
@@ -289,8 +290,10 @@ function moveMissiles(state: GameState, s: Stats, dt: number) {
       gone.add(m.id);
       continue;
     }
+    // Only seen foes are struck: an arrow flying on into the dark of a Night wave misses.
+    const sight = sightOf(state);
     const struck = state.enemies.find(
-      (e) => !m.hit.includes(e.id) && Math.hypot(e.x - m.x, e.y - m.y) < ENEMIES[e.kind].radius + 4,
+      (e) => e.x < sight && !m.hit.includes(e.id) && Math.hypot(e.x - m.x, e.y - m.y) < ENEMIES[e.kind].radius + 4,
     );
     if (!struck) continue;
     if (m.kind === 'fireball') {
@@ -699,6 +702,17 @@ function removeDead(state: GameState) {
 }
 
 /**
+ * Where a volley or a patch aimed at (x, y) lands: on the seen road in front of the barricade
+ * (short of mid-field on a Night wave). The scene draws its aiming ring there too.
+ */
+export function fieldSpot(state: GameState, x: number, y: number) {
+  return {
+    x: Math.round(Math.min(sightOf(state) - 10, Math.max(BARRICADE_FRONT + 30, x))),
+    y: Math.round(Math.min(FIELD.bottom, Math.max(FIELD.top, y))),
+  };
+}
+
+/**
  * Looses Arrow Rain on the ring around (x, y), kept on the seen road in front of the barricade
  * (short of mid-field on a Night wave), once kills have charged it. Returns whether it was loosed.
  */
@@ -707,8 +721,7 @@ export function loose(state: GameState, x: number, y: number) {
   state.rain.charge = 0;
   state.rain.volleys.push({
     id: state.nextId++,
-    x: Math.round(Math.min(sightOf(state) - 10, Math.max(BARRICADE_FRONT + 30, x))),
-    y: Math.round(Math.min(FIELD.bottom, Math.max(FIELD.top, y))),
+    ...fieldSpot(state, x, y),
     ms: RAIN_FALL_MS,
   });
   return true;
@@ -724,8 +737,7 @@ export function strew(state: GameState, x: number, y: number) {
   c.charge = 0;
   c.patches.push({
     id: state.nextId++,
-    x: Math.round(Math.min(sightOf(state) - 10, Math.max(BARRICADE_FRONT + 30, x))),
-    y: Math.round(Math.min(FIELD.bottom, Math.max(FIELD.top, y))),
+    ...fieldSpot(state, x, y),
     ms: 0,
     waves: CALTROP_WAVES,
   });

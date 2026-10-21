@@ -277,6 +277,8 @@ const en = {
   fallenHeat: 'The foes broke through and reached the hero on wave {wave} at Heat {heat}.\n{kills} foes slain this run, longest streak x{streak}, best wave cleared: {best}.\n\nThe hero keeps level {level}, every upgrade picked and every relic won.',
   fightAgain: 'Fight again',
   newHero: 'New hero',
+  newHeroConfirm: 'Sure? Tap again',
+  newHeroNote: 'Level, upgrades, relics and heats will be lost.',
   retire: 'Retire',
   nextRunAt: 'Next run at',
   startAt: 'Start at',

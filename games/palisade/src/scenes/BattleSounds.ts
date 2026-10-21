@@ -83,7 +83,7 @@ export class BattleSounds {
     let streak = 0;
     let boss = false;
     for (const e of s.effects) {
-      if (!fresh(e.id) || e.x > sight + 40) continue;
+      if (!fresh(e.id) || e.x >= sight) continue;
       kinds.add(e.kind);
       if (e.kind === 'death') {
         biggest = Math.max(biggest, e.radius ?? 14);
