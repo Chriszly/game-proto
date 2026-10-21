@@ -62,6 +62,8 @@ export const tripMs = (s: GameState) => Math.round(TRIP_MS * Math.pow(0.8, s.ran
  * rest, and with the Waggle Dance bees set off by themselves.
  */
 export function tick(s: GameState, dt: number) {
+  // Sampled before the year turns, since a meadow that shuts or opens with the season moves the demand too.
+  const wanted = demand(s);
   turn(s, dt);
   tire(s, dt);
   for (const b of s.bees) {
@@ -77,7 +79,6 @@ export function tick(s: GameState, dt: number) {
     c.phase = 'capped';
     s.events.push({ kind: 'capped', slot });
   });
-  const wanted = demand(s);
   s.marketMs += dt;
   const now = demand(s);
   if (now && now !== wanted) s.events.push({ kind: 'demand', honey: now });
@@ -159,7 +160,7 @@ function eat(s: GameState) {
   }
   if (s.bees.length <= 1) return;
   // Bees at home starve first, then foragers out, and bees lent to the orchard last.
-  const gone = [...s.bees].sort((a, b) => busy(b) - busy(a))[0];
+  const gone = [...s.bees].sort((a, b) => busy(a) - busy(b))[0];
   s.bees = s.bees.filter((b) => b !== gone);
   recountLent(s);
   s.events.push({ kind: 'ate', what: 'bee', slot: null });
@@ -322,13 +323,14 @@ export function sell(s: GameState) {
 }
 
 /**
- * The nectar the bees gathered while the page was closed for `awayMs`: one drop per bee per
- * `AWAY_MS_PER_DROP`, at most `AWAY_CAP` and never more than the comb has room for, delivered
- * into the filling cells like a forager's, of the kind they forage. Returns the drops added.
+ * The nectar the bees gathered while the page was closed for `awayMs`: one drop per bee not lent
+ * to the orchard per `AWAY_MS_PER_DROP`, at most `AWAY_CAP` and never more than the comb has room
+ * for, delivered into the filling cells like a forager's, of the kind they forage. Returns the drops added.
  */
 export function gatherAway(s: GameState, awayMs: number) {
   if (!(awayMs > 0) || isWinter(s)) return 0;
-  const drops = Math.min(AWAY_CAP, room(s), Math.floor((awayMs * s.bees.length) / AWAY_MS_PER_DROP));
+  const foragers = s.bees.filter((b) => !b.lent).length;
+  const drops = Math.min(AWAY_CAP, room(s), Math.floor((awayMs * foragers) / AWAY_MS_PER_DROP));
   if (drops > 0) deliver(s, drops, s.forage);
   return drops;
 }

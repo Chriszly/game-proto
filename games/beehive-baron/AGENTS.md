@@ -31,7 +31,8 @@ Implemented today:
 - Market: the board under the hive (`MARKET`, shown once `sold > 0`, in the hint's place) lists
   each kind's jar price now; tapping an open kind calls `forage`. With two or more kinds open,
   `demand` picks one in turn every `MARKET_MS` (60s of game time, `marketMs`, not saved) whose
-  base price is multiplied by `DEMAND` (1.5); a `demand` event floats a message when it moves.
+  base price is multiplied by `DEMAND` (1.5); a `demand` event floats a message when it moves
+  (`tick` samples it before the year turns, so a meadow shutting or opening with the season is announced too).
 - Village orders (`src/game/orders.ts`): from `ORDERS_FROM` (3) jars sold, an order for 3 to 5
   jars of an open kind comes `ORDER_GAP_MS` (20s) after the last one ended and lapses after
   `ORDER_MS` (2 min), or sooner when its meadow shuts (`openLeft`; a kind is only ordered while its
@@ -60,8 +61,8 @@ Implemented today:
   Heather Moor (ripening twice as fast). A goal card shows the next goal, its meadow and benefit,
   and a progress bar; the next locked meadow shows faded on the far hill with a padlock tag, and
   open meadows show in full colour with blooms.
-- Capped offline nectar: on load, `gatherAway` adds one drop per bee per `AWAY_MS_PER_DROP` (30s)
-  since the saved `seen` time, capped at `AWAY_CAP` (20) and at the comb's room, into the filling
+- Capped offline nectar: on load, `gatherAway` adds one drop per bee not lent to the orchard per
+  `AWAY_MS_PER_DROP` (30s) since the saved `seen` time, capped at `AWAY_CAP` (20) and at the comb's room, into the filling
   cells. A chip under the hive says "While you were away: +N nectar" with "cap 20" and a bar; it
   fades after 12s of game time or when tapped.
 - Purchases: comb cells (price rises per cell built), brood cells, Guard Bees, Pollen Baskets

@@ -125,7 +125,7 @@ the preview names the wax a build uses. A big comb funds itself.
 
 ### While you were away
 
-Close the page and the bees keep foraging, slowly: each bee gathers 1 drop per 30 seconds away,
+Close the page and the bees keep foraging, slowly: each bee not lent to the orchard gathers 1 drop per 30 seconds away,
 up to **20 drops** a visit, poured into the filling cells (it never spills, and an already full
 comb gets nothing). When you come back a chip under the hive says how much they brought, with a
 bar against the cap: "While you were away: +12 nectar (cap 20)". It fades after a few seconds, or
