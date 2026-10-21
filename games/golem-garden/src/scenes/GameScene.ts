@@ -52,6 +52,7 @@ import {
 import {
   SHOT_MS,
   boonCount,
+  compostCap,
   boonedStats,
   canCallEarly,
   canMove,
@@ -780,7 +781,7 @@ export class GameScene extends Phaser.Scene {
     if (boon === 'moss') return again(t('boonMoss', { pct: Math.round((1 + BOON.mossSlow * (times + 1)) * 100) }));
     if (boon === 'hedge') return again(t('boonHedge', { hp: Math.round(HEDGE.hp * (1 + BOON.hedgeHp * (times + 1))) }));
     if (boon === 'pebble') return again(t('boonPebble', { pct: Math.round(BOON.pebbleDamage * (times + 1) * 100) }));
-    return again(t('boonCompost', { cap: COMPOST.cap + BOON.compostCap * (times + 1) }));
+    return again(t('boonCompost', { cap: compostCap(s) + BOON.compostCap }));
   }
 
   /** A warm stripe along each row a Sunny row boon shines on. */
@@ -1016,7 +1017,7 @@ export class GameScene extends Phaser.Scene {
       return t(s.sap < regrowPrice(s) ? 'hintRegrowPoor' : 'hintRegrow', { n: regrowPrice(s) });
     }
     if (s.phase === 'build' && nextWave(s) % BOSS_EVERY === 0) return t('hintQueen');
-    if (s.phase === 'build' && s.wave >= COMPOST.fromWave) return t('hintCompost', { pct: Math.round(COMPOST.rate * 100), cap: COMPOST.cap });
+    if (s.phase === 'build' && s.wave >= COMPOST.fromWave) return t('hintCompost', { pct: Math.round(COMPOST.rate * 100), cap: compostCap(s) });
     return t(s.golems.length ? 'hintCombo' : 'hintPlant');
   }
 

@@ -398,11 +398,24 @@ export function regrow(s: GameState) {
   return true;
 }
 
-/** The row Sunny row would shine on: the one with the most grown golems (the top one of a tie). */
+/**
+ * The row Sunny row would shine on: the one with the most grown golems (the top one of a tie), or,
+ * with none grown, the one with the most golems planted (growing included); with no golem at all,
+ * row 0.
+ */
 export function sunRow(s: GameState) {
-  const counts = Array.from({ length: gardenOf(s).map.length }, (_, row) => s.golems.filter((g) => g.row === row && g.growMs === 0).length);
-  return counts.indexOf(Math.max(...counts));
+  const rows = gardenOf(s).map.length;
+  const most = (grownOnly: boolean) => {
+    const counts = Array.from({ length: rows }, (_, row) => s.golems.filter((g) => g.row === row && (!grownOnly || g.growMs === 0)).length);
+    const max = Math.max(...counts);
+    return max > 0 ? counts.indexOf(max) : -1;
+  };
+  const row = most(true);
+  return row >= 0 ? row : Math.max(0, most(false));
 }
+
+/** The most compost one wave can pay: COMPOST.cap, raised by each Rich compost boon. */
+export const compostCap = (s: GameState) => COMPOST.cap + BOON.compostCap * boonCount(s, 'compost');
 
 /** Takes one of the boons offered after a Queen Slug wave. */
 export function takeBoon(s: GameState, boon: Boon) {
@@ -430,8 +443,7 @@ function beginWave(s: GameState) {
  * moves on.
  */
 function finishWave(s: GameState) {
-  const cap = COMPOST.cap + BOON.compostCap * boonCount(s, 'compost');
-  s.compost = s.wave >= COMPOST.fromWave ? Math.min(cap, Math.floor(s.sap * COMPOST.rate)) : 0;
+  s.compost = s.wave >= COMPOST.fromWave ? Math.min(compostCap(s), Math.floor(s.sap * COMPOST.rate)) : 0;
   s.sap += waveBonus(s.wave) + s.compost;
   s.bloom = Math.min(BLOOM_GOAL, s.bloom + 1);
   s.best = Math.max(s.best, s.wave);
