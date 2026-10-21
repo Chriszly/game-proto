@@ -26,6 +26,7 @@ three stars each. Run out of tiles or room and the kingdom is finished.
 | Tap or click a tile button | Pick one of the three tiles drawn this turn |
 | Hover a cell | See what the picked building would score there, which neighbours pay into it, and whether it joins the castle |
 | Tap or click a grass cell | Place the building there; the other two tiles go back and a new three are drawn |
+| On a touchscreen, tap a grass cell once, then again | The first tap shows the preview (there is no hover); a second tap on the same cell places the building (clearing a wood works the same way) |
 | Tap a house with a house beside it, then that house | Merge the two into a manor (tap anything else to cancel) |
 | Pick the lumber camp, then tap a wood beside a camp | Clear the wood to grass, spending the camp tile |
 | Tap a market | Open the market trade: give two tiles of one kind for one gift building, once a round |
@@ -81,8 +82,9 @@ three stars each. Run out of tiles or room and the kingdom is finished.
     The wood becomes grass and the camp tile is spent: the camp and the houses beside the wood
     lose its points (the preview shows the loss), but there is room to build. It can be undone.
 13. **Market trades**: once a round, while a market stands, tap it to open the trade card and
-    give two tiles of one kind from the pouch for one gift building you have already won. A new
-    hand is drawn afterwards, and a trade cannot be undone.
+    give two tiles of one kind from the pouch for one gift building you have already won and that
+    has somewhere to go (or a wood to clear). A new hand is drawn afterwards, and a trade cannot be
+    undone; if nothing has room after it, the kingdom ends.
 14. **Seasons**: each round has one, in turn: Spring fair (markets and harbors score double),
    Harvest festival (farms), Timber season (houses and lumber camps) and Winter watch (towers and
    windmills). The strip under the gift row shows it. A doubled building scores its worth again

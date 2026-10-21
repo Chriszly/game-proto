@@ -14,6 +14,7 @@ import { OMEN_FROM, type Omen } from '../game/omens';
 import { SEASON_INFO } from '../game/seasons';
 import {
   canClear,
+  canClearAny,
   canMerge,
   canPlace,
   canTrade,
@@ -39,6 +40,7 @@ import {
   trade,
   TRADE_GIVE,
   tradeGives,
+  tradeTakes,
   undo,
   type GameState,
   type Placed,
@@ -141,6 +143,8 @@ export class GameScene extends Phaser.Scene {
   preview: { col: number; row: number; gained: number; base: number; links: Share[]; season: number; joins: number } | null = null;
   /** The house picked to merge into a house beside it, while one is picked. */
   mergeFrom: { col: number; row: number } | null = null;
+  /** On a touchscreen, the cell whose placement or clearing is being previewed: a second tap on it commits. */
+  private touchAt: { col: number; row: number } | null = null;
   /** Where the island button is on screen. */
   islandButton = { x: ISLAND_BUTTON.x, y: ISLAND_BUTTON.y, w: ISLAND_BUTTON.w, h: ISLAND_BUTTON.h };
   tileButtons: TileButton[] = [];
@@ -276,13 +280,17 @@ export class GameScene extends Phaser.Scene {
     this.omenLabel = this.add.text(0, 0, '', style(10, CREAM, '800')).setOrigin(0.5).setDepth(D.label).setVisible(false);
     this.mergeHint = this.add.text(0, 0, '', style(11, CREAM, '900')).setOrigin(0.5).setDepth(D.label + 0.2).setVisible(false);
 
-    // One zone over the whole board: hovering previews, a tap places.
+    // One zone over the whole board: hovering previews, a tap places. A touch has no hover, so its
+    // first tap on a cell previews and a second tap on the same cell places.
     const zone = this.add.zone(GRID.x, GRID.y, GRID.cols * GRID.cell, GRID.rows * GRID.cell).setOrigin(0).setInteractive({ useHandCursor: true });
     zone.on('pointermove', (p: Phaser.Input.Pointer) => this.hoverPointer(p));
-    zone.on('pointerout', () => this.hoverAt(-1, -1));
+    // A lifted finger counts as leaving the board; the touch preview stays until the next tap.
+    zone.on('pointerout', (p: Phaser.Input.Pointer) => {
+      if (!(p.wasTouch && this.touchAt)) this.hoverAt(-1, -1);
+    });
     zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
       const at = this.cameras.main.getWorldPoint(p.x, p.y);
-      this.tapAt(at.x, at.y);
+      this.tapAt(at.x, at.y, p.wasTouch);
     });
   }
 
@@ -508,7 +516,7 @@ export class GameScene extends Phaser.Scene {
       this.tradeGive = b;
       this.refreshTrade();
     });
-    const takes = s.unlocked.filter((b) => b !== this.tradeGive);
+    const takes = tradeTakes(s).filter((b) => b !== this.tradeGive);
     if (this.tradeTake && !takes.includes(this.tradeTake)) this.tradeTake = null;
     this.tradeRow(takes, top + TRADE_CARD.takeY, (b) => count(b, 1), this.tradeTake, (b) => {
       this.tradeTake = b;
@@ -527,6 +535,7 @@ export class GameScene extends Phaser.Scene {
     }
     sfx('jingle');
     this.closeTrade();
+    if (this.state.phase === 'over') this.gameEnded();
     this.refresh();
     this.hoverPointer();
   }
@@ -755,11 +764,21 @@ export class GameScene extends Phaser.Scene {
   /**
    * A tap on the board: on a house with a house beside it, picks it to merge (a second tap on the
    * house beside it merges them into a manor); on a wood beside a lumber camp with the lumber camp
-   * picked, clears the wood; anywhere else, places the picked building.
+   * picked, clears the wood; anywhere else, places the picked building. A `touch` tap on a cell to
+   * build on or clear only previews it, unless the last touch tap previewed the same cell.
    */
-  private tapAt(x: number, y: number) {
+  private tapAt(x: number, y: number, touch = false) {
     const at = this.cellAt(x, y);
     if (!at) return;
+    const s = this.state;
+    const armed = this.touchAt?.col === at.col && this.touchAt.row === at.row;
+    this.touchAt = null;
+    const commits = !this.mergeFrom && ((s.selected && previewPlacement(s, s.selected, at.col, at.row)) || canClear(s, at.col, at.row));
+    if (touch && commits && !armed) {
+      this.touchAt = at;
+      this.hoverAt(x, y);
+      return;
+    }
     const from = this.mergeFrom;
     this.mergeFrom = null;
     let placed: Placed | null = null;
@@ -1224,6 +1243,8 @@ export class GameScene extends Phaser.Scene {
 
   private refresh() {
     const s = this.state;
+    // Any change to the game drops a touch preview, so the next tap previews afresh.
+    this.touchAt = null;
     const kinds = shownKinds(s);
     if (kinds.join() !== this.shownKinds) {
       this.shownKinds = kinds.join();
@@ -1293,7 +1314,7 @@ export class GameScene extends Phaser.Scene {
     const stuck = s.phase === 'playing' && !anyPlace(s) && !canUndo(s);
     const undoable = canUndo(s) || stuck;
     const usedHere = s.undoneIn === s.round;
-    const noRoom = housesCanMerge(s.grid) ? 'noRoom' : 'noRoomWood';
+    const noRoom = housesCanMerge(s.grid) ? 'noRoom' : canClearAny(s) ? 'noRoomWood' : 'noRoomFinish';
     fit(this.undoText.setText(t(stuck ? noRoom : usedHere && !undoable ? 'undoUsed' : 'undo')), UNDO_BUTTON.w - 16);
     this.undoBg.setAlpha(undoable ? 1 : 0.5);
     this.undoText.setAlpha(undoable ? 1 : 0.5);

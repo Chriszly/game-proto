@@ -58,10 +58,12 @@ Implemented today:
   grass ghost, the bubble and a "Clear the wood" hint.
 - Market trades: `canTrade` needs the playing phase, a market on the board, no trade this round
   (`tradedIn !== round`) and a kind with `TRADE_GIVE` (2) in the pouch (`tradeGives`) to give
-  for a different special won (a lone windmill pair with only the windmill won is no trade). A tap on a market (hover hint "Tap to trade") opens the trade card
+  for a different special won that has a use on the board (`tradeTakes`: `playable`, so a harbour
+  with no lake shore left is never offered; a lone windmill pair with only the windmill won is no trade). A tap on a market (hover hint "Tap to trade") opens the trade card
   (`TRADE_CARD`, `createTradeCard` / `refreshTrade`): a row of chips to give two of, a row of the
-  specials won to take one of, and a Trade button once both are picked. `trade(s, give, take)`
-  moves the tiles, sets `tradedIn`, clears the undo snapshot and draws a new hand. The pouch line
+  specials won to take one of (`tradeTakes`), and a Trade button once both are picked. `trade(s, give, take)`
+  moves the tiles, sets `tradedIn`, clears the undo snapshot, draws a new hand and runs `checkEnd`
+  (`makeTrade` calls `gameEnded` if the kingdom ended). The pouch line
   adds "Tap a market to trade." while one can be made.
 - Random islands: each kingdom (the first and every "New kingdom") draws an island number from
   1 to `ISLANDS` (9999) with `Math.random`, and `islandMap` lays it out from that number with its
@@ -162,7 +164,8 @@ Implemented today:
   to go, or for a lumber camp a wood beside a camp to clear) and no two houses could merge
   (`housesCanMerge`, which ignores the phase). When no tile has room (`anyPlace`) but a merge or
   clearing is left and nothing can be undone, the undo button reads "No room: merge houses or
-  finish" (or "No room: clear a wood or finish" when no houses can merge) and calls `finish`; while
+  finish" (or "No room: clear a wood or finish" when no houses can merge but `canClearAny`, else
+  "No room: finish") and calls `finish`; while
   the last placement can still be undone, it stays Undo. A reached goal first gets its gift, unless
   the island is full and no two houses could merge nor a lumber camp tile clear a wood. `end` pays
   the castle bonus; the best final score, the crowns, the daily best and the campaign stars
@@ -239,7 +242,7 @@ File map (`src/`):
   `ROUND_POUCH`, `HAND`, `TRADE_GIVE`, `goalFor`, `season`, `newGame(best, crowns, island?,
   kingdom?)`, `inHand`, `cellParts`, `cellScore`, `boardScore`, `canPlace(s, col, row, kind?)`,
   `previewPlacement`, `select`, `place`, `canClear`, `previewClear`, `clear`,
-  `canTrade`, `tradeGives`, `trade`, `canMerge`, `mergeable`, `previewMerge`, `merge`, `anyPlace`,
+  `canTrade`, `tradeGives`, `tradeTakes`, `trade`, `canClearAny`, `canMerge`, `mergeable`, `previewMerge`, `merge`, `anyPlace`,
   `finish`, `canUndo`, `undo`, `chooseGift`, `shownKinds` and `handCount`; `settle` is the shared
   tail of `place`, `clear` and `merge`, `drawHand` draws the next hand, `keepHandPlayable` redraws
   a stuck one after a merge or gift, `playable` and `pouchPlayable` tell whether a tile has a use
@@ -288,7 +291,10 @@ How it runs:
   `POPUP_DEPTH`, above the gift card that opens on the same placement.
 - Input: one interactive zone covers the board. `pointermove` calls `hoverPointer`, which turns
   the pointer into layout pixels with `cameras.main.getWorldPoint` and calls `hoverAt`, which sets
-  `preview` from `previewPlacement` and redraws the hover; `pointerdown` calls `tapAt`, which maps
+  `preview` from `previewPlacement` and redraws the hover. A touch has no hover, so a touch tap
+  (`pointer.wasTouch`) on a cell that would place or clear only previews it and sets `touchAt`; a
+  second touch tap on the same cell commits (any other tap, or any `refresh`, drops `touchAt`, and
+  `pointerout` from a lifted finger keeps the preview shown). Mouse clicks place at once. `pointerdown` calls `tapAt`, which maps
   the point to a cell with `cellAt` and calls `merge` (second tap of a merge), picks a house to
   merge, calls `clear` on a wood that `canClear`, opens the trade card on a market while
   `canTrade`, or calls `place`. Each tile button's plaque calls `select`; the gift card's plaques
@@ -504,8 +510,8 @@ valid island number. Hovering makes no sound. The game has no `?watch` mode.
 - **Add an omen kind**: add it to `OmenKind`, pick its cell and texts in `omenFor` and its effect
   in `strike`; its texts in the `i18n/` files, worded by the scene's `omenLine`, popup word
   (`tapAt`) and mark label (`refreshBoardMarks`).
-- **Change the trade**: `TRADE_GIVE`, `canTrade`, `tradeGives` and `trade` in `state.ts`; the
-  card's chips come from `tradeGives` and `unlocked` (`refreshTrade`).
+- **Change the trade**: `TRADE_GIVE`, `canTrade`, `tradeGives`, `tradeTakes` and `trade` in `state.ts`; the
+  card's chips come from `tradeGives` and `tradeTakes` (`refreshTrade`).
 - **Add a season or change one**: `SEASONS` and `SEASON_INFO`; round 1's season must not double
   anything the playthrough places, or its `PLAN` changes.
 - **Add a campaign level**: append to `LEVELS` (the card's row fits about eight plaques at
@@ -538,7 +544,7 @@ valid island number. Hovering makes no sound. The game has no `?watch` mode.
   storm that struck is already on the board when the hand is checked for room.
 - Season bonuses are banked into `bonus` at placement, so they are in the undo `Snapshot`; a
   manor's merge never gets one.
-- `checkEnd` counts a possible merge as a reason to go on (`housesCanMerge`, not `mergeable`, which
+- `checkEnd` runs after `settle`, `chooseGift` and `trade`. It counts a possible merge as a reason to go on (`housesCanMerge`, not `mergeable`, which
   needs the playing phase), and a possible clearing too (`pouchPlayable`); `finish` is the way out then.
 - Canvas shadows ignore the canvas transform: use `shadow()` in `wood.ts`, which converts art
   units to canvas pixels (`RES / ART`).

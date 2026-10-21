@@ -331,6 +331,9 @@ export function undo(s: GameState) {
   return true;
 }
 
+/** Whether a lumber camp tile in the pouch could clear a wood beside a camp. */
+export const canClearAny = (s: GameState) => s.pouch.lumber > 0 && woodClearable(s.grid);
+
 /** Whether any tile left in the pouch has somewhere to go. */
 export function anyPlace(s: GameState) {
   return BUILDINGS.some((b) => s.pouch[b] > 0 && s.grid.some((cells, row) => cells.some((_, col) => canPlace(s, col, row, b))));
@@ -418,8 +421,7 @@ function settle(s: GameState, prior: Snapshot, at: { col: number; row: number },
   s.undo = newRound || decree ? null : prior;
   // A goal reached carries on to its gift, even with the pouch empty, unless the island is full
   // and no two houses could merge, nor a lumber camp tile clear a wood, to make room.
-  const clearable = s.pouch.lumber > 0 && woodClearable(s.grid);
-  if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass')) && !housesCanMerge(s.grid) && !clearable) s.giftsDue = 0;
+  if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass')) && !housesCanMerge(s.grid) && !canClearAny(s)) s.giftsDue = 0;
   if (s.phase === 'playing' || s.giftsDue === 0) checkEnd(s);
   return { gained: s.score - prior.score, changes, decree, newRound, season: seasonal, struck };
 }
@@ -464,25 +466,30 @@ export function clear(s: GameState, col: number, row: number): Placed | null {
   return placed;
 }
 
-/** Whether a market trade can be made now: a market stands, none was made this round, and the pouch has two of a kind to give for a different gift building already won. */
+/** Whether a market trade can be made now: a market stands, none was made this round, and the pouch has two of a kind to give for a different gift building already won that has a use on the board. */
 export function canTrade(s: GameState) {
-  return s.phase === 'playing' && s.tradedIn !== s.round && s.grid.some((cells) => cells.includes('market')) && tradeGives(s).some((g) => s.unlocked.some((t) => t !== g));
+  return s.phase === 'playing' && s.tradedIn !== s.round && s.grid.some((cells) => cells.includes('market')) && tradeGives(s).some((g) => tradeTakes(s).some((t) => t !== g));
 }
 
 /** The kinds the pouch could give two of in a trade. */
 export const tradeGives = (s: GameState) => BUILDINGS.filter((b) => s.pouch[b] >= TRADE_GIVE);
 
+/** The gift buildings won that a trade could take: those with a use on the board (room, or a wood to clear). */
+export const tradeTakes = (s: GameState) => s.unlocked.filter((b) => playable(s.grid, b));
+
 /**
  * A market trade, once per round: gives TRADE_GIVE tiles of `give` from the pouch for one tile of
- * `take`, a gift building already won, then draws a new hand. It cannot be undone. False if not allowed.
+ * `take`, a gift building already won with a use on the board, then draws a new hand and checks for
+ * the end. It cannot be undone. False if not allowed.
  */
 export function trade(s: GameState, give: Building, take: Special) {
-  if (!canTrade(s) || s.pouch[give] < TRADE_GIVE || !s.unlocked.includes(take) || give === take) return false;
+  if (!canTrade(s) || s.pouch[give] < TRADE_GIVE || !tradeTakes(s).includes(take) || give === take) return false;
   s.pouch[give] -= TRADE_GIVE;
   s.pouch[take]++;
   s.tradedIn = s.round;
   s.undo = null;
   drawHand(s);
+  checkEnd(s);
   return true;
 }
 

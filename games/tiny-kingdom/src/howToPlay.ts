@@ -17,6 +17,10 @@ const en: HowToPlay = {
       action: 'Place the building; the other two tiles go back to the pouch',
     },
     {
+      input: 'On a touchscreen, tap a grass cell once',
+      action: 'Preview it there; tap the same cell again to place it (clearing a wood works the same way)',
+    },
+    {
       input: 'Tap a house, then a house beside it',
       action: 'Merge the two into a manor',
     },
@@ -78,6 +82,10 @@ const de: HowToPlay = {
     {
       input: 'Ein Grasfeld anklicken oder antippen',
       action: 'Das Gebäude setzen; die anderen beiden Plättchen gehen zurück in den Beutel',
+    },
+    {
+      input: 'Auf einem Touchscreen ein Grasfeld einmal antippen',
+      action: 'Die Vorschau dort zeigen; dasselbe Feld noch einmal antippen, um zu setzen (Roden geht genauso)',
     },
     {
       input: 'Ein Haus antippen, dann ein Haus daneben',
