@@ -3,6 +3,9 @@ import { trace } from '../glyphs';
 import { C, PALETTE } from '../theme';
 import { fitGrid, type PuzzleView, type ViewCtx } from './types';
 
+/** Whether the drag in progress has changed a path, for one `place` sound when it ends. */
+let moved = false;
+
 function geometry({ s, r }: ViewCtx<LinkState>) {
   return fitGrid(r, s.size, s.size, 52);
 }
@@ -54,16 +57,23 @@ export const linkView: PuzzleView<LinkState> = {
   down(ctx, x, y) {
     const cell = cellAt(ctx, x, y);
     if (cell < 0) return;
-    if (endAt(ctx.s, cell) < 0 && pathAt(ctx.s, cell) < 0) return;
-    ctx.act((s) => linkStart(s, cell));
+    const k = endAt(ctx.s, cell) >= 0 ? endAt(ctx.s, cell) : pathAt(ctx.s, cell);
+    if (k < 0) return;
+    // The whole drag is one Undo step (made here) and one sound (played at its end). A start only
+    // starts or cuts back one path, so comparing that path says whether it changed anything.
+    const before = ctx.s.paths[k].join();
+    ctx.act((s) => linkStart(s, cell), true);
+    moved = ctx.s.paths[k].join() !== before;
     ctx.redraw();
   },
   move(ctx, x, y) {
     if (ctx.s.drawing < 0) return;
     const cell = cellAt(ctx, x, y);
-    if (cell >= 0) ctx.act((s) => linkMove(s, cell));
+    if (cell >= 0 && ctx.drag((s) => linkMove(s, cell))) moved = true;
   },
   up(ctx) {
     linkEnd(ctx.s);
+    if (moved) ctx.place();
+    moved = false;
   },
 };

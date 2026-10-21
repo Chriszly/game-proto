@@ -57,7 +57,8 @@ Any answer that keeps the rules counts, not only the one the puzzle was made fro
 - **Blitz**: three minutes on one clock and no hearts. A solve gives back 10 to 25 seconds (more at
   higher levels), a skip or a loss takes 10. The level rises every two solves.
 - **Draft Run**: before each puzzle, choose one of the cards dealt. Every third solve offers three
-  relics, each of which can be taken again:
+  relics, each of which can be taken again except the Crystal Ball (a draft deals three cards at
+  most):
 
 | Relic | Effect |
 | --- | --- |
