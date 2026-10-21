@@ -1780,6 +1780,7 @@ export class World {
   /** Removes what has run out of hit points; a fallen hub takes its whole faction with it. */
   private removeDead() {
     const fallen = new Set<number>();
+    const razedByPlayer = new Set<number>();
     for (const b of this.buildings) {
       if (b.hp > 0) continue;
       this.wreck(b);
@@ -1789,9 +1790,11 @@ export class World {
         this.cue('hubFalls', b);
       }
       if (b.faction !== PLAYER && b.lastHit === PLAYER) {
-        this.score('razes');
-        if (main) this.score('hubs');
-        if (this.abilityOf(b)?.kind === 'mines') this.score('lattice');
+        this.scoreRaze(b);
+        if (main) {
+          this.score('hubs');
+          razedByPlayer.add(b.faction);
+        }
       }
     }
     for (const u of this.units) {
@@ -1816,7 +1819,12 @@ export class World {
       }
     }
     // The rest of a fallen faction's ships and buildings go up with its hub.
-    for (const b of this.buildings) if (fallen.has(b.faction) && b.hp > 0) this.wreck(b);
+    // The buildings swept away with a hub the player razed count as the player's razes too.
+    for (const b of this.buildings) {
+      if (!fallen.has(b.faction) || b.hp <= 0) continue;
+      this.wreck(b);
+      if (razedByPlayer.has(b.faction)) this.scoreRaze(b);
+    }
     for (const u of this.units) if (fallen.has(u.faction) && u.hp > 0) this.wreck(u);
     this.buildings = this.buildings.filter((b) => b.hp > 0 && !fallen.has(b.faction));
     this.units = this.units.filter((u) => u.hp > 0 && !fallen.has(u.faction));
@@ -1859,6 +1867,12 @@ export class World {
   }
 
   /** Counts one more toward the current contract when it is of `goal`. */
+  /** Scores a rival building the player razed: a raze, and a Mine Lattice for the lattice contract. */
+  private scoreRaze(b: Building) {
+    this.score('razes');
+    if (this.abilityOf(b)?.kind === 'mines') this.score('lattice');
+  }
+
   private score(goal: 'kills' | 'razes' | 'hubs' | 'lattice' | 'convoy') {
     if (this.contract.goal === goal) this.contract.progress += 1;
   }
@@ -2104,12 +2118,15 @@ export class World {
     for (const u of this.units) u.convoy = false;
   }
 
-  /** Every rival not under truce turns on the player and sends its fleet, less its picket and claimer, at the player's hub. */
+  /**
+   * Every rival not under truce or held by tribute (`grudgeLockMs`) turns on the player and sends its
+   * fleet, less its picket and claimer, at the player's hub. The pact clears the locks first.
+   */
   private raidPlayer() {
     const hub = this.hubOf(PLAYER);
     if (!hub) return;
     for (const side of this.sides) {
-      if (side.index === PLAYER || !side.alive || this.atPeace(PLAYER, side.index)) continue;
+      if (side.index === PLAYER || !side.alive || this.atPeace(PLAYER, side.index) || side.grudgeLockMs > 0) continue;
       side.grudge = PLAYER;
       side.attackMs = 0;
       for (const u of this.units) {
