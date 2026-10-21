@@ -239,9 +239,9 @@ the same rules with its own first round, files and state.
 harvests, refines, brews and sells potions to a customer. The **Playthrough Apothecary** workflow
 (`.github/workflows/playthrough.yml`) runs on every PR (not on pushes to main) and reports one
 required check, `Playthrough`. It plays each game whose `games/<name>/` folder changed, so a PR for
-one game only plays that game, and a PR that only changes shared files plays none. If the workflow
-itself or the build setup (`package.json`, `package-lock.json`, `tsconfig.json`, `tsconfig.e2e.json`,
-`vite.config.ts`, `playwright.config.ts`) changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts`: the hub's own checks
+one game only plays that game. If the workflow itself, the shared code (`shared/`, which every
+playthrough runs through) or the build setup (`package.json`, `package-lock.json`, `tsconfig.json`,
+`tsconfig.e2e.json`, `vite.config.ts`, `playwright.config.ts`) changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts`: the hub's own checks
 in one job, and opening each game from its card in one job per game, on a PR only for the games
 whose folder changed (every game when the hub page, its test or `shared/` changes). The
 playthrough is the check that the core loop can still be played, so it has to stay accurate.

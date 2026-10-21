@@ -87,7 +87,8 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   visit online, **Wi-Fi only** waits while the phone is on mobile data or Data Saver, and **Off** keeps
   the version in place. Wi-Fi only is offered, and picked by default, only where the browser can tell
   WiFi from mobile data (Chrome and other Chromium browsers on Android); elsewhere Automatic is the
-  default. **Update now** fetches a new version at once whatever the setting says.
+  default. **Update now** fetches a new version at once whatever the setting says, and says so
+  when the browser has no app installed to update.
 
   ![The Updates setting](docs/screenshots/hub-updates.webp)
 - **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
@@ -167,7 +168,7 @@ npx playwright test --project apothecary   # one game only
 ```
 
 One playthrough workflow (`.github/workflows/playthrough.yml`) plays each game whose folder
-changed, on pull requests only, under a single required `Playthrough` check, and uploads videos and
+changed (every game when `shared/` or the build setup changed), on pull requests only, under a single required `Playthrough` check, and uploads videos and
 screenshots as the `playthrough-<name>` artifact. The Hub workflow runs the hub test, opening each game from its
 card in one job per game, on pull requests only for the games whose folder changed. The Screens workflow checks each game that uses `shared/scaling.ts` on five screens,
 one job per game, on pull requests only for the games whose folder changed. The Screenshots workflow fails a pull request that adds more than 4

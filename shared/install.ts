@@ -40,11 +40,14 @@ export function shareUpdates(mode: UpdateMode) {
 
 /**
  * Downloads a new version now, whatever the Updates setting says: `updated` once it is in place
- * (reload the page to show it), `current` when there is none, `failed` when it couldn't download.
+ * (reload the page to show it), `current` when there is none, `failed` when it couldn't download,
+ * and `none` when no service worker is installed (the dev server, browser automation, a browser
+ * without service workers or a registration that failed), so there is nothing to update.
  */
-export async function updateNow(): Promise<'updated' | 'current' | 'failed'> {
-  const registration = await navigator.serviceWorker?.getRegistration(root()).catch(() => undefined);
-  if (!registration) return 'current';
+export async function updateNow(): Promise<'updated' | 'current' | 'failed' | 'none'> {
+  if (!('serviceWorker' in navigator)) return 'none';
+  const registration = await navigator.serviceWorker.getRegistration(root()).catch(() => undefined);
+  if (!registration) return 'none';
   const cache = await caches.open(UPDATES_CACHE);
   await cache.put(updatesKey('update-now'), new Response('1'));
   try {

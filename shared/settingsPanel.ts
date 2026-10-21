@@ -65,7 +65,7 @@ export function mountSettingsPanel(
     updateButton.disabled = false;
     updateButton.textContent = t('updateNow');
     if (result === 'updated') location.reload();
-    else alert(t(result === 'current' ? 'updatesCurrent' : 'updatesFailed'));
+    else alert(t(result === 'current' ? 'updatesCurrent' : result === 'none' ? 'updatesNone' : 'updatesFailed'));
   });
 
   const actions = document.createElement('div');
