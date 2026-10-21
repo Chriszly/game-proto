@@ -1075,10 +1075,11 @@ export class GameScene extends Phaser.Scene {
       .on('pointerout', () => draw(false))
       .on('pointerdown', () => {
         ui('click');
-        saveTheme(theme === 'dark' ? 'light' : 'dark');
-        // The running game is handed along, so the restart never falls back to an older save
-        // (or a new game) when storage is blocked.
-        this.scene.start('Boot', { state: this.state });
+        const next = theme === 'dark' ? 'light' : 'dark';
+        saveTheme(next);
+        // The running game and the new theme are handed along, so the restart never falls back to
+        // an older save (or a new game) or the old theme when storage is blocked or full.
+        this.scene.start('Boot', { state: this.state, theme: next });
       });
     this.add.container(x, y, [g, hit]).setDepth(UI_DEPTH + 1);
     this.spots.theme = { x, y };
