@@ -7,7 +7,7 @@
 import Phaser from 'phaser';
 import { sharpRes } from '../../../../shared/scaling';
 import {
-  ITEMS, MONSTERS, ORIGIN_COLOR, PARTS, PLAYER_COMMANDERS, RIVALS, UNITS,
+  ITEMS, MONSTERS, ORIGIN_COLOR, PLAYER_COMMANDERS, RIVALS, UNITS,
   type ClassId, type CommanderDef, type MonsterId, type OriginId, type PartId, type UnitDef,
 } from '../game/data';
 
@@ -444,7 +444,6 @@ export function bakeAll(scene: Phaser.Scene) {
       itemIcon(ctx, id);
     }, 3);
   }
-  for (const id of PARTS) void id;
 }
 
 function bakeUnit(scene: Phaser.Scene, def: UnitDef) {

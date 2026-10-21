@@ -312,6 +312,16 @@ export interface SkillDef {
   text: TextKey;
 }
 
+/** What each skill does in a fight (`Battle.useSkill`); the skill texts in `i18n/` repeat these. */
+export const SKILL_POWER = {
+  /** Attack speed factor and how long it lasts. */
+  overclock: { speed: 1.4, seconds: 5 },
+  /** Damage to the toughest enemy and its stun. */
+  zap: { damage: 260, stunS: 1.5 },
+  /** Shield on every ally and how long it lasts. */
+  bulwark: { shield: 180, seconds: 5 },
+};
+
 export const SKILLS: Record<SkillId, SkillDef> = {
   overclock: { id: 'overclock', name: 'overclockSkill', text: 'overclockText' },
   zap: { id: 'zap', name: 'zapSkill', text: 'zapText' },
