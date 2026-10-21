@@ -22,6 +22,11 @@ Implemented today:
 - Screens (`screen`): `menu` (six mode cards and Records), `practice` (level buttons and nine
   puzzle cards), `records` and `run`. A run's `phase` is `playing`, `between` (the result banner),
   `draft`, `relic`, `handover` (pass and play) or `over`.
+- Both ways round: a wide view gets the `WIDE` layout (the stage with a side panel at its right)
+  and an upright one the `TALL` layout (the top bar in two rows, the stage, the tools, then the
+  side panel's cards with the score box beside them), and turning the phone mid-run lays
+  everything out again. The puzzle views take their board's area from the layout and fit it either
+  way.
 - Records (`Progress`): solves and losses per kind, the fastest hint-free solve per kind and level,
   the best score of Endless, Blitz and the daily five, the most solves in a draft run and the last
   daily played.
@@ -34,7 +39,8 @@ Missing or rough:
 - Unjam makes its layouts by scattering blocks and searching (up to about half a second at
   Oracle); `TRIES`, `MAX_STATES` and `TARGET_MOVES` in `puzzles/unjam.ts` trade speed for depth.
 - No translations of the glyph names (there are none on screen); the How to play names the modes.
-- `docs/screenshots/menu.webp`, `puzzles.webp`, `draft.webp` and `cover.png` are not made by the
+- `docs/screenshots/menu.webp`, `puzzles.webp`, `draft.webp`, `upright.webp` (a 390x844 phone at
+  2x) and `cover.png` are not made by the
   test; refresh them by hand (a Playwright script that taps the menu, Practice with hints, and a
   draft) when the look changes.
 
@@ -43,7 +49,7 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Phaser.Scale.FIT`) with `GameScene`,
-  calls `setupGame(game, { howToPlay })` and then `setupScaling(game, { fill: true })`, and in dev
+  calls `setupGame(game, { howToPlay })` and then `setupScaling(game, { fill: true, bothWays: true })`, and in dev
   builds puts `game` on `window`.
 - `howToPlay.ts`: the How to play text in English (also US English) and German.
 - `i18n.ts` and `i18n/`: the game's texts. `en.ts` is the British English source, `de.ts` the German
@@ -76,7 +82,10 @@ File map (`src/`):
   `types.ts` (`ViewCtx`, `fitGrid`), `pad.ts` (the number pad) and `index.ts` (`VIEWS`).
 - `scenes/glyphs.ts`: `drawGlyph` (the six glyphs Code Breaker and Memory Echo use), `drawKindIcon`,
   `drawRelic`, `trace`.
-- `scenes/theme.ts`: `FONT`, `C` (colours), `PALETTE`. `scenes/layout.ts`: every spot in the frame.
+- `scenes/theme.ts`: `FONT`, `C` (colours), `PALETTE`. `scenes/layout.ts`: the `Layout` type and its two values, `WIDE` (960x540) and
+  `TALL` (540x960), with every spot in the frame (`top`, `leave`, `stage`, `board`, `tools`,
+  `side`, `menu`, `practice`, `records`, `back`, `deal`, `end`, `endButtons`); `layoutFor(w, h)`,
+  `VIEW` (= `WIDE.view`, for `main.ts`) and `UI_DEPTH`.
 
 Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScaling`, `viewSize`,
 `viewFrame`), `shared/audio.ts`, `shared/settings.ts` (`byDifficulty`, `settings`) and
@@ -84,10 +93,13 @@ Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScalin
 
 How it runs:
 
-- Coordinates: everything is laid out in the designed 960x540 frame (`layout.ts`). The game fills
-  the screen's shape (`fill: true`); `fitView` scrolls the camera to `(-fx, -fy)` so the frame sits
-  in the middle, and the backdrop and dims cover the whole view from `(-fx, -fy)`. Pointers are
-  read through `pointer.worldX/Y`.
+- Coordinates: everything is laid out in a designed frame, 960x540 sideways or 540x960 upright
+  (`this.L`, from `layoutFor`). The game fills the screen's shape (`fill: true`) and turns with it
+  (`bothWays: true`); `fitView` reads `viewSize`/`viewFrame`, picks the layout and scrolls the
+  camera to `(-fx, -fy)` so the frame sits in the middle. It runs in `create` and on the scale
+  manager's `resize`, which also redraws the backdrop; the backdrop and dims cover the whole view
+  from `(-fx, -fy)`. Never use fixed coordinates in the scene: take them from `this.L`. Pointers
+  are read through `pointer.worldX/Y`.
 - Drawing: nothing is kept between frames. When `dirty` is set (any input, event, or a change of
   the shown clocks, tracked by `clockKey`), `draw` clears the `Painter` and draws the screen again,
   including the puzzle's `view.draw`. Cards over the board (banner, draft, relics, hand-over, end)
@@ -176,9 +188,10 @@ daily five played today).
   `KINDS`, `SKILL_OF`, `DEFS` and `KIND_COLOR`, a view in `scenes/views/` added to `VIEWS`, an icon
   case in `drawKindIcon`, its `Name` and `Rule` texts in English and German, a README row, and a
   case in the test's `solve` (the deck may deal it). Nine kinds fill the practice screen's 3x3
-  grid; a tenth needs `PRACTICE.cards` laid out again.
-- **Add a mode**: its id in `MODES` (six fill the menu's row of cards; a seventh needs
-  `MENU.cards` laid out again), its `START_HINTS`, its rules in `startRun`, `end`, `next` and
+  grid sideways and two columns upright; a tenth needs `practice.cards` laid out again in both
+  layouts.
+- **Add a mode**: its id in `MODES` (six fill the menu's row of cards, two rows of three
+  upright; a seventh needs `menu.cards` laid out again in both layouts), its `START_HINTS`, its rules in `startRun`, `end`, `next` and
   `finish`, its side panel in `drawSide`, its top line in `topLine`, its icon in `modeIcon`, its
   `Name` and `Text` texts, and the README.
 - **Add a relic**: its id in `RELICS` and `RELIC_COLOR`, its effect in `takeRelic`, `timeFor` or
@@ -186,6 +199,10 @@ daily five played today).
 - **Retune**: the constants at the top of `run.ts` and of each puzzle file (sizes and counts per
   level, `limit` seconds per level); mirror the Normal hearts and the first-round numbers in the
   test.
+- **Move something on screen**: change it in both `WIDE` and `TALL`, and check an upright phone
+  (390x844) and German there, where the mode cards, the side panel's cards and the score box are
+  narrowest. A puzzle view lays out in its `ctx.r` (580x330 sideways, 488x430 upright), so check
+  both shapes when a view changes.
 - **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
   without it); run `node scripts/check-translations.mjs` and check German with `?lang=de` (mode
   cards and the code legend are the tightest spots).

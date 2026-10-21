@@ -10,7 +10,7 @@ export const codeView: PuzzleView<CodeState> = {
     const g = p.g;
     const rowH = Math.min(36, Math.floor((r.h - 34) / s.maxGuesses));
     const slot = rowH - 6;
-    const x0 = r.x + 40;
+    const x0 = r.x + 52;
     // The places a hint has shown.
     p.text(x0 - 10, r.y + 12, t('codeKnown'), { size: 12, color: C.inkDim, ox: 1 });
     for (let i = 0; i < CODE_LENGTH; i++) {

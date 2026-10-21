@@ -14,7 +14,7 @@ import {
 import { loadProgress, saveProgress } from '../game/save';
 import { t, type TextKey } from '../i18n';
 import { drawGlyph, drawKindIcon, drawRelic, trace } from './glyphs';
-import { BACK, BOARD, DEAL, END, END_BUTTONS, LEAVE, MENU, PRACTICE, SIDE, STAGE, TOOLS, TOP, UI_DEPTH, VIEW } from './layout';
+import { layoutFor, UI_DEPTH, VIEW, WIDE, type Layout } from './layout';
 import { Painter } from './painter';
 import { C } from './theme';
 import { resetUnjam, VIEWS } from './views';
@@ -51,6 +51,8 @@ export class GameScene extends Phaser.Scene {
   /** Spots for the test: every tappable thing on screen by id, centred, in view pixels. */
   buttons: Record<string, Spot> = {};
 
+  /** The layout for the view's shape: wide or upright. */
+  private L: Layout = WIDE;
   private fx = 0;
   private fy = 0;
   private vw = VIEW.w;
@@ -76,13 +78,18 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.dragging && this.onMove(p.worldX, p.worldY));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onUp(p.worldX, p.worldY));
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
+    // A phone turned the other way round reshapes the view: lay everything out again.
+    const onResize = () => this.fitView();
+    this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, onResize));
   }
 
-  /** Reads the view's size and keeps the designed frame in its middle. */
+  /** Reads the view's size, picks the layout for its shape and keeps its frame in the middle. */
   private fitView() {
     ({ width: this.vw, height: this.vh } = viewSize(this));
     ({ x: this.fx, y: this.fy } = viewFrame(this));
-    this.cameras.main.setScroll(-this.fx, -this.fy);
+    this.L = layoutFor(this.vw, this.vh);
+    this.cameras.main.setSize(this.scale.width, this.scale.height).setScroll(-this.fx, -this.fy);
     this.drawBackdrop();
     this.dirty = true;
   }
@@ -180,7 +187,7 @@ export class GameScene extends Phaser.Scene {
     return {
       p: this.p,
       s: run.current!.state,
-      r: BOARD,
+      r: this.L.board,
       act: (change) => {
         if (act(run, change)) SFX('place');
         this.dirty = true;
@@ -274,18 +281,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private back(onTap: () => void) {
-    this.p.button('back', BACK.x, BACK.y, BACK.w, BACK.h, t('back'), onTap);
+    const b = this.L.back;
+    this.p.button('back', b.x, b.y, b.w, b.h, t('back'), onTap);
   }
 
   private drawMenu() {
     const p = this.p;
     const prog = this.progress;
+    const MENU = this.L.menu;
     const title = this.heading(MENU.title.x, MENU.title.y, t('title'), 54);
     if (!settings.reduceMotion) title.setShadow(0, 0, C.goldText, 14, false, true);
-    p.text(MENU.tagline.x, MENU.tagline.y, t('tagline'), { size: 16, color: C.inkDim });
-    const { xs, y, w, h } = MENU.cards;
+    p.text(MENU.tagline.x, MENU.tagline.y, t('tagline'), { size: 16, color: C.inkDim, wrap: MENU.tagline.w });
+    const { xs, ys, w, h } = MENU.cards;
     MODES.forEach((mode, k) => {
-      const x = xs[k];
+      const x = xs[k % xs.length];
+      const y = ys[Math.floor(k / xs.length)];
       const done = mode === 'daily' && dailyDone(prog);
       p.frame(x - w / 2, y - h / 2, w, h, { alpha: done ? 0.6 : C.panelAlpha });
       p.text(x, y - h / 2 + 20, ROMAN[k], { size: 15, color: C.goldText, spacing: 2 });
@@ -359,18 +369,19 @@ export class GameScene extends Phaser.Scene {
       ui('click');
       this.screen = 'menu';
     });
+    const PRACTICE = this.L.practice;
     this.heading(PRACTICE.title.x, PRACTICE.title.y, t('practiceName'), 28);
     const lv = PRACTICE.levels;
     LEVELS.forEach((level, k) => {
-      p.button(`level-${level}`, lv.xs[k], lv.y, lv.w, lv.h, `${ROMAN[k]} · ${t(`level${level}` as TextKey)}`, () => {
+      p.button(`level-${level}`, lv.xs[k % lv.xs.length], lv.ys[Math.floor(k / lv.xs.length)], lv.w, lv.h, `${ROMAN[k]} · ${t(`level${level}` as TextKey)}`, () => {
         ui('click');
         this.practiceLevel = level;
       }, { accent: this.practiceLevel === level, size: 14 });
     });
     const cards = PRACTICE.cards;
     KINDS.forEach((kind, k) => {
-      const x = cards.xs[k % 3];
-      const y = cards.ys[Math.floor(k / 3)];
+      const x = cards.xs[k % cards.xs.length];
+      const y = cards.ys[Math.floor(k / cards.xs.length)];
       p.frame(x - cards.w / 2, y - cards.h / 2, cards.w, cards.h);
       drawKindIcon(p.g, kind, x - cards.w / 2 + 46, y, 52, KIND_COLOR[kind]);
       const tx = x - cards.w / 2 + 86;
@@ -389,26 +400,27 @@ export class GameScene extends Phaser.Scene {
       ui('click');
       this.screen = 'menu';
     });
-    this.heading(480, 46, t('records'), 28);
-    const cols = [60, 270, 400, 520, 620, 720, 820];
-    const top = 104;
-    p.frame(36, top - 22, 888, 362);
-    [t('colPuzzle'), t('colSkill'), t('colSolved')].forEach((h, i) => p.text(cols[i], top, h, { size: 13, color: C.goldText, ox: 0 }));
+    const R = this.L.records;
+    this.heading(R.title.x, R.title.y, t('records'), 28);
+    const { cols, top } = R;
+    p.frame(R.frame.x, R.frame.y, R.frame.w, R.frame.h);
+    [t('colPuzzle'), t('colSkill'), t('colSolved')].forEach((h, i) => cols[i] >= 0 && p.text(cols[i], top, h, { size: 13, color: C.goldText, ox: 0 }));
     LEVELS.forEach((l) => p.text(cols[3 + l] + 30, top, `${ROMAN[l]}`, { size: 13, color: C.goldText }));
-    p.text(cols[3] - 16, top, t('colBest'), { size: 13, color: C.goldText, ox: 1 });
+    // Upright, the table has no room for the label before the fastest times.
+    if (cols[1] >= 0) p.text(cols[3] - 16, top, t('colBest'), { size: 13, color: C.goldText, ox: 1 });
     KINDS.forEach((kind, k) => {
-      const y = top + 34 + k * 34;
+      const y = top + R.step + k * R.step;
       const rec = prog.kinds[kind];
       drawKindIcon(p.g, kind, cols[0] + 10, y, 22, KIND_COLOR[kind]);
       p.text(cols[0] + 30, y, t(`${kind}Name` as TextKey), { size: 15, ox: 0 });
-      p.text(cols[1], y, t(SKILL_OF[kind]), { size: 13, color: C.inkDim, ox: 0 });
+      if (cols[1] >= 0) p.text(cols[1], y, t(SKILL_OF[kind]), { size: 13, color: C.inkDim, ox: 0 });
       p.text(cols[2], y, String(rec.solved), { size: 15, ox: 0 });
       LEVELS.forEach((l) => p.text(cols[3 + l] + 30, y, rec.best[l] ? timeText(rec.best[l]) : '–', { size: 14, color: rec.best[l] ? C.cyanText : C.inkDim }));
     });
     const skills = SKILLS.map((sk) => `${t(sk)} ${KINDS.filter((k) => SKILL_OF[k] === sk).reduce((n, k) => n + prog.kinds[k].solved, 0)}`).join('   ·   ');
-    p.text(480, 466, skills, { size: 14, color: C.goldText });
+    p.text(R.skills.x, R.skills.y, skills, { size: 14, color: C.goldText });
     const b = prog.best;
-    p.text(480, 498, t('bestsLine', { endless: formatNumber(b.endless), blitz: formatNumber(b.blitz), daily: formatNumber(b.daily), draft: b.draft }), { size: 13, color: C.inkDim });
+    p.text(R.bests.x, R.bests.y, t('bestsLine', { endless: formatNumber(b.endless), blitz: formatNumber(b.blitz), daily: formatNumber(b.daily), draft: b.draft }), { size: 13, color: C.inkDim, wrap: R.bests.w });
   }
 
   // -------------------------------------------------------------------------------------------
@@ -418,6 +430,7 @@ export class GameScene extends Phaser.Scene {
     const run = this.run!;
     const p = this.p;
     const cur = run.current;
+    const { stage: STAGE, tools: TOOLS } = this.L;
     this.drawTop(run);
     p.frame(STAGE.x, STAGE.y, STAGE.w, STAGE.h);
     if (cur && run.phase !== 'draft' && run.phase !== 'relic' && run.phase !== 'handover') {
@@ -444,12 +457,14 @@ export class GameScene extends Phaser.Scene {
   private drawTop(run: Run) {
     const p = this.p;
     const g = p.g;
+    const TOP = this.L.top;
     p.frame(TOP.x, TOP.y, TOP.w, TOP.h, { inner: false });
-    const cy = TOP.y + TOP.h / 2;
-    p.text(TOP.x + 18, cy - 9, t(`${run.mode}Name` as TextKey).toLocaleUpperCase(), { size: 15, color: C.goldText, ox: 0, bold: true, spacing: 2 });
-    p.text(TOP.x + 18, cy + 11, this.topLine(run), { size: 12, color: C.inkDim, ox: 0 });
+    let cy = TOP.title.y;
+    p.text(TOP.title.x, cy - 9, t(`${run.mode}Name` as TextKey).toLocaleUpperCase(), { size: 15, color: C.goldText, ox: 0, bold: true, spacing: 2 });
+    p.text(TOP.title.x, cy + 11, this.topLine(run), { size: 12, color: C.inkDim, ox: 0 });
     // The middle: hearts, the Blitz clock, the daily five or whose turn it is.
-    const mid = TOP.x + TOP.w / 2 - 40;
+    const mid = TOP.mid.x;
+    cy = TOP.mid.y;
     if (run.mode === 'endless' || run.mode === 'draft') {
       const hearts = '♥'.repeat(Math.max(0, run.hearts));
       p.text(mid, cy, hearts || '♡', { size: 22, color: C.roseText, spacing: 3 });
@@ -467,14 +482,15 @@ export class GameScene extends Phaser.Scene {
     }
     // The puzzle's own clock: a bar that runs down, and its seconds.
     const cur = run.current;
+    const { x: bx, y: by, w: bw } = TOP.clock;
     if (cur && cur.timeLeftMs !== null && run.phase === 'playing') {
       const share = cur.timeTotalMs ? cur.timeLeftMs / cur.timeTotalMs : 0;
-      const bx = 640;
-      g.fillStyle(C.deep, 1).fillRect(bx, cy - 5, 150, 10);
-      g.fillStyle(cur.timeLeftMs <= 10_000 ? C.rose : C.cyan, 1).fillRect(bx, cy - 5, 150 * share, 10);
-      g.lineStyle(1, C.gold, 0.8).strokeRect(bx, cy - 5, 150, 10);
-      p.text(bx + 160, cy, timeText(cur.timeLeftMs), { size: 14, color: C.ink, ox: 0 });
-    } else if (cur && run.mode === 'practice') p.text(715, cy, t('noClock'), { size: 13, color: C.inkDim });
+      g.fillStyle(C.deep, 1).fillRect(bx, by - 5, bw, 10);
+      g.fillStyle(cur.timeLeftMs <= 10_000 ? C.rose : C.cyan, 1).fillRect(bx, by - 5, bw * share, 10);
+      g.lineStyle(1, C.gold, 0.8).strokeRect(bx, by - 5, bw, 10);
+      p.text(bx + bw + 10, by, timeText(cur.timeLeftMs), { size: 14, color: C.ink, ox: 0 });
+    } else if (cur && run.mode === 'practice') p.text(bx + bw / 2, by, t('noClock'), { size: 13, color: C.inkDim });
+    const LEAVE = this.L.leave;
     p.button('leave', LEAVE.x, LEAVE.y, LEAVE.w, LEAVE.h, t('leave'), () => this.toMenu(), { size: 13 });
   }
 
@@ -494,35 +510,52 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A puzzle card in the side panel or the daily list: icon, name and level. */
+  /** A puzzle card in the side panel or the daily list: icon, name and level (on one line when short). */
   private smallCard(card: Card, x: number, y: number, w: number, h: number, line: string, outline = false) {
     const p = this.p;
+    const rad = Math.min(21, h / 2 - 4);
     p.frame(x, y, w, h, { inner: false, line: outline ? C.cyan : C.gold });
-    p.g.fillStyle(C.deep, 1).fillCircle(x + 30, y + h / 2, 21);
-    drawKindIcon(p.g, card.kind, x + 30, y + h / 2, 28, KIND_COLOR[card.kind]);
-    p.text(x + 60, y + h / 2 - 9, t(`${card.kind}Name` as TextKey), { size: 14, color: C.goldText, ox: 0, bold: true });
-    p.text(x + 60, y + h / 2 + 10, line, { size: 11, color: C.inkDim, ox: 0 });
+    p.g.fillStyle(C.deep, 1).fillCircle(x + 10 + rad, y + h / 2, rad);
+    drawKindIcon(p.g, card.kind, x + 10 + rad, y + h / 2, rad * 1.33, KIND_COLOR[card.kind]);
+    const tx = x + 2 * rad + 20;
+    if (h < 44) {
+      p.text(tx, y + h / 2, t(`${card.kind}Name` as TextKey), { size: 13, color: C.goldText, ox: 0, bold: true });
+      p.text(x + w - 10, y + h / 2, line, { size: 11, color: C.inkDim, ox: 1 });
+      return;
+    }
+    p.text(tx, y + h / 2 - 9, t(`${card.kind}Name` as TextKey), { size: 14, color: C.goldText, ox: 0, bold: true });
+    p.text(tx, y + h / 2 + 10, line, { size: 11, color: C.inkDim, ox: 0 });
   }
 
   private drawSide(run: Run) {
     const p = this.p;
-    const { x, y, w } = SIDE;
+    const { list, score } = this.L.side;
+    const { x, y, w } = list;
+    /** Where the n-th of `count` cards in the list sits, and how tall it is: up to `most` apart. */
+    const slot = (i: number, count: number, most: number) => {
+      const step = Math.min(most, Math.floor((list.h - 24) / count));
+      return { top: y + 24 + i * step, h: step - (step > 60 ? 10 : 6) };
+    };
     const scoreBox = (lines: [string, string][]) => {
       const h = 34 + lines.length * 22;
-      const top = SIDE.y + SIDE.h - h;
-      p.frame(x, top, w, h);
+      const top = score.bottom - h;
+      p.frame(score.x, top, score.w, h);
       lines.forEach(([label, value], i) => {
-        p.text(x + 16, top + 26 + i * 22, label, { size: 13, color: C.inkDim, ox: 0 });
-        p.text(x + w - 16, top + 26 + i * 22, value, { size: i === 0 ? 20 : 14, color: i === 0 ? C.goldText : C.ink, ox: 1, bold: i === 0 });
+        p.text(score.x + 16, top + 26 + i * 22, label, { size: 13, color: C.inkDim, ox: 0 });
+        // The big first number shrinks where a narrow box holds a long value (pass and play's times).
+        const big = i === 0 && (score.w > 250 || value.length <= 8);
+        p.text(score.x + score.w - 16, top + 26 + i * 22, value, { size: big ? 20 : 14, color: i === 0 ? C.goldText : C.ink, ox: 1, bold: i === 0 });
       });
     };
+    const label = (text: string) => p.text(x + 4, y + 8, text.toLocaleUpperCase(), { size: 12, color: C.inkDim, ox: 0, spacing: 3 });
     switch (run.mode) {
       case 'endless':
       case 'blitz':
-        p.text(x + 4, y + 8, t('upNext').toLocaleUpperCase(), { size: 12, color: C.inkDim, ox: 0, spacing: 3 });
-        run.queue.slice(0, QUEUE).forEach((card, i) =>
-          this.smallCard(card, x, y + 24 + i * 72, w, 62, i === 0 ? t('nextLevel', { level: t(`level${card.level}` as TextKey) }) : t(`level${card.level}` as TextKey), i === 0),
-        );
+        label(t('upNext'));
+        run.queue.slice(0, QUEUE).forEach((card, i) => {
+          const { top, h } = slot(i, QUEUE, 72);
+          this.smallCard(card, x, top, w, h, i === 0 ? t('nextLevel', { level: t(`level${card.level}` as TextKey) }) : t(`level${card.level}` as TextKey), i === 0);
+        });
         scoreBox([
           [t('score'), formatNumber(run.score)],
           [t('streak'), `×${run.streak}`],
@@ -530,25 +563,33 @@ export class GameScene extends Phaser.Scene {
         ]);
         break;
       case 'daily':
-        p.text(x + 4, y + 8, t('todaysFive').toLocaleUpperCase(), { size: 12, color: C.inkDim, ox: 0, spacing: 3 });
+        label(t('todaysFive'));
         run.queue.forEach((card, i) => {
           const res = run.results[i];
           const line = res ? (res.reason === 'solved' ? t('pointsLine', { n: res.points }) : t(`res_${res.reason}` as TextKey)) : t(`level${card.level}` as TextKey);
-          this.smallCard(card, x, y + 24 + i * 56, w, 50, line, i === run.results.length);
+          const { top, h } = slot(i, run.queue.length, 56);
+          this.smallCard(card, x, top, w, h, line, i === run.results.length);
         });
         scoreBox([[t('score'), formatNumber(run.score)]]);
         break;
       case 'draft': {
-        p.text(x + 4, y + 8, t('relicsTitle').toLocaleUpperCase(), { size: 12, color: C.inkDim, ox: 0, spacing: 3 });
+        label(t('relicsTitle'));
         const counts = new Map<RelicId, number>();
         for (const r of run.relics) counts.set(r, (counts.get(r) ?? 0) + 1);
-        if (!counts.size) p.text(x + 4, y + 36, t('noRelics'), { size: 13, color: C.inkDim, ox: 0 });
+        if (!counts.size) p.text(x + 4, y + 36, t('noRelics'), { size: 13, color: C.inkDim, ox: 0, wrap: w - 8, align: 'left' });
         [...counts].forEach(([relic, n], i) => {
-          p.frame(x, y + 24 + i * 56, w, 50, { inner: false });
-          p.g.fillStyle(C.deep, 1).fillCircle(x + 30, y + 49 + i * 56, 21);
-          drawRelic(p.g, relic, x + 30, y + 49 + i * 56, RELIC_COLOR[relic], 0.55);
-          p.text(x + 60, y + 40 + i * 56, n > 1 ? `${t(`${relic}Name` as TextKey)} ×${n}` : t(`${relic}Name` as TextKey), { size: 14, color: C.goldText, ox: 0, bold: true });
-          p.text(x + 60, y + 59 + i * 56, t(`${relic}Text` as TextKey), { size: 11, color: C.inkDim, ox: 0, wrap: w - 70, align: 'left' });
+          const { top, h } = slot(i, Math.max(3, counts.size), 56);
+          const cy = top + h / 2;
+          const name = n > 1 ? `${t(`${relic}Name` as TextKey)} ×${n}` : t(`${relic}Name` as TextKey);
+          p.frame(x, top, w, h, { inner: false });
+          p.g.fillStyle(C.deep, 1).fillCircle(x + 30, cy, Math.min(21, h / 2 - 4));
+          drawRelic(p.g, relic, x + 30, cy, RELIC_COLOR[relic], Math.min(0.55, (h - 8) / 76));
+          // A short slot has room for the name only.
+          if (h < 44) p.text(x + 60, cy, name, { size: 14, color: C.goldText, ox: 0, bold: true });
+          else {
+            p.text(x + 60, cy - 9, name, { size: 14, color: C.goldText, ox: 0, bold: true });
+            p.text(x + 60, cy + 10, t(`${relic}Text` as TextKey), { size: 11, color: C.inkDim, ox: 0, wrap: w - 70, align: 'left' });
+          }
         });
         scoreBox([
           [t('score'), formatNumber(run.score)],
@@ -558,10 +599,11 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 'duel':
-        p.text(x + 4, y + 8, t('duelCards').toLocaleUpperCase(), { size: 12, color: C.inkDim, ox: 0, spacing: 3 });
+        label(t('duelCards'));
         run.queue.forEach((card, i) => {
           const done = run.results.length - run.player * run.queue.length;
-          this.smallCard(card, x, y + 24 + i * 56, w, 50, t(`level${card.level}` as TextKey), i === done);
+          const { top, h } = slot(i, run.queue.length, 56);
+          this.smallCard(card, x, top, w, h, t(`level${card.level}` as TextKey), i === done);
         });
         scoreBox([0, 1].map((pl) => [t('playerN', { n: pl + 1 }), `${timeText(run.totals[pl])} · ${t('solvedCount', { n: run.duelSolved[pl] })}`] as [string, string]));
         break;
@@ -589,10 +631,11 @@ export class GameScene extends Phaser.Scene {
     const p = this.p;
     const last = run.last!;
     const solved = last.reason === 'solved';
+    const STAGE = this.L.stage;
     const bx = STAGE.x + 60;
-    const by = 210;
     const practice = run.mode === 'practice';
     const h = practice ? 170 : 120;
+    const by = Math.round(STAGE.y + STAGE.h / 2 - 72);
     p.hit('dim', STAGE.x, STAGE.y, STAGE.w, STAGE.h, practice ? () => {} : () => next(run));
     p.frame(bx, by, STAGE.w - 120, h, { alpha: 0.97, line: solved ? C.cyan : C.rose });
     this.heading(bx + (STAGE.w - 120) / 2, by + 40, t(`res_${last.reason}` as TextKey), 26, solved ? C.cyanText : C.roseText);
@@ -607,8 +650,9 @@ export class GameScene extends Phaser.Scene {
   /** Cards dealt for a pick: puzzle cards in a draft, relics after a few solves. */
   private drawDeal(items: { kind?: KindId; card?: Card; relic?: RelicId }[], title: string, pick: (i: number) => unknown, id: string) {
     const p = this.p;
+    const DEAL = this.L.deal;
     this.dim();
-    this.heading(480, DEAL.title, title, 26);
+    this.heading(DEAL.title.x, DEAL.title.y, title, 26);
     const xs = items.length === 2 ? DEAL.xs2 : DEAL.xs3;
     items.forEach((item, i) => {
       const x = xs[i];
@@ -635,6 +679,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawHandover(run: Run) {
     const p = this.p;
+    const { end: END, endButtons: END_BUTTONS } = this.L;
     this.dim();
     p.frame(END.x - END.w / 2, END.y - END.h / 2, END.w, END.h, { alpha: 0.98 });
     this.heading(END.x, END.y - 110, t('handoverTitle'), 26);
@@ -644,6 +689,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawOver(run: Run) {
     const p = this.p;
+    const { end: END, endButtons: END_BUTTONS } = this.L;
     this.dim();
     p.frame(END.x - END.w / 2, END.y - END.h / 2, END.w, END.h, { alpha: 0.98 });
     const lines: string[] = [];

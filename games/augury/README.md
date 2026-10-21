@@ -11,6 +11,10 @@ gather relics, a pass-and-play match for two, or practise any puzzle with no clo
 
 ![Endless Medley: a Path Link puzzle with the next three cards up next](cover.png)
 
+It plays sideways or upright, and turns with the phone.
+
+![Endless Medley on an upright phone](docs/screenshots/upright.webp)
+
 ## How to play
 
 | Control | Action |
