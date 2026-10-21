@@ -716,7 +716,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private draftSpot(i: number, n: number) {
-    const a = (i / n) * Math.PI * 2 + this.t * 0.25;
+    const a = (i / n) * Math.PI * 2 + (reduced ? 0 : this.t * 0.25);
     const x = DRAFT_RING.cx + Math.cos(a) * DRAFT_RING.rx;
     const y = DRAFT_RING.cy + Math.sin(a) * DRAFT_RING.ry;
     return { x, y, s: 0.75 + 0.2 * ((Math.sin(a) + 1) / 2) };
@@ -1114,8 +1114,8 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(C.mana).fillRect(92, lb + 20, need ? (60 * me.xp) / need : 60, 5);
     this.txt(92, lb + 25, need ? t('xp', { xp: me.xp, need }) : t('maxLevel'), 9, C.dim);
     const planning = m.phase === 'plan';
-    this.button(g, BUTTONS.reroll, t('reroll', { n: rerollCost(me) }), () => this.doReroll(), { on: planning && me.gold >= rerollCost(me), size: 11 });
-    this.button(g, BUTTONS.xp, t('buyXp', { n: ECONOMY.xpCost }), () => this.doXp(), { on: planning && me.gold >= ECONOMY.xpCost && me.level < MAX_LEVEL, size: 11 });
+    this.button(g, BUTTONS.reroll, t('reroll', { n: rerollCost(me) }), () => this.doReroll(), { on: planning && me.human && me.gold >= rerollCost(me), size: 11 });
+    this.button(g, BUTTONS.xp, t('buyXp', { n: ECONOMY.xpCost }), () => this.doXp(), { on: planning && me.human && me.gold >= ECONOMY.xpCost && me.level < MAX_LEVEL, size: 11 });
     const selUnit = this.selected?.kind === 'unit' ? unitAt(me, this.selected.spot) : null;
     if (selUnit && planning) this.button(g, BUTTONS.sell, t('sellFor', { n: sellValue(selUnit) }), () => this.doSell(), { color: 0xffb703, size: 11 });
     else this.txt(80, lb + 82, t('boardCount', { n: boardCount(me), max: me.level }), 11, boardCount(me) > me.level ? '#ff8a7a' : C.dim);
@@ -1141,6 +1141,7 @@ export class GameScene extends Phaser.Scene {
       this.txt(x + 58, y + 26, t(TRAITS[def.origin].name) + (s.gilded ? `\n+${t(TRAITS[s.gilded].name)}` : ''), 9, s.gilded ? C.gold : `#${ORIGIN_COLOR[def.origin].toString(16)}`);
       this.txt(x + 58, y + (s.gilded ? 50 : 40), t(TRAITS[def.cls].name), 9, '#d0d8e8');
       this.txt(x + 6, y + 66, s.gilded ? t('gilded', { name: t(def.name) }) : t(def.name), 11, '#ffffff', { fontStyle: 'bold', wordWrap: { width: SHOP.cardW - 10 } });
+      if (!me.human) return;
       if (can) this.buttons.push({ x, y, w: SHOP.cardW, h: SHOP.h, run: () => this.doBuy(i) });
       else if (planning) this.buttons.push({ x, y, w: SHOP.cardW, h: SHOP.h, run: () => ui('refuse') });
     });
@@ -1570,7 +1571,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    if (m.phase === 'fight' && m.battle && m.round.kind === 'rat' && m.time >= this.zapReadyAt) {
+    if (m.phase === 'fight' && m.battle && m.round.kind === 'rat' && me.human && m.time >= this.zapReadyAt) {
       const rat = m.battle.units.find((u) => u.monster === 'rat' && u.alive);
       const rv = rat && this.views.get(`b${rat.id}`);
       if (rat && rv && Math.hypot(v.x - rv.x, v.y - (rv.y - 12)) < 30) {

@@ -52,8 +52,8 @@ Implemented today:
   in `endFight`.
 - Scrap Rat round: the rat runs about the board; the player taps it to zap it (`zapRat`), and each
   hit on it shakes gold loose until it escapes.
-- Speed button (1x/2x, T), reduced motion (no shake, flash, orb bob, idle sway, avatar hop or
-  circling stun stars).
+- Speed button (1x/2x, T), reduced motion (no shake, flash, orb bob, idle sway, avatar hop,
+  circling stun stars or turning draft ring).
 - Shop lock (`Player.shopLocked`, `toggleShopLock`, the Lock button `BUTTONS.lock` or L):
   `startPlan` skips `rollShop` for a locked shop; `reroll` unlocks it. The AI never locks.
 - Scouting: during planning a tap on a rival's row in the players list sets `GameScene.scout`;
@@ -143,11 +143,12 @@ Shared code it imports: `shared/audio.ts`, `shared/setupGame.ts`, `shared/scalin
   `Player.maxHp`, which scales its bar in the players list), and `startPlan`
   gives each rival `byDifficulty(-1, 0, 1)` gold a round. Keep the README rows in step.
 - Reduced motion: no camera shake on slams, no hit flash, no idle sway or orb bob, no avatar walk
-  bounce or skill hop, and stun stars stand still instead of circling.
+  bounce or skill hop, and stun stars and the draft ring stand still instead of circling.
 - Watch AI (`?watch`): the scene starts a match at once with a random commander, season and
   terrain, seat 0 is AI-run (`human` false: `aiPlan` once, near the end of each plan phase, where the
   rivals plan in `beginPlan`; skill at 3 s;
-  the taps and keys that act for the player, R, X, E, L, 1-3 and Space, do nothing),
+  the taps and keys that act for the player, R, X, E, L, 1-3 and Space, do nothing: the shop cards,
+  Reroll, Buy XP, FIGHT, Lock and the skill button are off and the Scrap Rat can't be zapped),
   and `mountWatch` shows the panel; `watchSteps()` ticks per frame. Watch another on the end screen
   starts the next match.
 
