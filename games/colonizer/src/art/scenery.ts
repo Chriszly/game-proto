@@ -1,13 +1,12 @@
 // The world in tapestry work: buildings in elevation, Bayeux trees, berry bushes, gold mines, the
 // linen ground with its lakes, ridges and grass tufts, and the fog of unworked linen with the needle
 // still at its edge.
-import { BUILDINGS, MAP_SIZE, TILE, type BuildingId, type FactionId } from '../game/data';
+import { BUILDINGS, BUILDING_TOP, MAP_SIZE, TILE, type BuildingId, type FactionId } from '../game/data';
 import { DIRT, ROCK, WATER } from '../game/map';
 import { WOOL } from './figures';
 import { canvas, knot, linen, mix, outline, P, PI, reseed, rnd, rr, se, sew, sp, sr, T, thread, type Ctx, type Pt } from './stitch';
 
-/** Room above a building's footprint for roofs, domes and flags. */
-export const BUILDING_TOP = 22;
+export { BUILDING_TOP };
 /** Room above a tree's tile for its crown. */
 export const TREE_TOP = 24;
 

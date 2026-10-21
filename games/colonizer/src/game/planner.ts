@@ -22,6 +22,7 @@ import {
   type Resource,
   type Temperament,
   isSoldier,
+  takesRally,
   unitFor,
 } from './data';
 import {
@@ -200,7 +201,7 @@ function plan(s: GameState) {
 
   // 3c. Rally flags: each production building sends its soldiers to a spot in front of the base.
   for (const b of s.buildings.values()) {
-    if (b.owner !== ME || !b.built || b.rally || b.type === 'town' || !BUILDINGS[b.type].trains) continue;
+    if (b.owner !== ME || !b.built || b.rally || b.type === 'town' || !takesRally(b.type)) continue;
     const front = frontOf(s, town, 6);
     act(() => setRally(s, ME, b.id, front.x, front.y));
   }

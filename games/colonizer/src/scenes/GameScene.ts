@@ -33,6 +33,7 @@ import {
   type FactionId,
   type MapKind,
   type Cost,
+  takesRally,
 } from '../game/data';
 import { generateMap, idx } from '../game/map';
 import {
@@ -50,6 +51,7 @@ import {
   createGame,
   deedsDone,
   entityAt,
+  figureTall,
   hasBuilt,
   inAura,
   issue,
@@ -213,6 +215,9 @@ export class GameScene extends Phaser.Scene {
   private mini!: Minimap;
   private lastRaid = 0;
   private raidToastUntil = 0;
+  /** The notice's time left last frame, and the game time the current notice was said. */
+  private noticeLeft = 0;
+  private noticeAt = -Infinity;
   private selTitle!: Phaser.GameObjects.Text;
   private selInfo!: Phaser.GameObjects.Text;
   private selBig!: Phaser.GameObjects.Image;
@@ -279,6 +284,8 @@ export class GameScene extends Phaser.Scene {
     this.selFigs = [];
     this.lastRaid = 0;
     this.raidToastUntil = 0;
+    this.noticeLeft = 0;
+    this.noticeAt = -Infinity;
   }
 
   create() {
@@ -610,7 +617,7 @@ export class GameScene extends Phaser.Scene {
       const def = UNITS[u.type];
       const mine = u.owner === PLAYER;
       if (!mine && !visible(s, Math.floor(u.x), Math.floor(u.y))) continue;
-      const top = u.y * TILE - (def.role === 'cavalry' ? 48 : def.role === 'siege' ? 44 : 40);
+      const top = (u.y - figureTall(def)) * TILE;
       // A champion's gift shows as a faint ring: ochre for the Warlord's aura, green for the Druid's healing.
       if (def.gift === 'aura') stitchEllipse(g, u.x * TILE, u.y * TILE, AURA_RANGE * TILE, AURA_RANGE * TILE * 0.6, 1.2, ochre, 0.45);
       if (def.gift === 'heal') stitchEllipse(g, u.x * TILE, u.y * TILE, HEAL_RANGE * TILE, HEAL_RANGE * TILE * 0.6, 1.2, hexNum(T.green), 0.45);
@@ -725,7 +732,7 @@ export class GameScene extends Phaser.Scene {
     const out: Building[] = [];
     for (const id of this.selected) {
       const b = this.state.buildings.get(id);
-      if (b && b.owner === PLAYER && BUILDINGS[b.type].trains) out.push(b);
+      if (b && b.owner === PLAYER && takesRally(b.type)) out.push(b);
     }
     return out;
   }
@@ -1079,15 +1086,21 @@ export class GameScene extends Phaser.Scene {
     const v = this.cameras.main.worldView;
     const angle = (x: number, y: number) => Math.atan2(y * TILE - (v.y + v.height / 2), x * TILE - (v.x + v.width / 2));
     const a = this.alertAt;
+    if (s.noticeMs > this.noticeLeft) this.noticeAt = s.time;
+    this.noticeLeft = s.noticeMs;
+    const raidOn = !!r && r.target === PLAYER && s.time < this.raidToastUntil;
+    const alertOn = !!a && s.time < this.alertToastUntil;
+    // A notice said while the raid or alert line is up takes the toast for its time, then gives it back.
+    const since = raidOn ? this.raidToastUntil - RAID_TOAST_MS : alertOn ? this.alertToastUntil - ALERT_TOAST_MS : -Infinity;
     this.toastAt = null;
-    if (r && r.target === PLAYER && s.time < this.raidToastUntil) {
-      this.toastAt = { x: r.x, y: r.y };
-      this.toast.show(this.toastLog[this.toastLog.length - 1], angle(r.x, r.y));
-    } else if (a && s.time < this.alertToastUntil) {
-      this.toastAt = { x: a.x, y: a.y };
-      this.toast.show(this.alertText, angle(a.x, a.y));
-    } else if (s.noticeMs > 0) this.toast.show(s.notice.toUpperCase(), null);
-    else this.toast.hide();
+    if (s.noticeMs > 0 && this.noticeAt >= since) this.toast.show(s.notice.toUpperCase(), null);
+    else if (raidOn) {
+      this.toastAt = { x: r!.x, y: r!.y };
+      this.toast.show(this.toastLog[this.toastLog.length - 1], angle(r!.x, r!.y));
+    } else if (alertOn) {
+      this.toastAt = { x: a!.x, y: a!.y };
+      this.toast.show(this.alertText, angle(a!.x, a!.y));
+    } else this.toast.hide();
   }
 
   /** A hit on one of the player's units or buildings by a rival: a new alert, or more of a known one. */
@@ -1236,7 +1249,7 @@ export class GameScene extends Phaser.Scene {
       if (b.type === 'gate' && b.built) lines.push(t('gateInfo'));
       if (def.shelter && b.built) lines.push(b.garrison.length > 0 ? t('garrisonInside', { n: b.garrison.length }) : t('shelters', { n: def.shelter }));
       if (def.market && b.built && !head) lines.push(t('marketInfo'));
-      if (def.trains && b.built && !head) lines.push(t(b.rally ? 'rallyMove' : 'rallyHint'));
+      if (takesRally(b.type) && b.built && !head) lines.push(t(b.rally ? 'rallyMove' : 'rallyHint'));
       this.info(84, 24, lines.join('\n'));
       return;
     }
@@ -1434,7 +1447,7 @@ export class GameScene extends Phaser.Scene {
           });
         }
       }
-      if (def.trains) {
+      if (takesRally(b.type)) {
         const flags = this.rallyBuildings();
         out.push({ id: 'rally', name: t('rallyFlag'), sub: t(flags.some((x) => x.rally) ? 'rallyMoveSub' : 'rallySetSub'), enabled: true, run: () => void (this.rallyMode = true) });
       }
