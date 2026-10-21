@@ -80,10 +80,11 @@ seconds without a tap.
   `OMEN_BREAK_MS` (6 s). `OmenCard` shows it with Accept and Refuse, which call `decideOmen`: accept
   sets `accepted`, refuse clears `omen`, and either cuts the break to at most `BREAK_MS`. When the
   break ends an undecided omen is cleared (refused). `omenEffects(omen)` gives what an accepted one
-  changes: `sight` (Night: `targets` only takes foes left of `NIGHT_X`, so the arrows (and their
-  turn to a new foe when theirs dies or they pierce one), lightning,
-  fireballs, the mage and `crowdSpot` too; the scene hides foes right of it and darkens the field
-  with `nightG`), `elites` (Blood Moon doubles `eliteChance` in `spawn`), `coins` and `speed` (Rich
+  changes: `sight` (Night: `sightOf` caps it at `NIGHT_X`, so `targets` only takes foes left of
+  it, and with it the arrows (and their turn to a new foe when theirs dies or they pierce one),
+  lightning's leaps, fireballs, the mage and `crowdSpot`; `loose` and `strew` clamp to it, so no
+  volley or patch lands in the dark; the scene hides foes right of it, darkens the field with
+  `nightG` and draws no `death`, `xp` or `orb` effect there), `elites` (Blood Moon doubles `eliteChance` in `spawn`), `coins` and `speed` (Rich
   Plunder, in `removeDead` and `moveEnemies` with the road's), and `xp` (`OMEN_XP`, 1.3, on every
   kill's base experience). The chip at `OMEN_CHIP` names an accepted omen until the wave is cleared,
   when `clearWave` replaces it.
@@ -328,7 +329,8 @@ seconds without a tap.
   `caltrops-charging`, `caltrop`, `rock`, `hud-coin`, `hud-flame` and `hud-book`. There are no asset files.
 - **Tick:** `GameScene.update(time)` takes `dt` from the frame timestamp (not Phaser's smoothed
   delta), clamped to `MAX_STEP_MS` (250), then multiplies it by `speed` (1 or 2) unless a level-up
-  or the road choice is up, so both auto-pick countdowns stay in real seconds. It calls `tick(state, dt)`, which runs
+  or the road choice is up, so both auto-pick countdowns stay in real seconds, and unless the break
+  holds an undecided omen card, so it is read at 1x too. It calls `tick(state, dt)`, which runs
   `step` in substeps of at most `SUBSTEP_MS` (16) and stops while `choices` is set or the run is
   `held` (over, or won and on the victory panel). Only effects keep ageing then. The scene also
   skips `tick` while the fortify panel is open. While `choices` is set, `tick` counts `pickMs` down instead
@@ -360,9 +362,9 @@ seconds without a tap.
   `aim`. A tap on a guard slot's zone (depth `UI_DEPTH - 3`, under every overlay) opens
   `HirePanel`, which calls `GameScene.hire`/`train` (the zones, `GUARD_HIT`, are no taller than the
   slots are apart, so the third slot's does not cover the others); the scene holds the battle while it is open and
-  closes it on a level-up or a fall. A tap on the Fortify button (always shown; not after a fall or during a level-up) opens
+  closes it on a level-up or a fall, and a tap beside the panel (not on it) closes it. A tap on the Fortify button (always shown; not after a fall or during a level-up) opens
   `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the battle while it is open and
-  closes it on a level-up or a fall. A tap on the Repair button calls `repair`, and Accept or Refuse
+  closes it on a level-up or a fall, and a tap beside the panel (not on it) closes it. A tap on the Repair button calls `repair`, and Accept or Refuse
   on the omen card `decideOmen`. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
   `restart`, the heat buttons on the game-over panel and "Heat N" on the victory panel call
   `restartAt`, a "Start at" button sets `startWave`, "Retire" calls `openRetire` and a legacy card

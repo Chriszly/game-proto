@@ -54,6 +54,8 @@ export class HirePanel {
     const cy = Phaser.Math.Clamp(at.y - 60, 60 + HIRE.h / 2, 500 - HIRE.h / 2);
     const left = cx - HIRE.w / 2;
     const top = cy - HIRE.h / 2;
+    // The panel swallows taps so only taps beside it close it.
+    const page = scene.add.zone(cx, cy, HIRE.w, HIRE.h).setInteractive();
     const g = scene.add.graphics();
     drawPanel(g, left, top, HIRE.w, HIRE.h, { c: 14, fill: SLATE.mid, alpha: 0.98, lw: 2.5 });
     // A little pointer towards the slot.
@@ -63,7 +65,7 @@ export class HirePanel {
     const title = scene.add
       .text(left + 18, top + 22, guard ? t('guardLevel', { guard: t(GUARDS[guard.kind].name), level: guard.level }) : t('hireTitle'), textStyle(17, '#ffcf4a', 3))
       .setOrigin(0, 0.5);
-    this.body.add([g, coinIcon, coinText, title]);
+    this.body.add([page, g, coinIcon, coinText, title]);
     if (guard) {
       const kind = guard.kind;
       const full = guard.level >= MAX_GUARD_LEVEL;

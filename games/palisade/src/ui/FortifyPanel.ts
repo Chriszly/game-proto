@@ -48,6 +48,8 @@ export class FortifyPanel {
     const { w, h } = FORTIFY.panel;
     const left = VIEW.w / 2 - w / 2;
     const top = VIEW.h / 2 - h / 2;
+    // The panel swallows taps so only taps beside it close it.
+    const page = scene.add.zone(VIEW.w / 2, VIEW.h / 2, w, h).setInteractive();
     const g = scene.add.graphics();
     drawPanel(g, left, top, w, h, { c: 14, fill: SLATE.mid, alpha: 0.98, lw: 2.5 });
     const coinIcon = fit(scene.add.image(left + w - 70, top + 24, 'hud-coin'));
@@ -56,7 +58,7 @@ export class FortifyPanel {
     const sub = scene.add
       .text(left + 18, top + 46, note, { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' })
       .setOrigin(0, 0.5);
-    this.body.add([g, coinIcon, coinText, title, sub]);
+    this.body.add([page, g, coinIcon, coinText, title, sub]);
     const held = (id: FortId) =>
       forts.queued === id
         ? t('queuedNext')

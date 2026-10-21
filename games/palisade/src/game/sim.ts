@@ -201,8 +201,13 @@ function addFoe(state: GameState, kind: EnemyKind, x: number, y: number, hp: num
  * default). On a Night wave only those past mid-field are seen.
  */
 function targets(state: GameState, mode: AimMode = state.aimMode) {
-  const sight = Math.min(VIEW_RIGHT, omenEffects(state.omen).sight);
+  const sight = sightOf(state);
   return sortTargets(state.enemies.filter((e) => e.x < sight), mode);
+}
+
+/** How far right foes can be seen and struck: the view's edge, or mid-field on a Night wave. */
+function sightOf(state: GameState) {
+  return Math.min(VIEW_RIGHT, omenEffects(state.omen).sight);
 }
 
 function shoot(state: GameState, s: Stats, dt: number) {
@@ -363,12 +368,13 @@ function ignite(foe: Enemy, dps: number, ms: number) {
   foe.burnMs = ms;
 }
 
-/** Lightning strikes the foe nearest the barricade and leaps on to the nearest foe it has not struck. */
+/** Lightning strikes the foe nearest the barricade and leaps on to the nearest seen foe it has not struck. */
 function lightning(state: GameState, s: Stats, first: Enemy) {
   const struck: Enemy[] = [first];
+  const sight = sightOf(state);
   while (struck.length < s.storm!.leaps) {
     const last = struck[struck.length - 1];
-    const next = nearest(state.enemies.filter((e) => !struck.includes(e) && Math.hypot(e.x - last.x, e.y - last.y) < LEAP_RANGE), last.x, last.y);
+    const next = nearest(state.enemies.filter((e) => !struck.includes(e) && e.x < sight && Math.hypot(e.x - last.x, e.y - last.y) < LEAP_RANGE), last.x, last.y);
     if (!next) break;
     struck.push(next);
   }
@@ -693,15 +699,15 @@ function removeDead(state: GameState) {
 }
 
 /**
- * Looses Arrow Rain on the ring around (x, y), kept on the road in front of the barricade, once
- * kills have charged it. Returns whether it was loosed.
+ * Looses Arrow Rain on the ring around (x, y), kept on the seen road in front of the barricade
+ * (short of mid-field on a Night wave), once kills have charged it. Returns whether it was loosed.
  */
 export function loose(state: GameState, x: number, y: number) {
   if (held(state) || state.choices || state.rain.charge < state.rain.need) return false;
   state.rain.charge = 0;
   state.rain.volleys.push({
     id: state.nextId++,
-    x: Math.round(Math.min(VIEW_RIGHT - 10, Math.max(BARRICADE_FRONT + 30, x))),
+    x: Math.round(Math.min(sightOf(state) - 10, Math.max(BARRICADE_FRONT + 30, x))),
     y: Math.round(Math.min(FIELD.bottom, Math.max(FIELD.top, y))),
     ms: RAIN_FALL_MS,
   });
@@ -709,8 +715,8 @@ export function loose(state: GameState, x: number, y: number) {
 }
 
 /**
- * Strews caltrops over the patch around (x, y), kept on the road in front of the barricade, once
- * kills have charged them. Returns whether they were dropped.
+ * Strews caltrops over the patch around (x, y), kept on the seen road in front of the barricade
+ * (short of mid-field on a Night wave), once kills have charged them. Returns whether they were dropped.
  */
 export function strew(state: GameState, x: number, y: number) {
   const c = state.caltrops;
@@ -718,7 +724,7 @@ export function strew(state: GameState, x: number, y: number) {
   c.charge = 0;
   c.patches.push({
     id: state.nextId++,
-    x: Math.round(Math.min(VIEW_RIGHT - 10, Math.max(BARRICADE_FRONT + 30, x))),
+    x: Math.round(Math.min(sightOf(state) - 10, Math.max(BARRICADE_FRONT + 30, x))),
     y: Math.round(Math.min(FIELD.bottom, Math.max(FIELD.top, y))),
     ms: 0,
     waves: CALTROP_WAVES,

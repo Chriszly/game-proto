@@ -34,7 +34,7 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | Tap a road card | After a boss, take that road for the next ten waves (after 10 seconds one is taken at random) |
 | Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random, and a pop-up names it) |
 | Auto-pick checkbox (beside the level-up's countdown) | On by default; untick it to halt the countdown so a level-up waits for your pick, tick it to let it run again |
-| 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up and road countdowns stay 10 real seconds |
+| 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up and road countdowns stay 10 real seconds, and an omen card's break stays 6 |
 | Skill book (in the top bar) | Open the skill book; the battle waits until Back |
 | Hover over (or tap) the barricade's bar | Show its health, what Stout Timber adds and how much it mends after each wave |
 | Fight again / New hero | After a fall: start again keeping the hero, or with a new one; the "Next run at" row picks the heat and the "Start at" row the wave (a forced march) |
@@ -171,7 +171,7 @@ ranger names it until the wave is cleared. Left alone, an omen is refused.
 
 | Omen | What it does to the wave |
 | --- | --- |
-| Night | Foes stay unseen, and out of the ranger's and the mage's aim, until they reach mid-field |
+| Night | Foes stay unseen, and out of the ranger's and the mage's aim, until they reach mid-field; Arrow Rain and Caltrops fall short of it |
 | Blood Moon | Twice as many elite foes |
 | Rich Plunder | Foes drop 50% more coins, but walk 25% faster |
 
