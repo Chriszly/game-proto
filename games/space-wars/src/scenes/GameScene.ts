@@ -406,7 +406,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-SPACE', () => playing() && this.jumpToAlert());
     // Q selects every warship.
     this.input.keyboard!.on('keydown-Q', () => playing() && this.selectFleet());
-    this.newGame();
+    this.newGame(true);
     // Every Phaser text draws from Math.random for its texture's key, and the map and the AI draw from
     // it too: these are made on a generator of their own, so a seeded battle plays as it did before them.
     const random = Math.random;
@@ -479,11 +479,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Makes a new random map and shows the faction picker over it. The campaign's furthest open
-   * sector is picked, and the map has that sector's crystal; watching always plays the first sector.
+   * Makes a new random map and shows the faction picker over it. With `furthest` (the first game and
+   * after a victory) the campaign's furthest open sector is picked, otherwise (after a defeat) the
+   * same sector again; the map has that sector's crystal. Watching always plays the first sector.
    */
-  private newGame() {
-    this.sector = watching ? 0 : this.campaign.unlocked - 1;
+  private newGame(furthest: boolean) {
+    this.sector = watching ? 0 : furthest ? this.campaign.unlocked - 1 : Math.min(this.sector, this.campaign.unlocked - 1);
     this.makeMap();
     // Watch mode (`?watch`) skips the picker: a random faction takes the first slot and the AI plays all five.
     if (watching) this.startBattle(Math.floor(Math.random() * FACTIONS.length));
@@ -1189,7 +1190,7 @@ export class GameScene extends Phaser.Scene {
       const inSight = b.faction === PLAYER || this.state.fog.sees(b);
       const floats = side.def.name === 'solarConcord' && b.type === 'turret' && !settings.reduceMotion;
       img.setPosition(b.x, b.y + (floats ? Math.sin(this.clock / 500 + b.id) * 1.6 : 0));
-      img.setAlpha(!b.done ? 0.5 : b.disabledMs > 0 ? 0.45 : 1);
+      img.setAlpha(!b.done ? 0.5 : inSight && b.disabledMs > 0 ? 0.45 : 1);
       const r = def.radius;
       // A soft faction-coloured pad under every building, so a base reads as its faction's at a glance.
       this.underGfx.fillStyle(side.def.color, 0.16);
@@ -1395,7 +1396,7 @@ export class GameScene extends Phaser.Scene {
       .setScale(1 / RES * (expansion ? EXPANSION_SCALE : 1)).setPosition(x, y).setVisible(true);
   }
 
-  /** Names the unit or building under the pointer, with its role and hit points. */
+  /** Names the unit or building under the pointer, with its role and hit points (a building's only in sight). */
   private drawHover() {
     const label = this.hoverLabel;
     const hit = this.inMap(this.pointer.x, this.pointer.y) && !this.placing && !this.picking
@@ -1427,7 +1428,10 @@ export class GameScene extends Phaser.Scene {
     } else {
       const b = this.state.building(target.id)!;
       const name = b.expansion ? buildInfo(side, 'expansion').name : tr(side.def.buildings[b.type].name);
-      const head = `${name} · ${tr(ROLE_LABEL[b.expansion ? 'expansion' : b.type])} · ${tr('hp', { hp: Math.ceil(b.hp), max: b.maxHp })}`;
+      // A rival building under the fog shows its name and role only, not its hit points now.
+      const inSight = b.faction === PLAYER || this.state.fog.sees(b);
+      const hp = inSight ? ` · ${tr('hp', { hp: Math.ceil(b.hp), max: b.maxHp })}` : '';
+      const head = `${name} · ${tr(ROLE_LABEL[b.expansion ? 'expansion' : b.type])}${hp}`;
       text = [head, ...(b.expansion ? expansionLines(side) : buildingLines(side, b.type))].join('\n');
       at = b;
     }
@@ -1654,7 +1658,12 @@ export class GameScene extends Phaser.Scene {
     g.fillRoundedRect(CONTRACT_PILL.x, 4, 90, 21, 10.5);
     g.lineStyle(1.5, INK.mustard, 1);
     g.strokeRoundedRect(CONTRACT_PILL.x, 4, 308, 21, 10.5);
-    if (c) {
+    // Watching, no contract runs, so the pill says so rather than showing the first one.
+    if (s.watch) {
+      this.setText(h.tag, tr('watchingTag'));
+      this.setText(h.title, tr('noContractsWatching'));
+      this.setText(h.count, '');
+    } else if (c) {
       this.setText(h.tag, tr('contractTag', { step: step + 1, steps: CONTRACT_STEPS }));
       this.setText(h.title, c.title(side.def));
       this.setText(h.count, `${Math.floor(s.contract.progress)}/${c.target}  ◆+${c.reward}`);
@@ -1729,7 +1738,14 @@ export class GameScene extends Phaser.Scene {
     const c = s.currentContract();
     const step = s.contract.index;
     const p = this.panel;
-    if (c) {
+    if (s.watch) {
+      this.setText(p.head, tr('watchingTag'));
+      this.setText(p.next, '');
+      this.setText(p.brief, tr('noContractsWatching'));
+      this.setText(p.count, '');
+      this.setText(p.reward, '');
+      this.setText(p.perk, '');
+    } else if (c) {
       this.setText(p.head, tr('contractHead', { step: step + 1, steps: CONTRACT_STEPS }));
       this.setText(p.next, step + 1 < CONTRACT_STEPS ? tr('nextFromBoard') : tr('lastContract'));
       this.setText(p.brief, c.brief(side.def));
@@ -1974,7 +1990,7 @@ export class GameScene extends Phaser.Scene {
         saveCampaign(this.campaign);
       }
       ui('click');
-      this.newGame();
+      this.newGame(this.state.phase === 'won');
       return;
     }
     // A press on the minimap centres the map there, and dragging it keeps following.
@@ -2001,6 +2017,14 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
+    // The right button cancels, even over the contract board.
+    if (pointer.rightButtonDown()) {
+      this.placing = null;
+      this.rallyMode = false;
+      this.selected.clear();
+      this.rivalsOpen = false;
+      return;
+    }
     // A card on the contract board picks the next contract.
     const contract = this.boardCards.find(inside);
     if (contract) {
@@ -2009,13 +2033,6 @@ export class GameScene extends Phaser.Scene {
         this.message = reason;
         ui('refuse');
       }
-      return;
-    }
-    if (pointer.rightButtonDown()) {
-      this.placing = null;
-      this.rallyMode = false;
-      this.selected.clear();
-      this.rivalsOpen = false;
       return;
     }
     // The army count on the top bar selects every warship.

@@ -146,7 +146,7 @@ const en = {
   razesTask: 'destroy 3 enemy buildings',
   razesPerk: 'ship hulls +15%',
   surviveTitle: 'Survive the raid 90 s',
-  surviveBrief: 'Survive the raid: every rival comes, 90 s',
+  surviveBrief: 'Survive the raid: every rival not paid off comes, 90 s',
   surviveTask: 'every rival comes, 90 s',
   survivePerk: 'ships cost 10% less',
   hubsTitle: 'Topple a hub',
@@ -266,6 +266,8 @@ const en = {
   pickOnBoard: 'Pick one on the board',
   contractsDoneTag: 'CONTRACTS ✓',
   everyContractDone: 'Every contract done: Rank V',
+  watchingTag: 'WATCHING',
+  noContractsWatching: 'No contracts while watching',
   seconds: '{n} s',
 
   // Command bar

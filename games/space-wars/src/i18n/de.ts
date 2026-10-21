@@ -148,7 +148,7 @@ const de: Translation<typeof en> = {
   razesTask: 'zerstöre 3 feindliche Gebäude',
   razesPerk: 'Schiffsrümpfe +15 %',
   surviveTitle: 'Überfall 90 s überstehen',
-  surviveBrief: 'Überfall überstehen: alle Rivalen kommen, 90 s',
+  surviveBrief: 'Überfall überstehen: alle Rivalen ohne Tribut kommen, 90 s',
   surviveTask: 'alle Rivalen kommen, 90 s',
   survivePerk: 'Schiffe kosten 10 % weniger',
   hubsTitle: 'Eine Basis stürzen',
@@ -268,6 +268,8 @@ const de: Translation<typeof en> = {
   pickOnBoard: 'Wähle einen auf dem Brett',
   contractsDoneTag: 'VERTRÄGE ✓',
   everyContractDone: 'Alle Verträge erfüllt: Rang V',
+  watchingTag: 'ZUSCHAUEN',
+  noContractsWatching: 'Keine Verträge beim Zuschauen',
   seconds: '{n} s',
 
   // Command bar

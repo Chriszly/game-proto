@@ -69,6 +69,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Shrine Stack | stones swing 20% slower | stones swing 25% faster |
   | Mapmaker | 16 supplies a voyage | 9 supplies a voyage |
   | Lanternkeep | lanterns burn 30% longer | lanterns burn 20% shorter |
+  | Space Wars | rivals attack with 9 warships | rivals attack with 4 warships |
   | Colonizer | the AI gathers 25% slower | the AI gathers 25% faster |
   | Riftblade | foes have 25% less health and come 25% slower | foes have 35% more health and come 25% faster |
   | Bramblecrest | 5 hearts, and the bosses call in foes 25% less often | 2 hearts, and the bosses call in foes 30% more often |

@@ -144,7 +144,7 @@ Implemented today:
   `new World(layout, random pick, true)`. With `World.watch` the AI thinks for slot 0 too (and it
   can hold the beacon picket), the fog is lifted (`updateFog` fills it and knows every building,
   `seesUnit` shows every ship, cloaked or in a nebula),
-  contracts don't run, and the battle ends with `phase` `won` once one faction is left
+  contracts don't run (the contract pill and panel say `noContractsWatching`), and the battle ends with `phase` `won` once one faction is left
   (`World.winner`, a side index). The scene runs `update` `watchSteps()` times a frame, ignores
   taps except on the end overlay (which starts another battle), and the overlay names the winner.
   `think` reports builds, outposts, research and attacks to `aiLog`.
@@ -174,7 +174,7 @@ Implemented today:
   untouched. Goals: `kills`, `razes`, `hubs` and `lattice` (a Mine Lattice razed) count in
   `removeDead` when the player's shot (`lastHit`) landed last; `hold` in `updateBeacon`; `barracks`,
   `derelicts` (held now), `nebula` (`nebulaHeld`: a player warship in a nebula no enemy warship is
-  in) and `survive` (seconds since `raidPlayer` sent every rival's fleet at the hub) in
+  in) and `survive` (seconds since `raidPlayer` sent the fleet of every rival not under truce or held by tribute at the hub) in
   `updateContract`; `convoy` when a convoy harvester arrives. The convoy (`launchConvoy`,
   `convoyField`, `escort`, `endConvoy`, `World.convoyTo`, `Unit.convoy`): `CONVOY_SIZE` (3) new
   harvesters fly from the hub to the crystal node nearest 600 px away (420 to 820), the rival
@@ -205,7 +205,8 @@ Implemented today:
   five `SECTORS` in a chain, saved under `space-wars-campaign` (`unlocked`, and `kept`: the perk goal
   kept from each sector won). The picker shows a strip under the cards (`drawSectors`): the chosen
   sector, what makes it hard (`sectorText`), its node chain and the perks it carries in
-  (`keptFor`). The furthest open sector is chosen when a new map is made; tapping another open
+  (`keptFor`). The furthest open sector is chosen for the first map and after a victory
+  (`newGame(furthest)`), and a defeat keeps the sector just lost; tapping another open
   node makes a fresh map for it (`makeMap`, since the loose node count changes). `new World(layout,
   pick, watch, sector, kept)` applies the kept perks to the player and gives each rival the sector's
   crystal and research levels and, for the first `outposts` rivals, a finished outpost
@@ -239,7 +240,7 @@ Implemented today:
   bottom-left start, and the others fill the rest in order). The world does not update while picking.
 - Camera and hover: arrow keys and WASD scroll the map, and so does dragging with two fingers on a
   touch screen (`touchPan`, `twoFingers`: a second finger cancels the first one's box), H centres it on the hub, and hovering a unit
-  or building shows its name, role, hit points and stats. Hovering a command button shows what it is
+  or building shows its name, role, hit points (a rival building's only while in sight) and stats. Hovering a command button shows what it is
   (cost, stats, ability). Selecting one unit shows its name and hit points on the command bar.
 
 Missing or rough:

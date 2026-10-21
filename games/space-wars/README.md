@@ -108,7 +108,7 @@ progress made while a contract is current counts.
 | Hold a nebula 45 s | II | Keep a warship in a nebula no enemy warship is in, 45 s in all | 140 | Ships see 20% further |
 | Break a Mine Lattice | III | Destroy a Veil Syndicate Mine Lattice | 180 | Turret damage +25% |
 | Raze an outpost | III | Destroy 3 enemy buildings | 200 | Ship hulls +15% (new ships) |
-| Survive the raid 90 s | III | Every rival turns on you and sends its fleet at your hub at once; keep the hub for 90 s | 220 | Ships cost 10% less |
+| Survive the raid 90 s | III | Every rival not under truce or held by your tribute turns on you and sends its fleet at your hub at once; keep the hub for 90 s | 220 | Ships cost 10% less |
 | Topple a hub | IV | Destroy a rival hub | 300 | Ship damage +10% |
 
 A kill or a razed building counts for you when your ship or turret landed the last hit. A convoy
@@ -155,7 +155,8 @@ Battles are fought across five sectors in a chain, shown under the faction cards
 opens the next sector, and lets you keep one of the perks you earned from that battle's contracts:
 it applies from the start of every later sector's battles. A harder sector has rivals that start
 with an outpost, more crystal and research, and fewer loose crystal fields on the map. You can
-replay any open sector by tapping it before the battle. The campaign is kept in the browser.
+replay any open sector by tapping it before the battle, and a lost battle is fought again in the
+same sector. The campaign is kept in the browser.
 
 | Sector | Rivals with an outpost | Rival crystal | Rival research | Loose crystal fields |
 | --- | --- | --- | --- | --- |
