@@ -1,5 +1,6 @@
 import { playMusic, playSting, stopMusic, ui, type Song } from '../../../../shared/audio';
 import { HEROES, isKnight, type HeroId } from '../game/heroes';
+import { HURT_GRACE_MS } from '../game/sim';
 import type { BoltColor, Bomb, GameState, Hazard } from '../game/state';
 import { SCREEN } from '../scenes/layout';
 import { MENU_SONG, PLANET_SONGS, STINGS } from './music';
@@ -119,7 +120,9 @@ export class SoundCues {
     this.crossovers = s.crossovers.length;
     this.waves = s.waves.length;
     this.nextElite = s.nextElite;
-    this.boss = false;
+    const boss = s.enemies.find((e) => e.kind === 'boss' && e.hp > 0);
+    this.boss = !!boss;
+    this.bossFlash = boss?.flashMs ?? 0;
     this.warned.clear();
     this.hp = s.player.hp;
     this.hurtMs = s.player.hurtMs;
@@ -190,7 +193,8 @@ export class SoundCues {
     if (s.objectivesDone > this.objectivesDone) play('capstone');
     if (s.signatures > this.signatures && s.hero) play(SIGNATURE[s.hero]);
     if (s.damageTaken > this.damage + 0.01) play('hurt');
-    else if (s.phase === 'run' && s.hero && isKnight(s.hero) && p.hurtMs > this.hurtMs + 1) play('dodge');
+    // Foresight sets half the grace; the Barrier Emitter and a Shield power-up set it all (`pop`).
+    else if (s.phase === 'run' && s.hero && isKnight(s.hero) && p.hurtMs > this.hurtMs + 1 && p.hurtMs <= HURT_GRACE_MS / 2) play('dodge');
     if (p.barrier < this.barrier - 0.01 && s.damageTaken <= this.damage + 0.01) play('barrier');
     if (p.hp > this.hp + 8 && s.phase !== 'select' && this.phase !== 'select') play('heal');
     if (s.xp > this.xp || s.level > this.level) {

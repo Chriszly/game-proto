@@ -3,10 +3,10 @@ import { settings } from '../../../../shared/settings';
 import { splitHudCamera, viewFrame, viewPoint, viewSize } from '../../../../shared/scaling';
 import { HEROES, HERO_IDS, isKnight, schemeOf, type HeroId } from '../game/heroes';
 import { HERO_R, POWER_UPS, RUN_MS, clock, freshState, isStructure, statsOf, type GameState, type PowerUp } from '../game/state';
-import { choose, inRingGap, phalanxSpots, shieldHalf, startRun, suppressorHalf, suppressorLength } from '../game/sim';
+import { choose, inRingGap, phalanxSpots, prepare, shieldHalf, startRun, suppressorHalf, suppressorLength } from '../game/sim';
 import { bladeColor, dreadRadius, heroVariant, orbitBlades } from '../game/blades';
 import { bubble, rebuildTime } from '../game/squad';
-import { buy, chooseEvent, chooseNode, chooseWorld, chartOptions, frame, leave, reroll } from '../game/voyage';
+import { buy, chooseEvent, chooseNode, chooseWorld, chartOptions, frame, leave, nextPlanet, reroll } from '../game/voyage';
 import { ARENA_MS, BOSSES, CHAMPION, PLANETS, SIEGE, STRIKE, VENT, planetLabel } from '../game/planets';
 import { UPGRADES, MAX_TIER } from '../game/upgrades';
 import {
@@ -203,8 +203,20 @@ export class GameScene extends Phaser.Scene {
       else this.panel?.hover(viewPoint(p));
     });
     const saved = loadRun();
-    if (saved) this.resume(saved);
-    this.syncPanel();
+    try {
+      if (saved) this.resume(saved);
+      this.syncPanel();
+    } catch (err) {
+      // A saved run the panels can't show (hand-edited or from another version) is dropped, so the
+      // game still opens, on the hero select.
+      console.warn('Riftblade: dropping the saved run', err);
+      clearRun();
+      this.state = freshState();
+      this.savedDeeds = 0;
+      this.cues = new SoundCues();
+      this.hero.setVisible(false);
+      this.syncPanel();
+    }
   }
 
   /** Saves the run under way every few seconds and when the page is hidden or closed. */
@@ -232,6 +244,7 @@ export class GameScene extends Phaser.Scene {
     // The screen may have another shape now: the spawn ring follows the view's corners.
     s.ringOut = (Math.hypot(SCREEN.w, SCREEN.h) - Math.hypot(VIEW.w, VIEW.h)) / 2;
     this.state = s;
+    prepare(s);
     this.chosen = s.hero!;
     this.savedDeeds = s.deeds.length;
     this.recorded = false;
@@ -306,6 +319,15 @@ export class GameScene extends Phaser.Scene {
     if (this.state.phase !== 'trader') return;
     leave(this.state);
     ui('click');
+    this.settle();
+  }
+
+  /**
+   * Jumps at once when a choice ended in `travel`: `travel` is not saved, so a save in the frame
+   * before `frame` would still hold the panel with the reward not yet taken, and repeat it.
+   */
+  private settle() {
+    if (this.state.phase === 'travel') nextPlanet(this.state);
   }
 
   /** The card, node, offer or answer at `i` (a tap or the 1/2/3 keys). */
@@ -327,6 +349,7 @@ export class GameScene extends Phaser.Scene {
       if (s.event?.options[i]) sfx('event');
       chooseEvent(s, i);
     }
+    this.settle();
   }
 
   private begin(id: HeroId) {

@@ -266,16 +266,21 @@ last stage's boss) or opens the space map, showing any level-ups first (`after` 
 `chooseWorld` sets `next` and rolls the star map's nodes (`map`). A node opens the trader or an event, starts the arena (`run`
 with `arena` set, ended in `step` by the last elite falling or 60 s, then `cleared` again with a
 free pick if won) or rests; each ends in `travel`, which `nextPlanet` turns into the chosen planet's
-`run` (clock reset, field cleared, the escort bot added if taken). Run again resets to a fresh
+`run` (clock reset, field cleared, the escort bot added if taken). `frame` does that at the next
+update, and `GameScene.settle` right after a panel choice or Leave, so no save lands in between
+(`travel` is not saved) with a reward already taken. Run again resets to a fresh
 `select` state.
 
 The run under way is saved (`saveRun`) in every phase but `select`, `won` and `lost`: when it
 starts, every time a panel opens or closes (`syncPanel`), every 5 s of run time in a fight
 (`RUN_SAVE_MS`) and when the page is hidden or closed. The end screen clears it. `create` loads it
 (`loadRun`) and `GameScene.resume` picks it up: the state as saved, `ringOut` worked out again for
-the screen's shape, `savedDeeds` at the deeds already done and `SoundCues.resume`, so nothing
-plays for getting there. The shared start screen holds it paused until Start. A hero panel
-waiting to be shown is not saved (its hero is already unlocked).
+the screen's shape, `prepare` (the sim's stats and hero flags, so a rest or ration on the panel
+heals the right hero), `savedDeeds` at the deeds already done and `SoundCues.resume`, so nothing
+plays for getting there (a boss alive in the save counts as already heard). If the panels throw on
+the saved run, `create` drops it (`clearRun`) and opens the hero select. The shared start screen
+holds it paused until Start. A hero panel waiting to be shown is not saved (its hero is already
+unlocked).
 
 ### Input
 
@@ -312,7 +317,8 @@ saves load unchanged.
 - `riftblade-run`: the run under way, the whole `GameState` as JSON (it is plain data; `Infinity`,
   as in `nextElite` and `objectiveAt`, is stored as the text `"Infinity"`). `loadRun` lays it over
   `freshState()` (and the hero over `freshHero()`), so fields added since take their fresh values;
-  one with an unknown hero, a phase it can't resume in or an unknown planet is dropped. Keep
+  one with an unknown hero, a phase it can't resume in, an unknown planet or `next`, a `stage`
+  outside the crusade, unknown `nodes`, `offers` or `choices`, or a malformed `event` is dropped. Keep
   `GameState` plain data (no Maps, Sets, class instances or shared references), or teach
   `saveRun` and `loadRun` the new kind.
 
@@ -358,8 +364,9 @@ the arena is won), `unlock` (a new hero), `win`, `lose`.
 - New bombs: `toss` (grenade, frag), `charge`, `whistle` (crate, orbital, carpet). New blasts:
   `boom` (radius 90 and up, louder with size) or `pop`.
 - Side objectives: `node` when one starts, `capstone` when one is done; `chest` for a power-up.
-- `kill`, `eliteKill`, `bossHit` (the boss's hit flash), `hurt`, `dodge` (a knight's Foresight),
-  `barrier`, `heal` (health up by more than 8), `shard` (pitch rises with a combo), `chest`,
+- `kill`, `eliteKill`, `bossHit` (the boss's hit flash), `hurt`, `dodge` (a knight's Foresight:
+  `hurtMs` up to half the grace; the Barrier Emitter and a Shield power-up set the full grace and
+  play `pop` for their blast), `barrier`, `heal` (health up by more than 8), `shard` (pitch rises with a combo), `chest`,
   `ui('coin')` for credits gained.
 - `levelUp` (into the cards), `card` (a pick), `capstone`, `crossover`.
 - `eliteHorn`, `siren` (ring wave), hazards `warn` (vent, shell, lightning strike), `stomp`, `fireRing`

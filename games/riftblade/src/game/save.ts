@@ -1,7 +1,8 @@
 /** Lasting progress, in local storage under a key prefixed with the game's name. */
 import { HEROES, HERO_IDS, type HeroId } from './heroes';
-import { PLANETS } from './planets';
+import { LAST_STAGE, NODE_INFO, PLANETS } from './planets';
 import { freshHero, freshState, type GameState, type Phase } from './state';
+import { UPGRADES } from './upgrades';
 
 export const SAVE_KEY = 'riftblade-progress';
 /** The run under way, so closing the game mid-run and opening it again carries on with it. */
@@ -135,6 +136,14 @@ export function loadRun(): GameState | null {
     if (typeof saved !== 'object' || !saved || typeof saved.player !== 'object' || !saved.player) return null;
     const s: GameState = { ...freshState(), ...saved, player: { ...freshHero(), ...saved.player } };
     if (!HERO_IDS.includes(s.hero as HeroId) || !isResumable(s) || !PLANETS[s.planet]) return null;
+    // The panels read these as they open, so a run they would throw on is dropped here.
+    const known = (id: unknown) => typeof id === 'string' && id in UPGRADES;
+    if (!Number.isInteger(s.stage) || s.stage < 0 || s.stage > LAST_STAGE) return null;
+    if (s.next !== -1 && !PLANETS[s.next]) return null;
+    if (!Array.isArray(s.nodes) || !s.nodes.every((k) => k in NODE_INFO)) return null;
+    if (!Array.isArray(s.offers) || !s.offers.every((id) => id === null || known(id))) return null;
+    if (s.choices !== null && (!Array.isArray(s.choices) || !s.choices.every(known))) return null;
+    if (s.event !== null && (typeof s.event !== 'object' || !Array.isArray(s.event.options))) return null;
     return s;
   } catch {
     return null;
