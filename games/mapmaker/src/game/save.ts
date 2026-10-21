@@ -151,6 +151,7 @@ export function saveTheme(t: Theme) {
   try {
     localStorage.setItem(THEME_KEY, t);
   } catch {
-    // Storage can be full or blocked; the theme lasts until the page is closed.
+    // Storage can be full or blocked; the theme button hands the theme to Boot itself, so it
+    // still switches and lasts until the page is closed.
   }
 }

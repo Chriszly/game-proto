@@ -104,7 +104,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
   and `saveBest` for the Royal Atlas's fewest voyages; `loadTheme` (the saved theme, else the
   device's `prefers-color-scheme`) and `saveTheme`.
 - `src/scenes/BootScene.ts`: sets the art's resolution (`sharpenArt`) and the theme
-  (`applyTheme(loadTheme())`), bakes the surveyor and the icons, then starts `Game`. The theme
+  (`applyTheme(data?.theme ?? loadTheme())`), bakes the surveyor and the icons, then starts `Game`. The theme
   switch comes back through it.
 - `src/scenes/GameScene.ts`: owns the `GameState`, takes taps, paints the island into two canvas
   textures, draws the sheet, survey stations with their costs, the map marks, surveyor and rival,
@@ -162,9 +162,10 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `newBest`, so a reload or a tie shows the best instead), `closeAtlas`, `newGame` (New atlas), `pickCommission` and `hire` (the harbor's
   `card`s), `buy` and `setSail`. Every successful action calls `saveGame`. The theme button
   (`makeThemeButton`, above the overlays' dim) calls `saveTheme` with the other theme and starts
-  `Boot` with `{ state }`, which bakes the icons again and restarts `Game` with that running state
-  (`create(data)`, falling back to the save only when none is handed over), painting everything
-  anew. The overlay's full-screen dim is interactive, so it swallows taps on the map.
+  `Boot` with `{ state, theme }`, which applies that theme (`loadTheme()` only when none is handed
+  over, so the switch works with storage blocked or full), bakes the icons again and restarts
+  `Game` with that running state (`create(data)`, falling back to the save only when none is
+  handed over), painting everything anew. The overlay's full-screen dim is interactive, so it swallows taps on the map.
 - `update(time)` computes `dt` from the frame time (clamped to 100 ms) and only animates:
   - `syncIsland` repaints the terrain and place names when `state.tiles` is a new array (a load or
     a new isle), repaints the fog when tiles are charted (laying a `vellum` tile over each that

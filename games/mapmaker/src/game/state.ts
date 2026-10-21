@@ -157,7 +157,7 @@ export interface Chart {
   /** Tiles the rival charted first, and the coins they cost (half of those tiles' value). */
   rivalTiles: number;
   rivalLoss: number;
-  /** Supplies left when the voyage ended, and what they sell back for (`SELL_BACK` each, capped at `base`). */
+  /** Supplies left when the voyage ended, and what they sell back for (`SELL_BACK` each, capped at what the tiles pay, `base - rivalLoss`). */
   unused: number;
   sellBack: number;
   /** How many isle milestones this voyage reached, what they pay, and whether it finished the isle. */
