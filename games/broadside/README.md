@@ -81,7 +81,8 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    speed inside a dashed ochre ring. Sail alongside it (hull to hull, within about a ship's
    width) for a little over a second, while the ring fills, and you take her instead of sinking her.
    The prize crew patches her to half her hull and she sails with you as an escort for the rest of
-   the wave, in a ring of green dots, fighting any enemy near you; enemies shoot at her too. A
+   the wave, in a ring of green dots, fighting any enemy near you (a mortar ketch prize holds fire
+   while her shell could land on you or a prize); enemies shoot at her too. A
    button under the order card scuttles your newest prize at once for twice her loot; a prize
    still afloat when the wave is beaten is sold in harbor for her loot, unless you keep her as a
    consort (below). Fireships can't be boarded.
@@ -173,7 +174,7 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | --- | --- | --- | --- | --- | --- |
    | Frigate | the start | 120 | 2 (10 damage, 2 s reload, range 260) | 90 | 40 sailors |
    | Cutter | best wave 3 | 90 | 1 heavy gun (14 damage, 1.5 s reload, range 240) | 114, turns faster | 24 sailors |
-   | Bomb Ketch | best wave 6 | 150 | 2 to port (10 damage, 2.2 s, range 250); a mortar to starboard | 70, turns slowly | 36 sailors; holding the starboard control aims a shell that lands where the arc reaches two seconds later, bursting for 26 (more when charged) |
+   | Bomb Ketch | best wave 6 | 150 | 2 to port (10 damage, 2.2 s, range 250); a mortar to starboard | 70, turns slowly | 36 sailors; holding the starboard control aims a shell that lands where the arc reaches two seconds later, bursting for 26 (more when charged); it always lands clear of your own hull, now and where you'll be |
 
 19. **Choose the next course.** From the harbor after wave 5, "Set sail" becomes two buttons, one
    per charted course for the next wave (not the haven), and the wave's banner names it:

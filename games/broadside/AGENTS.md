@@ -28,8 +28,8 @@ and the player chooses a ship.
   over the ledger until `pickPerk` moves one to `perks` and empties `draft` (`setSail` refuses
   while a draft is open); the perks' rules live in `sim.ts` (`ricochet` in `fire`/`moveBalls`
   via `Ball.skip`, `salvage` in `sink`, `gunners` in `escortBroadsides`, `mortar` in `ownMortar`
-  with `GameState.mortarMs`, which holds fire while the landing spot is near the player, where she
-  will be, or a prize, `grapnels` in `boardMs`/`prizeCrew`, `swivels` in `stats().arc`,
+  with `GameState.mortarMs`, which holds fire while `safeSpot` says the landing spot is near the
+  player, where she will be, or a prize (a prize mortar ketch in `escortBroadsides` checks it too), `grapnels` in `boardMs`/`prizeCrew`, `swivels` in `stats().arc`,
   `carronades` in `firePlayer`). Perk ranks: `perks` lists a perk once per rank taken
   (`perkRank`, `MAX_PERK_RANK` 2); `drawDraft(taken, size)` fills the draft with new perks first
   and then the second rank of held ones, and each perk's numbers are arrays by rank read through
@@ -62,7 +62,7 @@ and the player chooses a ship.
   Ships (`src/game/hulls.ts`): `GameState.hull` picks the `HULLS` row `stats()` starts from (the
   frigate is the old `PLAYER`), `unlocked` by best wave, chosen on the end card and passed to
   `newRun`; a `mortarSide` (the Bomb Ketch's starboard) makes `firePlayer` `lob` a shell to where
-  the arc reaches instead, `loadShot` refuses that side and the harbor shows it as a mortar.
+  the arc reaches instead (pushed out until the burst clears her hull now and where she will be), `loadShot` refuses that side and the harbor shows it as a mortar.
   Bounties (`src/game/bounties.ts`): `setSail` draws `GameState.bounty` from wave
   `FIRST_BOUNTY_WAVE` (2), the wave's trackers (`waveLoot`, `waveDamage`, `waveAground`,
   `wavePrizes`, `waveMs`, `waveSunk`, which `sink` and `board` both add to) feed
@@ -193,7 +193,7 @@ File map (all under `src/`, plus the shared files it imports):
   (`sailEnemy` calls `captain`, with `planDetour`, `roundIsland`, `blocked`, `fend` and
   `shoalAhead`), escorts (`sailEscort`, `escortBroadsides`), separation, running aground on islands
   (`runAground`), boarding (`board`), the player's broadsides (`aimBroadsides`, `firePlayer`) and
-  own mortar (`ownMortar`), enemy broadsides and mortars (`enemyBroadsides`, `mortar`), the
+  own mortar (`ownMortar`, with `safeSpot`), enemy broadsides and mortars (`enemyBroadsides`, `mortar`), the
   forts' shelling (`fortsFire`), `fire`, `lobAt`/`lob` (shells), balls (chain shot sets `slowMs`,
   grapeshot `jamMs` and kills crew; forts are hit too), shells (`landShells`), blasts (`blast`),
   fireships ramming (`ram`), sinking (`sink`, with Salvage, which can't save a player sunk the
