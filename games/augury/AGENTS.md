@@ -67,11 +67,15 @@ File map (`src/`):
   `echoAnswer`), each returning whether it made a move worth keeping for Undo.
 - `game/run.ts`: the tuning (`QUEUE`, `BETWEEN_MS`, `START_HINTS`, `startHearts`, `MAX_HEARTS`,
   `blitzSeconds`, `BLITZ_SOLVE_S`, `BLITZ_PENALTY_S`, `DAILY_LEVELS`, `DUEL_LEVELS`, `DUEL_FAIL_S`,
-  `DUEL_HINT_S`, `RELIC_EVERY`, `RELIC_OFFER`, `HOURGLASS`, the points constants), `Card`,
-  `Current`, `Result`, `Run`, `RunEvent`, and the actions (`startRun`, `act`, `undo`, `hint`,
-  `skip`, `next`, `draftPick`, `takeRelic`, `startSecondPlayer`, `tick`, `canUndo`, `canHint`,
-  `dailyDone`, `endlessLevel`). Only this file changes a `Run`; `act` is the only way a move
-  reaches a puzzle's state.
+  `DUEL_HINT_S`, `RELIC_EVERY`, `RELIC_OFFER`, `DRAFT_MAX`, `HOURGLASS`, the points constants),
+  `Card`, `Current`, `Result`, `Run`, `RunEvent`, and the actions (`startRun`, `act`, `drag`,
+  `undo`, `hint`, `skip`, `next`, `draftPick`, `takeRelic`, `startSecondPlayer`, `tick`,
+  `canUndo`, `canHint`, `dailyDone`, `endlessLevel`). Only this file changes a `Run`; `act` and
+  `drag` (a step of a drag, with no Undo step) are the only ways a move reaches a puzzle's state.
+  `skip` in Practice deals a new puzzle of the same kind and level, with nothing recorded. A draft
+  deals at most `DRAFT_MAX` (3) cards, the deal layout's slots, so Crystal Ball is offered once;
+  Blitz's queue is levelled again after every puzzle, so "Up next" shows the level that will be
+  dealt, and Blitz ends where its clock runs out, without a result for the puzzle it cut off.
 - `game/catalog.ts`: `MODES`/`Mode`, `RELICS`/`RelicId`, `KIND_COLOR`, `RELIC_COLOR`.
 - `game/progress.ts`: `Progress`, `newProgress`, `recordResult`. `game/save.ts`: `loadProgress`,
   `saveProgress`.
@@ -111,7 +115,9 @@ How it runs:
   1-6/Backspace/Enter for Code Breaker, S/D or arrows for Memory Echo.
 - Moves: a view calls `ctx.act(change)`, which runs `act(run, change)`: the puzzle's state is
   copied for Undo (for kinds with `undo`), changed, and checked for solved or failed. Picking a cell
-  or island changes the state without a move (no Undo step) and plays `tap`.
+  or island changes the state without a move (no Undo step) and plays `tap`. A Path Link drag is
+  one move: its start goes through `ctx.act` quietly, each cell it crosses through `ctx.drag` (no
+  Undo step, no sound), and `ctx.place` plays `place` once when it ends, if it changed a path.
 - Time: `update` takes `dt` from the frame time (capped at `MAX_STEP_MS`) and calls `tick`, which
   runs the puzzle's clock (`timeLeftMs`), Blitz's clock (`clockMs`), Memory Echo's own clock and the
   banner between puzzles (`betweenMs`; Practice waits for a tap).
@@ -151,8 +157,8 @@ sting plays out).
 
 | Sound | Where |
 | --- | --- |
-| `tap` | a cell, island or block picked (`ctx.tap`) |
-| `place` | a move made (`ctx.act`), and Undo |
+| `tap` | a cell, island or block picked (`ctx.tap`), and Undo |
+| `place` | a move made (`ctx.act`), or a Path Link drag that changed a path, once when it ends (`ctx.place`) |
 | `deal` | a `start` event |
 | `solved` / `lost` | an `end` event, solved / lost, skipped or out of time |
 | `heart` | a `heart` event |
@@ -195,7 +201,8 @@ daily five played today).
   `finish`, its side panel in `drawSide`, its top line in `topLine`, its icon in `modeIcon`, its
   `Name` and `Text` texts, and the README.
 - **Add a relic**: its id in `RELICS` and `RELIC_COLOR`, its effect in `takeRelic`, `timeFor` or
-  `offerDraft`, an emblem in `drawRelic`, its texts and the README row.
+  `offerDraft`, an emblem in `drawRelic`, its texts and the README row. A relic that does nothing
+  twice is left out of the offer in `next` once held, like Crystal Ball.
 - **Retune**: the constants at the top of `run.ts` and of each puzzle file (sizes and counts per
   level, `limit` seconds per level); mirror the Normal hearts and the first-round numbers in the
   test.

@@ -28,6 +28,8 @@ export interface TextOpts {
   alpha?: number;
   align?: 'left' | 'center' | 'right';
   spacing?: number;
+  /** A soft halo in this colour (the menu title). */
+  glow?: string;
 }
 
 export interface ButtonOpts {
@@ -91,7 +93,7 @@ export class Painter {
     }
     const t = l.texts[i];
     const color = o.color ?? C.ink;
-    const key = `${o.size}|${color}|${o.bold}|${o.italic}|${o.wrap}|${o.align}|${o.spacing}`;
+    const key = `${o.size}|${color}|${o.bold}|${o.italic}|${o.wrap}|${o.align}|${o.spacing}|${o.glow}`;
     if (l.styles[i] !== key) {
       l.styles[i] = key;
       t.setStyle({
@@ -103,6 +105,8 @@ export class Painter {
       });
       t.setWordWrapWidth(o.wrap ?? null);
       t.setLetterSpacing(o.spacing ?? 0);
+      // `setStyle` keeps what it isn't given, so a pooled text's glow is set or cleared here.
+      t.setShadow(0, 0, o.glow ?? '#000', o.glow ? 14 : 0, false, !!o.glow);
     }
     t.setText(content)
       .setOrigin(o.ox ?? 0.5, o.oy ?? 0.5)

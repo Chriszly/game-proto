@@ -8,8 +8,8 @@ import { KIND_COLOR, MODES, RELIC_COLOR, type Mode, type RelicId } from '../game
 import { DEFS, KINDS, LEVELS, SKILLS, SKILL_OF, type KindId, type Level } from '../game/kinds';
 import type { Progress } from '../game/progress';
 import {
-  act, canHint, canUndo, dailyDone, draftPick, hint, next, skip, startRun, startSecondPlayer, takeRelic, tick, undo,
-  QUEUE, type Card, type Run,
+  act, canHint, canUndo, dailyDone, draftPick, drag, hint, next, skip, startRun, startSecondPlayer, takeRelic, tick, undo,
+  BLITZ_PENALTY_S, DUEL_FAIL_S, QUEUE, type Card, type Run,
 } from '../game/run';
 import { loadProgress, saveProgress } from '../game/save';
 import { t, type TextKey } from '../i18n';
@@ -122,7 +122,8 @@ export class GameScene extends Phaser.Scene {
     const hits = this.p.hits;
     for (let i = hits.length - 1; i >= 0; i--) {
       const h = hits[i];
-      if (!h.onTap || x < h.x || y < h.y || x >= h.x + h.w || y >= h.y + h.h) continue;
+      // A spot with a NaN edge would take every tap, so it takes none.
+      if (!h.onTap || !Number.isFinite(h.x + h.y + h.w + h.h) || x < h.x || y < h.y || x >= h.x + h.w || y >= h.y + h.h) continue;
       if (h.enabled === false) ui('refuse');
       else h.onTap();
       this.dirty = true;
@@ -188,11 +189,19 @@ export class GameScene extends Phaser.Scene {
       p: this.p,
       s: run.current!.state,
       r: this.L.board,
-      act: (change) => {
-        if (act(run, change)) SFX('place');
+      act: (change, quiet) => {
+        const moved = act(run, change);
+        if (moved && !quiet) SFX('place');
         this.dirty = true;
+        return moved;
+      },
+      drag: (change) => {
+        const moved = drag(run, change);
+        if (moved) this.dirty = true;
+        return moved;
       },
       tap: () => SFX('tap'),
+      place: () => SFX('place'),
       redraw: () => (this.dirty = true),
     };
   }
@@ -276,8 +285,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** A title in spaced capitals, as on a tarot card. */
-  private heading(x: number, y: number, text: string, size: number, color: string = C.goldText) {
-    return this.p.text(x, y, text.toLocaleUpperCase(), { size, color, spacing: Math.round(size / 6) });
+  private heading(x: number, y: number, text: string, size: number, color: string = C.goldText, glow?: string) {
+    return this.p.text(x, y, text.toLocaleUpperCase(), { size, color, spacing: Math.round(size / 6), glow });
   }
 
   private back(onTap: () => void) {
@@ -289,8 +298,7 @@ export class GameScene extends Phaser.Scene {
     const p = this.p;
     const prog = this.progress;
     const MENU = this.L.menu;
-    const title = this.heading(MENU.title.x, MENU.title.y, t('title'), 54);
-    if (!settings.reduceMotion) title.setShadow(0, 0, C.goldText, 14, false, true);
+    this.heading(MENU.title.x, MENU.title.y, t('title'), 54, C.goldText, settings.reduceMotion ? undefined : C.goldText);
     p.text(MENU.tagline.x, MENU.tagline.y, t('tagline'), { size: 16, color: C.inkDim, wrap: MENU.tagline.w });
     const { xs, ys, w, h } = MENU.cards;
     MODES.forEach((mode, k) => {
@@ -639,7 +647,7 @@ export class GameScene extends Phaser.Scene {
     p.hit('dim', STAGE.x, STAGE.y, STAGE.w, STAGE.h, practice ? () => {} : () => next(run));
     p.frame(bx, by, STAGE.w - 120, h, { alpha: 0.97, line: solved ? C.cyan : C.rose });
     this.heading(bx + (STAGE.w - 120) / 2, by + 40, t(`res_${last.reason}` as TextKey), 26, solved ? C.cyanText : C.roseText);
-    const line = practice || run.mode === 'duel' ? t('timeLine', { time: timeText(last.ms) }) : solved ? t('pointsLine', { n: last.points }) : run.mode === 'endless' || run.mode === 'draft' ? t('heartLost') : run.mode === 'blitz' ? t('timeLost', { n: 10 }) : '';
+    const line = practice || run.mode === 'duel' ? t('timeLine', { time: timeText(last.ms) }) : solved ? t('pointsLine', { n: last.points }) : run.mode === 'endless' || run.mode === 'draft' ? t('heartLost') : run.mode === 'blitz' ? t('timeLost', { n: BLITZ_PENALTY_S }) : '';
     p.text(bx + (STAGE.w - 120) / 2, by + 80, line, { size: 16, color: C.ink });
     if (practice) {
       p.button('next', bx + (STAGE.w - 120) / 2 - 95, by + 130, 170, 40, t('nextPuzzle'), () => (ui('click'), next(run)), { accent: true });
@@ -699,7 +707,7 @@ export class GameScene extends Phaser.Scene {
       const [a, b] = run.totals.map((ms) => Math.round(ms / 100));
       title = a === b ? t('duelTie') : t('duelWin', { n: a < b ? 1 : 2 });
       for (const pl of [0, 1]) lines.push(t('duelLine', { n: pl + 1, time: tenthsText(run.totals[pl]), solved: run.duelSolved[pl] }));
-      lines.push(t('duelRule', { n: 30 }));
+      lines.push(t('duelRule', { n: DUEL_FAIL_S }));
     } else {
       title = run.mode === 'blitz' ? t('blitzOver') : run.mode === 'daily' ? t('dailyOver') : t('runOver');
       lines.push(t('overScore', { n: formatNumber(run.score) }));

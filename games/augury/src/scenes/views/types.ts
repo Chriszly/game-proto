@@ -5,10 +5,17 @@ export interface ViewCtx<S = any> {
   p: Painter;
   s: S;
   r: Rect;
-  /** Makes a move: `change` changes the state and says whether it did (kept for Undo). */
-  act: (change: (s: S) => boolean) => void;
+  /**
+   * Makes a move: `change` changes the state and says whether it did (kept for Undo). Returns
+   * whether it did; `quiet` leaves out the move's sound (a drag's start, which `place` plays for).
+   */
+  act: (change: (s: S) => boolean, quiet?: boolean) => boolean;
+  /** A step of a drag: changes the state and checks it, with no Undo step and no sound. */
+  drag: (change: (s: S) => boolean) => boolean;
   /** A picking sound, for taps that change nothing worth undoing. */
   tap: () => void;
+  /** The move sound, once for a drag that made one. */
+  place: () => void;
   /** Asks for a redraw after a change outside `act`. */
   redraw: () => void;
 }

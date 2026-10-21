@@ -30,6 +30,8 @@ export const DUEL_HINT_S = 15;
 /** Puzzles solved between relic offers in a draft run, and how many are offered. */
 export const RELIC_EVERY = 3;
 export const RELIC_OFFER = 3;
+/** Cards a draft deals at most: the deal layout has three slots, so Crystal Ball is offered once. */
+export const DRAFT_MAX = 3;
 /** Extra time per Hourglass, as a share of each puzzle's time. */
 export const HOURGLASS = 0.25;
 /** Points: per level, per second left, taken per hint (down to a floor), and the streak bonus. */
@@ -217,7 +219,7 @@ function offerDraft(run: Run) {
   const count = 2 + run.relics.filter((r) => r === 'crystal').length;
   const last = run.results.length ? [run.results[run.results.length - 1].card.kind] : [];
   const offer: Card[] = [];
-  for (let i = 0; i < Math.min(count, KINDS.length - 1); i++) offer.push(randomCard(level, [...last, ...offer.map((c) => c.kind)]));
+  for (let i = 0; i < Math.min(count, DRAFT_MAX); i++) offer.push(randomCard(level, [...last, ...offer.map((c) => c.kind)]));
   run.draftOffer = offer;
   run.phase = 'draft';
 }
@@ -257,6 +259,15 @@ export function act(run: Run, change: (state: any) => boolean) {
   return true;
 }
 
+/** A step of a drag: changes the state like `act`, with no Undo step (the drag's start made one). */
+export function drag(run: Run, change: (state: any) => boolean) {
+  const cur = run.current;
+  if (run.phase !== 'playing' || !cur) return false;
+  if (!change(cur.state)) return false;
+  check(run);
+  return true;
+}
+
 /** Whether Undo has a move to take back. */
 export const canUndo = (run: Run) => run.phase === 'playing' && !!run.current?.history.length;
 
@@ -282,10 +293,14 @@ export function hint(run: Run) {
   return true;
 }
 
-/** Gives up on the current puzzle: a heart in Endless and Draft, time in Blitz and pass and play. */
+/**
+ * Gives up on the current puzzle: a heart in Endless and Draft, time in Blitz and pass and play.
+ * Practice just deals a new puzzle of the same kind and level, with nothing recorded.
+ */
 export function skip(run: Run) {
   if (run.phase !== 'playing' || !run.current) return false;
-  end(run, 'skip');
+  if (run.mode === 'practice') deal(run, { ...run.current.card, seed: newSeed() });
+  else end(run, 'skip');
   return true;
 }
 
@@ -320,7 +335,11 @@ function end(run: Run, reason: EndReason) {
     run.hearts--;
     run.events.push({ type: 'heart' });
   }
-  if (run.mode === 'blitz') run.clockMs = solved ? run.clockMs + BLITZ_SOLVE_S[cur.card.level] * 1000 : Math.max(0, run.clockMs - BLITZ_PENALTY_S * 1000);
+  if (run.mode === 'blitz') {
+    run.clockMs = solved ? run.clockMs + BLITZ_SOLVE_S[cur.card.level] * 1000 : Math.max(0, run.clockMs - BLITZ_PENALTY_S * 1000);
+    // The level rises with solves, so the queue shows what will be dealt.
+    for (const card of run.queue) card.level = blitzLevel(run.solved);
+  }
   if (run.mode === 'duel') {
     run.totals[run.player] += cur.elapsedMs + (solved ? 0 : DUEL_FAIL_S * 1000) + cur.hintsUsed * DUEL_HINT_S * 1000;
     if (solved) run.duelSolved[run.player]++;
@@ -338,7 +357,6 @@ export function next(run: Run) {
     case 'blitz': {
       if ((run.mode === 'endless' && run.hearts <= 0) || (run.mode === 'blitz' && run.clockMs <= 0)) return finish(run), true;
       const card = run.queue.shift()!;
-      if (run.mode === 'blitz') card.level = blitzLevel(run.solved);
       const after = run.queue[run.queue.length - 1]?.kind ?? card.kind;
       run.queue.push(randomCard(run.mode === 'blitz' ? blitzLevel(run.solved) : endlessLevel(run.dealt + QUEUE), [after]));
       deal(run, card);
@@ -358,7 +376,9 @@ export function next(run: Run) {
     case 'draft':
       if (run.hearts <= 0) return finish(run), true;
       if (run.last?.reason === 'solved' && run.solved % RELIC_EVERY === 0) {
-        run.relicOffer = shuffle(Math.random, [...RELICS]).slice(0, RELIC_OFFER);
+        // A second Crystal Ball would do nothing (`DRAFT_MAX`), so it is offered once.
+        const relics = RELICS.filter((r) => r !== 'crystal' || !run.relics.includes('crystal'));
+        run.relicOffer = shuffle(Math.random, relics).slice(0, RELIC_OFFER);
         run.phase = 'relic';
       } else offerDraft(run);
       return true;
@@ -419,10 +439,8 @@ export function tick(run: Run, dt: number) {
     const before = run.clockMs;
     run.clockMs = Math.max(0, run.clockMs - dt);
     if (Math.ceil(run.clockMs / 1000) < Math.ceil(before / 1000) && run.clockMs <= 5000 && run.clockMs > 0) run.events.push({ type: 'warn' });
-    if (run.clockMs <= 0) {
-      end(run, 'timeout');
-      run.betweenMs = BETWEEN_MS;
-    }
+    // The run ends where the clock runs out; the puzzle it cut off counts neither way.
+    if (run.clockMs <= 0) finish(run);
   }
 }
 
