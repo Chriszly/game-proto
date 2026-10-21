@@ -372,8 +372,9 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  create() {
-    this.state = loadState();
+  create(data?: { state?: GameState }) {
+    // Back from the town the live state comes as scene data; otherwise the save is loaded.
+    this.state = data?.state ?? loadState();
     const saved = this.state.plague;
     this.plagueSaved = saved ? { stage: saved.stage, relapses: saved.relapses, cured: saved.cured, season: saved.season ?? 0 } : null;
     // Play through the time away, before anything is drawn from the state.
@@ -445,7 +446,8 @@ export class GameScene extends Phaser.Scene {
     if (!window.confirm(t('confirmNewGame'))) return;
     this.startingOver = true;
     clearSave();
-    this.scene.restart();
+    // Fresh scene data, or the restart would keep the state handed over from the town.
+    this.scene.restart({});
   }
 
   /** The world is bigger than the view, so the camera keeps the doctor in sight within its edges. */
@@ -2024,7 +2026,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       // A second finger starts a pinch: stop walking instead of heading for it.
       if (this.pinching()) return;
-      if (p.y < HUD_HEIGHT) return;
+      if (viewPoint(p).y < HUD_HEIGHT) return;
       // While a panel is open, a tap anywhere below the top bar closes it instead of walking.
       if (this.closePanels()) return;
       // Where the tap is in the world, through the zoomed main camera rather than the top bar's.
