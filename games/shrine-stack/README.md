@@ -25,7 +25,7 @@ sky.
 | Swap (R) | From tier 2: put the stone in hand in reserve, or swap it with the one held (once per tier) |
 | Tap or click a blessing card | Keep that blessing after a balanced tier |
 | Marble, Sandstone, Basalt | Between tiers, from tier 3: pick the next tier's stone (tap again for plain limestone) |
-| Reroll | Spend 5 favor to swap the three blessings on offer for three new ones |
+| Reroll | Spend 5 favor to swap the three blessings on offer (four under the Many-Handed) for new ones |
 | Slow drop, Wider stone, Mason's Grace | Between tiers: spend favor on one-time help |
 | Take a curse | Between tiers: tick it before choosing a blessing to take the curse with it |
 | Build on | After a break with no blessing: go back to stacking |
@@ -42,13 +42,14 @@ sky.
    off, and the next stone is as wide as what is left.
 3. **Perfect drops**, within 5 pixels of the stone below, snap on whole and earn 2 extra favor.
 4. **Tiers**: three stones make a tier. A tier is balanced when each of its stones kept at least
-   three quarters of its width; it earns 5 favor and offers three blessings to choose from. A
-   wobbly tier earns nothing extra. Each tier swings 5% faster than the one before.
+   three quarters of its width; it earns 5 favor and offers three blessings (four under the
+   Many-Handed) to choose from. A wobbly tier earns nothing extra. Each tier swings 5% faster than the one before.
 5. **Reroll**: while choosing, spend 5 favor to draw new blessings (and a new curse), as often as
    favor lasts. A new curse comes untaken.
 6. **Spend favor** between tiers on one-time help, each at most once per break: a **Slow drop** (4
    favor: the next stone swings at half speed), a **Wider stone** (6: the top stone grows 20 wider,
-   up to the plinth) or **Mason's Grace** (8: the next miss is caught). The shop also opens after a
+   up to the plinth) or **Mason's Grace** (8: the next miss is caught, though the caught stone still
+   leaves the tier wobbly and fails its trial). The shop also opens after a
    wobbly tier when you have at least 4 favor, and from tier 3 after every tier; tap **Build on** to
    carry on.
 7. **Stone kinds**: from tier 2, a stone can be **heavy** (dark, iron-strapped: swings 25% slower,
@@ -81,7 +82,7 @@ sky.
 15. **The endless sky**: after the crown, **Keep building** lifts the crown off, a break picks the
     first sky tier's stone (and a blessing, if tier 12 was balanced), and the temple climbs on. Gusts now push the falling stone sideways (the
     top of the screen and the streaks by the stone show which way and how hard), stronger the higher
-    you go. Aim upwind.
+    you go (under the Storm Caller they just keep growing from tier 6). Aim upwind.
 16. **The end** comes when a stone misses the temple. The most tiers built in one temple are saved
     in the browser.
 
@@ -167,8 +168,8 @@ page).
 waits for a patron, takes the first of the two offered and checks its rule, checks that the first
 stone swings, drops each of the first tier's three stones with a tap while it is
 over the stone below (checking that a second tap while it falls drops nothing), checks the balanced
-tier's favor and its three blessings, taps Reroll and checks it cost 5 favor and brought three new
-cards, checks the break also shows a curse and the favor shop (neither is taken), and takes the
+tier's favor and its three blessings (four under the Many-Handed), taps Reroll and checks it cost 5
+favor and brought new cards, checks the break also shows a curse and the favor shop (neither is taken), and takes the
 first blessing, checking its effect and tier 2's trial as tier 2 starts. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Shrine Stack** workflow
 (`.github/workflows/playthrough.yml`) runs it on every PR that touches this folder or

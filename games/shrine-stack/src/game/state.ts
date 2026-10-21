@@ -341,10 +341,10 @@ function spawn(s: GameState) {
 /** Whether gusts can blow on the tier being built: in the endless sky, or from `STORM_FROM_TIER` under the Storm Caller. */
 export const gusty = (s: GameState) => s.endless || (s.patron === 'storm' && s.tier >= STORM_FROM_TIER);
 
-/** The gust on a new stone, when the tier is `gusty`. */
+/** The gust on a new stone, when the tier is `gusty`: the Storm Caller's ladder climbs on into the sky. */
 function gustFor(s: GameState) {
   if (!gusty(s)) return 0;
-  return s.endless ? gust(s.tier, GOAL_TIER) : gust(s.tier, STORM_FROM_TIER - 1);
+  return gust(s.tier, s.patron === 'storm' ? STORM_FROM_TIER - 1 : GOAL_TIER);
 }
 
 /** The kind of the stone that will be the temple's `n`th from the bottom (from 0): ordinary on the first tiers. */
@@ -468,6 +468,12 @@ function land(s: GameState) {
     s.events.push({ type: 'missed', drop: d, tier: s.tier, kind: m.kind, material: m.material });
     if (caught) {
       s.grace--;
+      // The caught stone kept nothing, so the tier is wobbly and a keep trial is failed.
+      s.wobbly = true;
+      if (s.trial && !s.trial.failed) {
+        s.trial.failed = true;
+        s.events.push({ type: 'trial', tier: s.tier, passed: false, favor: 0 });
+      }
       s.phase = 'swinging';
       spawn(s);
     } else {

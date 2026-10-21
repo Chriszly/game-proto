@@ -82,7 +82,8 @@ Implemented today:
   and `shopFor`; the Many-Handed (`hands`) offers `HANDS_OFFER` (4) blessings (`offerSize`) and
   swings at `HANDS_SPEED`; the Patient Mason (`patient`) swings at `PATIENT_SPEED` and earns no
   `PERFECT_FAVOR`; the Storm Caller (`storm`) adds `STORM_PERFECT` to `perfectPx` and gets gusts
-  from `STORM_FROM_TIER` (`gusty`, `gustFor`); the gust readout shows whenever `gusty` is true. `speedFor` takes the patron (`patronSpeed`).
+  from `STORM_FROM_TIER` (`gusty`, `gustFor`, whose ladder climbs on from there into the sky rather
+  than starting over at `GOAL_TIER`); the gust readout shows whenever `gusty` is true. `speedFor` takes the patron (`patronSpeed`).
 - Curses (SS5): a balanced tier's break offers `curseOffer` (`haste`, `brittle`, `dim`);
   `toggleCurse` sets `cursed`, and `chooseBlessing` then puts `curse` on the tier being started.
   `curseNow` says if it is in force; `favorMult` doubles (`CURSE_MULT`) every favor of that tier.
@@ -94,7 +95,9 @@ Implemented today:
   still rolls its `offer` and `curseOffer`, and `keepBuilding` opens the break with them (the
   material row and shop too); a wobbly one opens it with an empty offer.
   In the endless sky the run ends only on a miss; `best` keeps counting tiers.
-- The game ends on a miss (a stone keeping less than `MIN_W`) unless Mason's Grace catches it.
+- The game ends on a miss (a stone keeping less than `MIN_W`) unless Mason's Grace catches it; a
+  caught stone still marks the tier `wobbly` and fails its trial (with a `trial` event), then is
+  replayed.
 
 Missing or rough:
 
@@ -304,7 +307,7 @@ Effects, `sfx` (all from `GameScene`):
 | `stone` | a material button that changed the pick |
 | `pluck` | the curse toggle taking the curse (`ui('click')` when untaking it) |
 | `rise` | "Build on" and "Keep building" |
-| `gust` | `updateSound`, when a stone in hand gets a new, non-zero `wind` |
+| `gust` | `updateSound`, once per stone in hand (keyed by `dropped`) that has a non-zero `wind` |
 
 Shared sounds: `ui('coin')` on `bought`, `ui('click')` on "Build again", and `ui('refuse')` for a
 Reroll or shop button that can't be used, and for the Swap button or R while stacking when

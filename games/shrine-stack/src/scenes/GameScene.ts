@@ -309,8 +309,8 @@ export class GameScene extends Phaser.Scene {
   private crownedMs = 0;
   /** The song part playing, so the music only switches when the phase calls for another. */
   private musicPart = '';
-  /** The wind of the stone in hand last frame, to hear a new gust once. */
-  private lastWind = 0;
+  /** `dropped` when the gust sound last played, so each gusty stone sounds once. */
+  private lastGustStone = -1;
   /** The view's size in game pixels (wider or taller than `VIEW` when it fills the screen). */
   private vw: number = VIEW.w;
   private vh: number = VIEW.h;
@@ -341,7 +341,7 @@ export class GameScene extends Phaser.Scene {
     this.crown = null;
     this.crownedMs = 0;
     this.musicPart = '';
-    this.lastWind = 0;
+    this.lastGustStone = -1;
     this.movingKey = '';
     this.offerKey = '';
     ({ width: this.vw, height: this.vh } = viewSize(this));
@@ -548,8 +548,10 @@ export class GameScene extends Phaser.Scene {
     }
     // Only while stacking: the next stone's wind is rolled as a break opens, and must still gust when play resumes.
     if (!playing) return;
-    if (s.wind !== this.lastWind && s.wind !== 0) sfx('gust');
-    this.lastWind = s.wind;
+    if (s.wind !== 0 && s.dropped !== this.lastGustStone) {
+      sfx('gust');
+      this.lastGustStone = s.dropped;
+    }
   }
 
   /** The panel's Swap button and the R key: swap, or buzz while stacking when it isn't allowed. */
