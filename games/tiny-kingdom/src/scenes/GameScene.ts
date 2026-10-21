@@ -350,6 +350,7 @@ export class GameScene extends Phaser.Scene {
     this.undoBg = addArt(this, x, y, `plaque-${w}x${h}`);
     this.undoText = this.add.text(x, y - 1, '', style(13, INK)).setOrigin(0.5);
     this.undoBg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      this.closeTrade();
       // With no room for any tile and nothing to undo, the button finishes the kingdom instead
       // (merging or clearing a wood could still make room).
       if (!canUndo(this.state) && finish(this.state)) {
@@ -420,6 +421,7 @@ export class GameScene extends Phaser.Scene {
     const pill = addArt(this, countX, countY, 'count');
     const count = this.add.text(pill.x, pill.y, '', style(12, CREAM, '900')).setOrigin(0.5);
     plaque.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      this.closeTrade();
       if (!select(this.state, kind)) {
         ui('refuse');
         return;
@@ -781,7 +783,7 @@ export class GameScene extends Phaser.Scene {
       if (placed && kind) sfx('place', { pitch: PLACE_PITCH[kind] });
       else if (!placed) ui('refuse');
     } else sfx('select', { pitch: 0.8 }); // a second tap that cancels the merge
-    if (placed) this.placedSounds(placed, !!from);
+    if (placed) this.placedSounds(placed, from);
     if (placed) {
       if (placed.decree) saveCrowns(this.state.crowns);
       if (this.state.phase === 'over') this.gameEnded();
@@ -827,14 +829,15 @@ export class GameScene extends Phaser.Scene {
   /**
    * What a placement, clearing or merge sounds like after its own "tok": a rising blip per building
    * whose worth went up (staggered with the popups, at most six), one low note if any went down,
-   * then the decree's fanfare, the omen striking and the goal's arpeggio, in that order. `merged`
-   * is true for a merge.
+   * then the decree's fanfare, the omen striking and the goal's arpeggio, in that order. `from` is
+   * the merged-away house for a merge, null otherwise.
    */
-  private placedSounds(placed: Placed, merged: boolean) {
+  private placedSounds(placed: Placed, from: { col: number; row: number } | null) {
     const gains = placed.changes.filter((c) => c.gained > 0).slice(0, 6);
     gains.forEach((_, i) => this.later(70 + i * 70, () => sfx('gain', { pitch: 2 ** ((i * 2) / 12) })));
     // A merge always loses the house it takes away, so only other losses sound.
-    if (!merged && placed.changes.some((c) => c.gained < 0)) this.later(80, () => sfx('loss'));
+    const lost = placed.changes.filter((c) => !(from && c.col === from.col && c.row === from.row));
+    if (lost.some((c) => c.gained < 0)) this.later(80, () => sfx('loss'));
     let at = 120 + gains.length * 70;
     if (placed.decree) {
       this.later(at, () => sfx('decree'));
