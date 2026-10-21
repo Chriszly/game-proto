@@ -52,8 +52,9 @@ Implemented today:
   `bite * CHEW_PER_BITE` (6) health a second off the hedge; crows (`flies`) and a mole in its
   tunnel pass. Hedges at 0 health are dropped. The scene draws them (`drawHedges`) with a bar.
 - Compost (GG9): `finishWave` from `COMPOST.fromWave` (3) adds `COMPOST.rate` (10%) of the sap
-  unspent, floored and at most `COMPOST.cap` (30), and records it in `state.compost` for the
-  banner and the hint.
+  unspent, floored and at most `compostCap(s)` (`COMPOST.cap`, 30, plus `BOON.compostCap` per
+  Rich compost boon), and records it in `state.compost` for the banner; the hint and the boon
+  card show the same cap.
 - Harvest (GG10): `finishWave` at `HARVEST_WAVE` (30) sets `state.harvest` to
   `harvestStars(heart)` (1, 2 or 3 stars at `STAR_LEAVES` 1, 6 and 10 leaves) and raises
   `state.stars[garden]`; the scene opens the picker in 'harvest' mode (Keep going) and saves the
@@ -90,7 +91,8 @@ Implemented today:
   `showBoons` (after the harvest picker closes, when both come at wave 30); a card calls
   `takeBoon`, which pushes it onto `state.boons` (a boon taken twice counts twice, `boonCount`).
   Long moss, Sharp rocks and Sunny row fold into `boonedStats`/`statsOf(s, g)`; Sunny row records
-  `sunRow(s)` (the row with most grown golems) in `state.sunRows`, drawn as a warm stripe
+  `sunRow(s)` (the row with most grown golems, or with none grown the row with most golems
+  planted, or else row 0) in `state.sunRows`, drawn as a warm stripe
   (`drawSun`); New growth adds `BOON.leaves`; Thick hedges raises the hp of hedges planted later;
   Rich compost raises the compost cap. Numbers in `BOON`, names and blurbs in `BOON_INFO`.
 - Regrow a leaf (GG12): between waves (`canRegrow`: build phase, no boon pending, a leaf lost, the
@@ -191,7 +193,7 @@ File map (`src/`):
   `freeSoil`, `freePath`, `canPlant`, `plant`, `upgradeCost`, `picksForm`, `upgrade(s, g, form)`,
   `boonedStats`, `statsOf(s, g)`, `setTarget`, `nextTarget`, `uprootValue`, `uproot`, `canMove`, `move`, `neighbours`,
   `comboAt`, `slimed`, `queenOnPath`, `canCallEarly`, `nextWave`, `regrowPrice`, `canRegrow`, `regrow`, `sunRow`,
-  `takeBoon`, `startWave` (returns `'start'`, `'early'` or null) and `tick`. No Phaser.
+  `compostCap`, `takeBoon`, `startWave` (returns `'start'`, `'early'` or null) and `tick`. No Phaser.
 - `game/save.ts`: `loadBest`/`saveBest`, `loadBloom`/`saveBloom`, `loadGarden`/`saveGarden`,
   `loadThorny`/`saveThorny`, `loadStars`/`saveStars`, `loadLaurels`/`saveLaurels`.
 - `art/clay.ts`: the claymation toolkit. `bake` paints a texture in art units (2 per view pixel)

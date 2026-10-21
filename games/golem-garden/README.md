@@ -146,7 +146,7 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
     | Boon | What it does |
     | --- | --- |
     | Long moss | every slow lasts half again as long |
-    | Sunny row | golems on the row with the most grown golems reach 20px further (the row glows) |
+    | Sunny row | golems on the row with the most grown golems (or, with none grown, the most planted) reach 20px further (the row glows) |
     | New growth | two Heartwood leaves grow back, up to 10 |
     | Thick hedges | hedges planted from now have half again the health (90) |
     | Sharp rocks | pebble golems do 20% more damage |
