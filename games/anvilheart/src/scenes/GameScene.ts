@@ -31,6 +31,7 @@ import {
   tick,
   toggleAutoForge,
   toggleShieldMode,
+  touch,
 } from '../game/sim';
 import {
   BARREL as BARREL_PLACE,
@@ -96,6 +97,8 @@ import {
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the shop forward. */
 const MAX_STEP_MS = 250;
+/** How long "New smithy" waits for the second tap that confirms the wipe. */
+const RESET_CONFIRM_MS = 3000;
 /** How far up from an anvil's centre a sword lies on it. */
 const SWORD_LIFT = Math.round(11 * CELL_SCALE);
 /** How a sword lies on the barrel's mouth. */
@@ -343,7 +346,8 @@ export class GameScene extends Phaser.Scene {
     const dt = this.lastFrame === null ? 0 : Phaser.Math.Clamp(time - this.lastFrame, 0, MAX_STEP_MS);
     this.lastFrame = time;
     this.clock += dt;
-    tick(this.state, dt);
+    // The smithy stands still while a window covers the board, as it does under the edict window.
+    if (!this.windowOpen) tick(this.state, dt);
     // Forging (the Forge button's or the Auto Forge's inside tick), rust dropping tiers, heroes
     // bringing swords back and walk-offs costing reputation are kept here.
     if (this.state.events.some((e) => e.kind === 'forged' || e.kind === 'rusted' || e.kind === 'returned' || e.kind === 'left')) this.save();
@@ -415,6 +419,8 @@ export class GameScene extends Phaser.Scene {
     if (place === BARREL_PLACE && this.state.ranks.barrel === 0) return this.buy('barrel');
     const item = itemAt(this.state, place);
     if (item === null) return;
+    // A sword in hand is tended, so rust can't lower it under the held picture.
+    touch(this.state, place);
     this.spriteAt(place)?.setVisible(false);
     const sprite = this.image(p.worldX, p.worldY, itemTexture(item), swordScale(1.35)).setDepth(UI_DEPTH - 1);
     this.held = { slot: place, sprite };
@@ -1189,8 +1195,25 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });
+    // The first tap only asks; a second tap within RESET_CONFIRM_MS wipes everything, stars and perks too.
+    let confirm: Phaser.Time.TimerEvent | null = null;
+    const settle = () => {
+      confirm?.remove();
+      confirm = null;
+      text.setText(t('newSmithy'));
+      this.perkLink.setVisible(true);
+    };
     text.on('pointerdown', () => {
+      if (this.windowOpen) return;
       ui('click');
+      if (!confirm) {
+        text.setText(t('newSmithyConfirm'));
+        // The longer question would run into the perk link beside it.
+        this.perkLink.setVisible(false);
+        confirm = this.time.delayedCall(RESET_CONFIRM_MS, settle);
+        return;
+      }
+      settle();
       clearProgress();
       this.state = newShop(freshProgress());
       this.clearBoard();

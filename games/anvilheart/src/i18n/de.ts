@@ -160,6 +160,7 @@ const de: Translation<typeof en> = {
   reputation: 'Ruf der Gilde',
   onTheWay: 'Ein Abenteurer ist unterwegs …',
   newSmithy: 'Neue Schmiede',
+  newSmithyConfirm: 'Erneut tippen löscht Sterne, Vorteile',
 
   royalCommission: 'KÖNIGSAUFTRAG',
   crownOffers: 'Zwei Angebote',
