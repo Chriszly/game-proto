@@ -194,7 +194,8 @@ export type GameEvent =
   | { kind: 'handed'; desk: number; shield: boolean }
   | { kind: 'perk'; perk: Perk }
   | { kind: 'edict'; edict: Edict }
-  | { kind: 'left'; desk: number };
+  /** `back` says where half a set they held went: an anvil, the barrel (`BARREL`), or (place -1) its plain price paid. */
+  | { kind: 'left'; desk: number; back?: { place: number; coins: number } };
 
 /** What is kept between visits: the board, the coins and the upgrades. */
 export interface Progress {
@@ -280,26 +281,40 @@ export function newShop(progress: Progress): GameState {
   };
 }
 
-export const progressOf = (s: GameState): Progress => ({
-  coins: s.coins,
-  slots: [...s.slots],
-  idle: [...s.idle],
-  sold: s.sold,
-  bestTier: s.bestTier,
-  ranks: { ...s.ranks },
-  autoForge: s.autoForge,
-  commission: { ...s.commission },
-  choosing: s.choosing,
-  stars: s.stars,
-  charter: s.charter,
-  barrel: s.barrel,
-  reputation: s.reputation,
-  won: s.won,
-  shieldMode: s.shieldMode,
-  bestShield: s.bestShield,
-  perks: { ...s.perks },
-  edict: s.edict,
-});
+export const progressOf = (s: GameState): Progress => {
+  // Adventurers are not saved, so half a set they hold goes back onto an empty anvil, or, with no
+  // room, into the coins at its plain price.
+  const slots = [...s.slots];
+  let coins = s.coins;
+  for (const a of s.adventurers) {
+    for (const half of [a.given.sword, a.given.shield]) {
+      if (half === null) continue;
+      const slot = slots.indexOf(null);
+      if (slot >= 0) slots[slot] = half;
+      else coins += plainPrice(half, s);
+    }
+  }
+  return {
+    coins,
+    slots,
+    idle: [...s.idle],
+    sold: s.sold,
+    bestTier: s.bestTier,
+    ranks: { ...s.ranks },
+    autoForge: s.autoForge,
+    commission: { ...s.commission },
+    choosing: s.choosing,
+    stars: s.stars,
+    charter: s.charter,
+    barrel: s.barrel,
+    reputation: s.reputation,
+    won: s.won,
+    shieldMode: s.shieldMode,
+    bestShield: s.bestShield,
+    perks: { ...s.perks },
+    edict: s.edict,
+  };
+};
 
 /** A whole number of at least 0 from a save, or 0. */
 const count = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
@@ -329,6 +344,9 @@ export const priceFactor = (m?: Market, gem = false) => {
   const rule = edictRule(m.edict);
   return (1 + STAR_PRICE * freeStars(m)) * rule.pay * (gem ? 1 : rule.plainPay);
 };
+/** What an item is worth on its own: a sword's price (doubled with a gem) or a buckler's, with the market's raise. */
+export const plainPrice = (item: number, m?: Market) =>
+  Math.floor((isShield(item) ? shieldOf(tierOf(item)).price : swordOf(tierOf(item)).price * (isGemmed(item) ? GEM_PAY : 1)) * priceFactor(m, isGemmed(item)));
 /** What an order is worth: the sword's price, doubled for a gemmed one, raised a little per guild star. */
 export const orderPrice = (order: Order, m?: Market) => Math.floor(swordOf(order.wants).price * (order.gem ? GEM_PAY : 1) * priceFactor(m, order.gem));
 /** What a set order's buckler adds, before the set bonus. */

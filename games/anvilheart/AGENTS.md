@@ -83,7 +83,9 @@ Implemented today:
   `ranks.barrel` now and in every `foundCharter`; `rust` (2) doubles `rustMs`; `desk` (3) makes
   `desksOf` 4 (`MAX_DESKS`). The perk window (`createPerks`/`drawPerks`, `tall-panel`, three `wide`
   buttons) opens from the "Guild perks" link (`PERK_LINK`, shown once `stars > 0`) or the top bar's
-  star. With four desks `deskBox(desk, desks)` shrinks each desk by `deskScale` and centres it in
+  star. It stays open after a purchase, so the `perk` event's float (the perk's name and blurb) is
+  drawn just under the panel (`WIN.y + WIN.tallH / 2 + 30`) at `UI_DEPTH + 6`, above the window's
+  `UI_DEPTH + 5`. With four desks `deskBox(desk, desks)` shrinks each desk by `deskScale` and centres it in
   the same column: the counter frames are their own textures (`counter-3`, `counter-4`), and
   `drawVisitors` rebuilds the visitors, buyer frames and hint when the count changes.
 - Bucklers (AN14, `src/game/shields.ts`, `SHIELDS`: Wooden 6, Iron 15, Steel 40, Silver 100, Golden
@@ -96,7 +98,12 @@ Implemented today:
   patience is `SET_PATIENCE` (1.4x). `takes(a, item)` is `fitOf` (a buckler fits a set order at its
   tier or better) unless that half is already in `a.given`; `sell` stores the first half (pushing
   `handed`) and on the second pays `setPay`: `(payFor(sword) + shieldPrice) * SET_PAY` (1.5), with
-  the sword's fit deciding the reputation and the returning roll. The card shows both pictures,
+  the sword's fit deciding the reputation and the returning roll. When a set buyer walks off,
+  `tick` gives the half in `given` back through `handBack`: onto the first empty anvil, else into
+  the empty barrel, else as `plainPrice` in coins (the `left` event carries `back: { place, coins }`,
+  place -1 for coins, and the scene floats "Their half set is back in the smithy" or "paid Nc"
+  under "Left unhappy"). `progressOf` does the same in the saved snapshot (empty anvils, else
+  coins), since adventurers are not saved. The card shows both pictures,
   greys and ticks (`tick` texture) the half handed, and the tag reads "Set: 1 of 2" or "Set
   complete". Textures `shield-<tier>`.
 - Rust on idle anvils (AN8): `idle[]` (parallel to `slots`, saved) counts how long each anvil's
@@ -106,7 +113,8 @@ Implemented today:
   and `RUST_DROP_MS` (1 min) later it drops a tier (keeping its flags) and pushes `rusted`.
 - Adventurers with traits (AN9): `Order` is `{ wants, gem, trait, shield }`; `trait` (`Trait`, `TRAITS`)
   is rolled in `arrive` after the gem roll with one `Math.random` (never for the first order):
-  `TRAIT_CHANCE` (35%), split evenly. A `haggler` gets `HAGGLER_PATIENCE` (1.6x) and pays
+  `TRAIT_CHANCE` (35%), split evenly; a `veteran` rolled for a tier 1 order becomes `none`, since
+  nothing lies below a Rusty Dagger. A `haggler` gets `HAGGLER_PATIENCE` (1.6x) and pays
   `HAGGLER_PAY` (70%) of anything; a `noble` pays `NOBLE_PAY` (3x the price) for an exact fit and
   `fitOf` turns overkill into `short`; a `veteran` takes `wants - 1` as the new fit `lesser`
   (pays the price, no tip or reputation). `TRAIT_LINES` draws the trait between the order card
@@ -114,7 +122,8 @@ Implemented today:
 - Returning heroes (AN10): `sell` of tier `RETURN_TIER` (4) or better rolls `RETURN_CHANCE` (30%,
   one `Math.random`) to push a `Returning` (`RETURN_MS` 30s, the sword a tier lower with the
   `BATTERED` flag, `trophyFor` a tenth of its price, the buyer's look). `tick` brings the first
-  due hero back once a desk and an anvil are free (`comeBack`: `arrive` with their look and
+  due hero back once a desk and an anvil are free, before the Auto Forge gets to fill that anvil
+  (`comeBack`: `arrive` with their look and
   `returned` true, the sword on the first empty anvil, the trophy paid, a `returned` event). A
   battered sword (`isBattered`, textures `sword-<tier>[-gem]-worn`, dull glass with notches)
   merges and sells as its tier; `combine` repairs it with a Rusty Dagger either way round
@@ -156,8 +165,6 @@ Implemented today:
 Missing or rough:
 
 - No title screen and no in-game settings (they are on the hub page). No furnace ambience loop.
-- Half a set handed to an adventurer is lost if they walk off, and lives only on the adventurer, so
-  a reload loses it too.
 - With a long best sword name the top bar's stars slide under the banner, so their star can't be
   tapped; the "Guild perks" link still opens the perks.
 - `walkedOff` is counted but not saved (its cost is the reputation drop, which is: a walk-off
@@ -197,7 +204,7 @@ File map (`src/`):
   `STREAK_TOP`, `MASTER_MS`, `MASTER_PAY`, `LOOKS`, `REP_*`, `GEM_*`, `STAR_PRICE`, `RUST_*`,
   `TRAITS`, `TRAIT_CHANCE`, `HAGGLER_*`, `NOBLE_PAY`, `RETURN_*`, `TROPHY_PAY`, `REPAIR_PAY`,
   `SHIELD_TIER`, `SET_ORDER_CHANCE`, `SET_PAY`, `SET_PATIENCE`), `freshProgress`, `newShop`,
-  `progressOf`, the sale price rules `fitOf`, `freeStars`, `priceFactor`, `orderPrice`,
+  `progressOf`, the sale price rules `fitOf`, `freeStars`, `priceFactor`, `plainPrice`, `orderPrice`,
   `shieldPrice`, `payFor` and `setPay`, and the formulas `forgeMs`, `oreChance`, `autoForging`,
   `gemsAbout`, `gemChance`, `shieldsAbout`, `visitorEveryMs`, `patienceFactor`, `rusts`, `rustMs`,
   `dull`, `rustLeft`, `trophyFor` and `repairPay`.
@@ -264,8 +271,8 @@ How it runs:
   background's mosaic is computed pixel by pixel once at boot.
 - Tick: `GameScene.update(time)` takes `dt` from the frame timestamp (clamped to `MAX_STEP_MS`,
   250ms), adds it to `clock`, and calls `tick(state, dt)`, which cools the forge, forges when
-  `autoForging`, drains the hammer streak and patience (a walk-off costs reputation), rusts idle
-  swords, brings heroes back and brings adventurers. If that (or the Forge button since the last
+  brings heroes back, forges when `autoForging`, drains the hammer streak and patience (a walk-off
+  costs reputation and gives a held half set back), rusts idle swords and brings adventurers. If that (or the Forge button since the last
   frame) pushed a `forged`, `rusted`, `returned` or `left` event the scene saves. Then it draws,
   ending with `drawChooser` (which hides the offer window once a choice is made), `drawEdicts` and
   `playPart`.
@@ -335,7 +342,8 @@ State model (`src/game/state.ts`):
 Persistence: one key of its own, `anvilheart-progress`, holding `Progress` as JSON (`coins`,
 `slots`, `idle`, `sold`, `bestTier`, `ranks`, `autoForge`, `commission`, `choosing`, `stars`,
 `charter`, `barrel`, `reputation`, `won`, `shieldMode`, `bestShield`, `perks`, `edict`). Adventurers
-(and half sets they hold), returning heroes, heat, the streak and timers are not saved. An old save
+(half sets they hold go back onto empty anvils, or into the coins, in the snapshot), returning
+heroes, heat, the streak and timers are not saved. An old save
 loads with no perks, swords mode and no edict, so a charter past the first asks for its edict. `loadProgress` merges over `freshProgress()`, so a new upgrade id in `ranks`
 loads as rank 0, `autoForge` as false, and an old save starts with no barrel, reputation 50, not
 won, no idle times, no open offer (its standing commission counts as the quick way) and charter
@@ -490,7 +498,9 @@ Effects (`sfx`, plus the shared `ui`):
   round meets none of the later rules: no stars or edict (so prices are unchanged), no trait or set
   on the first order, a tier 2 sale (no returning hero), and under 20s of play (no rust).
 - Its screenshots are `0-forged`, `1-dragging`, `2-merged`, `3-masterwork`, `4-exact-fit` (the
-  sale drag midway, showing the tag) and `5-sold`; copy them to `docs/screenshots/playthrough-*.webp`.
+  sale drag midway, showing the tag) and `5-sold`; only `1-dragging` is kept, as
+  `docs/screenshots/playthrough-1-dragging.webp` (linked from the README), so refresh that one
+  when the drag's look changes.
 - It seeds `Math.random`, so adding or reordering random calls changes orders and looks but must
   not change the first round.
 
