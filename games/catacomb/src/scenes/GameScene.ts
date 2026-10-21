@@ -586,7 +586,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The powers in play, as their icons in purple rings under the top bar; hover or tap for the text. */
+  /**
+   * The powers in play, as their icons in purple rings under the top bar, one ring per kind with a
+   * count when copies stack (so the row never reaches the hero); hover or tap for the text.
+   */
   private drawPowers() {
     const s = this.state;
     const powers = s.fight?.powers ?? [];
@@ -594,13 +597,21 @@ export class GameScene extends Phaser.Scene {
     if (key === this.powerKey) return;
     this.powerKey = key;
     this.powerLayer.removeAll(true);
-    powers.forEach((id, i) => {
+    const kinds = new Map<string, { id: CardId; n: number }>();
+    for (const id of powers) {
+      const kind = card(id).power!;
+      const seen = kinds.get(kind);
+      if (seen) seen.n++;
+      else kinds.set(kind, { id, n: 1 });
+    }
+    [...kinds.values()].forEach(({ id, n }, i) => {
       const x = POWERS.x + i * POWERS.gap;
       const ring = this.add.circle(x, POWERS.y, POWERS.r, PURPLE.mid).setStrokeStyle(2, PURPLE.light);
       const pic = artImage(this, x, POWERS.y, cardIcon(card(id).icon), 0.5);
       const tip = () => this.showTip(t('powerTip', { name: cardName(id), text: describePower(id) }));
       ring.setInteractive({ useHandCursor: true }).on('pointerover', tip).on('pointerdown', tip);
       this.powerLayer.add([ring, pic]);
+      if (n > 1) this.powerLayer.add(this.add.text(x + POWERS.r, POWERS.y + POWERS.r, `×${n}`, textStyle(13)).setOrigin(0.5));
     });
   }
 
