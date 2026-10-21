@@ -8,7 +8,7 @@ import { KIND_COLOR, MODES, RELIC_COLOR, type Mode, type RelicId } from '../game
 import { DEFS, KINDS, LEVELS, SKILLS, SKILL_OF, type KindId, type Level } from '../game/kinds';
 import type { Progress } from '../game/progress';
 import {
-  act, canHint, canUndo, dailyDone, draftPick, drag, hint, next, skip, startRun, startSecondPlayer, takeRelic, tick, undo,
+  act, canHint, canUndo, dailyDone, draftPick, drag, hint, next, quit, skip, startRun, startSecondPlayer, takeRelic, tick, undo,
   BLITZ_PENALTY_S, DUEL_FAIL_S, QUEUE, type Card, type Run,
 } from '../game/run';
 import { loadProgress, saveProgress } from '../game/save';
@@ -189,8 +189,8 @@ export class GameScene extends Phaser.Scene {
       p: this.p,
       s: run.current!.state,
       r: this.L.board,
-      act: (change, quiet) => {
-        const moved = act(run, change);
+      act: (change, quiet, before) => {
+        const moved = act(run, change, before);
         if (moved && !quiet) SFX('place');
         this.dirty = true;
         return moved;
@@ -220,6 +220,8 @@ export class GameScene extends Phaser.Scene {
 
   private toMenu() {
     ui('click');
+    // Leaving mid-run ends the run: its bests, the daily five's score and the run are recorded.
+    if (this.run) quit(this.run);
     this.run = null;
     this.screen = 'menu';
     saveProgress(this.progress);
@@ -450,7 +452,7 @@ export class GameScene extends Phaser.Scene {
       VIEWS[kind].draw(this.ctx());
       const def = DEFS[kind];
       p.button('undo', TOOLS.xs[0], TOOLS.y, TOOLS.w, TOOLS.h, t('undo'), () => undo(run) && SFX('tap'), { enabled: def.undo && canUndo(run) });
-      p.button('hint', TOOLS.xs[1], TOOLS.y, TOOLS.w, TOOLS.h, Number.isFinite(run.hints) ? t('hintButton', { n: run.hints }) : t('hint'), () => hint(run), { enabled: canHint(run) });
+      p.button('hint', TOOLS.xs[1], TOOLS.y, TOOLS.w, TOOLS.h, Number.isFinite(run.hints) ? t('hintButton', { n: run.hints }) : t('hint'), () => hint(run) || ui('refuse'), { enabled: canHint(run) });
       p.button('skip', TOOLS.xs[2], TOOLS.y, TOOLS.w, TOOLS.h, run.mode === 'practice' ? t('newPuzzle') : t('skip'), () => skip(run), { enabled: run.phase === 'playing' });
     }
     this.drawSide(run);

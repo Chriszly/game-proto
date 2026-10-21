@@ -35,9 +35,9 @@ export const bridgesView: PuzzleView<BridgesState> = {
       p.text(cx, cy, String(isl.n), { size: Math.round(rad * 1.05), color: have === isl.n ? C.cyanText : C.goldText });
       p.hit(`island-${i}`, cx - cell / 2, cy - cell / 2, cell, cell, () => {
         const before = s.picked;
-        ctx.act((st) => bridgesTap(st, i));
-        // Picking or letting go changes nothing worth undoing, but still shows.
-        if (s.picked !== before) ctx.tap(), ctx.redraw();
+        const built = ctx.act((st) => bridgesTap(st, i));
+        // Picking or letting go changes nothing worth undoing, but still shows; a bridge plays `place`.
+        if (!built && s.picked !== before) ctx.tap(), ctx.redraw();
       });
     });
   },

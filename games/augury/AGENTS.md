@@ -59,8 +59,9 @@ File map (`src/`):
 - `audio.ts`: `SONG` (parts `menu`, `calm`, `blitz`, sting `over`) and the `SFX` table.
 - `game/rng.ts`: `seeded` (mulberry32), `newSeed`, `dailySeed`, `between`, `pick`, `shuffle`,
   `neighbours`.
-- `game/kinds.ts`: `LEVELS`/`Level`, `PuzzleDef` (`make`, `solved`, `failed?`, `hint`, `tick?`,
-  `undo`, `limit`), `KINDS`/`KindId`, `SKILLS`/`Skill`, `SKILL_OF` and `DEFS`.
+- `game/kinds.ts`: `LEVELS`/`Level`, `PuzzleDef` (`make`, `solved`, `failed?`, `hint`, `canHint?`
+  (Code Breaker: false once every place is shown), `afterUndo?` (Bridges lets go of a picked
+  island), `tick?`, `undo`, `limit`), `KINDS`/`KindId`, `SKILLS`/`Skill`, `SKILL_OF` and `DEFS`.
 - `game/puzzles/*.ts`: one per kind, no Phaser. Each exports its `PuzzleDef`, its state type and
   its move functions (`nonoTap`, `bridgesTap`, `codeAdd`/`codeBack`/`codeGuess`, `calcSelect`/
   `calcEnter`, `sumsSelect`/`sumsEnter`, `unjamMove`, `flipTap`, `linkStart`/`linkMove`/`linkEnd`,
@@ -69,10 +70,13 @@ File map (`src/`):
   `blitzSeconds`, `BLITZ_SOLVE_S`, `BLITZ_PENALTY_S`, `DAILY_LEVELS`, `DUEL_LEVELS`, `DUEL_FAIL_S`,
   `DUEL_HINT_S`, `RELIC_EVERY`, `RELIC_OFFER`, `DRAFT_MAX`, `HOURGLASS`, the points constants),
   `Card`, `Current`, `Result`, `Run`, `RunEvent`, and the actions (`startRun`, `act`, `drag`,
-  `undo`, `hint`, `skip`, `next`, `draftPick`, `takeRelic`, `startSecondPlayer`, `tick`,
+  `undo`, `hint`, `skip`, `quit`, `next`, `draftPick`, `takeRelic`, `startSecondPlayer`, `tick`,
   `canUndo`, `canHint`, `dailyDone`, `endlessLevel`). Only this file changes a `Run`; `act` and
   `drag` (a step of a drag, with no Undo step) are the only ways a move reaches a puzzle's state.
-  `skip` in Practice deals a new puzzle of the same kind and level, with nothing recorded. A draft
+  `skip` in Practice deals a new puzzle of the same kind and level, with nothing recorded. `quit`
+  (the Leave button) ends a run that is not over through `finish`, so its bests, the daily five's
+  score and the run count; Practice records nothing. `end` also writes the daily five's score so
+  far, so a reload keeps it. A draft
   deals at most `DRAFT_MAX` (3) cards, the deal layout's slots, so Crystal Ball is offered once;
   Blitz's queue is levelled again after every puzzle, so "Up next" shows the level that will be
   dealt, and Blitz ends where its clock runs out, without a result for the puzzle it cut off.
@@ -115,9 +119,12 @@ How it runs:
   1-6/Backspace/Enter for Code Breaker, S/D or arrows for Memory Echo.
 - Moves: a view calls `ctx.act(change)`, which runs `act(run, change)`: the puzzle's state is
   copied for Undo (for kinds with `undo`), changed, and checked for solved or failed. Picking a cell
-  or island changes the state without a move (no Undo step) and plays `tap`. A Path Link drag is
-  one move: its start goes through `ctx.act` quietly, each cell it crosses through `ctx.drag` (no
-  Undo step, no sound), and `ctx.place` plays `place` once when it ends, if it changed a path.
+  or island changes the state without a move (no Undo step) and plays `tap`; a bridge plays only
+  `place`. A Path Link drag is one move: its first change (the start, if it cut or restarted a path,
+  else the first cell crossed) goes through `ctx.act` quietly with the state from before the drag
+  (`act`'s `before`), so a tap that changes nothing makes no Undo step; later cells go through
+  `ctx.drag` (no Undo step, no sound), and `ctx.place` plays `place` once when it ends, if it
+  changed a path.
 - Time: `update` takes `dt` from the frame time (capped at `MAX_STEP_MS`) and calls `tick`, which
   runs the puzzle's clock (`timeLeftMs`), Blitz's clock (`clockMs`), Memory Echo's own clock and the
   banner between puzzles (`betweenMs`; Practice waits for a tap).
@@ -134,8 +141,9 @@ State model (`Run`): `mode`, `phase`, `hearts`, `maxHearts`, `hints`, `score`, `
 `draftOffer`, `player`, `totals`, `duelSolved`, `day`, `progress`, `newBest` and `events`.
 
 Persistence: one `localStorage` key, `augury-progress`, holding `Progress`. It is written when a run
-starts (the daily five counts as played from its first card), after every puzzle, when a run ends
-and when leaving to the menu. `loadProgress` keeps only known kinds and whole, non-negative numbers.
+starts (the daily five counts as played from its first card), after every puzzle (with the daily
+five's score so far), when a run ends and when leaving to the menu, which ends the run and records
+it (`quit`). `loadProgress` keeps only known kinds and whole, non-negative numbers.
 
 ### Hub settings
 
@@ -168,8 +176,8 @@ sting plays out).
 | `relic` | a `relic` event |
 
 Shared sounds: `ui('click')` on mode cards, menu buttons and picks, `ui('refuse')` for a disabled
-button (Undo with nothing to undo, Hint with none left, a pad key before a cell is picked, the
-daily five played today).
+button (Undo with nothing to undo, Hint with none left or none that can help, a pad key before a
+cell is picked, the daily five played today), and a Hint tap that finds nothing to show.
 
 ## Testing hooks
 

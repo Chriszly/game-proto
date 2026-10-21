@@ -249,10 +249,11 @@ export function takeRelic(run: Run, index: number) {
  * Makes a move on the current puzzle: `change` changes its state and says whether it did. A
  * change is kept for Undo, and a solved or lost puzzle ends.
  */
-export function act(run: Run, change: (state: any) => boolean) {
+export function act(run: Run, change: (state: any) => boolean, before?: string) {
   const cur = run.current;
   if (run.phase !== 'playing' || !cur) return false;
-  const before = JSON.stringify(cur.state);
+  // A drag that changes nothing at its start passes the state from before it began.
+  before ??= JSON.stringify(cur.state);
   if (!change(cur.state)) return false;
   if (DEFS[cur.card.kind].undo) cur.history.push(before);
   check(run);
@@ -275,10 +276,12 @@ export function undo(run: Run) {
   const cur = run.current;
   if (!canUndo(run) || !cur) return false;
   cur.state = JSON.parse(cur.history.pop()!);
+  DEFS[cur.card.kind].afterUndo?.(cur.state);
   return true;
 }
 
-export const canHint = (run: Run) => run.phase === 'playing' && run.hints > 0 && !!run.current && run.current.card.kind !== 'echo';
+export const canHint = (run: Run) =>
+  run.phase === 'playing' && run.hints > 0 && !!run.current && run.current.card.kind !== 'echo' && DEFS[run.current.card.kind].canHint?.(run.current.state) !== false;
 
 export function hint(run: Run) {
   const cur = run.current;
@@ -326,6 +329,8 @@ function end(run: Run, reason: EndReason) {
   run.last = result;
   recordResult(run.progress, cur.card.kind, cur.card.level, solved, cur.elapsedMs, cur.hintsUsed);
   run.score += points;
+  // The day's score so far, so a reload or a crash keeps the points of the cards played.
+  if (run.mode === 'daily') run.progress.daily = { day: run.day, score: run.score };
   if (solved) {
     run.solved++;
     run.streak++;
@@ -411,6 +416,16 @@ function finish(run: Run) {
   }
   run.progress.runs++;
   run.events.push({ type: 'over' });
+}
+
+/**
+ * Leaves a run before it is over (the Leave button): it ends there, recording its bests, the daily
+ * five's score and the run like a run that ended by its rules. Practice records nothing.
+ */
+export function quit(run: Run) {
+  if (run.phase === 'over' || run.mode === 'practice') return false;
+  finish(run);
+  return true;
 }
 
 /** Advances the run's clocks by `dt` milliseconds of game time. */

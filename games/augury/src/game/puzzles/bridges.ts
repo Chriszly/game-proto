@@ -116,6 +116,10 @@ export const bridges: PuzzleDef<BridgesState> = {
   undo: true,
   limit: [75, 100, 130, 170],
   make,
+  // A bridge's snapshot was taken with its first island picked; Undo lets go of it.
+  afterUndo(s) {
+    s.picked = -1;
+  },
   solved(s) {
     if (s.islands.some((_, i) => bridgeCount(s, i) !== s.islands[i].n)) return false;
     const seen = new Set([0]);

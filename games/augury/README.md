@@ -25,7 +25,7 @@ It plays sideways or upright, and turns with the phone.
 | Enter | Make the guess (Code Breaker) |
 | S and D, or Left and Right | Same or different (Memory Echo) |
 | Undo (U), Hint (H), Skip | Take back a move, use a hint, give the puzzle up |
-| Leave | Back to the menu (the run ends) |
+| Leave | Back to the menu (the run ends there, and its score and bests count) |
 
 ### The puzzles
 
