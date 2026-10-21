@@ -136,6 +136,8 @@ export class GameScene extends Phaser.Scene {
   private onKey(e: KeyboardEvent) {
     const s = this.state;
     if (this.screen !== 'board' || s.phase !== 'playing' || !s.puzzle) return;
+    // A browser shortcut (Ctrl/Cmd/Alt plus a key) is the browser's, not a move.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const size = s.puzzle.size;
     if (/^[1-9]$/.test(e.key)) this.enterDigit(Number(e.key));
     else if (e.key === 'n' || e.key === 'N') this.onNotes();
@@ -171,8 +173,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onErase() {
-    if (!canEnter(this.state)) return ui('refuse');
-    erase(this.state);
+    if (!erase(this.state)) return ui('refuse');
     SFX('erase');
     this.dirty = true;
   }
@@ -405,12 +406,16 @@ export class GameScene extends Phaser.Scene {
       const text = this.digits[i];
       if (v) {
         const color = wrong ? th.wrong : i === sel && th.selText ? th.selText : p.givens[i] ? th.given : th.player;
-        text
-          .setText(String(v))
-          .setPosition(cx + w / 2, cy + h / 2 + (th.font.includes('Courier') ? 1 : 0))
-          .setStyle({ fontFamily: th.font, fontSize: `${fontSize}px`, fontStyle: th.bold ? 'bold' : th.italicPlayer && !p.givens[i] ? 'italic' : '', color })
-          .setShadow(0, 0, th.glow === 'auto' ? color : th.glow ?? '#000', th.glow && !(i === sel && th.selText) ? 10 : 0, false, true)
-          .setVisible(true);
+        const fontStyle = th.bold ? 'bold' : th.italicPlayer && !p.givens[i] ? 'italic' : '';
+        const glowColor = th.glow === 'auto' ? color : th.glow ?? '#000';
+        const blur = th.glow && !(i === sel && th.selText) ? 10 : 0;
+        // Restyling re-renders the text's canvas, so only do it when the style really changed.
+        const styleKey = `${th.font}|${fontSize}|${fontStyle}|${color}|${glowColor}|${blur}`;
+        text.setText(String(v)).setPosition(cx + w / 2, cy + h / 2 + (th.font.includes('Courier') ? 1 : 0)).setVisible(true);
+        if (text.getData('styleKey') !== styleKey) {
+          text.setStyle({ fontFamily: th.font, fontSize: `${fontSize}px`, fontStyle, color }).setShadow(0, 0, glowColor, blur, false, true);
+          text.setData('styleKey', styleKey);
+        }
       } else if (s.notes[i]) {
         const marks: string[] = [];
         for (let d = 1; d <= size; d++) if (s.notes[i] & (1 << d)) marks.push(String(d));
@@ -547,7 +552,7 @@ export class GameScene extends Phaser.Scene {
     this.button('daily', this.L.menu.daily.x, this.L.menu.daily.y, this.L.menu.daily.w, this.L.menu.daily.h, dailyDone ? t('dailyDone') : t('daily'), () => {
       ui('click');
       startDaily(this.state, new Date());
-    }, 20);
+    }, 20, !dailyDone);
     this.text(this.L.menu.levels.xs[1], this.L.menu.levels.y - 44, t('classic'), 15);
     LEVELS.forEach((level, k) => {
       this.button(level, this.L.menu.levels.xs[k], this.L.menu.levels.y, this.L.menu.levels.w, this.L.menu.levels.h, t(level), () => {
