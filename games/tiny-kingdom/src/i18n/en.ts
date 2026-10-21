@@ -131,6 +131,7 @@ const en = {
   undoUsed: 'Undo used this round',
   noRoom: 'No room: merge houses or finish',
   noRoomWood: 'No room: clear a wood or finish',
+  noRoomFinish: 'No room: finish',
   starsAt: 'Stars at {one}, {two} and {three}',
   todaysBest: "Today's best {n}",
   bestScore: 'Best score {n}',
