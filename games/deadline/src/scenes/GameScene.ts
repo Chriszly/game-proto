@@ -129,6 +129,8 @@ const BLAM_EVERY = 6;
 const SPLUT_EVERY = 4;
 /** Taps on the game over screen are ignored for this long (game time, in ms) after it opens. */
 const OVER_GRACE_MS = 600;
+/** A boss's pack spawns at least this far (px) above the sandbags, so none of it starts behind them. */
+const PACK_CLEAR = 30;
 /** The pitch of a zombie's death sound: the small ones squeak, the big ones thud (bosses have their own). */
 const KILL_PITCH: Partial<Record<EnemyKind, number>> = { crawler: 1.4, runner: 1.15, spitter: 1.05, brute: 0.75, riot: 0.85 };
 
@@ -756,8 +758,9 @@ export class GameScene extends Phaser.Scene {
       } else if (this.hud.onKit(x, y) && ((s.phase === 'wave' && s.sandbags > 0) || s.placing)) {
         s.placing = !s.placing;
         ui('click');
-      } else if (this.hud.onKit(x, y) && s.phase !== 'wave') {
-        // Sandbags only go down in a wave; between waves a tap on the kit panel does nothing.
+      } else if (this.hud.onKit(x, y)) {
+        // Sandbags only go down in a wave, and only with some in the kit; any other tap on the kit
+        // panel does nothing (and never aims the squad).
         ui('refuse');
       } else if (s.placing) {
         // A tap on the road puts the wall in that lane; anywhere else puts the sandbags away.
@@ -1232,12 +1235,17 @@ export class GameScene extends Phaser.Scene {
     this.spawnPack(boss, brood ? 'crawler' : 'runner', brood ? BROOD.pack : BOSS.pack, 30);
   }
 
-  /** A bunch of `n` zombies of a kind comes out round a boss, in two staggered rows. */
+  /**
+   * A bunch of `n` zombies of a kind comes out round a boss, in two staggered rows. The rows stay
+   * `PACK_CLEAR` short of the sandbags, so a boss killed or calling at the line can't put them
+   * behind it with nothing to shoot.
+   */
   private spawnPack(boss: Enemy, kind: EnemyKind, n: number, step: number) {
     const hp = Math.round(ENEMIES[kind].hp * toughness(this.state.wave));
+    const maxY = REACH_Y - ENEMIES[kind].radius - PACK_CLEAR;
     for (let i = 0; i < n; i++) {
       const x = Phaser.Math.Clamp(boss.x + (i - (n - 1) / 2) * step, LANES[0].x0 + 10, LANES[2].x1 - 10);
-      this.addEnemy(kind, hp, x, boss.y + 26 + (i % 2) * 12);
+      this.addEnemy(kind, hp, x, Math.min(boss.y + 26 + (i % 2) * 12, maxY));
     }
     this.state.waveTotal += n;
   }
@@ -1375,6 +1383,8 @@ export class GameScene extends Phaser.Scene {
   private hitTargets() {
     const perks = this.state.perks;
     const fire = perks.includes('fire'), headshots = perks.includes('headshot');
+    // One `hit` for the whole pass, not one per bullet, and only for a zombie the player can see.
+    let struck = false;
     for (const b of this.bullets.all) {
       if (!b.alive) continue;
       const damage = this.state.stats.damage * b.mult;
@@ -1416,6 +1426,7 @@ export class GameScene extends Phaser.Scene {
           }
           if (fire) e.burn = FIRE_ROUNDS.ms;
           this.hurt(e, head ? damage * HEADSHOT.mult : damage);
+          if (e.alive && this.visibility(e.x, e.y) > 0) struck = true;
           // An armoured brute stops the bullet, pierce or not, and nothing ricochets off it.
           if (e.armoured) {
             b.hitsLeft = 0;
@@ -1465,6 +1476,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (b.hitsLeft <= 0) this.bullets.release(b);
     }
+    if (struck) sfx('hit');
   }
 
   /** A grenadier's grenade bursts: every zombie within `GRENADE.radius` takes its damage, past any shield. */
@@ -1507,7 +1519,6 @@ export class GameScene extends Phaser.Scene {
   /** Takes hit points off an enemy, with a little damage number, and kills it at 0. */
   private hurt(e: Enemy, damage: number) {
     e.hp -= damage;
-    if (e.hp > 0) sfx('hit');
     const r = ENEMIES[e.kind].radius;
     this.effect('', e.x + r * 0.8 + 4, e.y - r * 0.4, { life: 520, rise: 36, text: `-${damage}` });
     if (e.hp <= 0) this.kill(e);
@@ -1527,8 +1538,11 @@ export class GameScene extends Phaser.Scene {
       sfx('frenzy');
       this.music();
     }
-    if (isBoss(e.kind)) sfx('bossKill');
-    else sfx('kill', { pitch: KILL_PITCH[e.kind] ?? 1 });
+    // A zombie hidden by a blackout falls unheard.
+    if (this.visibility(e.x, e.y) > 0) {
+      if (isBoss(e.kind)) sfx('bossKill');
+      else sfx('kill', { pitch: KILL_PITCH[e.kind] ?? 1 });
+    }
     const n = this.state.streak;
     if (n >= 3 && n % 3 === 0) this.effect('streak', e.x + 12, e.y + 2, { life: 700, text: `x${n}`, grow: 0.1 });
     const s = this.splats.take();
