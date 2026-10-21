@@ -58,7 +58,7 @@ alongside you, and binding one isle of every kind completes the Royal Atlas.
 7. **Supplies**: 12 a voyage. When they can't pay for anything more, the surveyor heads home on
    their own.
 8. **Turn back early or push on**: every supply left when you tap Return to port sells back for 3
-   coins, up to what the chart's tiles are worth. The panel brackets the unused supply pips and the
+   coins, up to what the chart's tiles pay (after the rival's share). The panel brackets the unused supply pips and the
    button carries the sell-back as a magenta tag (+18c). A voyage that spends every supply sells
    none back.
 9. **Charts**: every tile revealed on a voyage, surveyed or seen from a lookout, goes on the chart,
