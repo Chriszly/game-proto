@@ -57,10 +57,10 @@ const SLOOP_LOOT = 10;
 /** The player's hull and Heavy Shot's first price, from src/game/state.ts and upgrades.ts. */
 const HULL = 120;
 const HEAVY_SHOT = 15;
-/** How close to sail to an enemy before turning side-on, from PLAYER.range in state.ts, less a margin. */
+/** How close to sail to an enemy before turning side-on, from HULLS.frigate.range in hulls.ts, less a margin. */
 const CLOSE_IN = 220;
 /**
- * A fully charged broadside reaches PLAYER.range (260); fire at enemies a little inside it, and
+ * A fully charged broadside reaches HULLS.frigate.range (260); fire at enemies a little inside it, and
  * within ARC (32 degrees, from state.ts) of straight out from the side, less a margin.
  */
 const FIRE_WITHIN = 210;

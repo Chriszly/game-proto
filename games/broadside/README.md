@@ -185,8 +185,9 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
 
 20. **Keep a consort.** The harbor's "Keep a consort" row buys back the richest prize sold there
    for her sale price: her prize crew goes across again and she sails into the next wave with
-   you, setting out astern, and on from wave to wave while she floats. Each harbor she draws a
-   wage of half her wave 1 loot (a brig 13 gold), and the crew patches a quarter of her hull; one
+   you, setting out astern, and on from wave to wave while she floats. The crew patches a quarter
+   of her hull as soon as she is kept, and each harbor after she draws a wage of half her wave 1
+   loot (a brig 13 gold) and is patched again; one
    the purse can't pay is paid off and sold. You can keep two at once, and scuttling one sinks
    her for double loot as with any prize.
 21. **Convoy waves.** From wave 7, every third wave (7, 10, 13, 16, 19 and on, never the haven)
