@@ -185,7 +185,7 @@ How it runs:
   Remove is on; a `pointerdown` on a junction calls `throwSwitch` instead. Dragging acts once per
   new tile. A `pointerdown` on an open village remembers it (`pressedVillage`), a move to another
   tile, off the board or off the grid forgets it, and the `pointerup` calls `sendCourier` for it. In `depot` mode a tap on a
-  village calls `buyDepot` (and goes back to `auto` once bought); the Depot button toggles it. Order cards call `dispatch`; the upgrade buttons `buyUpgrade`; the charter cards
+  village calls `buyDepot` (and goes back to `auto` once bought); the Depot button toggles it (and refuses to turn it on while `depotLocked`, in round 1). While the charter cards are up (`charterOffer`), a tap on the board does nothing. Order cards call `dispatch`; the upgrade buttons `buyUpgrade`; the charter cards
   `pickCharter`; Remove, Plain and Depot set the scene's `mode` (`auto`, `plain`, `remove` or `depot`), which
   lives in the scene, not the state. Sim functions check the phase and return false when the
   action is not allowed; `canBuild`, `canRemove` and `throwSwitch` also refuse while
@@ -353,13 +353,13 @@ starts the music again.
   switch thrown, `send` for an order card sent, `buy` for an upgrade or a depot (`roar` too for the
   second wyrm), `courier` for a courier call, `stamp` for a charter picked, `ui('click')` for the
   Remove, Plain and Depot toggles and Play again, and `ui('refuse')` for every refused tap (a tap,
-  not each tile of a drag, and none on the board once the game is over): track that can't go there, nothing to remove, a depot that can't be bought, an order card that can't
+  not each tile of a drag, and none on the board once the game is over or while the charter cards are up): track that can't go there, nothing to remove, a depot that can't be bought, an order card that can't
   be sent, an upgrade not affordable or locked, and a courier call that can't go (from round 2).
 - **`GameSounds` (the sim's doing):** `order` for a new order (`workshop` for a workshop's goods),
   `load` when goods are aboard, `deliver` for a delivery, `late` for an order out of time, `faith`
   for a heart lost to a village at rock bottom, `sour` for a village souring, `munch` when a wyrm
   eats, `switchStop` when a wyrm stops to throw a switch, `warn` for a hazard warned, `splash` or
-  `rumble` when a washout or rockfall strikes, `gifts` when a courier's visit ends, `round` for a
+  `rumble` when a washout or rockfall strikes (none when it blows over and the track stays), `gifts` when a courier's visit ends, `round` for a
   new round and `charter` when the charter cards appear.
 
 ## Testing hooks

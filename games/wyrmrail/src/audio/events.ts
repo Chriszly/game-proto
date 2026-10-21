@@ -1,4 +1,5 @@
 import { playMusic, playSting, stopMusic } from '../../../../shared/audio';
+import { key } from '../game/map';
 import { FESTIVAL_ROUND, type GameState } from '../game/state';
 import { SONG, sfx } from './sounds';
 
@@ -79,7 +80,8 @@ export class GameSounds {
     });
 
     if (now.hazard && !was.hazard) sfx('warn');
-    if (!now.hazard && was.hazard) sfx(was.hazard.kind === 'washout' ? 'splash' : 'rumble');
+    // A hazard that blew over (a wyrm stranded on its tile) took no track: no splash or rumble.
+    if (!now.hazard && was.hazard && !s.track.includes(key(was.hazard.tile))) sfx(was.hazard.kind === 'washout' ? 'splash' : 'rumble');
     // The gifts: a courier's visit ended, and not because a hazard dropped it.
     else if (now.wyrms.some((w, i) => was.wyrms[i]?.visiting && !w.visiting)) sfx('gifts');
 

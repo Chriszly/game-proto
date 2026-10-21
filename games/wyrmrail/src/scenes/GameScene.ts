@@ -312,7 +312,8 @@ export class GameScene extends Phaser.Scene {
     const onBoard = p.worldX >= BOARD.x && p.worldX < BOARD.x + BOARD.w && p.worldY >= BOARD.y && p.worldY < BOARD.y + BOARD.h;
     // A press on a village that slides off the board or the grid is no courier call.
     if (!onBoard || !inGrid(t)) return void (this.pressedVillage = null);
-    if (this.state.phase !== 'play') return void (this.pressedVillage = null);
+    // The game waits for a charter pick: a tap on the shaded board around the cards does nothing.
+    if (this.state.phase !== 'play' || this.state.charterOffer) return void (this.pressedVillage = null);
     if (!down && (this.dragTile === null || this.dragTile === key(t))) return;
     this.dragTile = key(t);
     if (down) this.dragLaid = 0;
@@ -450,6 +451,8 @@ export class GameScene extends Phaser.Scene {
     this.hoardButton = button(BUTTONS.hoard, buy('hoard'));
     this.secondButton = button(BUTTONS.second, buy('second'));
     const toggle = (mode: Mode) => () => {
+      // Depots are locked until their round: the dimmed Depot button refuses rather than turning on.
+      if (mode === 'depot' && this.mode !== 'depot' && depotLocked(this.state)) return ui('refuse');
       ui('click');
       this.mode = this.mode === mode ? 'auto' : mode;
     };
