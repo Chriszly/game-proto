@@ -102,7 +102,7 @@ How it runs:
   `unlocked`, `relic`, `over`) onto `state.events`; `drain` plays their sounds, adds flashes, saves
   the progress and switches the screen to `board` when a board loads. It also picks the music part.
 - Redrawing: `currentKey` names what is on screen (screen, phase, style, board size, relic offer,
-  mode); when it changes `buildLayer` destroys `parts` and rebuilds the screen or card. The board
+  mode, and today's date on the menu); when it changes `buildLayer` destroys `parts` and rebuilds the screen or card. The board
   (`boardG`, the 81 digit and note texts) is redrawn when `dirty` is set by an input or event; the
   panel's clock, hearts, hints and notes label are set every frame in `updatePanel`.
 - Input: the scene's `pointerdown` picks a cell (only on the board while playing). Buttons are a
@@ -114,7 +114,7 @@ State model (`GameState`): `phase` (`menu`, `playing`, `solved`, `relic`, `over`
 (`classic`, `daily`, `delve`), `level`, `puzzle` (`size`, `boxW`, `boxH`, `solution`, `givens`),
 `values` (0 empty; may hold a wrong digit), `notes` (bit per digit), `selected` (-1 none),
 `notesMode`, `mistakes`, `hintsLeft`, `hintsUsed`, `timeMs`, `hearts`, `maxHearts`, `floor`,
-`relics`, `relicOffer`, `warded`, `doneUnits` (indexes into `units`), `newStyles`, `progress` and
+`dailyDate` (the `dailySeed` a daily board was dealt for, 0 otherwise), `relics`, `relicOffer`, `warded`, `doneUnits` (indexes into `units`), `newStyles`, `progress` and
 `events`.
 
 Persistence: one `localStorage` key, `ninefold-progress`, holding `Progress` (`solved`, `flawless`,
@@ -200,8 +200,11 @@ digit, Erase or Hint that can't be used, a disabled pad key and a locked style.
   a wrong digit, or the notes of an empty cell, and reports false when there is nothing to clear.
 - A unit the Seer's Eye completes at the start of a floor is recorded in `doneUnits` by `markDone`
   without a `unit` event, like the givens' units; only `afterFill` (a digit or hint) celebrates one.
-- `drawBoard` only restyles a digit text whose style key (font, size, colour, glow) changed, since
-  `setStyle` re-renders the text's canvas.
+- `drawBoard` only restyles a digit or note text whose style key (font, size, colour, glow or wrap
+  width) changed, since `setStyle` re-renders the text's canvas.
+- A solved daily is recorded under the date it was dealt for (`dailyDate`), not the date it was
+  solved, so finishing it after midnight doesn't tick off the next day's. `currentKey` includes
+  today's date on the menu, so a menu left open past midnight rebuilds its daily button.
 - Keys with Ctrl, Cmd or Alt held are left to the browser.
 - `drawBoard` hides every digit text first; a board of fewer than 81 cells uses the first
   `size * size` texts.
