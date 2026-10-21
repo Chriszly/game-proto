@@ -8,7 +8,7 @@ Elder Wren has a job for you: fetch your grandfather's old blade, cut the gate f
 what grows the thorns. Beyond the gate lie Bramble Woods, a misty fen across the river and a shrine
 sunk deep in the roots, with a new tool inside that opens more of the world. In the second chapter
 a bell starts tolling under the fen at midnight, and the hermit's bellseeds open the way down to
-it. Everything is drawn as a soft 3D miniature by moonlight: lamp glow, fog, fireflies and a
+it. Everything is drawn as a soft 3D miniature by moonlight: lamp glow, glowing mushrooms, fog and a
 tilt-shift haze.
 
 The kingdom keeps secrets. Moonstones are hidden on every map, and most of them are not lying in

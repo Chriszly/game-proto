@@ -18,8 +18,8 @@ Implemented today:
 
 - Five maps in `src/game/maps.ts`: Mossford (the village: the elder, Pip, Marla the baker, Biscuit
   the cat, the shed's chest, lamps, the well and a pond), Bramble Woods (the path from the gate to
-  the shrine's arch, a river crossed on the hookvine, a thorn gate on the path, slugs and moths),
-  Glimmer Fen (the hermit Old Sedge, his hut, three statues and a wisp) and the Sunken Shrine
+  the shrine's arch, a river crossed on the hookvine, a thorn gate on the path with a line of trees
+  across the woods either side, slugs and moths), Glimmer Fen (the hermit Old Sedge, his hut, three statues and a wisp) and the Sunken Shrine
   (eight rooms: entry, key room, hall, block room, hookvine room, pit room, a hidden alcove and the
   boss hall), and the Drowned Belfry (entry, hub, the bells room behind a cracked wall, a flooded
   room crossed on the hookvine, a hollow behind a cracked wall and the Bellwraith's hall, through a
@@ -68,7 +68,7 @@ Implemented today:
   don't list their places or triggers in docs, PRs or commits.
 - The night (`src/scenes/light.ts`): a dark layer with holes for lights, an added warm glow and a
   haze at the view's top and bottom edges for the miniature look. Lamps, windows, braziers,
-  glowing mushrooms, candles, fireflies, moonstones, seeds, bellseeds and the knight's lantern are
+  glowing mushrooms, candles, moonstones, seeds, bellseeds and the knight's lantern are
   lights, and `flashes` are short-lived ones (a burst, a ringing bell; none with reduce motion).
 - The HUD (`src/scenes/hud.ts`): hearts, moonstones, keys (in a dungeon), bellseeds, the journal
   line (the quest's objective), place banners, toasts, the touch buttons, the floating touch stick,
