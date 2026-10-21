@@ -31,13 +31,15 @@ Implemented today:
   scrap tokens) goes through `giveItem`, which scraps it when the bench is full. The scene then
   floats "Parts full" (`partsFull`) over an orb or the item bench instead of the item's name.
 - Power cards (`AUGMENTS`): offered at rounds with `augment` set (2-1, 3-2, 4-2) and picked with
-  `pickAugment`.
+  `pickAugment`. Duplicator pays the robot's cost in gold instead when the bench is full. While
+  the card overlay is up, taps and keys other than 1-3 do nothing.
 - Rounds (`stageRounds`): stage 1 is three neutral rounds and a draft; later stages are
   pvp, pvp, pvp, draft, pvp, pvp, then a monster round (2-7 is the Scrap Rat, `RAT`).
   `stageDamage` and `SURVIVOR_DAMAGE` set what a loss costs.
 - Fights (`battle.ts`): both squads on one 8x8 board (side 0 on rows 4-7, side 1 mirrored onto
   rows 0-3), Chebyshev range and targeting, one robot per tile, charge (mana) and the class
-  abilities, trait and item specials, commander skills (`useSkill`), terrain (`TERRAIN`), and
+  abilities, trait and item specials, commander skills (`useSkill`, numbers in `SKILL_POWER`),
+  terrain (`TERRAIN`), and
   `FIGHT_LIMIT_S`. The player's fight is played back step by step; every other pairing runs
   `runToEnd` at once.
 - Pairings: `startFight` pairs the living seats at random, avoiding last round's opponent; with an
@@ -143,7 +145,8 @@ Shared code it imports: `shared/audio.ts`, `shared/setupGame.ts`, `shared/scalin
 - Reduced motion: no camera shake on slams, no hit flash, no idle sway or orb bob, no avatar walk
   bounce or skill hop, and stun stars stand still instead of circling.
 - Watch AI (`?watch`): the scene starts a match at once with a random commander, season and
-  terrain, seat 0 is AI-run (`human` false: `aiPlan` near the end of each plan phase, skill at 3 s;
+  terrain, seat 0 is AI-run (`human` false: `aiPlan` once, near the end of each plan phase, where the
+  rivals plan in `beginPlan`; skill at 3 s;
   the taps and keys that act for the player, R, X, E, L, 1-3 and Space, do nothing),
   and `mountWatch` shows the panel; `watchSteps()` ticks per frame. Watch another on the end screen
   starts the next match.

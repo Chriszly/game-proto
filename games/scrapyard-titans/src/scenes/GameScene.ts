@@ -6,7 +6,7 @@ import { playMusic, playSting, stopMusic, ui, type PlayOptions } from '../../../
 import { FIGHT_SONG, PLAN_SONG, play, type Sfx } from '../audio';
 import {
   AUGMENT_BY_ID, CLASS_STATS, COST_COLOR, DRAFT_PICK_S, ECONOMY, ITEM_BENCH, ITEMS, MAX_LEVEL, ORIGIN_COLOR, PLAN_S, PLAYER_COMMANDERS, RIVALS, SETS,
-  PARTS, SCRAP_TOKENS_PER_PART, SKILLS, TERRAIN, TRAITS, UNIT_BY_ID, comboOf, isPart,
+  PARTS, RAT, SCRAP_TOKENS_PER_PART, SKILLS, TERRAIN, TRAITS, UNIT_BY_ID, comboOf, isPart,
   type PartId, type SetId, type TraitId,
 } from '../game/data';
 import { STEP_S, traitValue, type BEvent } from '../game/battle';
@@ -260,7 +260,7 @@ export class GameScene extends Phaser.Scene {
     playMusic(PLAN_SONG, 'calm');
     this.scout = null;
     this.infoPage = 'meter';
-    for (const p of m.players) if (p.alive && !p.human) aiPlan(m, p);
+    for (const p of m.players) if (p.alive && !p.human && p.seat !== 0) aiPlan(m, p);
     this.selected = null;
     this.held = null;
     this.clearViews();
@@ -1578,7 +1578,7 @@ export class GameScene extends Phaser.Scene {
         this.sfx('zap');
         this.consume(m.battle.events.splice(0));
         this.fx.push({ kind: 'zap', at: this.t, dur: 0.3, to: rat.id, x: 0 });
-        this.zapReadyAt = m.time + 0.8;
+        this.zapReadyAt = m.time + RAT.zapCooldownS;
         this.down = null;
         return;
       }
@@ -1671,6 +1671,7 @@ export class GameScene extends Phaser.Scene {
     }
     const me = player(m);
     if (m.phase === 'plan' && me.human && me.augmentOffer && ['1', '2', '3'].includes(e.key)) return this.doAugment(Number(e.key) - 1);
+    if (this.overlayButtons.length) return;
     const k = e.key.toLowerCase();
     if (k === ' ') {
       e.preventDefault();

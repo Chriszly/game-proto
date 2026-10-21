@@ -9,7 +9,7 @@
  */
 import {
   BIG_ABILITY_COST, BOARD, CLASS_STATS, COST_SCALE, FIGHT_LIMIT_S, ITEMS, MONSTERS, OVERCHARGE_MANA,
-  RAT, STAR_POWER, STAR_STAT, TRAITS, UNIT_BY_ID,
+  RAT, SKILL_POWER, STAR_POWER, STAR_STAT, TRAITS, UNIT_BY_ID,
   type AbilityKind, type AugmentId, type ClassId, type MonsterId, type OriginId, type SetId, type SkillId, type Special,
   type TerrainId, type TraitId,
 } from './data';
@@ -302,7 +302,7 @@ export class Battle {
       this.stepToward(u, target, terrain === 'oil' ? MOVE_S / 0.7 : MOVE_S);
       return;
     }
-    const buff = this.time < this.asBuffUntil[u.team] ? 1.4 : 1;
+    const buff = this.time < this.asBuffUntil[u.team] ? SKILL_POWER.overclock.speed : 1;
     const speed = u.baseAs * (1 + u.asBonus + u.rampAs) * buff * (terrain === 'oil' ? 0.7 : 1);
     u.attackTimer += dt * speed;
     if (u.attackTimer >= 1) {
@@ -576,18 +576,18 @@ export class Battle {
     this.skillUsed[team] = true;
     const allies = this.alive(team);
     if (skill === 'overclock') {
-      this.asBuffUntil[team] = this.time + 5;
+      this.asBuffUntil[team] = this.time + SKILL_POWER.overclock.seconds;
       this.events.push({ t: 'skill', team, skill });
     } else if (skill === 'bulwark') {
       this.events.push({ t: 'skill', team, skill });
-      for (const a of allies) this.giveShield(a, 180, 5);
+      for (const a of allies) this.giveShield(a, SKILL_POWER.bulwark.shield, SKILL_POWER.bulwark.seconds);
     } else {
       const foe = [...this.alive(team === 0 ? 1 : 0)].sort((a, b) => b.hp - a.hp)[0];
       this.events.push({ t: 'skill', team, skill, target: foe?.id });
       if (foe) {
         const src = allies[0] ?? foe;
-        this.hurt(foe, 260 * (1 - (foe.sp.abilityResist ?? 0)), src.team === team ? src : null, true, false, true);
-        this.stun(foe, 1.5);
+        this.hurt(foe, SKILL_POWER.zap.damage * (1 - (foe.sp.abilityResist ?? 0)), src.team === team ? src : null, true, false, true);
+        this.stun(foe, SKILL_POWER.zap.stunS);
       }
     }
     return true;

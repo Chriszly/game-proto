@@ -384,7 +384,8 @@ export function pickAugment(m: Match, p: Player, choice: number) {
   else if (id === 'war-chest') giveItem(p, randomFinished());
   else if (id === 'duplicator') {
     const best = allUnits(p).filter((o) => UNIT_BY_ID[o.defId].cost <= 2).sort((a, b) => b.star - a.star || UNIT_BY_ID[b.defId].cost - UNIT_BY_ID[a.defId].cost)[0];
-    addUnit(m, p, best?.defId ?? pick(rosterOf(m.opts.set).filter((d) => d.cost === 2)).id, null);
+    const defId = best?.defId ?? pick(rosterOf(m.opts.set).filter((d) => d.cost === 2)).id;
+    if (!addUnit(m, p, defId, null)) p.gold += UNIT_BY_ID[defId].cost;
   }
 }
 
