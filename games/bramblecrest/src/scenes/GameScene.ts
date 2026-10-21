@@ -153,7 +153,7 @@ export class GameScene extends Phaser.Scene {
     this.vine = this.add.graphics();
     this.hookTip = this.add.image(0, 0, 'hook').setScale(texScale('hook')).setVisible(false);
     const kb = this.input.keyboard!;
-    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ENTER,J,SHIFT,K,Q,E,L', false) as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ENTER,J,SHIFT,K,Q,E,L,B,X', false) as Record<string, Phaser.Input.Keyboard.Key>;
     kb.on('keydown', this.onKey, this);
     this.input.on('pointerdown', this.onPointer, this);
     this.input.on('pointermove', this.onPointerMove, this);
@@ -803,7 +803,11 @@ export class GameScene extends Phaser.Scene {
     }
     // A swing on a buried moonstone's spot digs it up.
     for (const st of this.map.stones)
-      if (st.hidden === 'buried' && !this.dug.has(st.id) && Math.hypot((st.x + 0.5) * TILE - hx, (st.y + 0.5) * TILE - hy) <= 32) {
+      if (
+        st.hidden === 'buried' &&
+        !this.dug.has(st.id) &&
+        ((Math.floor(s.x / TILE) === st.x && Math.floor(s.y / TILE) === st.y) || Math.hypot((st.x + 0.5) * TILE - hx, (st.y + 0.5) * TILE - hy) <= 32)
+      ) {
         this.dug.add(st.id);
         this.stoneSprites.get(st.id)?.setVisible(true);
         sfx('glint');
