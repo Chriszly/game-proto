@@ -634,6 +634,13 @@ function firePlayer(s: GameState, side: Side, charge: number) {
       aim = out + Math.max(-p.arc, Math.min(p.arc, wrap(bearing(player, spot) - out)));
       far = Math.min(inReach, distance(player, spot));
     }
+    // Never so close that the burst reaches the player's own hull, now or where she will be when it
+    // lands (`ahead` along her heading): push the spot out past both.
+    const clear = SHELL_R + radiusOf(player);
+    const ahead = p.speed * windSpeed(s.wind, player.heading) * (SHELL_MS / 1000);
+    const turn = wrap(aim - player.heading);
+    const across = ahead * Math.abs(Math.sin(turn));
+    far = Math.max(far, clear, across >= clear ? 0 : ahead * Math.cos(turn) + Math.sqrt(clear * clear - across * across));
     lob(s, player, wrapCoord(player.x + Math.cos(aim) * far, WORLD.w), wrapCoord(player.y + Math.sin(aim) * far, WORLD.h), shell);
     player.reload[side] = p.reloadMs;
     return;
@@ -654,16 +661,24 @@ function ownMortar(s: GameState, dt: number) {
   if (s.mortarMs > 0) return;
   const foe = nearestFoe(s, s.player, OWN_MORTAR.range);
   if (!foe) return;
-  // The crew holds fire while the shell could burst on the player's own ship or a prize, now or
-  // where she will be when it lands, and tries again next tick.
+  // The crew holds fire while the shell could burst on the player's own ship or a prize, and tries again next tick.
+  if (!safeSpot(s, foe)) return;
+  lobAt(s, s.player, foe, speedOf(s, foe), OWN_MORTAR.damage, SHELL_SPREAD);
+  s.mortarMs = perkValue(s, 'mortar', OWN_MORTAR.reloadMs, 0);
+}
+
+/**
+ * Whether a shell lobbed at `foe` (landing where it will be in `SHELL_MS`, off by up to
+ * `SHELL_SPREAD`) is sure to miss the player, now and where she will be when it lands, and every
+ * prize (a prize ketch firing it included).
+ */
+function safeSpot(s: GameState, foe: Ship) {
   const lead = SHELL_MS / 1000;
   const spot = { x: foe.x + Math.cos(foe.heading) * speedOf(s, foe) * lead, y: foe.y + Math.sin(foe.heading) * speedOf(s, foe) * lead };
   const playerSpeed = stats(s).speed * windSpeed(s.wind, s.player.heading);
   const ahead = { x: s.player.x + Math.cos(s.player.heading) * playerSpeed * lead, y: s.player.y + Math.sin(s.player.heading) * playerSpeed * lead };
   const near = (at: { x: number; y: number }, ship: Ship) => distance(at, spot) < SHELL_R + SHELL_SPREAD + radiusOf(ship) * 0.5;
-  if (near(s.player, s.player) || near(ahead, s.player) || s.escorts.some((e) => near(e, e))) return;
-  lobAt(s, s.player, foe, speedOf(s, foe), OWN_MORTAR.damage, SHELL_SPREAD);
-  s.mortarMs = perkValue(s, 'mortar', OWN_MORTAR.reloadMs, 0);
+  return !(near(s.player, s.player) || near(ahead, s.player) || s.escorts.some((e) => e.hp > 0 && near(e, e)));
 }
 
 /**
@@ -712,8 +727,9 @@ function escortBroadsides(s: GameState, dt: number) {
     if (e.hp <= 0) continue;
     const type = ENEMIES[e.kind as keyof typeof ENEMIES];
     if (type.role === 'mortar') {
+      // Like the player's own mortar, a prize ketch holds fire (staying loaded) while its shell could land on the player or a prize.
       const foe = nearestFoe(s, e, type.range);
-      if (foe) mortar(s, e, foe, speedOf(s, foe), dt * pace);
+      if (foe && safeSpot(s, foe)) mortar(s, e, foe, speedOf(s, foe), dt * pace);
       else e.reload.port = Math.max(0, e.reload.port - reloadStep(e, dt * pace));
       continue;
     }
