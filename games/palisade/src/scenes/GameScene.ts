@@ -284,8 +284,9 @@ export class GameScene extends Phaser.Scene {
     let ticked = 0;
     if (!this.skillBook.open && !this.hirePanel.open && !this.fortifyPanel.open) {
       // The battle plays at the chosen speed; the level-up's and the road choice's auto-pick
-      // countdowns stay in real seconds.
-      const game = s.choices || s.roadChoices ? dt : dt * this.speed;
+      // countdowns and the break with an undecided omen card stay in real seconds.
+      const realTime = s.choices || s.roadChoices || (s.phase === 'break' && s.omen && !s.omen.accepted);
+      const game = realTime ? dt : dt * this.speed;
       tick(s, game, this.levelUp.autoPick);
       if (!s.choices && !held(s)) this.clock += game;
       ticked = game;
@@ -545,7 +546,10 @@ export class GameScene extends Phaser.Scene {
     glow.clear();
     const seen = new Set<number>();
     let inFlight = 0;
+    // A kill in the dark of a Night wave (by a blast's edge or a volley) shows no puff or pop.
+    const sight = omenEffects(this.state.omen).sight;
     for (const e of this.state.effects) {
+      if ((e.kind === 'death' || e.kind === 'xp' || e.kind === 'orb') && e.x >= sight) continue;
       const life = 1 - e.ms / e.total;
       if (e.kind === 'blast' || e.kind === 'fireblast') {
         // A faceted starburst that swells and fades.
