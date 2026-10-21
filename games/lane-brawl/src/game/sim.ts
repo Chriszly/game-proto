@@ -481,6 +481,7 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
   const ab = abilityFor(caster, key);
   if (!ab || caster.level < ab.level || caster.cds[key] > 0) return false;
   caster.cds[key] = ab.cd * Math.max(MIN_CD, 1 - (caster.cdr + buffSum(caster, 'cdr')) / 100);
+  caster.cdFull[key] = caster.cds[key];
   caster.castMs = 300;
   caster.recallMs = 0;
   caster.revealMs = REVEAL_MS;
@@ -594,6 +595,16 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
   return true;
 }
 
+/**
+ * A jungle camp is only hurt by a champion that goes for it or that it is already fighting:
+ * splash, bursts and stray bolts from a fight near by pass it by (a bolt flies on through it).
+ */
+function campSpares(s: GameState, sourceId: number, t: Unit): boolean {
+  if (t.kind !== 'camp') return false;
+  const src = getUnit(s, sourceId);
+  return !!src && src.kind === 'champion' && src.target !== t.id && t.lastHitBy !== sourceId;
+}
+
 /** Hurts a unit after its armor and any shield. A unit reduced to 0 health dies. Returns the health it lost. */
 export function damage(s: GameState, t: Unit, amount: number, sourceId: number): number {
   if (t.dead || amount <= 0 || !hittable(t) || invulnerable(s, t)) return 0;
@@ -605,12 +616,7 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
     if (t.hp <= 0) kill(s, t, sourceId);
     return 1;
   }
-  // A jungle camp is only hurt by a champion that goes for it or that it is already fighting:
-  // splash, bursts and stray bolts from a fight near by pass it by.
-  if (t.kind === 'camp') {
-    const src = getUnit(s, sourceId);
-    if (src && src.kind === 'champion' && src.target !== t.id && t.lastHitBy !== sourceId) return 0;
-  }
+  if (campSpares(s, sourceId, t)) return 0;
   // The siege banner, an objective's reward, makes the player's champion hit structures harder.
   if (sourceId === s.player && s.time < s.siegeUntil && (t.kind === 'tower' || t.kind === 'nexus')) amount *= SIEGE.mult;
   // The elder's blessing: its team's champions hit structures harder.
@@ -1608,6 +1614,7 @@ function updateProjectiles(s: GameState, dt: number) {
     for (const e of s.units) {
       if (e.dead || e.side === p.side || !hittable(e) || e.kind === 'ward' || p.hit.includes(e.id)) continue;
       if (Math.hypot(e.x - p.x, e.y - p.y) > p.width + e.radius) continue;
+      if (campSpares(s, p.owner, e)) continue;
       p.hit.push(e.id);
       const owner = getUnit(s, p.owner);
       if (p.look) {
