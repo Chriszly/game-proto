@@ -312,6 +312,7 @@ export class GameScene extends Phaser.Scene {
     const onBoard = p.worldX >= BOARD.x && p.worldX < BOARD.x + BOARD.w && p.worldY >= BOARD.y && p.worldY < BOARD.y + BOARD.h;
     // A press on a village that slides off the board or the grid is no courier call.
     if (!onBoard || !inGrid(t)) return void (this.pressedVillage = null);
+    if (this.state.phase !== 'play') return void (this.pressedVillage = null);
     if (!down && (this.dragTile === null || this.dragTile === key(t))) return;
     this.dragTile = key(t);
     if (down) this.dragLaid = 0;
@@ -339,7 +340,7 @@ export class GameScene extends Phaser.Scene {
       this.lastLaid = t;
       sfx('tok', { pitch: TOK_PITCH[terrainAt(s.valley, t)] * Math.min(1.5, 1 + 0.05 * this.dragLaid++) });
     } else if (onLine(s, t)) this.lastLaid = t;
-    else if (s.phase === 'play') ui('refuse');
+    else if (down) ui('refuse');
   }
 
   /** A prop standing on a tile, sorted with the wyrm by where it touches the ground. */
@@ -852,7 +853,7 @@ export class GameScene extends Phaser.Scene {
         ? t('festivalProgress', { n: s.delivered, goal: FESTIVAL_GOAL })
         : t('roundProgress', { round: s.round, n: s.delivered, goal: roundGoal(s.round) });
     // The round's charter goes on a second line, so the HUD stays clear of the bellies and the wyrms' status.
-    const charter = s.charter && s.round !== FESTIVAL_ROUND;
+    const charter = !!s.charter;
     this.roundText.setText(charter ? t('roundCharter', { progress, charter: t(s.charter!.name) }) : progress).setFontSize(charter ? 14 : 16);
     const two = s.wyrms.length > 1;
     this.wyrmText
@@ -916,7 +917,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawPanel() {
     const s = this.state;
-    const k = `${s.upgrades.hoard}|${s.wyrms.length}|` + s.orders.map((o) => `${o.id}:${o.status}:${o.status === 'waiting' && routable(s, o)}`).join(';');
+    const k = `${s.upgrades.hoard}|${s.wyrms.length}|` + s.orders.map((o) => `${o.id}:${o.status}:${routable(s, o)}`).join(';');
     if (k !== this.cardKey) {
       this.cardKey = k;
       for (const c of this.cards) c.destroy();
@@ -959,7 +960,7 @@ export class GameScene extends Phaser.Scene {
 
   private makeCard(o: Order, y: number) {
     const s = this.state;
-    const ok = o.status !== 'waiting' || routable(s, o);
+    const ok = routable(s, o);
     const bg = this.add
       .rectangle(0, 0, PANEL.w, ORDER_CARD.h, o.status === 'waiting' ? (o.made ? 0x4a3420 : 0x3d2b1f) : 0x2f4a2a)
       .setStrokeStyle(2, o.status === 'waiting' ? (ok ? 0xc9a040 : 0x6a6070) : 0x7bc85a);
