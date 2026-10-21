@@ -100,6 +100,8 @@ export interface GameState {
   hearts: number;
   maxHearts: number;
   floor: number;
+  /** The date (`dailySeed`) the daily board in play was dealt for, 0 for any other board. */
+  dailyDate: number;
   relics: RelicId[];
   relicOffer: RelicId[];
   /** The Ward has caught a mistake on this floor already. */
@@ -115,7 +117,7 @@ export interface GameState {
 export function newGame(progress: Progress): GameState {
   return {
     phase: 'menu', mode: 'classic', level: 'easy', puzzle: null, values: [], notes: [], selected: -1, notesMode: false,
-    mistakes: 0, hintsLeft: 0, hintsUsed: 0, timeMs: 0, hearts: 0, maxHearts: 0, floor: 0, relics: [], relicOffer: [],
+    mistakes: 0, hintsLeft: 0, hintsUsed: 0, timeMs: 0, hearts: 0, maxHearts: 0, floor: 0, dailyDate: 0, relics: [], relicOffer: [],
     warded: false, doneUnits: [], newStyles: [], progress, events: [],
   };
 }
@@ -140,6 +142,7 @@ function load(s: GameState, puzzle: Puzzle) {
 export function startClassic(s: GameState, level: Level, random: Random = Math.random) {
   s.mode = 'classic';
   s.level = level;
+  s.dailyDate = 0;
   load(s, makePuzzle(SHAPES[9], CLASSIC_GIVENS[level], random));
   s.hintsLeft = classicHints();
 }
@@ -148,13 +151,15 @@ export function startClassic(s: GameState, level: Level, random: Random = Math.r
 export function startDaily(s: GameState, date: Date) {
   s.mode = 'daily';
   s.level = DAILY_LEVEL;
-  load(s, makePuzzle(SHAPES[9], CLASSIC_GIVENS[DAILY_LEVEL], seeded(dailySeed(date))));
+  s.dailyDate = dailySeed(date);
+  load(s, makePuzzle(SHAPES[9], CLASSIC_GIVENS[DAILY_LEVEL], seeded(s.dailyDate)));
   s.hintsLeft = classicHints();
 }
 
 /** Starts a Delve run on floor 1. */
 export function startDelve(s: GameState) {
   s.mode = 'delve';
+  s.dailyDate = 0;
   s.floor = 0;
   s.relics = [];
   s.maxHearts = s.hearts = delveHearts();
@@ -290,7 +295,7 @@ function solved(s: GameState) {
   if (s.hintsUsed === 0) p.noHint++;
   if ((s.mode === 'classic' && s.level === 'hard') || (s.mode === 'delve' && s.floor >= HARD_FLOOR)) p.hard++;
   if (s.puzzle!.size === 9 && s.timeMs <= FAST_MS) p.fast++;
-  if (s.mode === 'daily') p.daily = dailySeed(new Date());
+  if (s.mode === 'daily') p.daily = s.dailyDate;
   if (s.mode === 'delve') p.bestFloor = Math.max(p.bestFloor, s.floor);
   s.selected = -1;
   s.events.push({ type: 'solved' });

@@ -419,11 +419,15 @@ export class GameScene extends Phaser.Scene {
       } else if (s.notes[i]) {
         const marks: string[] = [];
         for (let d = 1; d <= size; d++) if (s.notes[i] & (1 << d)) marks.push(String(d));
-        this.noteTexts[i]
-          .setText(marks.join(' '))
-          .setPosition(cx + 4, cy + 3)
-          .setStyle({ fontFamily: th.font, fontSize: `${Math.round(cs * 0.24)}px`, color: i === sel && th.selText ? th.selText : th.note, wordWrap: { width: w - 6 } })
-          .setVisible(true);
+        const note = this.noteTexts[i];
+        const noteSize = Math.round(cs * 0.24);
+        const noteColor = i === sel && th.selText ? th.selText : th.note;
+        const noteKey = `${th.font}|${noteSize}|${noteColor}|${w - 6}`;
+        note.setText(marks.join(' ')).setPosition(cx + 4, cy + 3).setVisible(true);
+        if (note.getData('styleKey') !== noteKey) {
+          note.setStyle({ fontFamily: th.font, fontSize: `${noteSize}px`, color: noteColor, wordWrap: { width: w - 6 } });
+          note.setData('styleKey', noteKey);
+        }
       }
       this.cellSpots.push({ cell: i, x: this.fx + x + c * cs + cs / 2, y: this.fy + y + r * cs + cs / 2, w: cs, h: cs });
     }
@@ -465,7 +469,9 @@ export class GameScene extends Phaser.Scene {
 
   private currentKey() {
     const s = this.state;
-    return `${this.screen}|${s.phase}|${s.progress.style}|${s.puzzle?.size ?? 0}|${s.relicOffer.join()}|${s.mode}`;
+    // The menu's daily button depends on today's date, so the menu is rebuilt when the date changes.
+    const today = this.screen === 'menu' ? dailySeed(new Date()) : 0;
+    return `${this.screen}|${s.phase}|${s.progress.style}|${s.puzzle?.size ?? 0}|${s.relicOffer.join()}|${s.mode}|${today}`;
   }
 
   private buildLayer() {
