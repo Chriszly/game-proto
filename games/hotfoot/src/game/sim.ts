@@ -23,6 +23,7 @@ import {
   freshState,
   metres,
   rand,
+  seedOf,
   speedOf,
   stats,
   streakMax,
@@ -250,18 +251,20 @@ function visitShrines(s: GameState) {
 function hurt(s: GameState, kind: TrapKind | 'wall' | 'boss' | 'rock') {
   const st = stats(s);
   const r = s.runner;
+  if (kind === 'pit') {
+    // Thrown back up out of the pit, high enough to clear it. A knight still unhurtable from the
+    // last hit falls and is thrown out all the same, but loses nothing more.
+    r.vh = st.jumpV;
+    r.h = 0.01;
+    r.slideMs = 0;
+    r.jumps = st.jumps - 1;
+    if (r.hurtMs > 0) return;
+  }
   s.hits += 1;
   s.streak = 0;
   r.hurtMs = st.hurtMs;
   // A no-hit dare is lost to any hit, a blocked one included.
   if (s.dare?.kind === 'nohit' && !s.dare.done) s.dare.failed = true;
-  if (kind === 'pit') {
-    // Thrown back up out of the pit, high enough to clear it.
-    r.vh = st.jumpV;
-    r.h = 0.01;
-    r.slideMs = 0;
-    r.jumps = st.jumps - 1;
-  }
   if (s.shields > 0) {
     s.shields -= 1;
     effect(s, 'block', s.distance, r.h + RUNNER.h / 2, 500);
@@ -343,14 +346,18 @@ export function tick(s: GameState, dt: number) {
   r.hurtMs = Math.max(0, r.hurtMs - dt);
   if (r.skidMs > 0) {
     r.skidMs = Math.max(0, r.skidMs - dt);
+    // The queued jump comes as the skid ends, in the air too (as the first jump, or Second Leap)
+    // when the knight has walked off a ledge meanwhile.
     if (r.skidMs === 0 && r.jumpQueued) {
       r.jumpQueued = false;
-      if (grounded(s)) jump(s);
+      jump(s);
     }
   }
 
-  if (r.hurtMs <= 0 && s.phase === 'running') {
-    const hit = s.traps.find((t) => touches(s, t));
+  // One trap hit a frame, and none while unhurtable, except a pit: a fall is not a contact hit,
+  // so nothing holds the knight up over one.
+  if (s.phase === 'running') {
+    const hit = s.traps.find((t) => (t.kind === 'pit' || r.hurtMs <= 0) && touches(s, t));
     if (hit) hurt(s, hit.kind);
     if (s.phase !== 'running') return;
   }
@@ -417,6 +424,9 @@ export function tick(s: GameState, dt: number) {
  * were added.)
  */
 export function rollChoices(s: GameState): BoonId[] {
+  // On a daily course the cards have a seed of their own, so a third draw after a met dare, or a
+  // curse draw, can't shift the next stage's layout for one player and not another.
+  if (s.daily) s.seed = seedOf(`${s.daily}:cards:${s.stage}`);
   const pool = BOON_IDS.filter((id) => !BOONS[id].filler && !BOONS[id].cursed && canTake(s, id));
   const picks: BoonId[] = [];
   const want = s.dare?.done ? 3 : 2;

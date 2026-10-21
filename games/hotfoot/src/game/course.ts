@@ -15,6 +15,7 @@ import {
   isRockStage,
   metres,
   rand,
+  seedOf,
   speedOf,
   terrainOf,
   type BossKind,
@@ -31,7 +32,8 @@ import {
 // 1500 m the dragon's: a clear road with the boss waiting on it. Every seventh stage a rockfall
 // rolls in behind the knight. Every random pick goes through `rand` (Math.random, or the daily
 // course's seed) so a seeded run repeats (the shrine, the bosses, the roads' extra coins, the dare
-// and the rockfall take no random draws).
+// and the rockfall take no random draws). A daily stage reseeds from the date and the stage, so
+// the draws taken before it (a checkpoint's cards, an earlier stage) can't shift its layout.
 
 /** No obstacle this close before the checkpoint, so the knight lands before reaching it. */
 const CLEAR_BEFORE_CHECKPOINT = 420;
@@ -164,6 +166,7 @@ function planOf(s: GameState, piece: Piece): Plan {
 export const dragonStage = (s: Pick<GameState, 'stageStart' | 'dragonBeaten'>) => !s.dragonBeaten && metres(s.stageStart) >= DRAGON_AT;
 
 export function buildStage(s: GameState) {
+  if (s.daily) s.seed = seedOf(`${s.daily}:${s.stage}`);
   if (dragonStage(s)) return buildBossStage(s, 'dragon');
   if (isBossStage(s.stage)) return buildBossStage(s, 'gate');
   if (isRockStage(s.stage)) s.rockfall = { x: s.distance - RUNNER_BACK - ROCK.start };
