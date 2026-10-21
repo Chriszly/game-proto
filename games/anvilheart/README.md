@@ -37,7 +37,7 @@ Masterwork.
 | Tap "Guild perks" (bottom right) or the stars in the top bar | Spend guild stars on lasting perks |
 | Tap an upgrade | Buy its next rank |
 | Tap Auto Forge, once bought | Switch the auto forge on or off |
-| New smithy (bottom right) | Throw the board, coins and upgrades away and start again |
+| New smithy (bottom right), then tap again within 3 seconds | Throw everything away and start again: the board, coins and upgrades, and also your guild stars, perks, charters and reputation |
 
 1. **The forge** makes one sword at a time and then has to heat up again (1.2s), shown by the bar
    under the button.
@@ -109,7 +109,7 @@ Masterwork.
    on the order card already includes it), and in each new charter the commissions ask for one
    more sword each (two Golden Claymores, then two Runeblades, and so on, paying as much more).
    The top bar names the charter: Anvilheart II, III and so on. "New smithy" in the corner still
-   throws everything away, stars included.
+   throws everything away, stars and perks included, once you tap it a second time to confirm.
 16. **Charter edicts.** Each new charter offers two edicts, and you take one before the new smithy
    opens; it rules that charter. **Iron shortage**: the forge is half again as slow, but every sale
    pays 25% more. **Tournament season**: adventurers come twice as often, with a third less

@@ -177,6 +177,7 @@ const en = {
   reputation: 'Guild reputation',
   onTheWay: 'An adventurer is on the way...',
   newSmithy: 'New smithy',
+  newSmithyConfirm: 'Tap again to wipe stars and perks too',
 
   // The commission banner
   royalCommission: 'ROYAL COMMISSION',

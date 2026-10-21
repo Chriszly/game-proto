@@ -67,7 +67,10 @@ Implemented today:
   banner's four pips the banner reads `Given made/count`) and scales the reward with
   the count. Every unspent star raises `orderPrice` by `STAR_PRICE` (5%) (`payFor`, `orderPrice`
   and the order card take the `Market`: stars, perks and edict, which `GameState` is). The top bar names the charter (`Anvilheart II`, `roman`). "New smithy"
-  in the corner still throws everything away, stars included.
+  in the corner still throws everything away, stars included: its first tap only swaps its text
+  for "Tap again to wipe stars and perks too" (`newSmithyConfirm`, hiding the perk link beside it)
+  for `RESET_CONFIRM_MS` (3s, a `time.delayedCall`), and only a second tap in that time calls
+  `clearProgress` and `newShop(freshProgress())`. It ignores taps while a window is open.
 - Charter edicts (AN11, `src/game/charter.ts`): `edict` (null in the first smithy) is cleared by
   `foundCharter`; while `edictOffers(s)` (charter > 0, no edict) returns the pair from
   `edictsFor(charter)` (the three `EDICTS` in turn, two at a time) the edict window
@@ -107,7 +110,8 @@ Implemented today:
   greys and ticks (`tick` texture) the half handed, and the tag reads "Set: 1 of 2" or "Set
   complete". Textures `shield-<tier>`.
 - Rust on idle anvils (AN8): `idle[]` (parallel to `slots`, saved) counts how long each anvil's
-  sword has lain; `put` and `forge` zero it, `rust` in `tick` adds `dt` for anything `rusts`
+  sword has lain; `put` and `forge` zero it, and so does `touch` when the scene picks a sword up
+  (so rust can't lower a sword in the player's hand), `rust` in `tick` adds `dt` for anything `rusts`
   (a sword above tier 1; gems, Rusty Daggers and the barrel never rust). At `RUST_MS` (3 min) the
   sword is `dull` (drawn at 0.55 alpha, with a rust ring in `drawMarks` draining over `rustLeft`),
   and `RUST_DROP_MS` (1 min) later it drops a tier (keeping its flags) and pushes `rusted`.
@@ -172,8 +176,8 @@ Missing or rough:
   their way back (`returning`) are not saved either, so a reload loses them.
 - The win window is only shown when the Crown Blade is delivered; on reload the banner's "Tap
   here to found a new smithy" opens it again.
-- "New smithy" resets at once with no confirmation, and the saved key is only rewritten on the
-  next action.
+- "New smithy" (after its confirming second tap) clears the saved key, which is only rewritten on
+  the next action.
 - Saved `coins`, `sold`, `bestTier` and `ranks` are trusted as loaded; only `slots`, `idle`,
   `barrel`, `commission`, `choosing`, `stars`, `charter`, `reputation`, `won`, `autoForge`,
   `shieldMode`, `bestShield` (clamped), `perks` and `edict` are checked (in `newShop`).
@@ -212,7 +216,7 @@ File map (`src/`):
   `SHIELD`, `tierOf`, `isGem`, `isSword`, `isShield`, `isGemmed`, `isBattered`, `isMaster`, `sword`,
   `shield`, `validItem`) and `combine`, the merge, gem-setting and repair rule.
 - `game/sim.ts`: the rules as pure functions on `GameState`: `tick`, `forge`, `toggleShieldMode`,
-  `itemAt`, `drop`, `standing`, `offers`, `chooseCommission`, `deliverable`, `deliver`, `takes`,
+  `itemAt`, `touch`, `drop`, `standing`, `offers`, `chooseCommission`, `deliverable`, `deliver`, `takes`,
   `sell`, `buy`, `toggleAutoForge`, `buyPerk`, `edictOffers`, `chooseEdict`, `foundCharter`, plus
   the private `rust`, `arrive`, `rollTrait`, `comeBack`, `raiseBest`, `put` and `hammer` (streaks).
 - `game/charter.ts`: `Edict`, `EDICTS`, `EDICT_IDS`, `edictsFor`, `edictRule`, `Perk`, `PERKS`,
@@ -270,7 +274,8 @@ How it runs:
   view pixel, which matches the screen's `renderScale`) and add them with `textures.addCanvas`. There are no asset files. The
   background's mosaic is computed pixel by pixel once at boot.
 - Tick: `GameScene.update(time)` takes `dt` from the frame timestamp (clamped to `MAX_STEP_MS`,
-  250ms), adds it to `clock`, and calls `tick(state, dt)`, which cools the forge, forges when
+  250ms), adds it to `clock`, and, unless a window is open (`windowOpen`: the win, offer, perk or edict
+  window, so nothing waits out its patience behind one), calls `tick(state, dt)`, which cools the forge, forges when
   brings heroes back, forges when `autoForging`, drains the hammer streak and patience (a walk-off
   costs reputation and gives a held half set back), rusts idle swords and brings adventurers. If that (or the Forge button since the last
   frame) pushed a `forged`, `rusted`, `returned` or `left` event the scene saves. Then it draws,
@@ -578,7 +583,7 @@ Effects (`sfx`, plus the shared `ui`):
   desksOf(state))` and `deskScale`; a new desk-relative thing must too, or it lands wrong with four
   desks.
 - `idle` must stay as long as `slots`: `buy('row')` pushes to both, `foundCharter` and `newShop`
-  rebuild both. Only `put`, `forge` and `comeBack` touch `idle` besides `rust`.
+  rebuild both. Only `put`, `touch`, `forge` and `comeBack` touch `idle` besides `rust`.
 - A returning hero waits in `returning` until a desk and an anvil are both free, and then takes
   the desk out of turn (the visitor timer is untouched).
 - The offer window and the win window share `win-panel` and both block input; `drawChooser` hides

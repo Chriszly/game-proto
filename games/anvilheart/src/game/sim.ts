@@ -232,6 +232,10 @@ export function toggleShieldMode(s: GameState) {
 export function itemAt(s: GameState, place: number) {
   return place === BARREL ? s.barrel : (s.slots[place] ?? null);
 }
+/** Tends the sword on an anvil, as picking it up does: it starts afresh against rust. */
+export function touch(s: GameState, place: number) {
+  if (place !== BARREL && place >= 0 && place < s.idle.length) s.idle[place] = 0;
+}
 /** Puts an item at a place; a touched anvil's sword starts afresh against rust. */
 function put(s: GameState, place: number, item: number | null) {
   if (place === BARREL) s.barrel = item;
