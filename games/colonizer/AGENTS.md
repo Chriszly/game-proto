@@ -78,7 +78,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   gathers the nearest node of that resource to it. Units push apart where closer than `UNIT_GAP` (`separate` in
   the sim); villagers at work hold their place.
 - Walls: a palisade is dragged out as a line (`wallLine`, `placeWall`, up to 40 stakes). A gate goes
-  in a gap or on an own stake (replacing it). A finished gate is not solid: `GameState.gates` holds
+  in a gap or on an own stake (replacing it; whoever was building that stake builds the gate). A finished gate is not solid: `GameState.gates` holds
   its owner, and `blocked(s, x, y, owner)` lets only that owner's units through. Auto-targeting
   (`nearestEnemy` with `auto`) skips palisades; a soldier whose path is cut off attacks the nearest
   enemy stake or gate (`breach`). A builder goes on to the next unfinished building within 6 tiles.
@@ -321,7 +321,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   scrolling, the alert arrows and the end screens use `W` and `H`. The menu is laid out for 960x540
   and offset by `viewFrame(scene)`. At exactly 960x540 nothing moves.
 - Input: `pointerdown` and `pointerup` on the scene. Clicks on the minimap move the camera, on the
-  toast jump to the raid or alert it shows (`toastAt`), on an edge marker to its alert, and in the top bar, the deeds card or the panel are left to the HUD. A
+  toast jump to the raid or alert it shows (`toastAt`; a plain notice lets the click through to the
+  world), on an edge marker to its alert, and in the top bar, the deeds card or the panel are left to the HUD. A
   click under 5 px is a click; otherwise it is a box select. Right click calls `commandAt`.
 - Placement: `placing` holds a building type. A click calls `tryPlace`, which centres the footprint
   on the tile under the cursor and sends the nearest selected villager to build it. For the Palisade
@@ -367,7 +368,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   range 7, 900 hp) shoot anything in range; soldiers fight on their own when idle and
   an enemy is within sight.
 - `research` refuses an age tech unless the player is in the age before it, and Age III unless
-  `deedsDone`. Shieldwall is applied in `takenBy` (towers and soldiers alike), Harvest Rites in the
+  `deedsDone`, and any tech already queued at one of the owner's buildings (`techQueued`, so two
+  Academies can't pay for the same tech twice; the panel greys the button the same way). Shieldwall is applied in `takenBy` (towers and soldiers alike), Harvest Rites in the
   gather step for farms, Age III in `ownBonus`. Hit points can be fractional under Shieldwall.
 - One raid is tracked at a time (`GameState.raid`): `startRaid` does nothing while a raid is under
   way, so in watch mode a side's raid can go untracked while the other's is on. A raid ends when
