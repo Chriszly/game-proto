@@ -97,7 +97,8 @@ Masterwork.
 13. **Adventurers with traits.** From the second adventurer on, about a third come with a trait,
    written under their order. A **Haggler** waits 60% longer but pays 70% of any price. A
    **Noble** pays triple for the exact sword asked for and takes nothing else. A **Veteran** also
-   takes the sword one tier below the one asked for, at the price asked (no tip).
+   takes the sword one tier below the one asked for, at the price asked (no tip); nobody asking
+   for a Rusty Dagger is a Veteran.
 14. **Returning heroes.** Whoever buys a Knight's Blade or better may come back half a minute
    later (3 in 10 do) with a new order, a trophy of a tenth of the sword's price in coins, and the
    sword itself, battered and a tier lower, laid on the first empty anvil. A battered sword merges
@@ -127,7 +128,8 @@ Masterwork.
    sword and shield set, with no gem or trait, and wait 40% longer. Hand them the sword and the
    buckler (at least as good as asked) in either order; the second completes the set, which pays
    the sword as usual plus the buckler's price, with 50% on top. Someone who walks off holding half
-   a set keeps it.
+   a set leaves it behind: it goes back onto an empty anvil (or into the empty barrel), or, with no
+   room, pays its plain price. A reload puts a handed-over half back the same way.
 19. **The smithy is kept**: the board and barrel (and how long each sword has lain), coins, swords
    sold, upgrades, the forge's mode and best buckler, the standing commission and its open offer,
    your guild stars, perks, charter and edict, reputation and whether you have won are saved in the
@@ -258,18 +260,20 @@ npx playwright test --project anvilheart
 
 All paths are inside `games/anvilheart/`.
 
-- `src/game/`: the rules in plain TypeScript with no Phaser dependency. `swords.ts`,
-  `upgrades.ts` and `commissions.ts` are data tables (the last also scales commissions per charter
-  and makes the grand offers), `items.ts` says what can lie on an anvil (swords, gems, gemmed and
-  battered swords) and how two combine, `state.ts` holds the shop, its timings, the reputation,
-  rust, trait and returning-hero rules and the sale price rule, `sim.ts` forges, rusts, merges
-  (with streaks), repairs, delivers to the crown, offers commissions, sells, buys, brings heroes
-  back and founds new charters, and `save.ts` keeps the smithy.
+- `src/game/`: the rules in plain TypeScript with no Phaser dependency. `swords.ts`, `shields.ts`
+  (the bucklers), `upgrades.ts`, `charter.ts` (the edicts and guild perks) and `commissions.ts`
+  are data tables (the last also scales commissions per charter and makes the grand offers),
+  `items.ts` says what can lie on an anvil (swords, gems, gemmed, battered and Masterwork swords,
+  bucklers) and how two combine, `state.ts` holds the shop, its timings, the reputation, rust,
+  trait and returning-hero rules and the sale price rule, `sim.ts` forges, rusts, merges (with
+  streaks), repairs, delivers to the crown, offers commissions, sells, buys, brings heroes back,
+  buys perks, picks edicts and founds new charters, and `save.ts` keeps the smithy.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the smithy and turns drags into
   rules calls, `layout.ts` says where things are drawn.
 - `src/art/`: all the stained-glass art, painted on canvases in code at startup: `glass.ts` holds
   the glass-and-lead painting kit, `scenery.ts` the mosaic wall, furnace, anvils and counter,
-  `swords.ts` the nine swords (each also with a set gem, and battered) and the loose gem, `characters.ts` the
+  `swords.ts` the nine swords (each also with a set gem, battered and as a Masterwork), the five
+  bucklers and the loose gem, `characters.ts` the
   four adventurers and `ui.ts` the buttons, cards, tags, banner, barrel, the win and offer windows
   and effects.
 - `src/ui/`: the leaded-glass button.

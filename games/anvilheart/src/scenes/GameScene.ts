@@ -592,11 +592,13 @@ export class GameScene extends Phaser.Scene {
       } else if (e.kind === 'left') {
         const c = deskCentre(e.desk, desksOf(this.state));
         this.float(c.x, c.y, t('leftUnhappy'), '#ff8a6a');
+        if (e.back) this.float(c.x, c.y + 26, e.back.coins > 0 ? t('halfPaid', { n: e.back.coins }) : t('halfBack'), '#ffe7a8');
       } else if (e.kind === 'handed') {
         const c = deskCentre(e.desk, desksOf(this.state));
         this.float(c.x, c.y, t(e.shield ? 'bucklerTaken' : 'swordTaken'), '#ffe7a8');
       } else if (e.kind === 'perk') {
-        this.float(VIEW.w / 2, VIEW.h / 2 + 150, `${t(PERKS[e.perk].name)}: ${t(PERKS[e.perk].blurb)}`, '#ffd36a', 2200);
+        // Under the perk window, which stays open, and above its depth, so the message shows.
+        this.float(WIN.x, WIN.y + WIN.tallH / 2 + 30, `${t(PERKS[e.perk].name)}: ${t(PERKS[e.perk].blurb)}`, '#ffd36a', 2200, UI_DEPTH + 6);
       } else if (e.kind === 'edict') {
         this.float(VIEW.w / 2, VIEW.h / 2, t('byEdict', { name: t(EDICTS[e.edict].name) }), '#ffd36a', 2200);
       }
@@ -723,8 +725,8 @@ export class GameScene extends Phaser.Scene {
     else if (this.state.choosing) this.chooser.setVisible(true);
   }
 
-  private float(x: number, y: number, message: string, color: string, duration = 1200) {
-    const text = this.add.text(x, y, message, textStyle(17, color, 4)).setOrigin(0.5).setDepth(UI_DEPTH + 3);
+  private float(x: number, y: number, message: string, color: string, duration = 1200, depth = UI_DEPTH + 3) {
+    const text = this.add.text(x, y, message, textStyle(17, color, 4)).setOrigin(0.5).setDepth(depth);
     // Keep it on screen.
     text.x = Phaser.Math.Clamp(x, this.edge.left + text.width / 2 + 6, this.edge.right - text.width / 2 - 6);
     this.tweens.add({ targets: text, y: y - 50, alpha: 0, duration, ease: 'Sine.In', onComplete: () => text.destroy() });

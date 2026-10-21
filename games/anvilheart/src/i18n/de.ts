@@ -108,6 +108,8 @@ const de: Translation<typeof en> = {
   soldLesser: '+{n} Münzen (eins drunter)',
   soldOverkill: '+{n} Münzen (zu gut)',
   leftUnhappy: 'Unzufrieden gegangen: Ruf sinkt',
+  halfBack: 'Das halbe Set ist zurück in der Schmiede',
+  halfPaid: 'Das halbe Set brachte {n} M',
   bucklerTaken: 'Schild erhalten: jetzt das Schwert',
   swordTaken: 'Schwert erhalten: jetzt der Schild',
   byEdict: 'Per Erlass: {name}',

@@ -14,6 +14,7 @@ import {
   MAX_SLOTS,
   PATIENCE_MS,
   PATIENCE_PER_TIER_MS,
+  plainPrice,
   REP_EXACT,
   REP_MAX,
   REP_WALKOFF,
@@ -64,6 +65,15 @@ export function tick(s: GameState, dt: number) {
   // A new charter's smithy stands still until its edict is chosen.
   if (edictOffers(s)) return;
   s.heatMs = Math.max(0, s.heatMs - dt);
+
+  // A due hero takes a free anvil before the Auto Forge can fill it.
+  for (const hero of s.returning) hero.inMs -= dt;
+  const due = s.returning.find((hero) => hero.inMs <= 0);
+  if (due && s.adventurers.length < desksOf(s) && s.slots.includes(null)) {
+    s.returning.splice(s.returning.indexOf(due), 1);
+    comeBack(s, due);
+  }
+
   if (autoForging(s)) forge(s);
   s.streakMs = Math.max(0, s.streakMs - dt);
   if (s.streakMs === 0) s.streak = 0;
@@ -74,14 +84,9 @@ export function tick(s: GameState, dt: number) {
     s.adventurers.splice(s.adventurers.indexOf(a), 1);
     s.walkedOff++;
     s.reputation = Math.max(0, s.reputation - REP_WALKOFF);
-    s.events.push({ kind: 'left', desk: a.desk });
-  }
-
-  for (const hero of s.returning) hero.inMs -= dt;
-  const back = s.returning.find((hero) => hero.inMs <= 0);
-  if (back && s.adventurers.length < desksOf(s) && s.slots.includes(null)) {
-    s.returning.splice(s.returning.indexOf(back), 1);
-    comeBack(s, back);
+    // Half a set they held comes back to the smithy.
+    const half = a.given.sword ?? a.given.shield;
+    s.events.push({ kind: 'left', desk: a.desk, back: half === null ? undefined : handBack(s, half) });
   }
 
   if (s.adventurers.length < desksOf(s)) {
@@ -124,8 +129,10 @@ function arrive(s: GameState, hero?: Returning) {
   const shieldWanted = set ? 1 + Math.floor(Math.random() * Math.min(SHIELD_TOP, Math.max(2, s.bestShield + 1))) : 0;
   // Once gems are about, some ask for one set in their sword (never in a dagger).
   const gem = !set && gemsAbout(s) && wants >= 2 && Math.random() < GEM_ORDER_CHANCE;
-  // From the second order on, some come with a trait.
-  const trait = s.orders === 0 || set ? 'none' : rollTrait();
+  // From the second order on, some come with a trait; a Veteran who wants a dagger has nothing
+  // below it to take, so comes with none.
+  const rolled = s.orders === 0 || set ? 'none' : rollTrait();
+  const trait = rolled === 'veteran' && wants === 1 ? 'none' : rolled;
   // Easier difficulties, a better reputation and a set order give adventurers more patience; a
   // Haggler brings their own, and the edict may take some away.
   const patience =
@@ -151,6 +158,25 @@ function arrive(s: GameState, hero?: Returning) {
   s.adventurers.push(a);
   s.orders++;
   return a;
+}
+
+/**
+ * Gives a half set back when its adventurer walks off: onto the first empty anvil, else into the
+ * empty barrel, else as its plain price in coins (the place is -1 then).
+ */
+function handBack(s: GameState, item: number): { place: number; coins: number } {
+  const slot = s.slots.indexOf(null);
+  if (slot >= 0) {
+    put(s, slot, item);
+    return { place: slot, coins: 0 };
+  }
+  if (s.ranks.barrel > 0 && s.barrel === null) {
+    put(s, BARREL, item);
+    return { place: BARREL, coins: 0 };
+  }
+  const coins = plainPrice(item, s);
+  s.coins += coins;
+  return { place: -1, coins };
 }
 
 function rollTrait(): Trait {

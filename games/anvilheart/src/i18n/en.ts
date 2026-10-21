@@ -119,6 +119,8 @@ const en = {
   soldLesser: '+{n} coins (one below)',
   soldOverkill: '+{n} coins (overkill)',
   leftUnhappy: 'Left unhappy: reputation down',
+  halfBack: 'Their half set is back in the smithy',
+  halfPaid: 'Their half set paid {n}c',
   bucklerTaken: 'Buckler taken: now the sword',
   swordTaken: 'Sword taken: now the buckler',
   byEdict: 'By edict: {name}',
