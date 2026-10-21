@@ -29,6 +29,7 @@ import {
   canRetire,
   crowdSpot,
   decideOmen,
+  fieldSpot,
   fightAgain,
   fortify,
   held,
@@ -196,6 +197,10 @@ export class GameScene extends Phaser.Scene {
   private relicName!: Phaser.GameObjects.Text;
   private relicText!: Phaser.GameObjects.Text;
   private gameOver!: Phaser.GameObjects.Container;
+  /** "New hero" wipes the save, so its first tap only arms it and a second one confirms. */
+  private newHeroArmed = false;
+  private newHeroCaption!: Phaser.GameObjects.Text;
+  private newHeroNote!: Phaser.GameObjects.Text;
   private gameOverText!: Phaser.GameObjects.Text;
   private lastArrowCooldown = 0;
   private clock = 0;
@@ -315,6 +320,7 @@ export class GameScene extends Phaser.Scene {
     this.discover();
     this.skillBook.show(this.found, s.ranks, s.relics, held(s));
     this.gameOver.setVisible(s.phase === 'over');
+    if (s.phase !== 'over' && this.newHeroArmed) this.armNewHero(false);
     if (!held(s)) this.legacyPanel.close();
     // Retiring needs every skill learned or the siege lifted; until then the button stays dim.
     for (const b of this.retireButtons) b.setAlpha(canRetire(s) ? 1 : 0.45);
@@ -546,10 +552,11 @@ export class GameScene extends Phaser.Scene {
     glow.clear();
     const seen = new Set<number>();
     let inFlight = 0;
-    // A kill in the dark of a Night wave (by a blast's edge or a volley) shows no puff or pop.
+    // Nothing in the dark of a Night wave shows: no puff or pop from a kill by a blast's edge or a
+    // volley, no spark, burst or healing mote over a hidden foe.
     const sight = omenEffects(this.state.omen).sight;
     for (const e of this.state.effects) {
-      if ((e.kind === 'death' || e.kind === 'xp' || e.kind === 'orb') && e.x >= sight) continue;
+      if (e.x >= sight) continue;
       const life = 1 - e.ms / e.total;
       if (e.kind === 'blast' || e.kind === 'fireblast') {
         // A faceted starburst that swells and fades.
@@ -605,6 +612,7 @@ export class GameScene extends Phaser.Scene {
         const r = (e.radius ?? 100) * (0.3 + 0.7 * life);
         glow.lineStyle(3, 0x5ad07a, 0.6 * (1 - life)).strokeEllipse(e.x, e.y, r * 2, r * 1.2);
         for (const p of e.points) {
+          if (p.x >= sight) continue;
           for (let k = 0; k < 3; k++) {
             const my = p.y - 10 - life * 30 - k * 8;
             const mx = p.x + Math.sin(e.id + k * 2.3) * 9;
@@ -1261,10 +1269,11 @@ export class GameScene extends Phaser.Scene {
     this.rainHint.setVisible(hint).setText(ready ? t('rainHint') : t('caltropsHint'));
     if (hint) drawPanel(g, RAIN_HINT.x - 118, RAIN_HINT.y - 12, 236, 24, { c: 6, fill: 0x1e222c, alpha: 0.88, edge: GOLD.mid, lw: 1.5 });
 
-    // While dragged: a dashed arc from the button up over the field to a gold ring on the road.
+    // While dragged: a dashed arc from the button up over the field to a gold ring on the road,
+    // where the volley or patch will land (kept short of the dark on a Night wave).
     if (this.aim) {
       const on = this.onField(this.aim);
-      const to = { x: this.aim.x, y: this.aim.y };
+      const to = on ? fieldSpot(s, this.aim.x, this.aim.y) : { x: this.aim.x, y: this.aim.y };
       const from = ARC_FROM[this.aimKind];
       const ctrl = { x: (from.x + to.x) / 2, y: Math.min(from.y, to.y) - 150 };
       const pts: V[] = [];
@@ -1496,7 +1505,12 @@ export class GameScene extends Phaser.Scene {
       .text(cx, cy - 62, '', { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center' })
       .setOrigin(0.5);
     const again = makeButton(this, cx - 195, cy + 112, 170, 40, t('fightAgain'), () => this.restart(false));
-    const reset = makeButton(this, cx, cy + 112, 170, 40, t('newHero'), () => this.restart(true));
+    const reset = makeButton(this, cx, cy + 112, 170, 40, t('newHero'), () => {
+      if (this.newHeroArmed) this.restart(true);
+      else this.armNewHero(true);
+    });
+    this.newHeroCaption = reset.list[1] as Phaser.GameObjects.Text;
+    this.newHeroNote = this.add.text(cx, cy + 140, '', { ...textStyle(10, '#ff9a7a'), fontStyle: 'normal', align: 'center', wordWrap: { width: 180 } }).setOrigin(0.5, 0);
     const retire = makeButton(this, cx + 195, cy + 112, 170, 40, t('retire'), () => this.openRetire());
     this.retireButtons.push(retire);
     this.retireNote = this.add.text(cx + 195, cy + 150, '', { ...textStyle(10, '#9aa0ac'), fontStyle: 'normal', align: 'center', wordWrap: { width: 190 } }).setOrigin(0.5, 0);
@@ -1524,6 +1538,7 @@ export class GameScene extends Phaser.Scene {
       const text = this.add.text(x, y, '', textStyle(11, '#ffe7a0')).setOrigin(0.5);
       const zone = this.add.zone(x, y, MARCH.w, MARCH.h).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
         if (!canMarch(this.state.bestWave, m.wave)) return ui('refuse');
+        this.armNewHero(false);
         this.startWave = m.wave;
         ui('click');
       });
@@ -1531,7 +1546,7 @@ export class GameScene extends Phaser.Scene {
       picks.push(bg, text, zone);
     });
     this.gameOver = this.add
-      .container(0, 0, [dim, panel, title, this.gameOverText, heatLabel, marchLabel, ...picks, again, reset, retire, this.retireNote])
+      .container(0, 0, [dim, panel, title, this.gameOverText, heatLabel, marchLabel, ...picks, again, reset, retire, this.retireNote, this.newHeroNote])
       .setDepth(UI_DEPTH + 20)
       .setVisible(false);
   }
@@ -1552,8 +1567,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Arms "New hero" (its caption asks for a second tap and a note says what is lost) or disarms it. */
+  private armNewHero(armed: boolean) {
+    this.newHeroArmed = armed;
+    this.newHeroCaption.setText(t(armed ? 'newHeroConfirm' : 'newHero'));
+    this.newHeroNote.setText(armed ? t('newHeroNote') : '');
+  }
+
   /** Opens the legacy cards, with a first relic rolled for the relic card. */
   private openRetire() {
+    this.armNewHero(false);
     if (!held(this.state) || !canRetire(this.state)) return ui('refuse');
     this.legacyRelic = rollLegacyRelic();
     this.legacyPanel.show(this.state.legacy, this.legacyRelic);
@@ -1643,6 +1666,7 @@ export class GameScene extends Phaser.Scene {
    * scratch on wave 1, who keeps what retired heroes left.
    */
   private restart(newHero: boolean) {
+    this.armNewHero(false);
     if (newHero) clearProgress();
     this.state = newHero ? newRun(freshProgress(this.state.legacy), this.state.aimMode) : fightAgain(this.state, this.startWave);
     this.startWave = 1;

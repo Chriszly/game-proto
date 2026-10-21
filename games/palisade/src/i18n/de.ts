@@ -277,6 +277,8 @@ const de: Translation<typeof en> = {
   fallenHeat: 'Die Feinde brachen durch und erreichten den Helden in Welle {wave} auf Hitze {heat}.\n{kills} Feinde in diesem Lauf besiegt, längste Serie x{streak}, beste geschaffte Welle: {best}.\n\nDer Held behält Stufe {level}, jede gewählte Verbesserung und jede gewonnene Reliquie.',
   fightAgain: 'Erneut kämpfen',
   newHero: 'Neuer Held',
+  newHeroConfirm: 'Sicher? Nochmal',
+  newHeroNote: 'Stufe, Verbesserungen, Reliquien und Hitzestufen gehen verloren.',
   retire: 'Ruhestand',
   nextRunAt: 'Nächster Lauf',
   startAt: 'Start bei',
