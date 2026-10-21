@@ -1,7 +1,11 @@
-// Where things are drawn in the 960x540 view. The board itself is `GRID` in src/game/board.ts.
+// Where things are drawn in the 960x560 view. The board itself is `GRID` in src/game/board.ts.
 export { GRID, cellCentre } from '../game/board';
 
-export const VIEW = { w: 960, h: 540 };
+/**
+ * The designed view. The HUD, board and panel fill its top 540 pixels; the 20 below them keep the
+ * shared corner buttons (full screen, sound, pause, in the bottom left) off the board's bottom row.
+ */
+export const VIEW = { w: 960, h: 560 };
 /**
  * The clay strip across the top: its centre line, the title and the garden tag under it (which
  * opens the garden picker), and the x of each tag's icon and number.

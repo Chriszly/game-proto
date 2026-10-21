@@ -86,8 +86,10 @@ Implemented today:
   The preview above it counts the next wave's pests with `waveCounts`.
 - Boons (GG11): `finishWave` after a Queen Slug wave (`wave % BOSS_EVERY === 0`) whose queen
   was squashed (`state.queenSquashed`, set in `step`'s kill loop, cleared as a wave begins) sets
-  `state.offer` to `boonOffer(wave / BOSS_EVERY)`, three of `BOONS` (the first three, then the
-  last three, in turn). The scene holds the game still (ticks by 0) while `offer` is set and shows
+  `state.offer` to `boonOffer(wave / BOSS_EVERY, twistOf(s))`, three of `BOONS` (the first three
+  (Long moss, Sunny row, New growth), then the last three (Thick hedges, Sharp rocks, Rich
+  compost), in turn; in the thorny Meadow, where no hedge can be planted, Long moss stands in for
+  Thick hedges). The scene holds the game still (ticks by 0) while `offer` is set and shows
   `showBoons` (after the harvest picker closes, when both come at wave 30); a card calls
   `takeBoon`, which pushes it onto `state.boons` (a boon taken twice counts twice, `boonCount`).
   Long moss, Sharp rocks and Sunny row fold into `boonedStats`/`statsOf(s, g)`; Sunny row records
@@ -124,10 +126,9 @@ Missing or rough:
 - Pests come in at the board's left edge from under a strip of table (`edge`), so they pop in at
   the first path cell's left half.
 - Pests on the same stretch can overlap; nothing spreads them out.
-- At a 16:9 view (frame y 0) the shared corner buttons (full screen, sound, pause; x 12 to 114,
-  y 498 to 528) cover the bottom 14px of cells (0,6) and (1,6): a tap there hits a button and the
-  level beads of a golem there hide under them. Clearing them means a smaller or moved `GRID`,
-  which changes the pixel distances the balance is tuned in.
+- On a small screen (a phone on its side, under about 540 CSS pixels tall) the shared corner
+  buttons, which keep their CSS size, are taller than the 20-pixel strip under the board and still
+  overlap the bottom of the board's bottom-left cell a little.
 - The hit flash is a fill tint, which the canvas renderer (used by the playthrough) does not draw.
 - Calling early counts the current wave as done even though its last pests are still walking:
   they can still bite the Heartwood, but its bonus and bud are already paid.
@@ -155,7 +156,7 @@ File map (`src/`):
   `TextKey`, a key of its texts.
 - `i18n/en.ts`: every on-screen text in British English, the source; `i18n/de.ts` (German, typed
   `Translation<typeof en>`, with `keepEnglish` for the title) and `i18n/en-US.ts` (only "armor").
-- `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
+- `main.ts`: creates the `Phaser.Game` (960x560, `VIEW`, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
@@ -224,15 +225,17 @@ Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupG
 
 Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
 4K screen) and zooms the one camera to match from its top-left. With `fill: true` the view takes
-the screen's shape (960 to 1296 wide, 540 to 720 tall). Everything is still laid out for the
-designed 960x540 frame: `GameScene.create` takes `viewFrame(this)` as `frame` and scrolls the camera
+the screen's shape (960 to 1344 wide, 560 to 720 tall). Everything is still laid out for the
+designed 960x560 frame (`VIEW`; the HUD, board and panel fill its top 540 pixels, and the 20
+below keep the shared corner buttons, about 12 to 114 by 498 to 528 CSS pixels in a 960x540
+window, off the board's bottom row, whose cells end at y 512): `GameScene.create` takes `viewFrame(this)` as `frame` and scrolls the camera
 to `-frame.x, -frame.y`, so the board, panel, banner, golem menu and the overlays (centred on
 `VIEW.w / 2`) sit in the middle of the view, and world coordinates stay the designed ones. Around
 them, the `table` image (at `-frame.x, -frame.y`, the view's size from `viewSize`) fills the view
 and carries the HUD strip across its top; the HUD's objects are moved up by `frame.y` after
 `createHud`, so the HUD stays pinned to the view's top edge (and so does the sap droplets' target).
 The overlays' dim covers the whole view, and `seedButtons` and `waveButton` add the frame's offset
-so they stay in view pixels. At 960x540 the frame is the whole view and nothing moves. Text and Graphics draw at the
+so they stay in view pixels. At 960x560 the frame is the whole view and nothing moves (a 960x540 window shows a 996x560 view, the frame 18 pixels in from each side). Text and Graphics draw at the
 full `renderScale`. The clay is painted at `sharpRes`, held to `MAX_RES` (2) in `clay.ts`, since
 its blur-filter shadows cost about the cube of the resolution at start-up. `addSharp` sets the
 texture source's `resolution` and trims its frame to the view size, so every `add.image`,
@@ -341,12 +344,13 @@ Heartwood falls.
   `waveButton` (`{ x, y, w, h }`), all in view pixels, and `waveLabel` (the wave button's text on
   one line, such as `Start wave 1` or `Call wave 2 now, +15 early`). `waveLabel` is in the
   player's language; the playthrough runs in British English, the default language, so it reads the English
-  `startWave`, `callWave` and `earlyBonus` texts.
-- Inputs: it clicks the seed cards, cell centres and the wave button, scaling view pixels by the
-  canvas bounding box. It never plants a hedge, raises a golem or opens the menu: forms,
+  `startWave`, `callWave` and `earlyBonus` texts. It also reads the view's width (the main
+  camera's width over its zoom) and the private `frame`'s `x` and `y`.
+- Inputs: it clicks the seed cards, cell centres (`GRID` plus the frame's offset; a 960x540 window
+  shows a 996x560 view) and the wave button, scaling view pixels by the canvas bounding box. It never plants a hedge, raises a golem or opens the menu: forms,
   targeting, hedges, compost (from wave 3) and the harvest (wave 30) stay out of its first round.
 - The test mirrors these, so change them together: the `GameState` fields it reads, `GRID`,
-  `VIEW`, `START`, the Meadow's path (the playthrough plays it, with no saved keys), the pebble seed's cost and grow time (`PEBBLE`), wave 1's beetle count, bounty
+  `START`, the Meadow's path (the playthrough plays it, with no saved keys), the pebble seed's cost and grow time (`PEBBLE`), wave 1's beetle count, bounty
   and bonus (`WAVE_1`), `EARLY_BONUS`, the wave button's labels, the cells it plants on (`PLANTS`,
   inside the path's bends) and a path cell (`PATH_CELL`). It also checks the thorn card picks
   nothing while locked, the early-call label once wave 1's queue is empty (it does not take it),

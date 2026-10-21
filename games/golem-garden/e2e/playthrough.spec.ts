@@ -23,7 +23,6 @@ interface GameState {
 }
 type Rect = { x: number; y: number; w: number; h: number };
 
-const VIEW = { w: 960, h: 540 };
 /** The board, from src/game/board.ts. */
 const GRID = { x: 16, y: 64, cols: 12, rows: 7, cell: 64 };
 /** What a garden starts with, the pebble seed's cost and growing time, from src/game/data.ts. */
@@ -63,6 +62,8 @@ function scene(page: Page) {
     seedButtons: () => read<(Rect & { kind: GolemKind })[]>((s) => s.seedButtons),
     waveButton: () => read<Rect>((s) => s.waveButton),
     waveLabel: () => read<string>((s) => s.waveLabel),
+    /** The view's width and the designed frame's offset in it, in view pixels. */
+    view: () => read<{ w: number; x: number; y: number }>((s) => ({ w: s.cameras.main.width / s.cameras.main.zoom, x: s.frame.x, y: s.frame.y })),
   };
 }
 
@@ -130,13 +131,16 @@ test('plays the first wave', async ({ page }, testInfo) => {
   const snap = async (name: string) =>
     testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
 
-  /** Where a point in the 960x540 view is on the page. */
+  // The view takes the window's shape around the designed 960x560 frame the board is laid out in.
+  const view = await game.view();
+  /** Where a point in the view is on the page. */
   async function onPage(x: number, y: number) {
     const box = (await canvas.boundingBox())!;
-    const scale = box.width / VIEW.w;
+    const scale = box.width / view.w;
     return { x: box.x + x * scale, y: box.y + y * scale };
   }
-  const cellPoint = (col: number, row: number) => onPage(GRID.x + (col + 0.5) * GRID.cell, GRID.y + (row + 0.5) * GRID.cell);
+  const cellPoint = (col: number, row: number) =>
+    onPage(view.x + GRID.x + (col + 0.5) * GRID.cell, view.y + GRID.y + (row + 0.5) * GRID.cell);
 
   /** Taps a point, as a player would, then lets a few frames play. */
   async function tap(at: { x: number; y: number }) {
