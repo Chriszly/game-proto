@@ -74,7 +74,7 @@ before the moves run out and the potion sells, for coins and one to three stars.
    the foot of the label. An order that runs out of moves gives back what it drew from the pantry.
 10. **Bench tools** spend coins during an order: **Stir** gives 3 more moves for 40 coins, **Sift**
    rerolls one row of the board for 25 coins (its specials, jars, resin and mould stay, and the new tiles
-   never make a match by themselves), **Pestle** smashes one tile for 30 coins (a jar opens, resin
+   never make a match by themselves; a row with nothing to reroll costs nothing), **Pestle** smashes one tile for 30 coins (a jar opens, resin
    melts, a Catalyst or Bloom fires) and **Funnel** swaps any two tiles for 35 coins (not jars or
    resin), and neither of those spends a move. Hover a tool to read what it does in the caption. A
    tool you can't afford is greyed out.

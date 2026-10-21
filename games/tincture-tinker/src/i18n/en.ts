@@ -67,10 +67,12 @@ const en = {
   captionExam: 'A guild examination: the same board every try; sell it with {stars} stars for a seal',
   captionRichMoves: 'A rich order: {share}% more coins for {moves} fewer moves',
   captionRichBlockers: 'A rich order: {share}% more coins for {blockers} more jars and resin',
+  captionRichBlockersMould: 'A rich order: {share}% more coins for {blockers} more jars and resin and one more mould patch',
   captionForbid: 'No {kind} in this order: a swap that matches it costs a move',
   captionRush: 'Rush order: {moves} fewer moves than usual, and {coins} more coins',
   captionPickRichMoves: 'A rich order pays {share}% more, for {moves} fewer moves',
   captionPickRichBlockers: 'A rich order pays {share}% more, for {blockers} more jars and resin',
+  captionPickRichBlockersMould: 'A rich order pays {share}% more, for {blockers} more jars and resin and one more mould patch',
   captionExamRetry: 'The examination starts on the same board every time',
   and: '{a} and {b}',
 

@@ -67,10 +67,12 @@ const de: Translation<typeof en> = {
   captionExam: 'Eine Gildenprüfung: jedes Mal dasselbe Brett; verkaufe mit {stars} Sternen für ein Siegel',
   captionRichMoves: 'Ein reicher Auftrag: {share} % mehr Münzen für {moves} Züge weniger',
   captionRichBlockers: 'Ein reicher Auftrag: {share} % mehr Münzen für {blockers} Gläser und Harz mehr',
+  captionRichBlockersMould: 'Ein reicher Auftrag: {share} % mehr Münzen für {blockers} Gläser und Harz mehr und einen Schimmelfleck mehr',
   captionForbid: 'Ohne {kind} in diesem Auftrag: ein Tausch, der es trifft, kostet einen Zug',
   captionRush: 'Eilauftrag: {moves} Züge weniger als sonst und {coins} Münzen mehr',
   captionPickRichMoves: 'Ein reicher Auftrag zahlt {share} % mehr, für {moves} Züge weniger',
   captionPickRichBlockers: 'Ein reicher Auftrag zahlt {share} % mehr, für {blockers} Gläser und Harz mehr',
+  captionPickRichBlockersMould: 'Ein reicher Auftrag zahlt {share} % mehr, für {blockers} Gläser und Harz mehr und einen Schimmelfleck mehr',
   captionExamRetry: 'Die Prüfung beginnt jedes Mal auf demselben Brett',
   and: '{a} und {b}',
 
