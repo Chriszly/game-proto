@@ -43,7 +43,7 @@ and the player chooses a ship.
   `Ship.escapeMs` (set in `spawn` to `ESCAPE_MS`) runs out (`escape`, an `escape` effect, no
   loot). Consorts (`src/game/consorts.ts`): `reachHarbor` sells every prize but keeps it in
   `GameState.moored` (richest first); `keep` buys `moored[0]` back for `keepCost` (her sale price),
-  sends `prizeCrew` across and puts her in `consorts` with `Ship.kept`, `keepBlocked` says why it
+  sends `prizeCrew` across, patches her by `HARBOR_PATCH` and puts her in `consorts` with `Ship.kept`, `keepBlocked` says why it
   can't (`none`, `full` at `CONSORT_MAX`, `gold`, `crew`); `setSail` moves `consorts` into
   `escorts` (`station`: in line astern, further back if an island is in the way), and the next `reachHarbor` pays `consortWage` each (into
   `wages`) and patches them, or sells one it can't pay. Convoys (`src/game/convoy.ts`): on
@@ -199,7 +199,8 @@ File map (all under `src/`, plus the shared files it imports):
   fireships ramming (`ram`), sinking (`sink`, with Salvage, which can't save a player sunk the
   same tick), razing (`raze`, after the sinking, so a fort a fireship's blast brings down is paid
   that tick), loot (`haulIn`),
-  reaching the harbor (`reachHarbor`: prizes sold and crews back, the bounty paid, the draft set)
+  reaching the harbor (`reachHarbor`: prizes sold and crews back, the player's broadsides
+  reloaded, the bounty paid, the draft set)
   and winning at the haven. `hurt` and `kill` are the only places hull and crew are taken off.
   `detourCourse`, `speedOf`, `boardable`, `canBoard`, `prizeCrew`, `boardMs`, `scuttleGold`,
   `fortBounty`, `convoyShip`, `keepCost`, `keepBlocked`, `SHELL_MS`, `SHELL_R` and `FIRE_BLAST`
@@ -372,7 +373,8 @@ the phase changes to `harbor`, `over` or `won`. `broadside-medals` stores the ba
 run's medals are added when the phase changes to `over` or `won`, and "Sail again" saves what is
 left after the chosen boons. `broadside-ship` stores the `HullId` chosen last ("Sail again"
 saves it; an unknown value loads as the Frigate). Reads and writes are wrapped in try/catch, and
-a stored number that is not finite and positive loads as 0 (rounded down otherwise).
+a stored number that is not finite and positive loads as 0 (rounded down otherwise); `loadHull`
+checks `Object.hasOwn(HULLS, id)`, so an inherited key like `constructor` is unknown too.
 
 Randomness and timing: `Math.random` is used in `spawn` (the angle at which an enemy appears), in
 `fire` (one call per shot, even for the player, whose spread is 0; grapeshot makes three per gun,

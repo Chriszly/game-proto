@@ -1064,6 +1064,8 @@ function reachHarbor(s: GameState) {
   s.balls = [];
   s.charge = { port: null, starboard: null };
   s.aim = { port: false, starboard: false };
+  // The crew has the whole harbor to reload; consorts and enemies set out loaded too.
+  s.player.reload = { port: 0, starboard: 0 };
   s.bestWave = Math.max(s.bestWave, s.wave);
   const max = stats(s).maxHp;
   s.player.hp = Math.min(max, s.player.hp + Math.round(max * HARBOR_PATCH));
@@ -1112,6 +1114,8 @@ export function keep(s: GameState) {
   e.kept = true;
   e.crew = prizeCrew(s, e);
   s.player.crew -= e.crew;
+  // Patched like a consort kept earlier (reachHarbor patches those before she is kept).
+  e.hp = Math.min(e.maxHp, e.hp + Math.round(e.maxHp * HARBOR_PATCH));
   s.consorts.push(e);
   return true;
 }

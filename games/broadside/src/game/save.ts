@@ -33,7 +33,8 @@ export const saveMedals = (medals: number) => save(MEDALS_KEY, medals);
 export function loadHull(): HullId {
   try {
     const id = localStorage.getItem(HULL_KEY);
-    return id !== null && id in HULLS ? (id as HullId) : FIRST_HULL;
+    // Own keys only: `in` would also accept 'constructor' or 'toString' from Object.prototype.
+    return id !== null && Object.hasOwn(HULLS, id) ? (id as HullId) : FIRST_HULL;
   } catch {
     return FIRST_HULL;
   }
