@@ -176,7 +176,8 @@ How it runs:
   `PLINTH_Y - h`. The camera only scrolls vertically: `update` eases `scrollY` towards keeping
   the temple's top at `TOP_SCREEN_Y`.
 - Time: `GameScene.update(time)` takes `dt` from the frame timestamp, clamped to `MAX_STEP_MS`,
-  and calls `tick(state, dt)`. `tick` moves the swinging stone at `swingSpeed` (bouncing at
+  and calls `tick(state, dt)`; the scene's `resume` and `wake` events clear `lastFrame`, so the
+  first frame after the shared pause steps nothing. `tick` moves the swinging stone at `swingSpeed` (bouncing at
   `TOWER_X ± SWING`) or makes the falling one fall under `GRAVITY`, pushed by `wind`, until it
   reaches the temple's top, then `land` runs.
 - `land` decides perfect (within `perfectWindow`, and only when the overlap would also reach
@@ -210,7 +211,9 @@ How it runs:
   inside a container: the break's parts live in `offerParts` (added with `addOffer`, buttons
   positioned with `place`) and the end panel's in `gameOver`, `againButton`, `againBeside` and
   `keepBuildingButton`; `makeButton` returns its parts. Only the banner, which takes no taps, is a
-  container (fixed with `pin`).
+  container (fixed with `pin`); `announce` wraps its text at `BANNER_WRAP` and grows its backdrop
+  (`bannerBack`, at least `BANNER_MIN`) to fit, plus `BANNER_PAD`. The end panel's text is
+  `fallenStood` or `fallenSky` plus a `bestTiers` line, each pluralised by its own number.
 - Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
   per game pixel, a whole number, so `pixelArt` stays crisp) and zooms the camera to match from its
   top-left corner. The game fills the screen's shape (`fill: true`): the view is 960x540 or wider

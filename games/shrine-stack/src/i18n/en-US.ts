@@ -17,11 +17,11 @@ const enUS: Partial<Translation<typeof en>> = {
   cursedWith: 'Cursed with {curse}: x{mult} favor',
   spendFavour: 'Spend favor (you have {n})',
   takeCurse: 'Take a curse on tier {tier}: {curse}, {text}. Earn x{mult} favor.',
-  fallenSky: 'Your crowned shrine climbed the sky\nto {tiers} tiers, for {favour} favor.\n\nBest {best} tiers.',
+  fallenSky: 'Your crowned shrine climbed the sky\nto {tiers} tiers, for {favour} favor.',
   crownedText: 'All {tiers} tiers stand,\n{balanced} of them balanced, for {favour} favor.\n\nKeep building into the windy sky?',
   fallenStood: {
-    one: 'Your shrine stood {n} tier tall,\n{balanced} of them balanced, for {favour} favor.\n\nBest {best} tiers.',
-    other: 'Your shrine stood {n} tiers tall,\n{balanced} of them balanced, for {favour} favor.\n\nBest {best} tiers.',
+    one: 'Your shrine stood {n} tier tall,\n{balanced} of them balanced, for {favour} favor.',
+    other: 'Your shrine stood {n} tiers tall,\n{balanced} of them balanced, for {favour} favor.',
   },
 };
 

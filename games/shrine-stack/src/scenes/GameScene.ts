@@ -88,6 +88,10 @@ const CAMERA_MS = 180;
 const POPUP_MS = 900;
 const DEBRIS_MS = 1100;
 const BANNER_MS = 2200;
+/** The banner's smallest box, the room it leaves round its text, and the width its lines wrap at. */
+const BANNER_MIN = { w: 420, h: 64 };
+const BANNER_PAD = { x: 40, y: 20 };
+const BANNER_WRAP = 640;
 /** How long the crowned shrine shows on its own before the win panel comes up. */
 const CROWN_MS = 2400;
 
@@ -294,6 +298,7 @@ export class GameScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Container;
   private bannerText!: Phaser.GameObjects.Text;
+  private bannerBack!: Phaser.GameObjects.Rectangle;
   /** Everything shown during a break between tiers, rebuilt with the offer. */
   private offerParts: UiPart[] = [];
   private offerKey = '';
@@ -361,9 +366,13 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(UI_DEPTH);
     this.windText = this.add.text(this.fx + TOWER_X, 20, '', textStyle(15, '#bfe4f4')).setOrigin(0.5).setScrollFactor(0).setDepth(UI_DEPTH);
-    const backdrop = this.add.rectangle(0, 0, 420, 64, 0x231c38, 0.92).setStrokeStyle(3, GOLD);
-    this.bannerText = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5).setAlign('center').setLineSpacing(6);
-    this.banner = pin(this.add.container(this.fx + TOWER_X, this.fy + 70, [backdrop, this.bannerText]))
+    this.bannerBack = this.add.rectangle(0, 0, BANNER_MIN.w, BANNER_MIN.h, 0x231c38, 0.92).setStrokeStyle(3, GOLD);
+    this.bannerText = this.add
+      .text(0, 0, '', { ...textStyle(20), wordWrap: { width: BANNER_WRAP } })
+      .setOrigin(0.5)
+      .setAlign('center')
+      .setLineSpacing(6);
+    this.banner = pin(this.add.container(this.fx + TOWER_X, this.fy + 70, [this.bannerBack, this.bannerText]))
       .setDepth(UI_DEPTH + 5)
       .setAlpha(0);
 
@@ -376,6 +385,9 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => drop(this.state) && sfx('whoosh'));
     // R swaps the stone in hand with the reserve, like the panel's button.
     this.input.keyboard?.on('keydown-R', () => this.trySwap());
+    // The shared pause stops update but not the frame clock: the first frame after Resume steps nothing.
+    this.events.on(Phaser.Scenes.Events.RESUME, () => (this.lastFrame = null));
+    this.events.on(Phaser.Scenes.Events.WAKE, () => (this.lastFrame = null));
 
     this.offerParts = [];
     this.createGameOver();
@@ -635,12 +647,8 @@ export class GameScene extends Phaser.Scene {
       sfx('rumble');
       sfx('tumble');
       const right = side > 0;
-      this.announce([
-        t('toppled'),
-        e.favor
-          ? t(right ? 'toppledFavourRight' : 'toppledFavourLeft', { n: e.favor })
-          : t(right ? 'toppledRight' : 'toppledLeft', { n: Math.abs(Math.round(e.lean)) }),
-      ]);
+      // The toppled tier always held at least one stone's favour, so there is always some to lose.
+      this.announce([t('toppled'), t(right ? 'toppledFavourRight' : 'toppledFavourLeft', { n: e.favor })]);
     } else if (e.type === 'regrown') {
       sfx('shimmer');
       this.redrawTop();
@@ -738,6 +746,11 @@ export class GameScene extends Phaser.Scene {
 
   private announce(lines: string[]) {
     this.bannerText.setText(lines);
+    // The box grows to fit a long line (some boons, and German) rather than letting it spill out.
+    this.bannerBack.setSize(
+      Math.max(BANNER_MIN.w, this.bannerText.width + BANNER_PAD.x),
+      Math.max(BANNER_MIN.h, this.bannerText.height + BANNER_PAD.y),
+    );
     this.banner.setAlpha(1);
     this.tweens.killTweensOf(this.banner);
     this.tweens.add({ targets: this.banner, alpha: 0, delay: BANNER_MS / 2, duration: BANNER_MS / 2 });
@@ -850,10 +863,12 @@ export class GameScene extends Phaser.Scene {
     this.keepButton = crowned && ended ? { x: this.vw / 2 + 115, y: this.vh / 2 + 80, w: 200, h: 40 } : null;
     if (s.phase === 'over' && s.endless) {
       this.gameOverTitle.setText(t('fallen'));
-      this.gameOverText.setText(t('fallenSky', { tiers: s.tiersBuilt, favour: s.favor, best: s.best }));
+      this.gameOverText.setText(`${t('fallenSky', { tiers: s.tiersBuilt, favour: s.favor })}\n\n${t('bestTiers', { n: s.best })}`);
     } else if (s.phase === 'over') {
       this.gameOverTitle.setText(t('fallen'));
-      this.gameOverText.setText(t('fallenStood', { n: s.tiersBuilt, balanced: s.balancedTiers, favour: s.favor, best: s.best }));
+      this.gameOverText.setText(
+        `${t('fallenStood', { n: s.tiersBuilt, balanced: s.balancedTiers, favour: s.favor })}\n\n${t('bestTiers', { n: s.best })}`,
+      );
     } else if (s.phase === 'crowned') {
       this.gameOverTitle.setText(t('crowned'));
       this.gameOverText.setText(t('crownedText', { tiers: GOAL_TIER, balanced: s.balancedTiers, favour: s.favor }));

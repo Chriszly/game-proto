@@ -103,8 +103,6 @@ const de: Translation<typeof en> = {
   toppled: 'Die Ebene stürzt ein!',
   toppledFavourLeft: 'Zu weit nach links geneigt: -{n} Gunst',
   toppledFavourRight: 'Zu weit nach rechts geneigt: -{n} Gunst',
-  toppledLeft: 'Der Tempel neigte sich {n} zu weit nach links',
-  toppledRight: 'Der Tempel neigte sich {n} zu weit nach rechts',
   regrown: 'Nachgewachsen +{n}',
   inHand: '{kind} in der Hand',
   watchesOver: '{patron} wacht über dich',
@@ -135,11 +133,12 @@ const de: Translation<typeof en> = {
   buildAgain: 'Neu bauen',
   keepBuilding: 'Weiterbauen',
   fallen: 'Der Stein ist gefallen',
-  fallenSky: 'Dein gekrönter Schrein stieg in den Himmel,\nauf {tiers} Ebenen, für {favour} Gunst.\n\nRekord {best} Ebenen.',
+  fallenSky: 'Dein gekrönter Schrein stieg in den Himmel,\nauf {tiers} Ebenen, für {favour} Gunst.',
   fallenStood: {
-    one: 'Dein Schrein stand {n} Ebene hoch,\n{balanced} davon ausgewogen, für {favour} Gunst.\n\nRekord {best} Ebenen.',
-    other: 'Dein Schrein stand {n} Ebenen hoch,\n{balanced} davon ausgewogen, für {favour} Gunst.\n\nRekord {best} Ebenen.',
+    one: 'Dein Schrein stand {n} Ebene hoch,\n{balanced} davon ausgewogen, für {favour} Gunst.',
+    other: 'Dein Schrein stand {n} Ebenen hoch,\n{balanced} davon ausgewogen, für {favour} Gunst.',
   },
+  bestTiers: { one: 'Rekord {n} Ebene.', other: 'Rekord {n} Ebenen.' },
   crownedText: 'Alle {tiers} Ebenen stehen,\n{balanced} davon ausgewogen, für {favour} Gunst.\n\nWeiter in den windigen Himmel bauen?',
 };
 

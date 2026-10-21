@@ -103,8 +103,6 @@ const en = {
   toppled: 'The tier topples!',
   toppledFavourLeft: 'Leaned too far left: -{n} favour',
   toppledFavourRight: 'Leaned too far right: -{n} favour',
-  toppledLeft: 'The temple leaned {n} too far left',
-  toppledRight: 'The temple leaned {n} too far right',
   regrown: 'Regrown +{n}',
   inHand: '{kind} in hand',
   watchesOver: '{patron} watches over you',
@@ -135,11 +133,12 @@ const en = {
   buildAgain: 'Build again',
   keepBuilding: 'Keep building',
   fallen: 'The stone has fallen',
-  fallenSky: 'Your crowned shrine climbed the sky\nto {tiers} tiers, for {favour} favour.\n\nBest {best} tiers.',
+  fallenSky: 'Your crowned shrine climbed the sky\nto {tiers} tiers, for {favour} favour.',
   fallenStood: {
-    one: 'Your shrine stood {n} tier tall,\n{balanced} of them balanced, for {favour} favour.\n\nBest {best} tiers.',
-    other: 'Your shrine stood {n} tiers tall,\n{balanced} of them balanced, for {favour} favour.\n\nBest {best} tiers.',
+    one: 'Your shrine stood {n} tier tall,\n{balanced} of them balanced, for {favour} favour.',
+    other: 'Your shrine stood {n} tiers tall,\n{balanced} of them balanced, for {favour} favour.',
   },
+  bestTiers: { one: 'Best {n} tier.', other: 'Best {n} tiers.' },
   crownedText: 'All {tiers} tiers stand,\n{balanced} of them balanced, for {favour} favour.\n\nKeep building into the windy sky?',
 };
 
