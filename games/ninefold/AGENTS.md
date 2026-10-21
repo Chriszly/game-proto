@@ -22,8 +22,8 @@ Implemented today:
   more). 9x9 boards take a few to a few tens of milliseconds.
 - Entering: a right digit is filled in for good and clears that digit from its peers' notes; a
   wrong one stays (shown in `wrong`/`wrongBg`), counts a mistake, and in Delve costs a heart unless
-  a Ward catches the floor's first. Erase clears a wrong digit or notes. Notes mode toggles a bit
-  per digit in `notes`. Hints fill the picked cell, or the first open one.
+  a Ward catches the floor's first. Erase clears a wrong digit, or an empty cell's notes. Notes mode
+  toggles a bit per digit in `notes`. Hints fill the picked cell, or the first open one.
 - Finished rows, columns and boxes (`doneUnits`) flash once and stay tinted; picking a cell tints
   its peers and every cell with the same right digit.
 - Delve floors are `FLOORS` (from floor 6 on, the last row repeats). Relics (`RELICS`): Lantern
@@ -39,7 +39,8 @@ Implemented today:
 Missing or rough:
 
 - A board in play is not saved; a reload starts at the menu.
-- The daily puzzle has no streak and no shared leaderboard; the menu only ticks it off for today.
+- The daily puzzle has no streak and no shared leaderboard; once solved, the menu ticks it off and
+  disables its button for today.
 - No undo; a right digit can't be taken back (it is right).
 - Puzzle levels are by given count, not by the solving techniques they need.
 - `docs/screenshots/all-styles.webp`, `style-picker.webp`, `menu.webp`, `upright-board.webp` (a
@@ -150,7 +151,7 @@ part for the screen; the engine only switches when it changes.
 | `place` | a `placed` event |
 | `wrong` / `heart` / `ward` | a `wrong` event in Classic / one that cost a heart / one the Ward caught |
 | `note` | a digit entered in notes mode |
-| `erase` | Erase on a cell that can be erased |
+| `erase` | Erase on a cell with a wrong digit or notes to clear |
 | `hint` | a `hint` event |
 | `unit` | a `unit` event (a row, column or box finished) |
 | `unlock` | an `unlocked` event, and picking a style |
@@ -196,7 +197,12 @@ digit, Erase or Hint that can't be used, a disabled pad key and a locked style.
 ## Gotchas
 
 - A right digit is never wrong again, so `canEnter` refuses a cell that is right; Erase only clears
-  wrong digits and notes.
+  a wrong digit, or the notes of an empty cell, and reports false when there is nothing to clear.
+- A unit the Seer's Eye completes at the start of a floor is recorded in `doneUnits` by `markDone`
+  without a `unit` event, like the givens' units; only `afterFill` (a digit or hint) celebrates one.
+- `drawBoard` only restyles a digit text whose style key (font, size, colour, glow) changed, since
+  `setStyle` re-renders the text's canvas.
+- Keys with Ctrl, Cmd or Alt held are left to the browser.
 - `drawBoard` hides every digit text first; a board of fewer than 81 cells uses the first
   `size * size` texts.
 - Buttons stop their `pointerdown` so the board never sees a tap on the panel; anything tappable

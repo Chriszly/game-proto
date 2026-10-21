@@ -18,7 +18,7 @@ styles, from Paper Cut-out to Stained Glass; the digits stay plain and easy to r
 | Tap or click a cell, or the arrow keys | Pick a cell |
 | Number pad, or keys 1-9 | Write that digit in the picked cell |
 | Notes (N) | Switch to pencil marks: digits then toggle small notes in the cell |
-| Erase (Backspace) | Clear a wrong digit or the notes from the picked cell |
+| Erase (Backspace) | Clear a wrong digit from the picked cell, or an empty cell's notes |
 | Hint (H) | Fill in the picked cell, or the first open one |
 | Menu | Leave the board for the menu |
 
@@ -35,7 +35,7 @@ column or box flashes and stays tinted.
 
 ### Modes
 
-- **Daily puzzle**: a Normal 9x9 board picked by the date. The menu ticks it off once solved.
+- **Daily puzzle**: a Normal 9x9 board picked by the date. The menu ticks it off once solved, until the next day.
 - **Classic**: a fresh 9x9 board at Easy (40 givens), Normal (32) or Hard (26), with 3 hints and no
   limit on mistakes. **Next puzzle** deals another at the same level.
 - **Delve**: floor 1 is a 4x4 board, floors 2 and 3 are 6x6 and from floor 4 every floor is a 9x9

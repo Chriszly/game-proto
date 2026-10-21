@@ -67,7 +67,8 @@ export function peersOf(shape: Shape): number[][] {
   return sets.map((s) => [...s]);
 }
 
-function shuffle<T>(items: T[], random: Random) {
+/** Shuffles the items in place (Fisher-Yates) and returns them. */
+export function shuffle<T>(items: T[], random: Random) {
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [items[i], items[j]] = [items[j], items[i]];

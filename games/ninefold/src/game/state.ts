@@ -1,6 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { RELICS, STYLES, type Level, type RelicId, type StyleId } from './catalog';
-import { dailySeed, makePuzzle, peersOf, seeded, SHAPES, units, type Puzzle, type Random } from './sudoku';
+import { dailySeed, makePuzzle, peersOf, seeded, SHAPES, shuffle, units, type Puzzle, type Random } from './sudoku';
 
 // Ninefold's rules: Classic (a daily puzzle and free play at three levels) and Delve (a run of
 // ever bigger puzzles with hearts and relics), and the progress that unlocks the art styles.
@@ -131,7 +131,7 @@ function load(s: GameState, puzzle: Puzzle) {
   s.timeMs = 0;
   s.warded = false;
   s.newStyles = [];
-  s.doneUnits = units(puzzle).flatMap((u, i) => (u.every((c) => s.values[c]) ? [i] : []));
+  markDone(s);
   s.phase = 'playing';
   s.events.push({ type: 'board' });
 }
@@ -174,6 +174,14 @@ function nextFloor(s: GameState) {
     const cell = empty.splice(Math.floor(Math.random() * empty.length), 1)[0];
     fill(s, cell);
   }
+  // The Seer's cells are givens for the player, so a unit they complete is not celebrated.
+  markDone(s);
+}
+
+/** Records every unit that is already complete, without celebrating it. */
+function markDone(s: GameState) {
+  const p = s.puzzle!;
+  s.doneUnits = units(p).flatMap((u, i) => (u.every((c) => s.values[c] === p.solution[c]) ? [i] : []));
 }
 
 /** Picks a cell, or none with -1. */
@@ -238,11 +246,14 @@ export function enter(s: GameState, digit: number) {
   return true;
 }
 
-/** Clears a wrong digit or the notes from the selected cell. */
+/** Clears a wrong digit from the selected cell, or, if it holds none, its notes; false if there was nothing to clear. */
 export function erase(s: GameState) {
-  if (!canEnter(s)) return;
-  s.values[s.selected] = 0;
-  s.notes[s.selected] = 0;
+  if (!canEnter(s)) return false;
+  const cell = s.selected;
+  if (s.values[cell]) s.values[cell] = 0;
+  else if (s.notes[cell]) s.notes[cell] = 0;
+  else return false;
+  return true;
 }
 
 /** Fills in the selected cell (or the first open one) with its digit, using up a hint. */
@@ -287,7 +298,7 @@ function solved(s: GameState) {
   for (const style of s.newStyles) s.events.push({ type: 'unlocked', style });
   if (s.mode === 'delve') {
     s.phase = 'relic';
-    s.relicOffer = [...RELICS].sort(() => Math.random() - 0.5).slice(0, RELIC_OFFER);
+    s.relicOffer = shuffle([...RELICS], Math.random).slice(0, RELIC_OFFER);
   } else s.phase = 'solved';
 }
 
