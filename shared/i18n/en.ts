@@ -71,6 +71,7 @@ const en = {
   updateChecking: 'Checking…',
   updatesCurrent: 'You have the latest version.',
   updatesFailed: 'The update could not be downloaded. Try again with a connection.',
+  updatesNone: 'This browser has no app installed to update. Open the site online once to set up updates and offline play.',
   settingReduceMotion: 'Reduce motion',
   settingReduceMotionHint: 'Turns off screen shake, flashes and blinking hit effects.',
   settingMusic: 'Music',

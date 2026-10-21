@@ -93,8 +93,9 @@ function gameManifest(root: string, game: string) {
   const html = readFileSync(join(root, 'games', game, 'index.html'), 'utf8');
   const name = /<title>([^<]*)<\/title>/.exec(html)?.[1].trim() || game;
   const background = colour(root, game);
+  // No `id`: a manifest's id resolves against the origin, not the manifest, so every app's `./`
+  // would be the same id and only one could be installed. Without it the id is the start_url.
   return {
-    id: './',
     name,
     short_name: name,
     start_url: './',

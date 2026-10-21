@@ -510,6 +510,10 @@ test('hub and games install as apps', async ({ page, request }) => {
     const manifest = await (await request.get(url)).json();
     expect(manifest.name).toBe(name);
     expect(new URL(manifest.start_url, url).pathname).toBe(path);
+    // An id resolves against the origin, so a relative id would make every app the same one;
+    // without an id the app's id is its start_url, which differs for each app.
+    const id = manifest.id === undefined ? new URL(manifest.start_url, url) : new URL(manifest.id, new URL(url).origin);
+    expect(id.pathname).toBe(path);
     for (const icon of manifest.icons) expect((await request.get(new URL(icon.src, url).href)).ok()).toBe(true);
   }
 });
@@ -535,7 +539,7 @@ test('a game installs from its start screen', async ({ page }, testInfo) => {
 });
 
 // The Updates setting says when the installed apps download a new version, and Update now checks
-// at once; the dev server has no service worker, so it finds the latest version in place.
+// at once; the dev server has no service worker, so it says there is no app to update.
 test('hub update settings', async ({ page }, testInfo) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -554,7 +558,7 @@ test('hub update settings', async ({ page }, testInfo) => {
     d.accept();
   });
   await updates.getByRole('button', { name: 'Update now' }).click();
-  await expect.poll(() => message).toBe('You have the latest version.');
+  await expect.poll(() => message).toBe('This browser has no app installed to update. Open the site online once to set up updates and offline play.');
 });
 
 // A browser that tells WiFi from mobile data, like Chrome on Android, offers Wi-Fi only and picks it first.

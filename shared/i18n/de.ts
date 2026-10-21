@@ -71,6 +71,7 @@ const de: Translation<typeof en> = {
   updateChecking: 'Wird geprüft …',
   updatesCurrent: 'Du hast die neueste Version.',
   updatesFailed: 'Die Aktualisierung konnte nicht geladen werden. Versuch es mit einer Verbindung noch einmal.',
+  updatesNone: 'In diesem Browser ist keine App installiert, die aktualisiert werden könnte. Öffne die Seite einmal online, um Aktualisierungen und Offline-Spielen einzurichten.',
   settingReduceMotion: 'Bewegung reduzieren',
   settingReduceMotionHint: 'Schaltet Bildschirmwackeln, Blitze und blinkende Treffereffekte ab.',
   settingMusic: 'Musik',
