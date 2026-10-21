@@ -106,20 +106,23 @@ Implemented today:
 - Windows that call (LK8): `callsFor(night)` gives the dusk-left times (none on night 1, 37 s and
   23 s after, 11 s too from night 6). `windows` picks `callTarget` (a dark, unclaimed, unqueued
   lantern from index `(night * 3 + callsKept + calls left) % count` on, else the lit unclaimed one
-  lowest on oil) and sets `state.call` (`lantern`, `msLeft` = `CALL_MS`, 8 s). A moth that lights
+  lowest on oil while `caskSpare`, else no call) and sets `state.call` (`lantern`, `msLeft` = `CALL_MS`, 8 s). A moth that lights
   or refills that lantern in time pays `callPay(s)` (`CALL_PAY` 3, double in the market) at once
   and counts `callsKept`; running out pushes a `call` event with `kept` false and costs nothing.
 - Oil cask (LK9): `state.cask` fills, `CASK_START` (3) to `CASK_MAX` (6). From `CASK_NIGHT` (3)
   (`usesCask(s)`) a refill draws one fill when the moth finishes lighting a lit lantern.
   `caskSpare(s, except?)` is false once every fill is spoken for by moths already flying to or
-  refilling lit lanterns whose fill would add oil (`drawsFill`; a guard tap on a full lantern
-  reserves none). `mayTap(s, i, except?)` allows a tap on a dark lantern, on a lit one while
-  `caskSpare`, and on a lit one that is `menaced` (a gust, the owl or a bat coming for it,
-  `threatened` plus bats), so it can always be shielded: `send` refuses the rest, a queued refill
-  is dropped (in `tick` and a firefly's `nextHop`) once `mayTap` is false, and the scene hides the
-  "Save it" tag and rings when `caskSpare` is false. A moth sent to shield a menaced lantern that
-  arrives to find the cask dry pushes a `dry` event (its `clunk`, no `strike`) and leaves the
-  lantern as it is (no close call), then guards it. `topUp(s)` in the night phase adds a fill for
+  refilling lit lanterns whose fill would add oil (`drawsFill`: the moth's `fill` is set and the
+  fill adds oil; a guard tap on a full lantern reserves none). `dispatch` sets `fill` to
+  `caskSpare` as the moth leaves, so a moth sent with every fill spoken for never takes one
+  reserved for another. `mayTap(s, i, except?)` allows a tap on a dark lantern, on a lit one while
+  `caskSpare`, and on a lit one that is `threatened` (a gust or the owl coming for it), so it can
+  always be shielded (a bat is chased instead): `send` refuses the rest, a queued refill is
+  dropped (in `tick` and a firefly's `nextHop`) once `mayTap` is false, and the scene hides the
+  "Save it" tag and rings when `caskSpare` is false. A moth sent to shield a threatened lantern
+  that arrives to find the cask dry (or, sent without `fill`, no fill spare) pushes a `dry` event
+  (its `clunk`, no `strike` or buzz) and leaves the lantern as it is (no close call), then guards
+  it. `topUp(s)` in the night phase adds a fill for
   `CASK_COST` (3); the Cask card calls it. The HUD shows the cask at `CASK_HUD` (grey before night
   3, orange when dry).
 - Districts (LK10): `DISTRICTS` in `places.ts` (`keep`, `docks`, `chapel`, `market`), each with
@@ -310,8 +313,8 @@ State model (`GameState` in `src/game/state.ts`):
   `claimed` while a moth is on its way to it, lighting it or guarding it.
 - `moths[i]` has a `kind`, a position, a `task` (`idle`, `out`, `lighting`, `guard`, `chase`,
   `home`, `rest`), its `target` lantern, `lightingMs`, `closeCall` (set when it arrived at a nearly
-  dry lantern), `bat` (the id it chases), `hops` (lanterns left on a firefly's flight), `flights`
-  (since it last rested) and `restMs`.
+  dry lantern), `bat` (the id it chases), `hops` (lanterns left on a firefly's flight), `fill`
+  (sent with a spare cask fill), `flights` (since it last rested) and `restMs`.
 - `kind` and `nextKind` are this night's and the next night's kind. `batTimes` are the bats still
   to come, `bats` those on screen (`id`, position, `target`, `task` `fly` or `flee`), `nextBat`
   the next id and `chased` the bats chased off this dusk. `festival` is set once the Great
@@ -389,7 +392,7 @@ Sound table, `sfx` (plus the shared `ui('coin')`, `ui('refuse')` and `ui('click'
 | `flutter` / `pip` | `tapLantern`: a moth sent / the tap queued (lost or ignored taps buzz) |
 | `strike` + `fwoomp` | `frameSounds`: a moth finished lighting or refilling a lantern (one per frame) |
 | `sparkle` + coin | `closeCall` event |
-| `clunk` + buzz | `dry` event |
+| `clunk` | `dry` event |
 | `fizzle` | any lanterns going dark in a frame: burnt out, blown out, snuffed by a bat or the owl (merged into one) |
 | `windSwell` / `gust` / `ting` | gust warned / `gust` event / a shielded gust or owl |
 | `squeak` / `bounce` / `whoosh` | a bat comes on screen / a bat driven off a guarded lantern / `chased` (and a tapped chase) |

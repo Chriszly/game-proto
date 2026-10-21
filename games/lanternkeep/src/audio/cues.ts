@@ -47,7 +47,6 @@ export function frameSounds(before: Snapshot, s: GameState, events: GameEvent[])
         break;
       case 'dry':
         sfx('clunk');
-        ui('refuse');
         dried.add(e.lantern);
         break;
       case 'gust':

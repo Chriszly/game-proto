@@ -105,8 +105,9 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 15. **The oil cask**: the barrel on the HUD holds fills of oil (3 to start, 6 at most). From the
     third night a refill of a lit lantern draws one fill; lighting a dark lantern is always free.
     With the cask dry a tap on a lit lantern is refused, so keep one going or let it go dark,
-    except on a lantern a gust, a bat or the owl is coming for: a moth may still be sent to shield
-    it, and one that arrives to find the cask dry sits on the lantern as it is ("Cask dry!").
+    except on a lantern a gust or the owl is coming for: a moth may still be sent to shield it, and
+    one that arrives with no fill for it sits on the lantern as it is ("Cask dry!") and guards it.
+    Chase a bat off instead. With no fill to spare a window calls only for a dark lantern.
     Between nights the Cask card puts a fill in for 3 coins.
 16. **Kinds of lantern**: from the fourth night some spots hold a special lantern, named under
     it: one on night 4, two on night 5, three from night 6, on spots that change with the night.
