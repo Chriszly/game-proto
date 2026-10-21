@@ -160,7 +160,8 @@ How it runs:
   shortest such way. Strict, it also never moves in or out of a junction by its barred arm.
   `planRoute` takes the strict way if there is one, else the loose way (the wyrm then stops to
   throw switches). `routable` and `dispatch` use loose routes (from each wyrm's `at` and `from`),
-  since the wyrm can always throw switches itself.
+  since the wyrm can always throw switches itself. For an order loading or aboard, `routable` asks
+  whether its wyrm can still reach the drop, so the card says "No track yet" when the way is cut.
 - **Screens:** `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas
   pixels per game pixel) and zooms the camera, which never scrolls, to match. With `fill` the view
   is 960x540 or bigger in one direction (up to 1296 wide or 720 tall), picked once at start.
@@ -249,9 +250,10 @@ State model (`src/game/state.ts`):
   the host. `addOrder` reads `moodOf(s, from)`: pay times `MOOD_PAY[mood]`
   above zero, time times `MOOD_RUSH` below, and keeps it as `Order.mood`.
 - Hazards (from `HAZARD_ROUND`): every `HAZARD_EVERY_MS` `tickHazard` picks a track tile that is a
-  bridge (washout) or beside a mountain (rockfall), if any, and sets `hazard` with
-  `HAZARD_WARN_MS`. `strikeHazard` moves an idle wyrm (no job, no path) on the tile one tile off it
-  (`stepOff`), waits while a wyrm is on the tile or moving onto it, then takes
+  bridge (washout) or beside a mountain (rockfall) and that no wyrm stands on, if any, and sets
+  `hazard` with `HAZARD_WARN_MS`. `strikeHazard` moves an idle wyrm (no job, no path) on the tile
+  one tile off it (`stepOff`), drops the hazard without a strike when a wyrm stands stranded on the
+  tile (no track beside it), waits while a wyrm is on the tile or moving onto it, then takes
   the track (no refund), cuts each wyrm's `path` short of it and drops its job (`dropJob`: a
   pickup goes back to the front of the queue, cargo stays aboard). Removing the tile first doesn't
   cancel the hazard, and `trackCost` refuses the hazard's tile until it has struck.
@@ -350,8 +352,8 @@ starts the music again.
   `TOK_PITCH`, rising along a drag), `untok` and `ui('coin')` for track taken up, `switch` for a
   switch thrown, `send` for an order card sent, `buy` for an upgrade or a depot (`roar` too for the
   second wyrm), `courier` for a courier call, `stamp` for a charter picked, `ui('click')` for the
-  Remove, Plain and Depot toggles and Play again, and `ui('refuse')` for every refused tap: track
-  that can't go there, nothing to remove, a depot that can't be bought, an order card that can't
+  Remove, Plain and Depot toggles and Play again, and `ui('refuse')` for every refused tap (a tap,
+  not each tile of a drag, and none on the board once the game is over): track that can't go there, nothing to remove, a depot that can't be bought, an order card that can't
   be sent, an upgrade not affordable or locked, and a courier call that can't go (from round 2).
 - **`GameSounds` (the sim's doing):** `order` for a new order (`workshop` for a workshop's goods),
   `load` when goods are aboard, `deliver` for a delivery, `late` for an order out of time, `faith`
@@ -401,7 +403,7 @@ starts the music again.
   `node scripts/check-translations.mjs`. German runs longer than English: the order card's status
   and mood tag share one line, the upgrade buttons and the hint line (beside the corner buttons)
   shrink their font to fit, and
-  the HUD's round line puts the charter on a second line; check a new text with `?lang=de`.
+  the HUD's round line puts the charter on a second line (the festival's too); check a new text with `?lang=de`.
 
 - **Add a village:** add an entry to `VILLAGE_LIST` in `src/game/map.ts` with its `round` (no
   place: `generateValley` finds one; more villages may need a smaller spacing), and give it roof

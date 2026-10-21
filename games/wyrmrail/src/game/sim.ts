@@ -318,8 +318,15 @@ function planRoute(s: GameState, w: Wyrm, b: Tile) {
   return route(s, w.at, b, w.from, true) ?? route(s, w.at, b, w.from);
 }
 
-/** Whether a wyrm could fetch and deliver this order along the track laid so far. */
+/**
+ * Whether a wyrm could fetch and deliver this order along the track laid so far; for an order
+ * already aboard (or loading), whether its wyrm can still reach the drop.
+ */
 export function routable(s: GameState, o: Order) {
+  if (o.wyrm !== null && (o.status === 'loading' || o.status === 'carrying')) {
+    const w = s.wyrms[o.wyrm];
+    return route(s, w.at, villages(s)[o.to], w.from) !== null;
+  }
   const from = villages(s)[o.from];
   return s.wyrms.some((w) => route(s, w.at, from, w.from) !== null) && route(s, from, villages(s)[o.to]) !== null;
 }
@@ -520,7 +527,8 @@ function tickHazard(s: GameState, dt: number) {
   }
   if ((s.hazardTimerMs -= dt) > 0) return;
   s.hazardTimerMs = HAZARD_EVERY_MS;
-  const spots = s.track.map(tileOf).filter((t) => hazardKind(s, t));
+  // Never under a wyrm: one standing there could be cut off from every way off the tile.
+  const spots = s.track.map(tileOf).filter((t) => hazardKind(s, t) && !s.wyrms.some((w) => sameTile(w.at, t)));
   if (!spots.length) return;
   const tile = spots[Math.floor(Math.random() * spots.length)];
   const kind = hazardKind(s, tile)!;
@@ -536,6 +544,11 @@ function strikeHazard(s: GameState) {
   const h = s.hazard!;
   // A wyrm idling on the tile, waiting for its next job, steps off it so the hazard can strike.
   for (const w of s.wyrms) if (sameTile(w.at, h.tile) && !w.job && !w.path.length && w.progress === 0) stepOff(s, w);
+  // A wyrm stranded on the tile, with no track left beside it, can't step off: the hazard blows over.
+  if (s.wyrms.some((w) => sameTile(w.at, h.tile) && !w.path.length && w.progress === 0 && !arms(s, w.at).length)) {
+    s.hazard = null;
+    return;
+  }
   if (s.wyrms.some((w) => sameTile(w.at, h.tile) || (w.progress > 0 && w.path.length && sameTile(w.path[0], h.tile)))) {
     h.ms = 500;
     return;

@@ -46,7 +46,7 @@ in a new valley.
 4. **The wyrm** pulls two wagons, so it can carry two orders at once. It always heads for the
    nearest stop: a village its cargo is going to or, while a wagon is free, a village with goods
    it was sent to fetch. It loads the goods and the village they go to pays on arrival. An order
-   it can't reach yet says "No track there yet". A dotted line in the wyrm's colour shows the way
+   it can't reach yet, or whose way was cut after it was sent, says "No track yet". A dotted line in the wyrm's colour shows the way
    it is taking and a ring marks its stop.
 5. **Switches steer**: track with three or four arms is a junction, and its switch is set against
    one arm, shown by a striped barrier and dimmed rails. A new junction's switch is set against the
@@ -85,7 +85,8 @@ in a new valley.
     marked with an amber "!" and a warning for 9 seconds, then its track is gone: a wyrm heading
     over it stops short and picks its stop again (a pickup goes back to the queue), and an order
     with no way left waits until the track is rebuilt, at the usual price. A spare loop keeps the
-    line running meanwhile. The warning holds off while a wyrm is on the tile. Taking the track up
+    line running meanwhile. The warning holds off while a wyrm is on the tile, never falls on a tile a
+    wyrm stands on, and blows over if a wyrm is stranded there with no track beside it. Taking the track up
     yourself doesn't stop the hazard, and no track can be laid on its tile until it has struck.
 12. **Round charters**, from round 3: each round opens with two charters to choose from, and the
     game waits until one is tapped (the board takes no taps meanwhile). A charter rules the round: a *Fair* (one cargo pays double,
@@ -93,7 +94,7 @@ in a new valley.
     shorter), *Patient villages* (deadlines half as long again, a quarter less pay), *Cheap rails*
     (track at half price, a fifth less pay), *Busy season* (orders twice as often, a tenth less
     pay) or a *Feast* (the wyrms never go hungry, a tenth less pay). The HUD shows the round's
-    charter by the round.
+    charter by the round, the festival's included.
 13. **Passengers**, from round 3: now and then an order is passengers, who pay triple and allow
     40% less time. They fill both wagons: a wyrm only fetches them while it carries nothing, and
     loads nothing else until they are delivered.
