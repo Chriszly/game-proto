@@ -194,8 +194,8 @@ function village(): MapDef {
   b.border('tree', 2);
   // The main street runs north to the gate, the cross street east to west.
   b.rect(19, 0, 2, 24, 'path').rect(6, 11, 28, 2, 'path').rect(25, 18, 2, 3, 'path');
-  // Thorns block the north gate until they are cut.
-  b.rect(19, 3, 2, 1, 'thorns');
+  // Thorns block the north gate until they are cut, with trees either side so they can't be walked round.
+  b.rect(19, 3, 2, 1, 'thorns').rect(17, 2, 2, 2, 'tree').rect(21, 2, 2, 2, 'tree');
   b.ellipse(7, 20, 3.6, 2.4, 'water');
   b.prop('house', 6, 6, 5, 4).prop('house', 23, 14, 5, 4).prop('shed', 30, 6, 3, 3).prop('well', 15, 15, 2, 2);
   b.prop('lamp', 18, 7).prop('lamp', 21, 13).prop('lamp', 17, 19).prop('lamp', 28, 10).prop('lamp', 11, 13);
@@ -227,7 +227,8 @@ function woods(): MapDef {
   b.border('tree', 2);
   // The path from the village gate up to the shrine, with a branch west to the river.
   b.rect(24, 16, 2, 16, 'path').rect(24, 16, 20, 2, 'path').rect(42, 4, 2, 13, 'path').rect(13, 15, 11, 2, 'path');
-  b.rect(42, 10, 2, 1, 'thorns');
+  // Thorns across the shrine path, hemmed in by trees.
+  b.rect(42, 10, 2, 1, 'thorns').rect(41, 9, 1, 3, 'tree').rect(44, 9, 1, 3, 'tree');
   // The river, crossed only on the hookvine, and the way to the fen beyond it.
   b.rect(8, 2, 4, 28, 'water').rect(0, 15, 8, 2, 'path');
   d.posts.push({ x: 7, y: 15 }, { x: 12, y: 15 });
@@ -265,6 +266,7 @@ function fen(): MapDef {
   b.ellipse(25, 6, 4, 2.2, 'water').ellipse(6, 18, 3.5, 2.5, 'water').ellipse(26, 19, 3, 2, 'water').ellipse(15, 19, 2, 1.4, 'water');
   // The top of the drowned bell tower, its door choked by boulders.
   b.rect(30, 4, 2, 8, 'path').set(30, 5, 'boulder').set(31, 5, 'boulder');
+  b.rect(29, 4, 1, 2, 'tree').rect(32, 4, 1, 2, 'tree');
   b.prop('tower', 29, 1, 4, 3);
   d.exits.push({ x: 30, y: 4, w: 2, h: 1, to: 'belfry', tx: 17, ty: 37, facing: 'up' });
   b.scatter('reeds', 40, { x: 2, y: 2, w: 32, h: 20 }, 31, 'grass', 0);
