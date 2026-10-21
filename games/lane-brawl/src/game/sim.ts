@@ -681,6 +681,33 @@ function dealt(s: GameState, u: Unit, amount: number): number {
 // ---------------------------------------------------------------------------------------------
 // Each unit's turn.
 
+/** The per-tick countdowns of a unit: swing, flash, control effects, shield, buffs and a champion's cooldowns and gold. */
+function countDown(u: Unit, dt: number) {
+  u.attackCd = Math.max(0, u.attackCd - dt);
+  u.swing = Math.max(0, u.swing - dt);
+  u.flash = Math.max(0, u.flash - dt);
+  u.slowMs = Math.max(0, u.slowMs - dt);
+  u.castMs = Math.max(0, u.castMs - dt);
+  u.stunMs = Math.max(0, u.stunMs - dt);
+  if (u.shieldMs > 0) {
+    u.shieldMs -= dt;
+    if (u.shieldMs <= 0) u.shield = 0;
+  }
+  if (u.buffs.length) {
+    for (const b of u.buffs) b.ms -= dt;
+    u.buffs = u.buffs.filter((b) => b.ms > 0);
+  }
+  if (!u.champ) return;
+  for (const k of ABILITY_KEYS) u.cds[k] = Math.max(0, u.cds[k] - dt);
+  for (const k of Object.keys(u.activeCds)) u.activeCds[k] = Math.max(0, u.activeCds[k] - dt);
+  u.revealMs = Math.max(0, u.revealMs - dt);
+  u.aggroMs = Math.max(0, u.aggroMs - dt);
+  u.aiCastMs = Math.max(0, u.aiCastMs - dt);
+  u.hasteMs = Math.max(0, u.hasteMs - dt);
+  u.lullMs += dt;
+  u.gold += (GOLD_PER_SEC * dt) / 1000;
+}
+
 function updateUnit(s: GameState, u: Unit, dt: number) {
   if (u.kind === 'watchstone') return;
   if (u.kind === 'ward') {
@@ -692,6 +719,9 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     u.flash = Math.max(0, u.flash - dt);
     return;
   }
+  // Every countdown runs dead or alive, so a champion comes back with its cooldowns, item actives
+  // and buffs run down and its passive gold earned (only a recall needs it standing).
+  countDown(u, dt);
   if (u.dead) {
     if ((u.kind === 'champion' || u.kind === 'camp' || u.kind === 'beast') && s.time >= u.respawnAt) {
       if (u.kind === 'beast' && s.time >= ELDER.at && !s.beastElder) makeElder(s, u);
@@ -708,29 +738,7 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     }
     return;
   }
-  u.attackCd = Math.max(0, u.attackCd - dt);
-  u.swing = Math.max(0, u.swing - dt);
-  u.flash = Math.max(0, u.flash - dt);
-  u.slowMs = Math.max(0, u.slowMs - dt);
-  u.castMs = Math.max(0, u.castMs - dt);
-  u.stunMs = Math.max(0, u.stunMs - dt);
-  if (u.shieldMs > 0) {
-    u.shieldMs -= dt;
-    if (u.shieldMs <= 0) u.shield = 0;
-  }
-  if (u.buffs.length) {
-    for (const b of u.buffs) b.ms -= dt;
-    u.buffs = u.buffs.filter((b) => b.ms > 0);
-  }
   if (u.champ) {
-    for (const k of ABILITY_KEYS) u.cds[k] = Math.max(0, u.cds[k] - dt);
-    for (const k of Object.keys(u.activeCds)) u.activeCds[k] = Math.max(0, u.activeCds[k] - dt);
-    u.revealMs = Math.max(0, u.revealMs - dt);
-    u.aggroMs = Math.max(0, u.aggroMs - dt);
-    u.aiCastMs = Math.max(0, u.aiCastMs - dt);
-    u.hasteMs = Math.max(0, u.hasteMs - dt);
-    u.lullMs += dt;
-    u.gold += (GOLD_PER_SEC * dt) / 1000;
     if (u.recallMs > 0) {
       u.recallMs -= dt;
       if (u.recallMs <= 0) {
@@ -1169,7 +1177,7 @@ function nextBuy(u: Unit): ItemDef | null {
   return null;
 }
 
-/** An AI champion at home or dead buys the next item of its build it can pay for, then a ward when it has none. */
+/** An AI champion at home or dead buys the next item of its build it can pay for, else an elixir once the build is done, else a ward when it carries none. */
 function aiShop(u: Unit) {
   if (!u.champ || u.player || (!u.dead && !atShop(u))) return;
   const next = nextBuy(u);

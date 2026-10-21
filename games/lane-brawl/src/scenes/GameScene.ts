@@ -468,6 +468,7 @@ export class GameScene extends Phaser.Scene {
     );
     if (import.meta.env.DEV) console.info(`Lane Brawl champions baked in ${Math.round(ms)} ms`);
     this.shopOpen = false;
+    this.objSeen = { id: -1, progress: 0 };
     this.liveFx = [];
     this.structureHp.clear();
     this.tenseUntil = 0;
@@ -1357,6 +1358,9 @@ export class GameScene extends Phaser.Scene {
   private drawPlaying(g: Phaser.GameObjects.Graphics, s: GameState) {
     const me = this.player();
     if (!me || !me.champ) return;
+    // Once the match is over only the end panel shows: the bars' texts and the portrait sit above
+    // the HUD graphics, so they would stay lit through the panel's dimming.
+    if (s.phase !== 'playing') return this.drawEnd(g, s);
     this.drawTopBar(g, s, me);
     // The shop panel covers the objective card, so the card steps aside while it is open.
     if (!this.shopOpen) {
@@ -1367,7 +1371,6 @@ export class GameScene extends Phaser.Scene {
     this.drawBottomBar(g, s, me);
     this.drawMinimap(g, s, me);
     if (this.shopOpen) this.drawShop(g, me);
-    if (s.phase !== 'playing') this.drawEnd(g, s);
   }
 
   private drawTopBar(g: Phaser.GameObjects.Graphics, s: GameState, me: Unit) {
@@ -1517,7 +1520,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x151a24, 1).fillRect(bx, P.y + 28, bw, 11);
     g.fillStyle(col('#62d86f'), 1).fillRect(bx, P.y + 28, bw * Math.max(0, me.hp / me.maxHp), 11);
     g.fillStyle(0xffffff, 0.25).fillRect(bx, P.y + 28, bw * Math.max(0, me.hp / me.maxHp), 2);
-    this.t('hp', bx + bw / 2, P.y + 28, `${Math.max(0, Math.ceil(me.hp))} / ${me.maxHp}`, 9, UI.text, 'center', true);
+    this.t('hp', bx + bw / 2, P.y + 28, `${formatNumber(Math.max(0, Math.ceil(me.hp)))} / ${formatNumber(me.maxHp)}`, 9, UI.text, 'center', true);
     const xpFloor = XP_FOR_LEVEL[me.level - 1] ?? 0;
     const xpNext = XP_FOR_LEVEL[me.level] ?? XP_FOR_LEVEL[MAX_LEVEL - 1];
     const xpRatio = me.level >= MAX_LEVEL ? 1 : (me.xp - xpFloor) / (xpNext - xpFloor);
