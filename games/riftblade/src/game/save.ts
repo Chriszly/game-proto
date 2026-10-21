@@ -134,7 +134,12 @@ export function loadRun(): GameState | null {
   try {
     const saved = JSON.parse(localStorage.getItem(RUN_KEY) ?? 'null', readInfinity);
     if (typeof saved !== 'object' || !saved || typeof saved.player !== 'object' || !saved.player) return null;
-    const s: GameState = { ...freshState(), ...saved, player: { ...freshHero(), ...saved.player } };
+    const fresh = freshState();
+    const s: GameState = { ...fresh, ...saved, player: { ...freshHero(), ...saved.player } };
+    // A run saved mid-fight is stepped from its first frame: every list the sim walks must be one.
+    const lists = (a: object, b: object) =>
+      Object.entries(a).every(([k, v]) => !Array.isArray(v) || Array.isArray((b as Record<string, unknown>)[k]));
+    if (!lists(fresh, s) || !lists(fresh.player, s.player)) return null;
     if (!HERO_IDS.includes(s.hero as HeroId) || !isResumable(s) || !PLANETS[s.planet]) return null;
     // The panels read these as they open, so a run they would throw on is dropped here.
     const known = (id: unknown) => typeof id === 'string' && id in UPGRADES;

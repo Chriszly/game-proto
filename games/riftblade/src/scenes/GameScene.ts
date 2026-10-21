@@ -463,15 +463,21 @@ export class GameScene extends Phaser.Scene {
     }
     // Every other panel (a level-up, the maps, the trader, an event) saves the run as it opens.
     else this.saveRun();
-    if (this.unlocking.length) this.panel = unlockPanel(this, this.unlocking[0]);
-    else if (s.phase === 'select') this.panel = heroSelect(this, this.progress, this.chosen);
-    else if (s.phase === 'levelup') this.panel = levelUp(this, s);
-    else if (s.phase === 'chart') this.panel = spaceMap(this, s, this.progress.charted);
-    else if (s.phase === 'map') this.panel = starMap(this, s);
-    else if (s.phase === 'trader') this.panel = trader(this, s);
-    else if (s.phase === 'event') this.panel = eventPanel(this, s);
-    else if (s.phase === 'won' || s.phase === 'lost') this.panel = endScreen(this, s, this.progress);
-    this.panel?.place(FRAME.x, FRAME.y);
+    // The panel is kept before it is built, so one that throws half-built (a corrupt saved run) is
+    // still destroyed by the next call.
+    const build = (fill: (p: Panel) => void) => {
+      const p = (this.panel = new Panel(this));
+      fill(p);
+      p.place(FRAME.x, FRAME.y);
+    };
+    if (this.unlocking.length) build((p) => unlockPanel(p, this.unlocking[0]));
+    else if (s.phase === 'select') build((p) => heroSelect(p, this.progress, this.chosen));
+    else if (s.phase === 'levelup') build((p) => levelUp(p, s));
+    else if (s.phase === 'chart') build((p) => spaceMap(p, s, this.progress.charted));
+    else if (s.phase === 'map') build((p) => starMap(p, s));
+    else if (s.phase === 'trader') build((p) => trader(p, s));
+    else if (s.phase === 'event') build((p) => eventPanel(p, s));
+    else if (s.phase === 'won' || s.phase === 'lost') build((p) => endScreen(p, s, this.progress));
     this.shown = this.panelKey();
     this.walking = false;
     this.stick = null;
