@@ -43,9 +43,10 @@ export class TownScene extends Phaser.Scene {
     super('Town');
   }
 
-  create() {
-    // Entered only through `leaveFor`, which saved a moment ago, so there is no time away to catch up on.
-    this.state = loadState();
+  create(data?: { state?: GameState }) {
+    // Entered only through `leaveFor`, which hands the state over and saved a moment ago, so there is
+    // no time away to catch up on; the save is the fallback.
+    this.state = data?.state ?? loadState();
     this.views = [];
     const { width, height } = viewSize(this);
     this.add.rectangle(0, 0, width, height, PAPER_NUM).setOrigin(0);

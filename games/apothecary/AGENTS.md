@@ -207,7 +207,8 @@ study, shade gardens and a mirrored second production line.
   the same randomness as before. Once `townOpen`, it also runs each district (`runDistrict`: opening it
   once the one before has houses, then a supply round every `SUPPLY_MS` through `supplyNeed`, which
   takes a good off a bought shop's shelf or a potion, plain first, off `state.counter.shelf`, and
-  pays the price into that till). Districts use no randomness. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
+  pays the price into that till: for a potion `potionPrice` times its sign's `SIGN_PAY` and
+  `FINE_BONUS` for a fine one, as a customer pays). Districts use no randomness. Marker actions (`buyShop`, `harvestBed`, `dropAtStation`,
   `pickUpFromStation`, `stockShopShelf`, `collectShopTill`, `tossGood`, `payStationLevel`,
   `payWorker`, `payCounterLevel`, `payShopkeeper`, `payRoute`, `payGear`, `payLesson`, `payRecipe`, `payLine2`, `payGuildJoin`, `payGuildUpgrade`,
   `cycleShopPriority`, `cycleShopSign`) return `Feedback` like the sim's. `nextRecipe` skips recipes
@@ -255,12 +256,14 @@ study, shade gardens and a mirrored second production line.
   of the others' (a station takes about 280x270 around its spot, a garden with side markers 314x204)
   and every marker reachable, and check the yard fresh and fully unlocked, in English and German.
 - `src/scenes/townKit.ts`: what the town's scenes share: `townTopBar`, `townCard`, `leaveFor`
-  (saves, then starts another scene, which loads the save again) and `keepSaving`.
+  (saves, then starts another scene with the live `GameState` as its scene data, `{ state }`, so a
+  save that could not be written never loses the session) and `keepSaving`.
 - `TownScene` lays the lots out in rows of three (`LOT`) with the districts' cards in a row below
   (`DISTRICT`, `addDistrict`, homes drawn as little houses by `drawHomes`), all centred in the view.
 - `src/scenes/TownScene.ts` (`Town`) and `src/scenes/ShopScene.ts` (`Shop`, started with
-  `{ shop }`): both call `loadState` on create (not `catchUp`: they are only entered through
-  `leaveFor`, which saves first, so there is no time away), and run the apothecary with
+  `{ shop }`): both take the state from their scene data on create and fall back to `loadState`
+  (not `catchUp`: they are only entered through `leaveFor`, which hands the state over and saves
+  first, so there is no time away), and run the apothecary with
   `tick(state, dt, null)` (as while away) next to `tickTown`; `GameScene` runs `tickTown(state, dt,
   null)` after its own `tick`. `src/art/town.ts` paints the goods, the beds (`bedTexture`: hives, flax, woad, coppice, ore pit, orchard, lavender, madder, copper pit), each
   shop's stations (mill, oven, wax press, spinning wheel, dipping vat, loom, dye mill, dye vat,
@@ -335,8 +338,10 @@ study, shade gardens and a mirrored second production line.
 ### How it runs
 
 - `BootScene.create` calls the `bake*` functions (doctor, items, garden, stations, markers,
-  pixies, townsfolk, ground, ui); none load asset files. Then `GameScene.create` calls `loadState` and the
-  `create*` builders in order.
+  pixies, townsfolk, ground, ui); none load asset files. Then `GameScene.create` takes the state
+  from its scene data (back from the town) or calls `loadState`, and runs the `create*` builders in
+  order. "New game" restarts the scene with `{}`, since a restart without data keeps the old scene
+  data and would bring the old state back.
 - `GameScene.update(time, delta)`: sets `frameMs` (delta clamped to `MAX_STEP_MS`, 250), finds
   `workingAt` (the work spot under the feet), calls `tick(state, frameMs, workingAt, atCounter)`,
   then `movePlayer`, `standOnMarkers`, `autoHarvest` and `spinSickle`, copies the sprite position
@@ -599,8 +604,10 @@ brew's `out` may be `PANACEA`.
   (same priority rules) into `second`, and a finished one waits there while its pallet is full. A
   cauldron runs `brew` on `brewing`, then on `brewing2`. `second` and `brewing2` are optional, so
   old saves load with both empty.
-- The refiner moves the plant it works on to the front of `queue`; `refining` keeps a started plant
-  there and otherwise picks the priority plant first (`firstToRefine`), also right after finishing
+- The refiner moves the plant it works on to the front of `queue`, resetting `progress` when that
+  is a different plant (a started plant whose pallet filled up loses its work rather than handing
+  it to the newcomer); `refining` keeps a started plant
+  there while its pallet has room and otherwise picks the priority plant first (`firstToRefine`), also right after finishing
   one, so leftover work goes onto the priority plant; without one, the plant whose good has the
   fewest on the output pallets (`onPallet`), ties to the front of the queue. Work past the end of a plant,
   brew or served potion carries over to the next, so slow frame rates lose nothing.
@@ -822,8 +829,8 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
   and `ICONS` in `src/art/markers.ts` (and in `upgradeIcon` if it isn't its id), give it a row in
   `UNLOCKED_BY` unless it is for sale from the start, and apply its level in a helper in
   `src/game/state.ts` used by the sim or scene (the herbalist: `blightImmune`).
-- Add a plague stage: a row in `PLAGUE_STAGES` (name, potion or null for any, need); the card and
-  the counting follow. The Panacea's recipe is `PANACEA_RECIPE` in `src/game/items.ts`; it is not
+- Add a plague stage: a row in `PLAGUE_STAGES` (potion or null for any, need); the card (titled by
+  the `plagueStage`/`seasonPlagueStage` texts) and the counting follow. The Panacea's recipe is `PANACEA_RECIPE` in `src/game/items.ts`; it is not
   in `RECIPES` or the Recipes panel, whose `lines` the test checks.
 - Move a station, marker or wall: edit `src/scenes/layout.ts` (a station's pallets and the belt
   ends at them move with it, and `BELT_MS` stays about 100 pixels a second), bump `LAYOUT` in

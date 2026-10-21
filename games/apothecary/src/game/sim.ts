@@ -174,8 +174,12 @@ export function tick(
     // second craftsman's a plant of its own (see `refineSecond`).
     if (crew(state, id, workingAt) > 0 && next >= 0) {
       // The plant being worked on moves to the front of the queue, so its progress stays its own even
-      // when a plant ahead of it gets room on its pallet again.
-      if (next > 0) refiner.queue.unshift(...refiner.queue.splice(next, 1));
+      // when a plant ahead of it gets room on its pallet again. Work on a front plant whose pallet
+      // has filled up is dropped rather than handed to the newcomer.
+      if (next > 0) {
+        refiner.queue.unshift(...refiner.queue.splice(next, 1));
+        refiner.progress = 0;
+      }
       refiner.progress += speed;
       const recipe = REFINE[refiner.queue[0]];
       if (refiner.progress >= recipe.ms) {

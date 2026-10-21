@@ -660,10 +660,10 @@ export interface Plague {
 }
 export const PLAGUE_DAY = 5;
 export const PLAGUE_STAGE_MS = 3 * DAY_MS;
-export const PLAGUE_STAGES: { name: string; potion: PotionId | null; need: number }[] = [
-  { name: 'A fever spreads', potion: 'healingDraught', need: 6 },
-  { name: 'The chills take hold', potion: 'sleepingTonic', need: 6 },
-  { name: 'The whole town lies ill', potion: null, need: 10 },
+export const PLAGUE_STAGES: { potion: PotionId | null; need: number }[] = [
+  { potion: 'healingDraught', need: 6 },
+  { potion: 'sleepingTonic', need: 6 },
+  { potion: null, need: 10 },
 ];
 export const PLAGUE_RELAPSE_EXTRA = 2;
 export const PLAGUE_RELAPSE_REPUTATION = 10;
@@ -677,10 +677,10 @@ export const MAX_PLAGUE_NEED = 16;
 export const SEASON_GAP = 5;
 export const SEASON_EXTRA = 2;
 export const SEAL_PRICE = 0.1;
-export const SEASON_STAGES: { name: string; potion: PotionId | null; need: number }[] = [
-  { name: 'A night cough returns', potion: 'moonlightSalve', need: 6 },
-  { name: 'Fever dreams haunt the town', potion: 'witchsBrew', need: 6 },
-  { name: 'The whole town lies ill again', potion: null, need: 12 },
+export const SEASON_STAGES: { potion: PotionId | null; need: number }[] = [
+  { potion: 'moonlightSalve', need: 6 },
+  { potion: 'witchsBrew', need: 6 },
+  { potion: null, need: 12 },
 ];
 /** The stages of an outbreak: the first season's, then the stronger ones of every season after. */
 export const stagesFor = (season = 0) =>

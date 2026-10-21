@@ -2,7 +2,7 @@ import { byDifficulty } from '../../../../shared/settings';
 import { t } from '../i18n';
 import { routeMs } from '../scenes/shopLayout';
 import { DISTRICTS, GROW_ROUNDS, HAPPY, HAPPY_PULL, HOME_TIERS, MAX_HOMES, START_HOMES, SUPPLY_MS, UNHAPPY, districtAsks, type DistrictState, type Need } from './districts';
-import { FINE, type PotionId } from './items';
+import { FINE, isFine, type PotionId } from './items';
 import type { Feedback } from './sim';
 import {
   BLIGHT_DAY,
@@ -32,6 +32,7 @@ import {
   payment,
   potionPrice,
   reputationFactor,
+  signOf,
   speedAt,
   stockedPay,
   tipLeft,
@@ -513,8 +514,9 @@ function supplyNeed(state: GameState, need: Need): boolean {
   const shelf = state.counter.shelf;
   const at = shelf.includes(need) ? shelf.indexOf(need) : shelf.indexOf(FINE[need as PotionId]);
   if (at < 0) return false;
-  shelf.splice(at, 1);
-  state.counter.till += potionPrice(state, need);
+  const [held] = shelf.splice(at, 1);
+  // The shelf's sign scales the price and a fine one pays more, as for a customer.
+  state.counter.till += Math.round(potionPrice(state, need) * SIGN_PAY[signOf(state, need)] * (isFine(held) ? FINE_BONUS : 1));
   return true;
 }
 

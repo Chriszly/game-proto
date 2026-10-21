@@ -179,9 +179,10 @@ export class ShopScene extends Phaser.Scene {
     return this.state.town.shops[this.id]!;
   }
 
-  create(data: { shop: ShopId }) {
-    // Entered only through `leaveFor`, which saved a moment ago, so there is no time away to catch up on.
-    this.state = loadState();
+  create(data: { shop: ShopId; state?: GameState }) {
+    // Entered only through `leaveFor`, which hands the state over and saved a moment ago, so there is
+    // no time away to catch up on; the save is the fallback.
+    this.state = data.state ?? loadState();
     this.id = data.shop;
     this.def = SHOPS[this.id];
     this.markers = [];

@@ -52,10 +52,13 @@ export function townTopBar(scene: Phaser.Scene, state: () => GameState, title: s
   return () => coins.setText(formatNumber(state().coins));
 }
 
-/** Saves the game and starts another scene, which loads it again. */
+/**
+ * Saves the game and starts another scene with the live state as its scene data, so the session
+ * goes on even where the save could not be written (storage blocked or full).
+ */
 export function leaveFor(scene: Phaser.Scene, state: GameState, key: string, data?: object) {
   saveState(state);
-  scene.scene.start(key, data);
+  scene.scene.start(key, { ...data, state });
 }
 
 /** Saves every `AUTOSAVE_MS`, on hiding the tab and on leaving the page, until the scene shuts down. */
