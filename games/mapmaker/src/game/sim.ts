@@ -144,9 +144,10 @@ export function sightOf(s: GameState, terrain: Terrain) {
  * shore beside it, for sea), and from hills and peaks also reveals the tiles in sight for free.
  * Finds under the revealed tiles turn up at once. Every `RIVAL_PACE` surveys the rival takes a
  * turn. The voyage ends when nothing more can be done. Returns false when the tile can't be surveyed,
- * else the storm finds that found no fogged tile to settle on (they pass).
+ * else the storms it `settled` (which may have ended the voyage, clearing `storms`) and the storm
+ * finds that found no fogged tile to settle on (they `passed`).
  */
-export function survey(s: GameState, x: number, y: number): Point[] | false {
+export function survey(s: GameState, x: number, y: number): { settled: Point[]; passed: Point[] } | false {
   if (s.phase !== 'survey' || !canSurvey(s, x, y) || !canAfford(s, { x, y })) return false;
   s.supplies -= costOf(s, x, y);
   const tile = tileAt(s, x, y)!;
@@ -175,6 +176,7 @@ export function survey(s: GameState, x: number, y: number): Point[] | false {
   }
   // Each storm settles on the nearest fogged tile within two steps, once the lookout has seen what
   // it can.
+  const settled: Point[] = [];
   const passed: Point[] = [];
   for (const p of storms) {
     const near: Point[] = [];
@@ -186,8 +188,10 @@ export function survey(s: GameState, x: number, y: number): Point[] | false {
       }
     }
     near.sort((a, b) => dist(a, p) - dist(b, p));
-    if (near.length) s.storms.push(near[0]);
-    else passed.push(p);
+    if (near.length) {
+      s.storms.push(near[0]);
+      settled.push(near[0]);
+    } else passed.push(p);
   }
 
   if (s.rival && ++s.rival.due >= RIVAL_PACE) {
@@ -195,7 +199,7 @@ export function survey(s: GameState, x: number, y: number): Point[] | false {
     rivalTurn(s);
   }
   endIfDone(s);
-  return passed;
+  return { settled, passed };
 }
 
 /**
@@ -399,7 +403,7 @@ export function chartOf(s: GameState): Chart {
   const c = s.commission;
   const bonus = c && c.done + (counts[c.terrain] ?? 0) >= c.need ? c.bonus : 0;
   const unused = s.supplies;
-  const sellBack = sellBackOf(s, base);
+  const sellBack = sellBackOf(s, base - rivalLoss);
   const due = milestonesDue(s);
   const milestoneCoins = due.reduce((sum, m) => sum + m.coins, 0);
   const atlas = due.some((m) => m.atlas);
@@ -425,9 +429,12 @@ export function chartOf(s: GameState): Chart {
   };
 }
 
-/** What the unused supplies sell back for: `SELL_BACK` each, never more than the chart's tiles are worth. */
-export function sellBackOf(s: GameState, base: number) {
-  return Math.min(s.supplies * SELL_BACK, base);
+/**
+ * What the unused supplies sell back for: `SELL_BACK` each, never more than the chart's tiles pay
+ * (`worth`: their value less the rival's share).
+ */
+export function sellBackOf(s: GameState, worth: number) {
+  return Math.min(s.supplies * SELL_BACK, worth);
 }
 
 /**

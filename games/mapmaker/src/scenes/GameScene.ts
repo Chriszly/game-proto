@@ -244,7 +244,7 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  create() {
+  create(data?: { state?: GameState }) {
     this.paintedTiles = null;
     this.known = [];
     this.fading = [];
@@ -260,7 +260,7 @@ export class GameScene extends Phaser.Scene {
     this.overlay = null;
     this.overlayKey = '';
     this.musicPart = '';
-    this.state = loadGame() ?? newGame();
+    this.state = data?.state ?? loadGame() ?? newGame();
     // The sheet is laid out for 960x540; on a screen of another shape the camera centres it in the
     // view and the drafting table fills the rest.
     const frame = viewFrame(this);
@@ -302,7 +302,6 @@ export class GameScene extends Phaser.Scene {
       const s = this.state;
       const before = {
         surveyed: s.surveyed.length,
-        storms: s.storms.length,
         known: !!s.riddle?.known,
         features: featuresDone(s).map((f) => f.name),
         rivalRuins: !!s.rival?.ruins,
@@ -310,8 +309,8 @@ export class GameScene extends Phaser.Scene {
       };
       const tile = s.tiles[indexOf(at.x, at.y)];
       const cost = costOf(s, at.x, at.y);
-      const passed = survey(s, at.x, at.y);
-      if (passed) {
+      const storms = survey(s, at.x, at.y);
+      if (storms) {
         saveGame(s);
         const fresh = s.surveyed.slice(before.surveyed);
         // A pen stroke and a blip, lower for the dearer tiles and higher for the free ones.
@@ -320,7 +319,7 @@ export class GameScene extends Phaser.Scene {
         this.announce(at, fresh);
         // One news sound a survey, the most important one (a lookout can turn up several).
         const news = [
-          this.announceFinds(fresh, passed, before.storms, before.known),
+          this.announceFinds(fresh, storms, before.known),
           this.announceFeatures(before.features),
           this.announceRival(before.rivalRuins, before.rivalTreasure),
         ].filter((n): n is News => n !== null);
@@ -605,8 +604,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Notices for what the survey turned up: a wreck's stores, an artifact, a storm, the riddle chart. */
-  private announceFinds(fresh: Point[], passed: Point[], stormsBefore: number, knewRiddle: boolean): News | null {
+  /**
+   * Notices for what the survey turned up: a wreck's stores, an artifact, a storm, the riddle chart.
+   * The storms come from `survey` itself, since one that ends the voyage is already cleared from
+   * the state by the time this runs.
+   */
+  private announceFinds(fresh: Point[], storms: { settled: Point[]; passed: Point[] }, knewRiddle: boolean): News | null {
     const s = this.state;
     let news: News | null = null;
     const heard = (n: News) => {
@@ -628,9 +631,9 @@ export class GameScene extends Phaser.Scene {
         say(p, t('caveFound', { n: artifactValue(s) }), true);
         heard('cave');
       }
-      if (find === 'storm' && passed.some((q) => q.x === p.x && q.y === p.y)) say(p, t('stormOver'));
+      if (find === 'storm' && storms.passed.some((q) => q.x === p.x && q.y === p.y)) say(p, t('stormOver'));
     }
-    for (const st of s.storms.slice(stormsBefore)) {
+    for (const st of storms.settled) {
       say(st, t('stormBlocks'));
       heard('storm');
     }
@@ -1073,7 +1076,9 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => {
         ui('click');
         saveTheme(theme === 'dark' ? 'light' : 'dark');
-        this.scene.start('Boot');
+        // The running game is handed along, so the restart never falls back to an older save
+        // (or a new game) when storage is blocked.
+        this.scene.start('Boot', { state: this.state });
       });
     this.add.container(x, y, [g, hit]).setDepth(UI_DEPTH + 1);
     this.spots.theme = { x, y };
@@ -1246,7 +1251,7 @@ export class GameScene extends Phaser.Scene {
         : back === 0
           ? t('sellBackNone', { each: SELL_BACK })
           : capped
-          ? t('sellBackCapped', { n: s.supplies, each: SELL_BACK, worth: chart.base })
+          ? t('sellBackCapped', { n: s.supplies, each: SELL_BACK, worth: chart.base - chart.rivalLoss })
           : t('sellBack', { n: s.supplies, each: SELL_BACK }),
     );
     this.syncCampButton();

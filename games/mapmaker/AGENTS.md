@@ -17,7 +17,7 @@ charted ground (1 supply a dig). Every river, road and wood (3+ forest tiles) is
 the chart that charts its last tile pays 2 coins a tile on top. When nothing more can be paid for,
 or the player taps Return to port, the voyage's revealed tiles become a chart that sells for coins
 at the port (half for tiles the rival charted first), plus feature bonuses, a commission bonus,
-artifacts and treasure, plus 3 coins for each unused supply (capped at the tiles' value), plus any
+artifacts and treasure, plus 3 coins for each unused supply (capped at what the tiles pay), plus any
 isle milestones reached (50%: +20, 75%: +40, 100%: an atlas page). The harbor lays out a
 commission board (up to three, one of them long, over two or three voyages) and three of four hands
 (free, for the next voyage: Woodsman, Climber, Naturalist, Boatman) and sells four upgrades, then
@@ -152,7 +152,9 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `pointer.worldX/Y`, since `pointer.x/y` are canvas pixels) and passed to
   `survey`, or else to `dig`; the scene slices `state.surveyed` before and after to know which
   tiles the survey charted and calls `announce`, `announceFinds` (notices for wrecks, caves,
-  storms (a "storm passes" for each storm find `survey` returns as having no tile to settle on)
+  storms ("blocks" for each storm `survey` returns as `settled`, taken from its result rather than
+  `state.storms` since a storm that ends the voyage is cleared at once, and "storm passes" for each
+  storm find it returns as `passed`, having no tile to settle on)
   and the riddle chart; a dig gets "Nothing here" or "Treasure!"), `announceFeatures` (a
   feature charted whole) and `announceRival` (the rival read the riddle or dug the treasure).
   Buttons call `pitchCamp`, `returnToPort`, `sellChart` (then `saveBest` when the Royal Atlas
@@ -160,7 +162,8 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `newBest`, so a reload or a tie shows the best instead), `closeAtlas`, `newGame` (New atlas), `pickCommission` and `hire` (the harbor's
   `card`s), `buy` and `setSail`. Every successful action calls `saveGame`. The theme button
   (`makeThemeButton`, above the overlays' dim) calls `saveTheme` with the other theme and starts
-  `Boot`, which bakes the icons again and restarts `Game` from the save, painting everything
+  `Boot` with `{ state }`, which bakes the icons again and restarts `Game` with that running state
+  (`create(data)`, falling back to the save only when none is handed over), painting everything
   anew. The overlay's full-screen dim is interactive, so it swallows taps on the map.
 - `update(time)` computes `dt` from the frame time (clamped to 100 ms) and only animates:
   - `syncIsland` repaints the terrain and place names when `state.tiles` is a new array (a load or
@@ -205,7 +208,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
 - Finds turn up in `reveal`, for tapped and lookout tiles alike: a wreck adds `WRECK_SUPPLIES`
   (supplies can pass `maxSupplies`), a cave adds to `artifacts`, a storm settles on the nearest
   fogged chartable tile within two steps after the lookout's reveal (`storms`, cleared by
-  `returnToPort`); `survey` returns the storm finds that found no tile, which pass. Charting a ruins tile sets `riddle.known`.
+  `returnToPort`); `survey` returns the storms it `settled` and the storm finds that found no tile, which `passed`. Charting a ruins tile sets `riddle.known`.
 - `camps` (the isle's base camps) are pitched on the surveyor's tile by `pitchCamp` for
   `CAMP_COST`; not on the port or sea, not twice. They reset on a new isle.
 - `riddle` (null when no tile could be told apart) holds the hidden tile `at`, its `clues` (each a
@@ -227,7 +230,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
   tiles are all revealed with at least one in `surveyed`, so it pays once), `bonus` (the
   commission's, when `done` plus this voyage's count reaches `need`), `artifacts`, `artifactCoins`
   (`artifactValue`: double with a Naturalist), `treasure`, `unused` and `sellBack`
-  (`min(unused * SELL_BACK, base)`, so turning back at once earns nothing), `milestones` and
+  (`min(unused * SELL_BACK, base - rivalLoss)`, so turning back at once earns nothing), `milestones` and
   `milestoneCoins` (the `MILESTONES` reached and not yet paid), `atlas` (100% reached), `total`.
   Supplies are left as they are until `setSail` refills them.
 - `features` (from `makeIsland`, or `findFeatures` on a load): each with `kind`, `name` (a `TextKey`), `tiles`
