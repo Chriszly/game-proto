@@ -234,7 +234,7 @@ export interface Coin {
 
 export interface Effect {
   id: number;
-  kind: 'coin' | 'hit' | 'block' | 'dust' | 'skid' | 'stomp' | 'pop' | 'heal' | 'refuse';
+  kind: 'coin' | 'hit' | 'block' | 'dust' | 'fall' | 'skid' | 'stomp' | 'pop' | 'heal' | 'refuse';
   x: number;
   h: number;
   ms: number;

@@ -589,6 +589,10 @@ export class GameScene extends Phaser.Scene {
           const py = y - 3 - (i % 2) * 5 - 6 * t;
           g.fillStyle(0xffffff, 1 - t).fillCircle(px, py, 2.5).lineStyle(0.75, N.ink, 0.6 * (1 - t)).strokeCircle(px, py, 2.5);
         }
+      } else if (e.kind === 'fall') {
+        // A puff thrown up from a pit fallen into while unhurtable.
+        g.fillStyle(N.vellumDark, 0.8 * (1 - t)).fillCircle(x - 10, y - 6 - 14 * t, 7 + 7 * t).fillCircle(x + 10, y - 6 - 14 * t, 7 + 7 * t);
+        g.lineStyle(1, N.ink, 0.6 * (1 - t)).strokeCircle(x - 10, y - 6 - 14 * t, 7 + 7 * t).strokeCircle(x + 10, y - 6 - 14 * t, 7 + 7 * t);
       } else if (e.kind === 'dust') {
         g.fillStyle(N.vellum, 0.7 * (1 - t)).fillCircle(x - 10 - 16 * t, y - 4 - 6 * t, 5 + 4 * t).fillCircle(x - 22 - 20 * t, y - 3 - 4 * t, 4 + 3 * t);
       } else {

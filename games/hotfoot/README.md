@@ -231,7 +231,7 @@ buttons in the bottom right of the margin do the same while the knight runs.
 ![The armoury](docs/screenshots/armoury.webp)
 
 **The coin shop.** Coins collected in a run are banked when the knight falls. On the game-over panel,
-the boon you missed at the last checkpoint (the card you did not tap) is for sale for 30 coins. Buy
+the boon you missed at the last checkpoint (a card you did not tap, one that can be sold if there is one) is for sale for 30 coins. Buy
 it and the next run starts with it at one rank and full hearts. One purchase at a time, and Field
 Dressing and cursed boons are never for sale. Nothing is for sale until the run has reached a
 checkpoint. The armoury, also on the game-over panel, spends the same bank on lasting upgrades.

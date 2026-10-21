@@ -65,7 +65,7 @@ in.
   shared start and pause screens cover it). The run starts as soon as `GameScene` loads. Sound
   effects and a galloping chiptune song play throughout (see Sound). The hub's shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen) apply; see Hub settings below.
 - Coins are counted during a run and banked when the knight falls. On the game-over panel they buy
-  the boon missed at the last checkpoint (the card not taken), for `BOON_PRICE` (30) coins. The next
+  the boon missed at the last checkpoint (a card not taken, a sellable one first), for `BOON_PRICE` (30) coins. The next
   ordinary run starts with that boon at one rank, with full hearts (a daily run keeps it waiting).
   The Squire's Purse's starting coins (`purse`) are never banked: a fall banks `coins - purse`. One purchase at a time; Field Dressing
   and cursed boons are never for sale, and no boon is for sale before the first checkpoint. The
@@ -206,12 +206,12 @@ in.
   rockfall gains `ROCK.skid`); stomp a foe landed on; stomp or bump the boss (`bossContact`);
   refill jumps when grounded; count down slide, hurt and skid (a jump queued during the skid fires
   as it ends, in the air too if the knight walked off a ledge meanwhile); check one trap hit (a pit
-  even while unhurtable: the fall and the throw-out happen, but cost nothing); let the rockfall gain `ROCK.hit` if a hit landed this tick, and
+  even while unhurtable: the fall and the throw-out happen, marked by a `fall` puff, but cost nothing); let the rockfall gain `ROCK.hit` if a hit landed this tick, and
   if it has reached the knight's back, hurt (`'rock'`) and drop it `ROCK.start` behind (a knight
   still unhurtable is only kept at their heels); visit a shrine slid into; collect or pull coins;
   drop traps, ledges, shrines, coins and a beaten boss more than `BEHIND` behind; enter
-  `checkpoint`, note its banner, meet a no-hit dare still standing and roll choices when
-  `distance` reaches `checkpointX`.
+  `checkpoint`, note its banner, meet a no-hit dare still standing, roll choices and clear
+  the runner's slide, skid and queued jump and drop when `distance` reaches `checkpointX`.
 - A boss (`moveBoss`, `Boss.mode`, with the numbers `bossOf(boss)` from `BOSS[kind]`): `wait` on
   the road until `station` ahead of the knight; `throw` keeps that gap and throws `throws(hp)`
   things (its two `missiles` by turns: barrel, axe, barrel... or fire, tail, fire...) every
@@ -327,7 +327,7 @@ in.
 - `streak`: coins taken in a row since the last hit (stomps count). `streakMult(streak, cap)` is
   `min(cap, 1 + floor(streak / 10))`, with the cap from `streakMax(road)` (5, or 7 on the High Road).
 - `course: Coin[]` (the coins; `pulled` once a lodestone catches one). `effects: Effect[]` are
-  short visual timers (`coin`, `hit`, `block`, `dust`, `skid`, `stomp`, and `pop`, `heal`, `refuse`,
+  short visual timers (`coin`, `hit`, `block`, `dust`, `fall`, `skid`, `stomp`, and `pop`, `heal`, `refuse`,
   which carry their words in `text`).
 - `ranks` maps `BoonId` to rank taken; `stats(s)` derives every boon effect from it (cursed ones
   and the pairs' bonuses included), with the armoury's levels (none on a daily run) and the terrain's rule, so boons have
@@ -338,8 +338,8 @@ in.
   which call `buyMissed` and `buyArmoury`.
 - Progress across runs: `best` (the best distance in metres), `bank` (coins banked from finished
   runs, added in `hurt` when the knight falls, less the run's starting `purse`), `pending` (the boon
-  bought at game over, applied and cleared by the next ordinary `newRun`; a daily one carries it on), `crown` and `missed` (the first other boon offered at the last
-  checkpoint and not taken, set by `pick`; null before any checkpoint). `buyMissed` takes `BOON_PRICE` from `bank` into
+  bought at game over, applied and cleared by the next ordinary `newRun`; a daily one carries it on), `crown` and `missed` (a boon offered at the last
+  checkpoint and not taken, set by `pick`: the first other one that is `forSale`, else the first other one; null before any checkpoint). `buyMissed` takes `BOON_PRICE` from `bank` into
   `pending`, and refuses unless the run is over, `missed` is `forSale` (not filler or cursed),
   nothing is pending and the bank covers the price. `buyArmoury` takes `nextPrice` from `bank` and
   adds a level, while the run is over and the item is not full.
@@ -455,7 +455,7 @@ the stage), at most one sound of each kind a frame, so a row of coins or a volle
   road's tune over a driving bass) and `camp` (calm, at a checkpoint and on the game-over panel).
   Stings: `lose` (the knight falls) and `crown` (the dragon beaten).
 - **Effects** (`sfx`), and where they play: `jump` (a jump, at 1.35x pitch for an air jump, also the
-  skid's queued jump), `slide` (a slide starts), `drop` (an air drop), `land` (the `dust` effect),
+  skid's queued jump), `slide` (a slide starts), `drop` (an air drop), `land` (the `dust` effect, and the `fall` puff of a pit taken while unhurtable, which plays no `jump`),
   `skid` (the `skid` effect on ice), `coin` (a `coin` effect, climbing the D major scale with the
   streak's count towards the next multiplier), `streak` (the multiplier goes up), `stomp` (a `stomp`
   effect: a foe stomped or knocked away by Bulwark), `hit` / `block` (the `hit` / `block` effect),
