@@ -235,6 +235,8 @@ export class GameScene extends Phaser.Scene {
   private goldText!: Phaser.GameObjects.Text;
   private roomText!: Phaser.GameObjects.Text;
   private relicLayer!: Phaser.GameObjects.Container;
+  /** The top bar's room text and relic count it was last laid out for. */
+  private barKey = '';
   private relicKey = '';
   private tip!: Phaser.GameObjects.Text;
   private tipMs = 0;
@@ -271,6 +273,7 @@ export class GameScene extends Phaser.Scene {
     this.pickKey = '';
     this.shopKey = '';
     this.relicKey = '';
+    this.barKey = '';
     this.flaskKey = '';
     this.powerKey = '';
     this.roomsBuilt = null;
@@ -951,6 +954,13 @@ export class GameScene extends Phaser.Scene {
     const name = room?.foes ? room.foes.map((k) => t(ENEMIES[k].name)).reduce((a, b) => t('and', { a, b })) : t(room ? names[room.kind] : 'entrance');
     const where = s.phase === 'map' || s.phase === 'walk' || s.phase === 'hero' ? '' : name;
     const deep = s.depth > 0 ? `${t('depth', { n: s.depth })}   ` : '';
-    this.roomText.setText(`${deep}${actName(s)}   ${t('roomOf', { n: depth, rooms: COLUMNS })}   ${where}`.trimEnd());
+    const bar = `${deep}${actName(s)}   ${t('roomOf', { n: depth, rooms: COLUMNS })}`;
+    const barKey = `${bar}   ${where}|${s.relics.length}`;
+    if (barKey !== this.barKey) {
+      this.barKey = barKey;
+      this.roomText.setText(where ? `${bar}   ${where}` : bar);
+      // The foes' names (already over their heads) leave the bar when it would run into the relic row.
+      if (where && this.W - 16 - this.roomText.width < HUD.relicX + s.relics.length * HUD.relicGap) this.roomText.setText(bar);
+    }
   }
 }
