@@ -35,7 +35,7 @@ export const EVENT_BUTTONS = { y: 324, gap: 52, w: 440 };
 export const HERO_PANEL = { knightX: 280, hunterX: 680, feetY: 312, depthY: 216, depthDx: 90, rulesY: 256 };
 /** The flask slots down the left of a fight, by their centres. */
 export const FLASKS = { x: 60, y: 120, gap: 58, r: 24 };
-/** The powers in play, in a row under the flasks, left of the hero. */
+/** The powers in play, in a row under the flasks, left of the hero: one ring per kind (four at most), so the row ends clear of the hero. */
 export const POWERS = { x: 44, y: 296, gap: 36, r: 15 };
 /** The deck laid out to pick a card to burn, temper or sell, by the cards' centres: roomier while it fits in two rows, tight up to three, packed (four rows of 15, room for every card and its tempered copy) beyond. */
 export const PICKER = {

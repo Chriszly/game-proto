@@ -71,7 +71,7 @@ in code.
 9. **Powers** are cards that stay in play once played, shown in purple rings by the hero: Bulwark
    (3 block each turn), Thorns (deal 3 back to any foe that hits you), Battle Rage (1 Strength each
    turn, added to every hit) and Venom Veil (poison on one foe splashes half onto the rest). A second
-   copy of a power in play adds its effect again.
+   copy of a power in play adds its effect again and shows as a count (×2) on its ring.
 10. **Curses** are grey cards that can't be played and only leave the deck when burnt or removed:
     Rust clogs a slot in the hand, Wound costs 2 health when drawn (it never kills), and Doubt makes
     the first card each turn cost 1 more while in hand. Elites threaten them as a move, and the

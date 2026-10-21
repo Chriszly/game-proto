@@ -133,7 +133,8 @@ File map (all under `src/` unless it starts with `shared/`):
   (`bakeScenery`, at the view's size, `bakeCharacters`, `bakeIcons`, `bakeCardFrames`), then starts `Game`.
 - `scenes/GameScene.ts`: builds and draws the map (room icons rebuilt by `buildRooms` when a new
   act brings a new map), fight (with a `StatusRow` over each fighter, the flask slots in
-  `flaskLayer` and the powers in play in `powerLayer`), reward overlay, the merchant (`shopLayer`,
+  `flaskLayer` and the powers in play in `powerLayer`, one ring per power kind with a `×n` count when copies
+  stack), reward overlay, the merchant (`shopLayer`,
   with the flasks under the cards), panel (hero choice with the depth row, campfire, mystery room,
   descent, defeat and victory), the card picker (`pickLayer`, shown while `picking` is `burn`,
   `temper` or `sell`), floating numbers (the hero's over the map token while the map shows) and HUD (gold and relic icons, with a tip that flasks and
