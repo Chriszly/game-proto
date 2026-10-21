@@ -180,7 +180,7 @@ Select the Town Center and press **Ring the bell** when a raid comes in: every v
 tiles of a shelter runs to the nearest one with room, the Town Center (12) or a finished Watchtower
 (5), and disappears inside. Each villager sheltering adds an arrow of 3 damage to that building's
 volleys, and a knot of ochre on its roof counts them. They gather nothing while they hide, so press
-**Back to work** as soon as the raiders are dead or gone and they walk back to the node they left.
+**Back to work** as soon as the raiders are dead or gone and they walk back to the node they left, or to the building they were putting up.
 A shelter that falls spills its garrison out onto the ground. The AI rings its own bell when enemy
 soldiers come within 14 tiles of its Town Center, and releases it once they are gone.
 
@@ -203,7 +203,8 @@ costs 70 ore and sells for 42; every purchase raises that resource's price by 12
 lowers it, and prices drift back to the base over a few minutes. The Market also trains **Trade
 Carts** (80 wood, 40 food): each drives to the nearest of the two **trading posts** in the middle
 of the map, loads 40 ore there, and brings it to the nearest building that takes ore (the Market, a
-Mining Camp or the Town Center), then sets off again. The posts are the same distance from both
+Mining Camp or the Town Center), then sets off again. A new cart sets off at once, so the Market
+has no rally flag. The posts are the same distance from both
 Town Centers and marked on the minimap for everyone. A cart can't fight: the road to the post is a
 line the enemy can raid, and the AI's economy raids go for a Market too. The AI builds a Market after
 its Watchtower and keeps three carts on the road, and sells a resource that piles up past 600 when

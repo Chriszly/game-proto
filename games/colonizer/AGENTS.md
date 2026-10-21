@@ -47,7 +47,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   shelter (a building with `shelter`: the Town Center 12, a finished Watchtower 5) get a `garrison`
   order, walk there and are moved out of `s.units` into `Building.garrison`. Each adds
   `GARRISON_ARROW` to the building's volley. `releaseBell` (or a shelter falling, in `reap`) puts them
-  back on free tiles round it and `backToWork` sends each to its old node. `Player.bell` is only set
+  back on free tiles round it and `backToWork` sends each to its old node, or back to the unfinished
+  site it was building (`Unit.site`, set by `ringBell` from a `build` order). `Player.bell` is only set
   when `ringBell` sent someone. `garrisoned` counts them;
   `popUsed` and `unitCount` include them. The AI rings when an enemy soldier is within `BELL_RANGE`
   of its Town Center and releases when none is.
@@ -70,7 +71,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   soldiers within `AURA_RANGE` get `AURA_DMG` in `ownBonus`, `inAura`), the Tide Seer (`sight` 14),
   the Thorn Druid (`heal`: `HEAL_HP` to own units within `HEAL_RANGE` every `HEAL_MS`, `Unit.pulse`).
   The scene rings the aura and heal ranges with a faint ellipse.
-- Rally flags (`Building.rally`): a right click with production buildings selected (and no units),
+- Rally flags (`Building.rally`), on every building that `takesRally` (one that trains anything but
+  trade carts, so not the Market, whose carts set off trading at once): a right click with such buildings selected (and no units),
   or the `rally` button and a click (`GameScene.rallyMode`), plants it on every selected one
   (`plantRally`); on one of those buildings it takes them down (`clearRally`). New units walk to a
   ring of spots round it (`RALLY_SPOTS`), a villager whose flag is on a node or own farm gathers
@@ -139,7 +141,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   pulsing red rings on the ground and the minimap (`Minimap.ping`), and a red triangle at the edge of
   the view (`edgeMarks`, clickable) while out of sight. A new one out of sight shows the toast for
   `ALERT_TOAST_MS` (5 s) naming what was hit (`alertVillagers`, `alertSoldiers`, `alertBuilding`),
-  below a raid's toast and above notices. Space, the toast or a marker jump the camera there (`jumpTo`).
+  below a raid's toast. A notice said while either is up takes the toast for its 2.5 s and then gives
+  it back (`noticeAt`); one said before it began waits. Space, the toast or a marker jump the camera there (`jumpTo`).
   None in watch mode.
 - Feedback: hits throw ochre sparks, arrows fly from ranged attackers and towers, damage numbers
   rise, and every load the player drops off pops a "+N" badge with the resource's icon.
@@ -226,7 +229,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `monumentLeft` reads a Monument's count, `deedCount` and `deedsDone` read
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
   player's sight, and `entityAt` finds what is under a point (a mouse click prefers
-  the player's own unit over an enemy standing on it).
+  the player's own unit over an enemy standing on it): a unit within 0.6 tiles of its feet or on its
+  figure up to `figureTall` above them (except over a node or farm, so gather orders still reach it),
+  then a building, its roof `BUILDING_TOP` (in `data.ts`) above the footprint included, then a node.
 - `src/game/planner.ts`: `think(state, dt, side = AI)` runs the AI for a side every 4 s of game time (`THINK_MS`). It issues
   the same commands a player would, through the sim's functions, and at most `ACTIONS_PER_THINK`
   (2) of them each time, about 30 a minute, so it can't out-click a player. Each command goes
@@ -277,7 +282,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - `Unit.act` (`idle | walk | gather | build | fight`, set each tick), `Unit.face` (1 or -1) and
   `Unit.struck` (game time of the last blow) drive the animation; they change no rule. `Unit.kills`
   and `Unit.rank` are the veteran ranks, `Unit.pulse` a champion's heal timer. Orders also include
-  `garrison` (a villager running to a shelter) and `trade` (a cart heading for a post).
+  `garrison` (a villager running to a shelter) and `trade` (a cart heading for a post); `Unit.site` is
+  the building site a villager left for the bell.
 - `Player.age` is 1, 2 or 3; `Player.deeds` is `{ age2, army, raid }` (`army` is the most soldiers
   alive at once); `Player.boon` and `Player.boonPending`, `Player.edge` and `Player.edgePending`,
   `Player.temperament`, `Player.scouted` and `Player.out`; `Player.bell` (the bell is ringing) and
@@ -346,7 +352,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   and the champion count). While `boonPending` (or `edgePending`), `renderPick` puts the two boon
   (or edge) cards in the buttons' place, with `hud` ids `shieldwall` and `harvest` (or
   `masonry` and `muster`). The Town Center's buttons
-  are the Villager, the champion, `Ring the bell` or `Back to work`, the `rally` button (every production building has it) and the age; a Market's are the
+  are the Villager, the champion, `Ring the bell` or `Back to work`, the `rally` button (every building that `takesRally` has it) and the age; a Market's are the
   Trade Cart and `Buy 100 wood` / `70 ore` buy and sell buttons with the live price; selected carts
   get `Trade`. A unit whose age is too low shows the age under its name (`Ram`, `Age II`), a
   champion at its limit `one only`.

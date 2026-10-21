@@ -8,6 +8,7 @@ import {
   AURA_RANGE,
   BELL_RANGE,
   BUILDINGS,
+  BUILDING_TOP,
   CARRY,
   CLAIM_RANGE,
   DOCK_FOOD,
@@ -59,6 +60,8 @@ import {
   TECHS,
   UNITS,
   MAP_SIZE,
+  TILE,
+  takesRally,
   type BuildingId,
   type Cost,
   type FactionId,
@@ -101,6 +104,8 @@ export interface Unit {
   home: number | null;
   /** The resource this villager last gathered, so it can find more when its node runs out. */
   lastRes: Resource | null;
+  /** The building site a villager left when the bell rang, to go back to building once it is released. */
+  site: number | null;
   /** What the unit did this tick, for its animation: idle, walk, gather, build or fight. */
   act: 'idle' | 'walk' | 'gather' | 'build' | 'fight';
   /** Which way it faces: 1 right, -1 left. */
@@ -473,27 +478,42 @@ export function footprintOf(s: GameState, id: number) {
 }
 
 /**
- * The entity under a tile or point: units, then buildings, then nodes. Among units the nearest wins,
- * or with `prefer` the nearest of that side's when one is there.
+ * The entity under a tile or point. A unit counts within 0.6 tiles of its feet, or anywhere on its
+ * figure up to `figureTall` above them unless the point is on a tree, bush, mine or farm (so a
+ * gather order behind a figure still reaches the node); then buildings, their roof included
+ * (`BUILDING_TOP` above the footprint), then nodes. Among units the nearest wins (feet before
+ * bodies), or with `prefer` the nearest of that side's when one is there.
  */
 export function entityAt(s: GameState, x: number, y: number, prefer?: number): { kind: 'unit' | 'building' | 'node'; id: number; owner: number } | null {
+  const within = (tx: number, ty: number, w: number, h: number) => x >= tx && y >= ty && x < tx + w && y < ty + h;
+  const node = [...s.nodes.values()].find((n) => within(n.tx, n.ty, n.w, n.h));
+  const farm = [...s.buildings.values()].some((b) => BUILDINGS[b.type].farm && within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h));
   let best: { kind: 'unit' | 'building' | 'node'; id: number; owner: number; d: number } | null = null;
   for (const u of s.units.values()) {
-    const d = Math.hypot(u.x - x, u.y - y);
-    if (d > 0.6) continue;
+    const tall = figureTall(UNITS[u.type]);
+    const feet = Math.hypot(u.x - x, u.y - y);
+    const body = !node && !farm && Math.abs(u.x - x) <= 0.45 && y <= u.y && y >= u.y - tall;
+    if (feet > 0.6 && !body) continue;
+    const d = feet <= 0.6 ? feet : 1 + Math.hypot(u.x - x, u.y - tall / 2 - y);
     const mine = u.owner === prefer;
     const bestMine = best?.owner === prefer;
     if (!best || (mine && !bestMine) || (mine === bestMine && d < best.d)) best = { kind: 'unit', id: u.id, owner: u.owner, d };
   }
   if (best) return best;
+  let roofOf: Building | undefined;
   for (const b of s.buildings.values()) {
     const def = BUILDINGS[b.type];
-    if (x >= b.tx && y >= b.ty && x < b.tx + def.w && y < b.ty + def.h) return { kind: 'building', id: b.id, owner: b.owner };
+    if (within(b.tx, b.ty, def.w, def.h)) return { kind: 'building', id: b.id, owner: b.owner };
+    if (!roofOf && within(b.tx, b.ty - BUILDING_TOP / TILE, def.w, BUILDING_TOP / TILE)) roofOf = b;
   }
-  for (const n of s.nodes.values()) {
-    if (x >= n.tx && y >= n.ty && x < n.tx + n.w && y < n.ty + n.h) return { kind: 'node', id: n.id, owner: -1 };
-  }
+  if (node) return { kind: 'node', id: node.id, owner: -1 };
+  if (roofOf) return { kind: 'building', id: roofOf.id, owner: roofOf.owner };
   return null;
+}
+
+/** How tall a unit's figure stands above its feet, in tiles (its health thread hangs there). */
+export function figureTall(def: UnitDef) {
+  return (def.role === 'cavalry' ? 48 : def.role === 'siege' ? 44 : 40) / TILE;
 }
 
 export function popUsed(s: GameState, owner: number) {
@@ -598,6 +618,7 @@ function spawnAt(s: GameState, owner: number, type: string, x: number, y: number
     gatherMs: 0,
     home: null,
     lastRes: null,
+    site: null,
     act: 'idle',
     face: owner === PLAYER ? 1 : -1,
     struck: -1e9,
@@ -834,8 +855,14 @@ export function placeBuilding(s: GameState, owner: number, type: BuildingId, tx:
   const old = type === 'gate' ? wallAt(s, owner, tx, ty) : null;
   if (old) s.buildings.delete(old.id);
   const b = addBuilding(s, owner, type, tx, ty, false);
-  // Whoever was building the replaced stake builds the gate instead of going idle.
-  if (old) for (const u of s.units.values()) if (u.order.t === 'build' && u.order.b === old.id) u.order = { t: 'build', b: b.id };
+  // Whoever was building the replaced stake (or left it for the bell) builds the gate instead of going idle.
+  if (old) {
+    const sheltering = [...s.buildings.values()].flatMap((h) => h.garrison);
+    for (const u of [...s.units.values(), ...sheltering]) {
+      if (u.order.t === 'build' && u.order.b === old.id) u.order = { t: 'build', b: b.id };
+      if (u.site === old.id) u.site = b.id;
+    }
+  }
   rebuildSolid(s);
   return b.id;
 }
@@ -897,7 +924,7 @@ export function placeWall(s: GameState, owner: number, tiles: { tx: number; ty: 
 /** Sets where a production building's new units go. */
 export function setRally(s: GameState, owner: number, bid: number, x: number, y: number): boolean {
   const b = s.buildings.get(bid);
-  if (!b || b.owner !== owner || !BUILDINGS[b.type].trains) return false;
+  if (!b || b.owner !== owner || !takesRally(b.type)) return false;
   b.rally = { x, y };
   return true;
 }
@@ -1011,6 +1038,7 @@ export function ringBell(s: GameState, owner: number): number {
     room.set(best.b.id, (room.get(best.b.id) ?? 0) - 1);
     u.path = [];
     u.repath = 0;
+    u.site = u.order.t === 'build' ? u.order.b : null;
     u.order = { t: 'garrison', b: best.b.id };
     sent++;
   }
@@ -1047,10 +1075,14 @@ function ungarrison(s: GameState, b: Building): number {
   return out;
 }
 
-/** A villager out of shelter goes back to the node it was working, or stands by. */
+/** A villager out of shelter goes back to the site it was building or the node it was working, or stands by. */
 function backToWork(s: GameState, u: Unit) {
   u.path = [];
   u.repath = 0;
+  // A builder called in by the bell goes back to its site while it still stands unfinished.
+  const site = u.site !== null ? s.buildings.get(u.site) : undefined;
+  u.site = null;
+  if (site && site.owner === u.owner && !site.built) return void (u.order = { t: 'build', b: site.id });
   const home = u.home !== null ? s.nodes.get(u.home) ?? s.buildings.get(u.home) : undefined;
   const again = home && ('amount' in home ? home.amount > 0 : true) ? home : u.lastRes ? nearestSource(s, u.owner, u.lastRes, u.x, u.y) : null;
   u.order = u.amount > 0 ? { t: 'return' } : again ? { t: 'gather', node: again.id } : { t: 'idle' };

@@ -5,6 +5,8 @@ import type { TextKey } from '../i18n';
 
 export const TILE = 32;
 export const MAP_SIZE = 128;
+/** Room above a building's footprint for roofs, domes and flags, in px: drawn there, and clickable. */
+export const BUILDING_TOP = 22;
 
 export const RESOURCES = ['wood', 'food', 'ore'] as const;
 export type Resource = (typeof RESOURCES)[number];
@@ -245,6 +247,11 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   market: { id: 'market', name: 'market', cost: { wood: 150, food: 50 }, time: 35000, w: 3, h: 3, hp: 600, sight: 4, age: 2, limit: 1, drops: ['ore'], trains: ['cart'], market: true },
   monument: { id: 'monument', name: 'monument', cost: { wood: 500, food: 300, ore: 400 }, time: 90000, w: 3, h: 3, hp: 2500, sight: 5, age: 3, limit: 1 },
 };
+
+/** Whether a building takes a rally flag: it trains something besides trade carts, which set off trading at once. */
+export function takesRally(type: BuildingId) {
+  return BUILDINGS[type].trains?.some((role) => role !== 'cart') ?? false;
+}
 
 /** The build list's first page; the faction's own building comes after these. */
 export const BUILD_ORDER: BuildingId[] = ['house', 'farm', 'lumber', 'mine', 'barracks', 'range', 'stable', 'academy', 'watchtower'];

@@ -8,6 +8,7 @@ import { deedCount, monumentLeft, NEUTRAL, PLAYER, popCap, popUsed, type GameSta
 import { WOOL } from '../art/figures';
 import { hexNum, mix, SERIF, T } from '../art/stitch';
 import { settings } from '../../../../shared/settings';
+import { formatNumber } from '../../../../shared/i18n';
 import { t } from '../i18n';
 import { AGE_PIPS, DEED_CARD, MINI, STATUS_CARD, TOAST, TOP_RIGHT, TOP_SLOTS } from './layout';
 
@@ -75,8 +76,8 @@ export class TopBar {
 
   update(s: GameState) {
     const p = s.players[PLAYER];
-    for (const r of RESOURCES) this.set(r, String(Math.floor(p.res[r])));
-    this.set('pop', `${popUsed(s, PLAYER)}/${popCap(s, PLAYER)}`);
+    for (const r of RESOURCES) this.set(r, formatNumber(Math.floor(p.res[r])));
+    this.set('pop', `${formatNumber(popUsed(s, PLAYER))}/${formatNumber(popCap(s, PLAYER))}`);
     const secs = Math.floor(s.time / 1000);
     this.values.clock!.setText(`${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`);
     // The age track: a pip per age, filled when reached; the next one fills as its deeds are done.
