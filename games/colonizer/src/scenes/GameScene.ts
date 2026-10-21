@@ -66,6 +66,7 @@ import {
   ringBell,
   say,
   setRally,
+  techQueued,
   clearRally,
   tick,
   trade,
@@ -760,10 +761,8 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.centerOn(t.x * TILE, t.y * TILE + (H - PANEL_Y - TOP_H) / 2);
       return;
     }
-    if (this.toast.contains(p.x, p.y)) {
-      if (this.toastAt) this.jumpTo(this.toastAt.x, this.toastAt.y);
-      return;
-    }
+    // Only a raid or alert toast takes the click; a plain notice lets it through to the world.
+    if (this.toastAt && this.toast.contains(p.x, p.y)) return void this.jumpTo(this.toastAt.x, this.toastAt.y);
     // A marker at the edge of the view jumps to the attack it points at.
     const mark = this.edgeMarks.find((m) => Math.hypot(m.x - p.x, m.y - p.y) <= 14);
     if (mark) return void this.jumpTo(mark.alert.x, mark.alert.y);
@@ -1426,7 +1425,7 @@ export class GameScene extends Phaser.Scene {
             id: tech.id,
             name: t(tech.name),
             sub: costText(tech.cost),
-            enabled: affordable(p, tech.cost) && !p.techs.includes(tech.id) && (!tech.age2 || p.age >= 2),
+            enabled: affordable(p, tech.cost) && !p.techs.includes(tech.id) && !techQueued(s, PLAYER, tech.id) && (!tech.age2 || p.age >= 2),
             run: () => {
               if (research(this.state, PLAYER, b.id, tech.id)) return queued();
               say(this.state, t('cantResearch'));

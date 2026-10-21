@@ -834,6 +834,8 @@ export function placeBuilding(s: GameState, owner: number, type: BuildingId, tx:
   const old = type === 'gate' ? wallAt(s, owner, tx, ty) : null;
   if (old) s.buildings.delete(old.id);
   const b = addBuilding(s, owner, type, tx, ty, false);
+  // Whoever was building the replaced stake builds the gate instead of going idle.
+  if (old) for (const u of s.units.values()) if (u.order.t === 'build' && u.order.b === old.id) u.order = { t: 'build', b: b.id };
   rebuildSolid(s);
   return b.id;
 }
@@ -934,11 +936,17 @@ export function research(s: GameState, owner: number, bid: number, techId: strin
   if (tech.age2 && p.age < 2) return false;
   if (tech.advance && p.age !== tech.advance - 1) return false;
   if (tech.advance === 3 && !deedsDone(p)) return false;
-  if (p.techs.includes(techId) || b.queue.some((q) => q.key === techId)) return false;
+  if (p.techs.includes(techId) || techQueued(s, owner, techId)) return false;
   if (!affordable(p, tech.cost)) return false;
   pay(p, tech.cost);
   b.queue.push({ kind: 'tech', key: techId, left: tech.time });
   return true;
+}
+
+/** Whether a tech is already queued at any of the owner's buildings (a second Academy counts). */
+export function techQueued(s: GameState, owner: number, techId: string) {
+  for (const b of s.buildings.values()) if (b.owner === owner && b.queue.some((q) => q.key === techId)) return true;
+  return false;
 }
 
 /** How many of the three Age III deeds a player has done. */
