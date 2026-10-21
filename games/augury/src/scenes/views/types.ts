@@ -7,9 +7,10 @@ export interface ViewCtx<S = any> {
   r: Rect;
   /**
    * Makes a move: `change` changes the state and says whether it did (kept for Undo). Returns
-   * whether it did; `quiet` leaves out the move's sound (a drag's start, which `place` plays for).
+   * whether it did; `quiet` leaves out the move's sound (a drag, which `place` plays for once), and
+   * `before` is the state to keep for Undo when it is not the state now (a drag's first change).
    */
-  act: (change: (s: S) => boolean, quiet?: boolean) => boolean;
+  act: (change: (s: S) => boolean, quiet?: boolean, before?: string) => boolean;
   /** A step of a drag: changes the state and checks it, with no Undo step and no sound. */
   drag: (change: (s: S) => boolean) => boolean;
   /** A picking sound, for taps that change nothing worth undoing. */

@@ -101,19 +101,19 @@ export const link: PuzzleDef<LinkState> = {
   },
 };
 
-/** Starts drawing at a cell: from a pair's end (afresh) or from a cell of a path (cut back to it). */
+/**
+ * Starts drawing at a cell: from a pair's end (afresh) or from a cell of a path (cut back to it).
+ * Returns whether that changed the path; drawing starts either way.
+ */
 export function linkStart(s: LinkState, cell: number) {
   const end = endAt(s, cell);
-  if (end >= 0) {
-    s.paths[end] = [cell];
-    s.drawing = end;
-    return true;
-  }
-  const k = pathAt(s, cell);
+  const k = end >= 0 ? end : pathAt(s, cell);
   if (k < 0) return false;
-  s.paths[k] = s.paths[k].slice(0, s.paths[k].indexOf(cell) + 1);
+  const was = s.paths[k];
+  s.paths[k] = end >= 0 ? [cell] : was.slice(0, was.indexOf(cell) + 1);
   s.drawing = k;
-  return true;
+  // An end on its own, drawn or not, looks the same and joins nothing: no change.
+  return end >= 0 ? was.length > 1 || (was.length === 1 && was[0] !== cell) : s.paths[k].length !== was.length;
 }
 
 /** Carries the path being drawn into a cell, a step at a time along a straight line. */

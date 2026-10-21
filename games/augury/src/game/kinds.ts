@@ -25,6 +25,10 @@ export interface PuzzleDef<S = unknown> {
   failed?(s: S): boolean;
   /** Makes one step towards an answer; false when it can't help. */
   hint(s: S): boolean;
+  /** Whether a hint could still help, when that is known without trying one (Code Breaker). */
+  canHint?(s: S): boolean;
+  /** Clears what an Undo should not bring back, like a picked island (Bridges). */
+  afterUndo?(s: S): void;
   /** Runs the puzzle's own clock (Memory Echo). */
   tick?(s: S, dt: number): void;
   /** Whether Undo steps back through its moves. */

@@ -57,6 +57,7 @@ export const code: PuzzleDef<CodeState> = {
   },
   solved: (s) => s.guesses.some((g) => g.exact === CODE_LENGTH),
   failed: (s) => s.guesses.length >= s.maxGuesses && !code.solved(s),
+  canHint: (s) => s.shown.includes(false),
   hint(s) {
     const i = s.shown.indexOf(false);
     if (i < 0) return false;
