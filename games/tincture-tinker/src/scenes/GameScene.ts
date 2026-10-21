@@ -280,7 +280,6 @@ export class GameScene extends Phaser.Scene {
     this.showBands(false);
     this.refresh();
     if (opening) this.queue.push(opening);
-    this.penalised(steps);
     this.playSteps(steps);
     this.queue.push({ ms: 0, end: () => this.settle() });
   }
@@ -811,7 +810,7 @@ export class GameScene extends Phaser.Scene {
     const items: Phaser.GameObjects.GameObject[] = [];
     let x = 0;
     for (const [kind, n] of [...held].reverse()) {
-      items.push(this.add.text(x, 0, `${n}`, ink(12, SEPIA, 'bold')).setOrigin(1, 0.5));
+      items.push(this.add.text(x, 0, formatNumber(n), ink(12, SEPIA, 'bold')).setOrigin(1, 0.5));
       x -= 14;
       items.push(shown(this.add.image(x - 9, 0, needTexture(kind)), 0.45));
       x -= 24;
