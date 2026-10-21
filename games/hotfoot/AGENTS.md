@@ -205,7 +205,8 @@ in.
   falling with Falcon's Glide) and land on the floor (on ice, a landing starts a skid, and the
   rockfall gains `ROCK.skid`); stomp a foe landed on; stomp or bump the boss (`bossContact`);
   refill jumps when grounded; count down slide, hurt and skid (a jump queued during the skid fires
-  as it ends); check one trap hit; let the rockfall gain `ROCK.hit` if a hit landed this tick, and
+  as it ends, in the air too if the knight walked off a ledge meanwhile); check one trap hit (a pit
+  even while unhurtable: the fall and the throw-out happen, but cost nothing); let the rockfall gain `ROCK.hit` if a hit landed this tick, and
   if it has reached the knight's back, hurt (`'rock'`) and drop it `ROCK.start` behind (a knight
   still unhurtable is only kept at their heels); visit a shrine slid into; collect or pull coins;
   drop traps, ledges, shrines, coins and a beaten boss more than `BEHIND` behind; enter
@@ -342,12 +343,14 @@ in.
   `pending`, and refuses unless the run is over, `missed` is `forSale` (not filler or cursed),
   nothing is pending and the bank covers the price. `buyArmoury` takes `nextPrice` from `bank` and
   adds a level, while the run is over and the item is not full.
-- Invariants: `distance <= checkpointX`; `choices` is non-null only at a checkpoint and holds two
-  ids, or three after a met dare (at most one cursed, always the second); `roads` is non-null only
+- Invariants: `distance <= checkpointX`; `choices` is non-null only at a checkpoint and holds one
+  to three ids: two, or three after a met dare, less once the boon pool is short (one Field
+  Dressing at most; at most one cursed, always the second); `roads` is non-null only
   at a checkpoint once `choices` is null; `hearts` is clamped to `stats().maxHearts` (and at least
   1) on `pick`; a boss's stage has no pieces, ledges, shrine, dare, road or rockfall; a pit only
   hurts when grounded over its middle; one hit per frame, and none while `hurtMs > 0` (the rockfall
-  waits at the knight's heels until then); pieces never overlap, so pits, blades and the rest always
+  waits at the knight's heels until then) except a pit, which still throws the knight out but takes
+  no heart, shield, streak or dare while `hurtMs > 0`; pieces never overlap, so pits, blades and the rest always
   sit on the road (`h` 0) and the checkpoint is always on the road; `rockfall.x` never passes the
   knight's back.
 
@@ -365,13 +368,16 @@ key (see Hub settings).
 ### Randomness and timing
 
 - Every random draw goes through `rand(s)` in `state.ts`: `Math.random` on an ordinary run, and a
-  mulberry32 sequence seeded by `seedOf(date)` on a daily run, so everyone's daily course and boon
-  offers match. It is used only in `src/game/course.ts` (sizes and fire vent phases in `planOf`,
-  ledge heights, `pickOf`, gap length) and in `rollChoices` in `src/game/sim.ts`. `placeShrine`,
-  the bosses, the terrains, the roads' extra coins, the dare (`dareOf` goes round by stage) and
-  the rockfall take no draws, and the curse draw only happens from `CURSE.from` (stage 2), so the
-  seeded first stage and first checkpoint are what they were before. A met dare adds a third draw
-  to `rollChoices`, from the second checkpoint on. The art
+  mulberry32 sequence on a daily run, so everyone's daily course and boon offers match. On a daily
+  run `buildStage` reseeds it with `seedOf(`${date}:${stage}`)` and `rollChoices` with
+  `seedOf(`${date}:cards:${stage}`)`, so a stage's layout depends only on the date, the stage and
+  the road (and `dragonBeaten`), never on how many draws the cards before it took (a third draw
+  after a met dare, or a curse draw) or on an earlier stage. It is used only in
+  `src/game/course.ts` (sizes and fire vent phases in `planOf`, ledge heights, `pickOf`, gap
+  length) and in `rollChoices` in `src/game/sim.ts`. `placeShrine`, the bosses, the terrains, the
+  roads' extra coins, the dare (`dareOf` goes round by stage) and the rockfall take no draws, and
+  the curse draw only happens from `CURSE.from` (stage 2). A met dare adds a third draw to
+  `rollChoices`, from the second checkpoint on. The art
   uses `seeded()` from `ink.ts`, not `Math.random`.
 - Time comes only from the `time` argument of `GameScene.update` (the sim's `state.time` is the sum
   of the `dt`s it was given). No timers, tweens or `Date.now`. The one use of the calendar is

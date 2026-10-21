@@ -325,7 +325,7 @@ export interface GameState {
   armoury: Armoury;
   /** The date of the daily course being run (`YYYY-MM-DD`), or null for an ordinary run. */
   daily: string | null;
-  /** The daily course's random state; its course and boons are drawn from it instead of Math.random. */
+  /** The daily course's random state; its course and boons are drawn from it instead of Math.random, reseeded from the date and stage by `buildStage` and `rollChoices`. */
   seed: number;
   nextId: number;
 }
@@ -394,10 +394,10 @@ export function rand(s: Pick<GameState, 'daily' | 'seed'>) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-/** The daily course's seed from its date. */
-export function seedOf(date: string) {
+/** A daily course's seed from its date (and a `:stage` or `:cards:stage` tag for one stage's draws). */
+export function seedOf(key: string) {
   let h = 2166136261;
-  for (const ch of date) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
   return h | 0;
 }
 
