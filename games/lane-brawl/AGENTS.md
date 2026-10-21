@@ -60,7 +60,8 @@ Implemented today:
   `group`), and per side one ember and one moss brute, whose slayer gets a 60 s buff (`BUFFS`, in
   `Unit.buffs`). Hitting one camp wakes its pack; a camp heals 5% a second when left alone and
   ignores stealthed champions. `damage` spares a camp from a champion that neither targets it nor
-  is already fighting it, so splash and bursts from a lane fight don't steal or wake camps.
+  is already fighting it (`campSpares`), so splash and bursts from a lane fight don't steal or wake
+  camps, and a bolt from such a champion flies on through the camp (`updateProjectiles`).
 - Watchstones (LB6): `'watchstone'` units, neutral until a team's champions stand within
   `WATCH.radius` with no enemy champion there for `WATCH.captureMs` (`updateWatchstones`,
   progress in `Unit.capture`); a held one gives its team `SIGHT.watchstone` of vision.
@@ -410,7 +411,7 @@ State model:
 - `Unit.side` is `'blue'`, `'red'` or `'neutral'` (camps and the beast). Hostile means a different
   side.
 - Champions keep `champ` (the `ChampionDef`), `name`, `level`, `xp`, `gold`, `items`, `cds`
-  (cooldowns per key), `upgrades` (ids the player kept), `buffs`, `kills`, `deaths`, and for the
+  (cooldowns per key), `cdFull` (each key's last full cooldown, for the HUD's sweep), `upgrades` (ids the player kept), `buffs`, `kills`, `deaths`, and for the
   passives `attackCount` (crits), `lullMs` (ambush) and `hasteMs`. Camps keep `campKind` and
   `group`; watchstones `capture`. Every unit has `hidden` (per team, set by `updateVision`).
 - `zones` are the lingering circles of `zone` abilities (side, owner, `dps`, slow, time left). `refreshStats` recomputes `maxHp`, `dmg`, `armor` and
@@ -447,7 +448,7 @@ How it runs:
   the last 120 ms of game time shows `w0`..`w3` by distance walked, otherwise `idle`. Feet are drawn
   `FOOT[kind]` px below the hitbox centre; hitboxes (`radius`) are unchanged by the art.
 - Input: `onPointerDown` checks the zones newest first (shop rows and upgrade cards before the
-  bars, which block, and the objective card, which also blocks; the D, H and V buttons sit in the
+  bars, which block, and the objective card, which also blocks while it shows, not while the shop hides it; the D, H and V buttons sit in the
   bottom bar, the Recall/Buy back button in the top bar). Anything else is a world click: a
   hostile unit under the cursor (not a watchstone, which can't be hit) becomes the player's target,
   otherwise the point becomes a move.
@@ -460,7 +461,7 @@ How it runs:
   draws it in `drawHud`.
 
 Randomness and timing: `Math.random` only draws the rosters, in `createGame` (the test seeds it, with
-a seed picked for the roster the round was tuned with); no `Date.now` or `performance.now` in the rules. Game time
+a seed picked for the roster the round was tuned with), and blue's class in watch mode (`watchMatch`); no `Date.now` or `performance.now` in the rules. Game time
 advances only through `tick`, which the scene drives from frame times. The art uses its own seeded
 generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for a dev log.
 

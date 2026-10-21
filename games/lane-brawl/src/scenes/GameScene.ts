@@ -567,7 +567,9 @@ export class GameScene extends Phaser.Scene {
     // Watching the AI, nothing on the HUD takes a press.
     if (watching) return;
     // The bars and the objective card block presses so a click on the HUD never walks the champion.
-    this.zones.push({ ...TOP_BAR, run: noop }, { ...BOTTOM_BAR, run: noop }, { ...OBJECTIVE_CARD, run: noop });
+    this.zones.push({ ...TOP_BAR, run: noop }, { ...BOTTOM_BAR, run: noop });
+    // The open shop hides the objective card, so the card only blocks while it shows.
+    if (!this.shopOpen) this.zones.push({ ...OBJECTIVE_CARD, run: noop });
     this.zones.push({ ...SHOP_BUTTON, run: () => this.toggleShop() });
     // One button in the top bar: Recall while alive, Buy back while dead.
     this.zones.push({ ...RECALL_BUTTON, run: () => (this.player()?.dead ? this.buyBack() : this.recall()) });
@@ -1554,7 +1556,7 @@ export class GameScene extends Phaser.Scene {
       if (locked) g.fillStyle(0x0d1018, 0.7).fillRect(box.x + 3, box.y + 3, box.w - 6, box.h - 6);
       this.abilityIcon(g, ab, box.x + box.w / 2, box.y + box.h / 2 - 2, locked ? 0.35 : 1, c.color);
       const cd = me.cds[k];
-      if (cd > 0) g.fillStyle(0x000000, 0.6).fillRect(box.x + 3, box.y + 3, box.w - 6, (box.h - 6) * (cd / ab.cd));
+      if (cd > 0) g.fillStyle(0x000000, 0.6).fillRect(box.x + 3, box.y + 3, box.w - 6, (box.h - 6) * Math.min(1, cd / me.cdFull[k]));
       this.t(`ab-${k}`, box.x + 6, box.y + 4, k, 12, locked ? UI.muted : UI.text, 'left', true);
       const name = t(ab.name);
       this.t(`abn-${k}`, box.x + box.w / 2, box.y + box.h - 15, name.length > 10 ? name.split(' ')[0] : name, 9, UI.dim, 'center', true);

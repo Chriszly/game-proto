@@ -126,6 +126,8 @@ export interface Unit {
   gold: number;
   items: string[];
   cds: Record<AbilityKey, number>;
+  /** The full length of each key's last cooldown, after cooldown upgrades and cdr, for the HUD's sweep. */
+  cdFull: Record<AbilityKey, number>;
   /** Ids of the upgrades the champion chose on its level ups (see `UPGRADES`). AI champions pick too. */
   upgrades: string[];
   /** Cooldowns of item actives, by active id. */
@@ -409,6 +411,7 @@ export function blankUnit(
     gold: 0,
     items: [],
     cds: { Q: 0, W: 0, E: 0, R: 0 },
+    cdFull: { Q: 1, W: 1, E: 1, R: 1 },
     upgrades: [],
     activeCds: {},
     retreatUntil: 0,
