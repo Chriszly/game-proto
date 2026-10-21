@@ -58,7 +58,7 @@ function scene(page: Page) {
 }
 
 test('plays the first quest', async ({ page }, testInfo) => {
-  // Seeded like the other games' tests, so the fireflies and moths repeat from run to run.
+  // Seeded like the other games' tests, so the foes' wandering repeats from run to run.
   await page.addInitScript(() => {
     let seed = 1234567;
     Math.random = () => {

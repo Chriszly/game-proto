@@ -227,8 +227,10 @@ function woods(): MapDef {
   b.border('tree', 2);
   // The path from the village gate up to the shrine, with a branch west to the river.
   b.rect(24, 16, 2, 16, 'path').rect(24, 16, 20, 2, 'path').rect(42, 4, 2, 13, 'path').rect(13, 15, 11, 2, 'path');
-  // Thorns across the shrine path, hemmed in by trees.
+  // Thorns across the shrine path, hemmed in by trees, with a line of trees from the river to the
+  // east border either side, so the north of the woods is reached only by cutting through.
   b.rect(42, 10, 2, 1, 'thorns').rect(41, 9, 1, 3, 'tree').rect(44, 9, 1, 3, 'tree');
+  b.rect(12, 10, 30, 1, 'tree').rect(44, 10, 4, 1, 'tree');
   // The river, crossed only on the hookvine, and the way to the fen beyond it.
   b.rect(8, 2, 4, 28, 'water').rect(0, 15, 8, 2, 'path');
   d.posts.push({ x: 7, y: 15 }, { x: 12, y: 15 });
