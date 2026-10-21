@@ -200,12 +200,26 @@ export const usesCask = (s: GameState) => s.night >= CASK_NIGHT;
 /**
  * True when a refill can be sent now: before CASK_NIGHT always, after it while the cask holds a
  * fill that no moth (other than `except`) already flying to or refilling a lit lantern will draw.
+ * A moth whose fill would add no oil (a guard tap on a full lantern) draws none, so it reserves none.
  */
 export function caskSpare(s: GameState, except?: Moth) {
   if (!usesCask(s)) return true;
-  const reserved = s.moths.filter((m) => m !== except && (m.task === 'out' || m.task === 'lighting') && s.lanterns[m.target]?.lit).length;
+  const reserved = s.moths.filter((m) => m !== except && (m.task === 'out' || m.task === 'lighting') && drawsFill(s, m)).length;
   return s.cask - reserved > 0;
 }
+/** The oil a fill by moth `m` gives lantern `l`, in milliseconds of burning. */
+const mothFill = (s: GameState, m: Moth, l: Lantern) => stats(s).burnMs * MOTH_KINDS[m.kind].oil * LANTERN_KINDS[l.kind].oil;
+/** True when moth `m`, on its way to its lantern, will draw a fill from the cask: the lantern is lit and the fill adds oil. */
+function drawsFill(s: GameState, m: Moth) {
+  const l = s.lanterns[m.target];
+  return !!l?.lit && mothFill(s, m, l) > l.oilMs;
+}
+/**
+ * True when a tap on lantern `i` may go: a dark lantern always, a lit one while the cask has a
+ * spare fill (not counting `except`) or while a gust, a bat or the owl is coming for it, since a
+ * moth sent to shield it is no wasted refill (with the cask dry it sits without drawing a fill).
+ */
+export const mayTap = (s: GameState, i: number, except?: Moth) => !s.lanterns[i].lit || menaced(s, i) || caskSpare(s, except);
 
 /** Districts (LK10): at every MOVE_EVERY nightfalls the keep can move to another district. */
 export const MOVE_EVERY = 5;
@@ -601,7 +615,7 @@ function dispatch(s: GameState, moth: Moth, i: number, hops = moth.kind === 'fir
 /** A firefly's next stop after lighting a lantern: the oldest queued tap, else the nearest dark lantern no moth has, else -1. */
 function nextHop(s: GameState, m: Moth) {
   // A queued refill with the cask spoken for is dropped, as the tap would now be refused.
-  s.queue = s.queue.filter((i) => !s.lanterns[i].lit || caskSpare(s, m));
+  s.queue = s.queue.filter((i) => mayTap(s, i, m));
   const queued = s.queue.findIndex((i) => !s.lanterns[i].claimed);
   if (queued >= 0) return s.queue.splice(queued, 1)[0];
   let best = -1;
@@ -620,12 +634,12 @@ function nextHop(s: GameState, m: Moth) {
  * Taps lantern `i`. The first idle moth goes to light it, or refill it if it is already lit. When
  * every moth is busy the tap waits in the queue (up to QUEUE_MAX) and a moth takes it when one
  * comes home. False when the tap was lost: another moth already has the lantern, the queue is full,
- * it is not dusk, or it is lit and the cask is dry.
+ * it is not dusk, or it is lit and the cask is dry (unless something is coming for it, see `mayTap`).
  */
 export function send(s: GameState, i: number) {
   const lantern = s.lanterns[i];
   if (s.phase !== 'dusk' || !lantern || lantern.claimed || s.queue.includes(i)) return false;
-  if (lantern.lit && !caskSpare(s)) return false;
+  if (!mayTap(s, i)) return false;
   // An idle firefly goes first, so its second lantern is not wasted.
   const moth = s.moths.find((m) => m.task === 'idle' && m.kind === 'firefly') ?? s.moths.find((m) => m.task === 'idle');
   if (moth) {
@@ -685,6 +699,8 @@ const sitting = (s: GameState, i: number) => s.moths.some((m) => m.target === i 
 
 /** True while a gust or the owl is coming for lantern `i`, so a moth that lights it stays to guard it. */
 export const threatened = (s: GameState, i: number) => s.gust?.target === i || !!s.owl?.lanterns.includes(i);
+/** True while a gust, the owl or a bat is coming for lantern `i`, so a moth sitting on it shields it. */
+export const menaced = (s: GameState, i: number) => threatened(s, i) || s.bats.some((b) => b.task === 'fly' && b.target === i);
 
 /** The lantern a gust warned now goes for: the lit one with the most oil left, or -1 if none is lit. */
 function gustTarget(s: GameState, except = -1) {
@@ -875,7 +891,6 @@ function answerCall(s: GameState, i: number) {
 /** Advances dusk by `dt` milliseconds: oil burns, moths fly and light, gusts blow, and night falls at the end. */
 export function tick(s: GameState, dt: number) {
   if (s.phase !== 'dusk') return;
-  const { burnMs } = stats(s);
   const burn = (s.kind === 'fog' ? FOG_BURN : 1) * (districtOf(s).rule === 'trade' ? TRADE_BURN : 1) * THIN_BURN ** s.curses.thin;
   s.lanterns.forEach((lantern, i) => {
     // A moth refilling a lantern holds its flame, so it burns no oil meanwhile.
@@ -899,7 +914,7 @@ export function tick(s: GameState, dt: number) {
       m.lightingMs += dt;
       if (m.lightingMs >= mothLightMs(s, m)) {
         const lantern = s.lanterns[m.target];
-        const fill = burnMs * MOTH_KINDS[m.kind].oil * LANTERN_KINDS[lantern.kind].oil;
+        const fill = mothFill(s, m, lantern);
         // A refill that adds oil draws a fill from the cask; with the cask dry the moth leaves the
         // lantern as it is. One that would add none (a guard tap on a full lantern) never lowers it.
         const adds = !lantern.lit || fill > lantern.oilMs;
@@ -976,7 +991,7 @@ export function tick(s: GameState, dt: number) {
     if (moth.task !== 'idle' || s.queue.length === 0) continue;
     const i = s.queue.shift()!;
     // A queued refill with the cask spoken for is dropped, as the tap would now be refused.
-    if (!s.lanterns[i].claimed && (!s.lanterns[i].lit || caskSpare(s))) dispatch(s, moth, i);
+    if (!s.lanterns[i].claimed && mayTap(s, i)) dispatch(s, moth, i);
   }
   s.duskMs = Math.max(0, s.duskMs - dt);
   if (s.duskMs === 0) nightfall(s);

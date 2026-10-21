@@ -112,11 +112,16 @@ Implemented today:
 - Oil cask (LK9): `state.cask` fills, `CASK_START` (3) to `CASK_MAX` (6). From `CASK_NIGHT` (3)
   (`usesCask(s)`) a refill draws one fill when the moth finishes lighting a lit lantern.
   `caskSpare(s, except?)` is false once every fill is spoken for by moths already flying to or
-  refilling lit lanterns: `send` on a lit lantern then returns false, a queued refill is dropped
-  (in `tick` and a firefly's `nextHop`), and the scene hides the "Save it" tag and rings. A moth
-  that still arrives to find it dry pushes a `dry` event and leaves the lantern as it is (no close
-  call). `topUp(s)` in the night phase adds a fill for `CASK_COST` (3); the Cask card calls it. The HUD shows the cask at
-  `CASK_HUD` (grey before night 3, orange when dry).
+  refilling lit lanterns whose fill would add oil (`drawsFill`; a guard tap on a full lantern
+  reserves none). `mayTap(s, i, except?)` allows a tap on a dark lantern, on a lit one while
+  `caskSpare`, and on a lit one that is `menaced` (a gust, the owl or a bat coming for it,
+  `threatened` plus bats), so it can always be shielded: `send` refuses the rest, a queued refill
+  is dropped (in `tick` and a firefly's `nextHop`) once `mayTap` is false, and the scene hides the
+  "Save it" tag and rings when `caskSpare` is false. A moth sent to shield a menaced lantern that
+  arrives to find the cask dry pushes a `dry` event (its `clunk`, no `strike`) and leaves the
+  lantern as it is (no close call), then guards it. `topUp(s)` in the night phase adds a fill for
+  `CASK_COST` (3); the Cask card calls it. The HUD shows the cask at `CASK_HUD` (grey before night
+  3, orange when dry).
 - Districts (LK10): `DISTRICTS` in `places.ts` (`keep`, `docks`, `chapel`, `market`), each with
   ten `spots` (with `name`s for the orders), `chains` and a `rule` (`none`, `seawind`: `wind`
   blows a second lantern, the next with most oil; `vespers`: `lanternPay` adds `VESPERS_PAY` (2)
@@ -167,8 +172,6 @@ Missing or rough:
   hand.
 - Canvas `filter: blur` (the card's soft shadows and the far hills) is ignored by Safari, so those
   edges are hard there.
-- `docs/screenshots/hub-card.webp` and `favicon.webp` are old captures of the hub card and favicon,
-  not referenced anywhere.
 
 ## Architecture
 
@@ -196,7 +199,8 @@ File map (`src/`):
   panels (night, move, peril, game over, festival) once; `update` ticks the rules, turns `state.events`
   into popups and redraws from state. `drawDistrict` swaps the scenery texture when the keep moves
   (baking it with `bakeScenery` the first time), and `drawLanterns` moves each lantern's images,
-  tag, kind label and tap zone to where the district hangs it.
+  tag, kind label and tap zone to where the district hangs it, and hides the images and tap zone
+  of a spot the night has no lantern on.
 - `scenes/layout.ts`: `VIEW`, `HUD`, `DUSK_BAR`, `NIGHT_PANEL`, `SHOP` (three columns, three
   rows: the seven upgrades, the cask and the hearth), `NEXT_BUTTON`, `SMALL_PANEL` (game over and festival),
   `MOVE_PANEL` and `MOVE_CARDS` (the choice of district; the peril panel reuses the panel and
