@@ -52,7 +52,7 @@ before the moves run out and the potion sells, for coins and one to three stars.
    the Pestle hitting it) scrubs it clean and frees the tile.
 5. **Order twists**, from the third order on, in turn: a **rush order** gives 3 fewer moves and pays
    20 more coins; the next **forbids** one ingredient it doesn't need (on a royal commission, one no stage needs), and a swap that matches it
-   costs an extra move; the one after is plain. The twist is written under the order's price.
+   costs an extra move (cascades and tools never do); the one after is plain. The twist is written under the order's price.
 6. **Orders** list the ingredients the potion needs, the moves allowed and what it pays. Filling one
    pays its price plus 5 coins for every move left; running out of moves means trying it again on a
    new board.
@@ -75,8 +75,8 @@ before the moves run out and the potion sells, for coins and one to three stars.
 10. **Bench tools** spend coins during an order: **Stir** gives 3 more moves for 40 coins, **Sift**
    rerolls one row of the board for 25 coins (its specials, jars, resin and mould stay, and the new tiles
    never make a match by themselves; a row with nothing to reroll costs nothing), **Pestle** smashes one tile for 30 coins (a jar opens, resin
-   melts, a Catalyst or Bloom fires) and **Funnel** swaps any two tiles for 35 coins (not jars or
-   resin), and neither of those spends a move. Hover a tool to read what it does in the caption. A
+   melts, a Catalyst or Bloom fires) and **Funnel** swaps any two tiles for 35 coins (not jars,
+   resin or mould, nor two plain tiles of one kind; two specials go off together, as in a swap), and neither of those spends a move. Hover a tool to read what it does in the caption. A
    tool you can't afford is greyed out.
 11. **Workbench**: after an order, "Workbench" on the result card opens three
    upgrades that stay bought: **Steady hands** (+1 move on every order, three levels for 60, 100 and

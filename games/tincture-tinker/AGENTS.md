@@ -21,7 +21,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   3: holds a tile in place, the first match it is in only melts it) and creeping mould (from order
   5: holds its tile, never matches, spreads to a neighbour after every move unless a match touched
   some mould, and is scrubbed off by a match next to it), order twists from order 3
-  (rush: 3 fewer moves, 20 more coins; forbidden ingredient: a swap matching it costs a move),
+  (rush: 3 fewer moves, 20 more coins; forbidden ingredient: a swap whose own match has it costs a move; cascades and tools never do),
   royal commissions on every fifth order (three stages on one board, the moves carried over; the
   one played at Grand Master is the crown's last order, which ends the game with the title Royal
   Apothecary and a star total, after which play goes on), twin orders from Journeyman on every fifth
@@ -197,8 +197,9 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `spread`. Tools never spread mould.
 - **Twists:** `twistFor` gives order 3, 6, 9... `rush` and 4, 7, 10... a `forbid` kind not in its
   needs (on a royal commission, not in any stage's needs; none if every kind is needed). `orderFor` takes `RUSH_MOVES` off and adds `RUSH_COINS` to the price. `resolve` takes one
-  extra move (`penalties`) per swap or tool use whose steps match the forbidden kind; the step
-  that did it has `penalty`, and the scene pulses the moves.
+  extra move (`penalties`) when called with `charge` (only `trySwap` does) and the swap's own first
+  step matches the forbidden kind; cascade steps and tools (Pestle, Funnel) never cost one. The step
+  that did it has `penalty`, and the scene pulses the moves (`penalised`, from `swap`).
 - **Only wanted ingredients:** `gather` increments `got` only for kinds in the order's needs
   (`wanted`), so other kinds stay 0. `got` keeps counting past a need; the surplus goes to the
   pantry on a sale or stage change (`stockPantry`), up to `PANTRY_MAX` a kind, and the next order
@@ -251,8 +252,9 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   board tap calls `siftRow`, which calls `sift` (new tiles for the row, specials, jars, resin and mould
   kept, rerolled until nothing matches and a move is left, else a shuffle; a row with nothing but kept
   tiles is refused and costs nothing), saves and animates the
-  row fading out and growing back. Pestle's tap calls `pestle` and Funnel's second tap `funnel`;
-  both go through `resolve` with no move spent (so a tool can sell the order) and the scene plays
+  row fading out and growing back. Pestle's tap calls `pestle` and Funnel's second tap `funnel`
+  (which refuses two plain tiles of one kind, a swap that changes nothing, and sets two specials off
+  together with `mixed`, as `trySwap` does); both go through `resolve` with no move spent (so a tool can sell the order) and the scene plays
   them in `playTool`. Buttons show `on`, `off` (not affordable or not playing) or `armed`; hovering
   one shows its `tip` in the caption (`refreshCaption`, which otherwise shows the armed tool's
   instruction or a tip for the order: forbidden kind, blockers, rush, then the specials).
@@ -434,7 +436,7 @@ triangle lead, a thin `pulse12` arpeggio and a triangle bass. It is written at `
 | `fire` / `burst` | a fired row, column or Bloom square / a 5x5 of two Blooms |
 | `cork`, `sizzle`, `scrub` | a jar opened, resin melted, mould scrubbed in the step |
 | `spread` | mould creeping onto a tile (the `spread` step) |
-| `penalty` | a swap or tool that matched the forbidden kind (`penalised`) |
+| `penalty` | a swap whose own match had the forbidden kind (`penalised`) |
 | `shuffle` | a step whose board was shuffled |
 | `served` / `stage` | a twin order's customer served / a royal commission's next stage |
 | `stir`, `sift`, `pestle`, `funnel` | the bench tools, when they act (`useTool`, `siftRow`, `usePestle`, `pickFunnel`) |

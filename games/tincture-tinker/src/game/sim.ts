@@ -102,7 +102,7 @@ export function trySwap(s: GameState, a: Cell, b: Cell): Step[] | null {
   s.moves--;
   const extra = mixed(s.board[a.row][a.col], s.board[b.row][b.col], b);
   // On the swap's own match a Catalyst is brewed where the player moved a tile to, if it can be.
-  const steps = resolve(s, swapped(s.board, a, b), [b, a], extra);
+  const steps = resolve(s, swapped(s.board, a, b), [b, a], extra, true);
   // Mould creeps to a neighbour after every move, unless a match touched some this move.
   if (s.phase === 'play' && !steps.some((st) => st.scrubbed.length > 0)) {
     const grown = spreadMould(s.board);
@@ -130,14 +130,15 @@ const emptyStep = (s: GameState): Step => ({
 /**
  * Plays `board` out: gathers its matches (and `extra`) and every cascade after them, shuffles the
  * board if no move is left, then sells the order once it is filled or fails it when the moves are gone.
+ * With `charge` (a swap), a match of the forbidden ingredient in the swap's own step costs a move;
+ * cascades and tools never do.
  */
-function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step[] {
+function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra, charge = false): Step[] {
   const newTile = tileMaker(s);
   const steps: Step[] = [];
   let penalty = false;
   for (let step = gather(s, board, prefer, extra); step; step = gather(s, board, [])) {
-    // The forbidden ingredient costs one move per swap, however many times it is matched.
-    if (step.penalty && penalty) step.penalty = false;
+    if (!charge || steps.length > 0) step.penalty = false;
     penalty ||= !!step.penalty;
     board = collapse(step.board, step.cleared, newTile);
     steps.push({ ...step, board });
@@ -371,14 +372,19 @@ export function pestle(s: GameState, cell: Cell): Step[] | null {
 }
 
 /**
- * Funnel: swaps any two tiles that aren't held by a jar or resin, without spending a move, and plays
- * out whatever they match. Null if it can't be bought or the tiles can't move.
+ * Funnel: swaps any two tiles that aren't held by a jar, resin or mould, without spending a move, and
+ * plays out whatever they match; two specials go off together as in a swap (see `mixed`). Null if it
+ * can't be bought, the tiles can't move or swapping them would change nothing.
  */
 export function funnel(s: GameState, a: Cell, b: Cell): Step[] | null {
   if (!canUse(s, 'funnel') || !inBoard(a) || !inBoard(b) || (a.row === b.row && a.col === b.col)) return null;
-  if (stuck(s.board[a.row][a.col]) || stuck(s.board[b.row][b.col])) return null;
+  const ta = s.board[a.row][a.col];
+  const tb = s.board[b.row][b.col];
+  if (stuck(ta) || stuck(tb)) return null;
+  // Two plain tiles of one kind would only trade places.
+  if (!special(ta) && !special(tb) && ta.kind === tb.kind) return null;
   s.coins -= TOOLS.funnel.cost;
-  return resolve(s, swapped(s.board, a, b), [b, a]);
+  return resolve(s, swapped(s.board, a, b), [b, a], mixed(ta, tb, b));
 }
 
 /** After a sale, the next order; after running out of moves, the same order again. After an examination, back to the orders. */
