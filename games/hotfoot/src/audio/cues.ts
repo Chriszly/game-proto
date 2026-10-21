@@ -64,9 +64,9 @@ export class SoundCues {
 
     // New effects since the last frame.
     const fresh = s.effects.filter((e) => e.id >= this.nextId);
-    const hurt = fresh.some((e) => e.kind === 'hit' || e.kind === 'block');
+    const hurt = fresh.some((e) => e.kind === 'hit' || e.kind === 'block' || e.kind === 'fall');
 
-    // The knight's own moves (a pit's hit throws the knight up too, which is no jump).
+    // The knight's own moves (a pit throws the knight up too, which is no jump).
     if (r.jumps < this.jumps && !hurt) play('jump', this.jumps < stats(s).jumps ? 1.35 : 1);
     const sliding = r.slideMs > 0;
     if (sliding && !this.sliding) play('slide');
@@ -91,7 +91,7 @@ export class SoundCues {
       } else if (e.kind === 'hit') play('hit');
       else if (e.kind === 'block') play('block');
       else if (e.kind === 'stomp' && !bossStomped && !rockCaught) play('stomp');
-      else if (e.kind === 'dust' && !skid) play('land');
+      else if ((e.kind === 'dust' && !skid) || e.kind === 'fall') play('land');
       else if (e.kind === 'skid') play('skid');
       else if (e.kind === 'heal') play('heal');
       // A shrine that can't give a heart refuses, with the buzz every refused action gets.

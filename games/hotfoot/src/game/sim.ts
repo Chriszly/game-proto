@@ -258,7 +258,11 @@ function hurt(s: GameState, kind: TrapKind | 'wall' | 'boss' | 'rock') {
     r.h = 0.01;
     r.slideMs = 0;
     r.jumps = st.jumps - 1;
-    if (r.hurtMs > 0) return;
+    if (r.hurtMs > 0) {
+      // A puff from the pit marks the fall, so the throw-out doesn't pass for a jump.
+      effect(s, 'fall', s.distance, 0, 400);
+      return;
+    }
   }
   s.hits += 1;
   s.streak = 0;
@@ -413,7 +417,11 @@ export function tick(s: GameState, dt: number) {
     // A no-hit dare is met by reaching the banner unhurt.
     if (s.dare?.kind === 'nohit' && !s.dare.failed) meetDare(s);
     s.choices = rollChoices(s);
+    // Nothing tapped on the way in carries over to the next stage.
     r.slideMs = 0;
+    r.skidMs = 0;
+    r.jumpQueued = false;
+    r.slideQueued = false;
   }
 }
 
@@ -444,7 +452,8 @@ export function rollChoices(s: GameState): BoonId[] {
  */
 export function pick(s: GameState, id: BoonId) {
   if (s.phase !== 'checkpoint' || !s.choices?.includes(id)) return false;
-  s.missed = s.choices.find((c) => c !== id) ?? null;
+  // The boon passed up, one the shop can sell when there is one (a curse can sit between two cards).
+  s.missed = s.choices.find((c) => c !== id && forSale(c)) ?? s.choices.find((c) => c !== id) ?? null;
   const before = pairsOf(s.ranks);
   s.ranks[id] = (s.ranks[id] ?? 0) + 1;
   const st = stats(s);
