@@ -452,7 +452,7 @@ function finishWave(s: GameState) {
     s.stars[s.garden] = Math.max(s.stars[s.garden], s.harvest);
     if (s.thorny) s.laurels[s.garden] = 1;
   }
-  if (s.wave % BOSS_EVERY === 0 && s.queenSquashed) s.offer = boonOffer(s.wave / BOSS_EVERY);
+  if (s.wave % BOSS_EVERY === 0 && s.queenSquashed) s.offer = boonOffer(s.wave / BOSS_EVERY, twistOf(s));
   s.wave++;
 }
 

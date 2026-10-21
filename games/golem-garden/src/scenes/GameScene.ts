@@ -137,10 +137,10 @@ type Chip = { bg: Image; text: Text };
 export class GameScene extends Phaser.Scene {
   state!: GameState;
   /**
-   * The designed 960x540 frame in the middle of the view: the camera scrolls so the board, panel
+   * The designed 960x560 frame (`VIEW`) in the middle of the view: the camera scrolls so the board, panel
    * and overlays laid out for it sit there, while the table and the HUD strip fill the whole view.
    */
-  private frame = new Phaser.Geom.Rectangle(0, 0, 960, 540);
+  private frame = new Phaser.Geom.Rectangle(0, 0, VIEW.w, VIEW.h);
   /** Where the seed cards are, in view pixels; read by the playthrough test. */
   seedButtons: (Rect & { kind: SeedKind })[] = [];
   /** Where the wave button is, in view pixels; read by the playthrough test. */

@@ -152,7 +152,8 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
     | Sharp rocks | pebble golems do 20% more damage |
     | Rich compost | compost pays up to 15 sap more |
 
-    Wave 10, 30, 50 and on offer the first three, wave 20, 40 and on the last three.
+    Wave 10, 30, 50 and on offer the first three, wave 20, 40 and on the last three. The thorny
+    Meadow, which has no hedges, offers Long moss in place of Thick hedges.
 17. **Regrow a leaf.** Between waves, tap the Heartwood (or the leaf tag, which shows a green plus
     when you can) to grow back a lost leaf: 25 sap for the first in a garden, 25 more for each one
     after. Three stars need all 10 leaves at the harvest, so they are now a sap trade-off.

@@ -300,8 +300,12 @@ export const BOON_INFO: Record<Boon, { name: TextKey; blurb: TextKey }> = {
 };
 /** What each boon does, in numbers: each pick of it adds this much again. */
 export const BOON = { mossSlow: 0.5, sunReach: 20, leaves: 2, hedgeHp: 0.5, pebbleDamage: 0.2, compostCap: 15 };
-/** The three boons offered after the `nth` Queen Slug (1 for wave 10): two sets of three, in turn. */
-export const boonOffer = (nth: number): Boon[] => BOONS.slice(((nth - 1) % 2) * 3, ((nth - 1) % 2) * 3 + 3);
+/**
+ * The three boons offered after the `nth` Queen Slug (1 for wave 10): two sets of three, in turn.
+ * With the 'hedges' twist, where no hedge can be planted, Long moss takes Thick hedges' place.
+ */
+export const boonOffer = (nth: number, twist: Twist | null = null): Boon[] =>
+  BOONS.slice(((nth - 1) % 2) * 3, ((nth - 1) % 2) * 3 + 3).map((b) => (b === 'hedge' && twist === 'hedges' ? 'moss' : b));
 
 /**
  * Thorny variants (GG13): three stars on a garden unlock its thorny variant, played with one twist
