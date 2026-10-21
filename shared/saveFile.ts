@@ -1,4 +1,4 @@
-import { RECENT_KEY, clearAllProgress, progressKeys } from './progress';
+import { RECENT_KEY, progressKeys } from './progress';
 import { SETTINGS_KEY } from './settings';
 import { t } from './i18n';
 import { fileEnding as ending } from './saveCodes';
@@ -55,31 +55,41 @@ export async function exportProgress(kind: string, games: string[]): Promise<Blo
 
 /**
  * Replaces the progress `kind` covers with a file from `exportProgress` of the same kind. Returns
- * false, changing nothing, when the file isn't one, is of another kind or was edited.
+ * `ok`, or, changing nothing, `invalid` when the file isn't one, is of another kind or was edited,
+ * and `noSpace` when storage is full or blocked (the progress there before is put back).
  */
-export async function importProgress(file: Blob, kind: string, games: string[]): Promise<boolean> {
+export async function importProgress(file: Blob, kind: string, games: string[]): Promise<'ok' | 'invalid' | 'noSpace'> {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (new TextDecoder().decode(bytes.subarray(0, MAGIC.length)) !== MAGIC) return false;
+  if (new TextDecoder().decode(bytes.subarray(0, MAGIC.length)) !== MAGIC) return 'invalid';
   const iv = bytes.subarray(MAGIC.length, MAGIC.length + 12);
   let payload: { kind?: unknown; data?: unknown };
   try {
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, await cryptoKey(), bytes.subarray(MAGIC.length + 12));
     payload = JSON.parse(new TextDecoder().decode(plain));
   } catch {
-    return false;
+    return 'invalid';
   }
-  if (payload?.kind !== kind || !payload.data || typeof payload.data !== 'object') return false;
+  if (payload?.kind !== kind || !payload.data || typeof payload.data !== 'object') return 'invalid';
   const entries = Object.entries(payload.data).filter(
     (entry): entry is [string, string] => typeof entry[1] === 'string' && belongs(entry[0], kind, games),
   );
+  // Every key the import removes or writes, with its value before, to put back if a write fails.
+  const removed = kind === ALL ? [...games.flatMap(progressKeys), RECENT_KEY] : progressKeys(kind);
+  const before = new Map<string, string | null>();
   try {
-    if (kind === ALL) clearAllProgress(games);
-    else for (const k of progressKeys(kind)) localStorage.removeItem(k);
+    for (const k of [...removed, ...entries.map(([k]) => k)]) before.set(k, localStorage.getItem(k));
+    for (const k of removed) localStorage.removeItem(k);
     for (const [k, value] of entries) localStorage.setItem(k, value);
   } catch {
-    return false;
+    try {
+      for (const k of before.keys()) localStorage.removeItem(k);
+      for (const [k, value] of before) if (value !== null) localStorage.setItem(k, value);
+    } catch {
+      // Storage is blocked, so there was nothing to put back.
+    }
+    return 'noSpace';
   }
-  return true;
+  return 'ok';
 }
 
 /** Hands the player the file to save, named `<game>-<date>.gh<code>` (`game-hub-progress-<date>.gh` for all). */
@@ -111,7 +121,12 @@ export async function askToExport(kind: string, games: string[]) {
 export async function askToImport(file: Blob, kind: string, games: string[], title: string, done: () => void) {
   const all = kind === ALL;
   if (!confirm(all ? t('importAllConfirm') : t('importGameConfirm', { game: title }))) return;
-  if (!(await importProgress(file, kind, games).catch(() => false))) {
+  const result = await importProgress(file, kind, games).catch(() => 'invalid' as const);
+  if (result === 'noSpace') {
+    alert(t('importNoSpace'));
+    return;
+  }
+  if (result === 'invalid') {
     alert(all ? t('importAllFailed') : t('importGameFailed', { game: title }));
     return;
   }
