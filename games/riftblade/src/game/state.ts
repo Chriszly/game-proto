@@ -360,8 +360,8 @@ export interface Pop {
 
 /**
  * `cleared` (a boss or the arena is done) and `travel` (on to the next planet) only last until the
- * next frame; `chart` is the space map (where to jump next), `map` the star map on the way there,
- * `trader` and `event` its nodes.
+ * next frame (the scene settles `travel` from a panel at once); `chart` is the space map (where to
+ * jump next), `map` the star map on the way there, `trader` and `event` its nodes.
  */
 export type Phase = 'select' | 'run' | 'levelup' | 'cleared' | 'chart' | 'map' | 'trader' | 'event' | 'travel' | 'won' | 'lost';
 

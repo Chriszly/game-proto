@@ -48,6 +48,16 @@ const isSquad = (id: HeroId) => id === 'elara' || id === 'triad';
 /** The stats for this frame (for `blades.ts`). */
 export const stats = () => st;
 
+/**
+ * Works out the stats and hero flags for `s` (every frame, when a run starts, and when a saved run
+ * is picked up, so a heal on a panel before the first fight step goes to the right hero).
+ */
+export function prepare(s: GameState) {
+  st = statsOf(s);
+  knight = isKnight(s.hero!);
+  squad = isSquad(s.hero!);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Starting and choosing
 
@@ -63,9 +73,7 @@ export function startRun(s: GameState, id: HeroId, known: HeroId[] = [], ringOut
   s.player.hp = s.player.maxHp = hero.maxHp;
   s.player.r = hero.r ?? HERO_R;
   s.player.fireMs = 300;
-  st = statsOf(s);
-  knight = isKnight(id);
-  squad = isSquad(id);
+  prepare(s);
   if (squad) squadStart(s);
 }
 
@@ -134,9 +142,7 @@ export function raise(s: GameState, id: string) {
 
 export function tick(s: GameState, dtMs: number, input: Input) {
   if (s.phase !== 'run') return;
-  st = statsOf(s);
-  knight = isKnight(s.hero!);
-  squad = isSquad(s.hero!);
+  prepare(s);
   const dt = Math.min(dtMs, MAX_FRAME_MS);
   if (input.signature) signature(s);
   const steps = Math.max(1, Math.ceil(dt / STEP_MS));
