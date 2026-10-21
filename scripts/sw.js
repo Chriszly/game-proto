@@ -12,8 +12,11 @@ const CACHE = PREFIX + VERSION;
 const INDEX = './__files__.json';
 
 // The hub's Updates setting, which the pages copy here (`shared/install.ts`): `auto`, `wifi` or
-// `off`, and an `update-now` entry while Update now lets one update through whatever it says.
+// `off`, and an `update-now` entry (the time it was asked) while Update now lets one update through
+// whatever it says.
 const UPDATES_CACHE = 'game-proto.updates';
+// How long an Update now stays good for, should the page close before it could take it back.
+const UPDATE_NOW_FOR = 5 * 60 * 1000;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(fill().then(() => self.skipWaiting()));
@@ -26,18 +29,32 @@ self.addEventListener('install', (event) => {
  */
 async function updatesAllowed() {
   const settings = await caches.open(UPDATES_CACHE);
-  if (await settings.match('./update-now')) return true;
   const mode = (await (await settings.match('./updates'))?.text()) ?? 'wifi';
   if (mode === 'off') return false;
   const connection = self.navigator.connection;
   return mode !== 'wifi' || !connection || (connection.type !== 'cellular' && !connection.saveData);
 }
 
+/**
+ * Whether the player asked for Update now in the last few minutes. The entry is used up here, by
+ * the one install it lets through, so a page that closed before it could delete it never leaves
+ * updates let through for good.
+ */
+async function updateNowAsked() {
+  const settings = await caches.open(UPDATES_CACHE);
+  const asked = await settings.match('./update-now');
+  if (!asked) return false;
+  await settings.delete('./update-now');
+  const at = Number(await asked.text());
+  return Date.now() - at >= 0 && Date.now() - at < UPDATE_NOW_FOR;
+}
+
 /** Fills this version's cache, reusing every file an older cache holds with the same content. */
 async function fill() {
   const older = await olderCaches();
+  const asked = await updateNowAsked();
   // The first install always goes ahead; only updates are held back.
-  if (older.length && !(await updatesAllowed())) throw new Error('Updates are held back by the Updates setting');
+  if (older.length && !asked && !(await updatesAllowed())) throw new Error('Updates are held back by the Updates setting');
   const cache = await caches.open(CACHE);
   await Promise.all(
     Object.entries(FILES).map(async ([path, hash]) => {

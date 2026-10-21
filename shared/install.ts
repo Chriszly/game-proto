@@ -25,7 +25,8 @@ function root() {
 /**
  * The service worker can't read the settings, so the Updates setting is also kept where it can:
  * in a cache of its own, which every page refreshes as it opens and the Settings panel on a change.
- * An `update-now` entry there lets one update through whatever the setting says. See `scripts/sw.js`.
+ * An `update-now` entry there (the time it was asked) lets the next update through whatever the
+ * setting says; the worker uses it up and ignores it after a few minutes. See `scripts/sw.js`.
  */
 const UPDATES_CACHE = 'game-proto.updates';
 const updatesKey = (name: string) => new URL(`${root()}${name}`, location.href).href;
@@ -49,7 +50,7 @@ export async function updateNow(): Promise<'updated' | 'current' | 'failed' | 'n
   const registration = await navigator.serviceWorker.getRegistration(root()).catch(() => undefined);
   if (!registration) return 'none';
   const cache = await caches.open(UPDATES_CACHE);
-  await cache.put(updatesKey('update-now'), new Response('1'));
+  await cache.put(updatesKey('update-now'), new Response(String(Date.now())));
   try {
     await registration.update();
     const worker = registration.installing ?? registration.waiting;
@@ -70,7 +71,7 @@ export async function updateNow(): Promise<'updated' | 'current' | 'failed' | 'n
 }
 
 /** Whether the page runs as the installed app rather than in a browser tab. */
-function installed() {
+export function installed() {
   return matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 }
 
@@ -84,10 +85,16 @@ interface InstallPrompt extends Event {
  * install prompt, and on iPhones and iPads the button explains Add to Home Screen. With `always`
  * (a game opened with `?install` from the ⚙ on its hub card) it shows in every browser, and where
  * there is no prompt it says how to install from the browser's menu. In the installed app it stays
- * hidden. The hub has one next to Settings, and every game one on its start and pause screens.
+ * hidden, except with `always`, where it says to open the game in the browser to install it. The hub
+ * has one next to Settings, and every game one on its start and pause screens.
  */
 export function mountInstallButton(button: HTMLButtonElement, always = false) {
-  if (installed()) return;
+  if (installed()) {
+    if (!always) return;
+    button.hidden = false;
+    button.addEventListener('click', () => alert(t('installInsideAppHint')));
+    return;
+  }
   let offer: InstallPrompt | undefined;
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();

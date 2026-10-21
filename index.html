@@ -291,7 +291,7 @@
       import { clearProgress, hasProgress, recentlyPlayed } from './shared/progress.ts';
       import { loadSettings } from './shared/settings.ts';
       import { language, setLanguage, t, translatePage } from './shared/i18n.ts';
-      import { mountInstallButton, onOpenFile, registerServiceWorker } from './shared/install.ts';
+      import { installed, mountInstallButton, onOpenFile, registerServiceWorker } from './shared/install.ts';
       import { ALL, askToExport, askToImport, fileEnding, pickFile } from './shared/saveFile.ts';
 
       const games = document.querySelector('.games');
@@ -412,6 +412,8 @@
       showPlayCounts(document.querySelectorAll('.game a'));
       registerServiceWorker();
       mountInstallButton(document.getElementById('install-app'));
+      // The installed hub's window would open a game inside itself, where it can't be installed.
+      document.getElementById('install-game').hidden = installed();
       // A progress file opened with the installed app imports like the Import buttons: a .gh file
       // every game's progress, a game's own file (.gh and its code, like .ghap) just that game's.
       onOpenFile((file) => {

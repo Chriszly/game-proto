@@ -243,8 +243,8 @@ one game only plays that game. If the workflow itself, the shared code (`shared/
 playthrough runs through) or the build setup (`package.json`, `package-lock.json`, `tsconfig.json`,
 `tsconfig.e2e.json`, `vite.config.ts`, `playwright.config.ts`) changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts`: the hub's own checks
 in one job, and opening each game from its card in one job per game, on a PR only for the games
-whose folder changed (every game when the hub page, its test or `shared/` changes). The
-playthrough is the check that the core loop can still be played, so it has to stay accurate.
+whose folder changed (every game when the hub page, its test or `shared/` changes), reported as
+one check, `Hub open`. The playthrough is the check that the core loop can still be played, so it has to stay accurate.
 
 - **Change the test in the same PR as the game.** A change to gameplay, layout, input or balance
   that the playthrough depends on goes in together with its test update. That includes rules and
