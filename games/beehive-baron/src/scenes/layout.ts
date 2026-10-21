@@ -108,8 +108,11 @@ export function forageSpot(kind: Kind, flower: number) {
 
 /** The chip under the hive that says how much nectar the bees gathered while the page was closed. */
 export const AWAY = { x: 56, y: 384, w: 359, h: 38 };
-/** The swarm chip, in the same place while a crowded hive gets ready to swarm: tap it to catch the swarm. */
-export const SWARM = AWAY;
+/**
+ * The swarm chip while a crowded hive gets ready to swarm (tap it to catch the swarm): over the
+ * meadow's foot, just above the button board, so the market under the hive stays in reach.
+ */
+export const SWARM = { x: 530, y: 250, w: 410, h: 38 };
 /** The hint line for a new player, in the same place (it hides while the chip shows). */
 export const HINT = { x: 233, y: 403 };
 /**

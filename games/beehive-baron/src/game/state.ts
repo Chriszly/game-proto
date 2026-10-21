@@ -184,6 +184,8 @@ export interface Progress {
   meadows: number;
   forage: Kind;
   seasonMs: number;
+  /** Game time until the bees' next winter meal, so a reload can't put it off. */
+  eatIn: number;
   years: number;
   casks: Cask[];
   hives: number;
@@ -213,6 +215,7 @@ export const freshProgress = (): Progress => ({
   meadows: 0,
   forage: 'clover',
   seasonMs: 0,
+  eatIn: WINTER_EAT_MS,
   years: 0,
   casks: [],
   hives: 1,
@@ -274,7 +277,7 @@ export function newHive(progress: Progress): GameState {
     orderIn: ORDER_GAP_MS,
     seasonMs: Math.max(0, Math.min(YEAR_MS - 1, Math.floor(progress.seasonMs) || 0)),
     years: Math.max(0, Math.floor(progress.years) || 0),
-    eatIn: WINTER_EAT_MS,
+    eatIn: Math.max(1, Math.min(WINTER_EAT_MS, Math.floor(progress.eatIn) || WINTER_EAT_MS)),
     casks: progress.casks.map((c) => ({ ...c })),
     hives,
     swarmIn: SWARM_MS,
@@ -313,6 +316,7 @@ export const progressOf = (s: GameState): Progress => ({
   meadows: s.meadows,
   forage: s.forage,
   seasonMs: s.seasonMs,
+  eatIn: s.eatIn,
   years: s.years,
   casks: s.casks.map((c) => ({ ...c })),
   hives: s.hives,

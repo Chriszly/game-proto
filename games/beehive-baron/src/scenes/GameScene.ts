@@ -1356,7 +1356,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The swarm chip under the hive while a crowded hive gets ready to swarm: a bar runs out, and a tap catches the swarm. */
+  /** The swarm chip above the button board while a crowded hive gets ready to swarm: a bar runs out, and a tap catches the swarm. */
   private createSwarm() {
     const text = this.add.text(12, 12, '', textStyle(12.5, '#fff1cc', '900')).setOrigin(0, 0.5);
     const detail = this.add.text(12, 27, '', textStyle(10, '#ffe0b0', '700')).setOrigin(0, 0.5);
@@ -1373,7 +1373,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawSwarm() {
     const s = this.state;
-    const on = crowded(s) && this.awayLeft === 0;
+    const on = crowded(s);
     this.swarm.root.setVisible(on);
     // The queen card goes with the swarm (it leaves, or there are no longer coins to catch it).
     if (this.queenCard.root.visible && (!crowded(s) || s.coins < CATCH_PRICE)) this.queenCard.root.setVisible(false);

@@ -2,14 +2,14 @@ import { CONTRACT_MS } from './contracts';
 import { KINDS, type Kind } from './honey';
 import { CASK_MS, MAX_CASKS, type Cask } from './mead';
 import { MEADOWS } from './meadows';
-import { YEAR_MS } from './seasons';
+import { WINTER_EAT_MS, YEAR_MS } from './seasons';
 import { freshProgress, type Progress } from './state';
 import { FAIR_CLASSES } from './fair';
 import { MAX_HIVES, QUEEN_IDS, type Queen } from './swarm';
 import { UPGRADES, UPGRADE_IDS } from './upgrades';
 
 // The comb, the coins, the jars, the wax, the bees, the upgrades, the meadows unlocked, where the
-// bees forage, the season and years, the casks, the hives and the queen, the fair entries and fairs held,
+// bees forage, the season and years, the time to the bees' next winter meal, the casks, the hives and the queen, the fair entries and fairs held,
 // the tired meadows, the bees lent to the orchard and when the hive was last seen are saved; bees out foraging come home on load, and
 // wasps, the market, village orders, contract offers and a swarm start afresh.
 const KEY = 'beehive-baron-progress';
@@ -38,6 +38,7 @@ export function loadProgress(): Progress {
       meadows: Math.min(MEADOWS.length, num(saved.meadows, fresh.meadows)),
       forage: KINDS.includes(saved.forage as Kind) ? (saved.forage as Kind) : fresh.forage,
       seasonMs: Math.min(YEAR_MS - 1, num(saved.seasonMs, fresh.seasonMs)),
+      eatIn: Math.max(1, Math.min(WINTER_EAT_MS, num(saved.eatIn, fresh.eatIn))),
       years: num(saved.years, fresh.years),
       casks: (Array.isArray(saved.casks) ? saved.casks : []).flatMap((c: Partial<Cask>) =>
         KINDS.includes(c?.kind as Kind) ? [{ kind: c.kind as Kind, agingMs: Math.min(CASK_MS, num(c.agingMs, 0)), value: num(c.value, 0) }] : [],
