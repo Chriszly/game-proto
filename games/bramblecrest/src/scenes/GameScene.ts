@@ -126,6 +126,8 @@ export class GameScene extends Phaser.Scene {
   private rollCd = 0;
   /** The hookvine in flight: going out, coming back, or pulling the knight to a post. */
   hook: { x: number; y: number; dx: number; dy: number; dist: number; phase: 'out' | 'back' | 'pull'; to?: { x: number; y: number } } | null = null;
+  /** A save asked for while the hookvine pulls the knight, written once they land (`persist`). */
+  private saveAfterPull = false;
   private invuln = 0;
   private walkT = 0;
   private pushT = 0;
@@ -199,6 +201,7 @@ export class GameScene extends Phaser.Scene {
     this.route = null;
     this.target = null;
     this.hook = null;
+    this.saveAfterPull = false;
     this.roll = null;
     this.swing = null;
 
@@ -331,6 +334,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The area's song, or the boss loop while a boss is awake. */
+  /**
+   * Saves the game, unless the hookvine is pulling the knight: then the save waits until they land
+   * on the post, so a reload never puts them (and their spawn) over water or a pit.
+   */
+  private persist() {
+    if (this.hook?.phase === 'pull') this.saveAfterPull = true;
+    else save(this.state);
+  }
+
   private playAreaMusic() {
     if (this.boss?.awake) return playMusic(BOSS, 'thornmother');
     if (this.wraith?.awake) return playMusic(BOSS, 'bellwraith');
@@ -634,7 +646,7 @@ export class GameScene extends Phaser.Scene {
         sfx('unlock');
         this.hud.toast(t('unlocked'));
         this.updateDoors();
-        save(s);
+        this.persist();
       } else {
         ui('refuse');
         if (door.kind === 'key') this.hud.toast(t('locked'));
@@ -662,7 +674,7 @@ export class GameScene extends Phaser.Scene {
       seeds: t('foundSeeds', { n: MAX_SEEDS }),
     };
     this.openDialog('', [text[item]]);
-    save(s);
+    this.persist();
   }
 
   private openDialog(speaker: string, lines: string[], then?: Dialog['then']) {
@@ -732,7 +744,7 @@ export class GameScene extends Phaser.Scene {
         this.chapterEnd(2);
         break;
     }
-    save(s);
+    this.persist();
   }
 
   private chapterEnd(chapter: 1 | 2) {
@@ -772,7 +784,7 @@ export class GameScene extends Phaser.Scene {
     this.stoneSprites.delete(id);
     sfx('stone');
     this.hud.toast(t('moonstone', { n: s.moonstones.length, total: stonesToFind(s) }));
-    save(s);
+    this.persist();
   }
 
   // ---------------------------------------------------------------- actions
@@ -839,7 +851,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (this.map.id === 'woods') setFlag(s, 'woods-thorns');
-      save(s);
+      this.persist();
     } else if (Math.random() < 0.2) this.dropHeart((tx + 0.5) * TILE, (ty + 0.5) * TILE);
     else if (s.items.seeds && Math.random() < 0.3) this.dropPod((tx + 0.5) * TILE, (ty + 0.5) * TILE);
   }
@@ -870,7 +882,7 @@ export class GameScene extends Phaser.Scene {
       sfx('chime');
       this.hud.toast(t('bellsRight'));
     });
-    save(s);
+    this.persist();
   }
 
   // ---------------------------------------------------------------- bellseeds
@@ -985,7 +997,7 @@ export class GameScene extends Phaser.Scene {
       paintGround(this, this.map);
       this.ground.setTexture(groundKey(this.map));
     }
-    save(s);
+    this.persist();
   }
 
   private dropPod(x: number, y: number) {
@@ -1036,7 +1048,7 @@ export class GameScene extends Phaser.Scene {
       setFlag(s, plate.flag);
       sfx('chime');
       this.hud.toast(t('barsOpen'));
-      save(s);
+      this.persist();
     }
   }
 
@@ -1238,6 +1250,10 @@ export class GameScene extends Phaser.Scene {
         s.x = h.to.x;
         s.y = h.to.y;
         this.hook = null;
+        if (this.saveAfterPull) {
+          this.saveAfterPull = false;
+          save(s);
+        }
       } else {
         s.x += (dx / dist) * step;
         s.y += (dy / dist) * step;
@@ -1590,7 +1606,7 @@ export class GameScene extends Phaser.Scene {
       t('foundHeart'),
       t('thornmotherWayOut'),
     ]);
-    save(s);
+    this.persist();
   }
 
   private updateBoss(dt: number) {
@@ -1707,7 +1723,7 @@ export class GameScene extends Phaser.Scene {
       t('foundHeart'),
       t('wraithQuiet'),
     ]);
-    save(s);
+    this.persist();
   }
 
   private updateWraith(dt: number) {
