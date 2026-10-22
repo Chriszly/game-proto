@@ -228,7 +228,8 @@ a star map between them.
   and the HUD (planet tag, credits, running power-ups beside the health line, and
   `drawObjectiveHud`: the objective's lines at `OBJECTIVE_HUD` and the edge arrow). `splitHudCamera` keeps the HUD fixed. The panel is rebuilt whenever `panelKey`
   changes.
-- `src/ui/panels.ts`: `Panel` (HUD objects plus tappable `spots`) and `heroSelect` (12 cards from
+- `src/ui/panels.ts`: `Panel` (HUD objects plus tappable `spots`) and the builders, each filling a
+  `Panel` it is handed: `heroSelect` (12 cards from
   `heroCardRect`, keyed by `heroKeyLabel`, and the detail panel `HERO_DETAIL` with the `FIGHT`
   button; a locked hero shows only `rb-locked`), `unlockPanel` (the new hero, with a `continue`
   spot), `levelUp` (also the arena's and an objective's reward, titled by `state.after`; three or four cards whose lines flow down; pool labels
@@ -278,7 +279,8 @@ starts, every time a panel opens or closes (`syncPanel`), every 5 s of run time 
 the screen's shape, `prepare` (the sim's stats and hero flags, so a rest or ration on the panel
 heals the right hero), `savedDeeds` at the deeds already done and `SoundCues.resume`, so nothing
 plays for getting there (a boss alive in the save counts as already heard). If the panels throw on
-the saved run, `create` drops it (`clearRun`) and opens the hero select. The shared start screen
+the saved run, `create` drops it (`clearRun`) and opens the hero select; `syncPanel` keeps each
+`Panel` in `GameScene.panel` before its builder fills it, so a half-built one is destroyed too. The shared start screen
 holds it paused until Start. A hero panel waiting to be shown is not saved (its hero is already
 unlocked).
 
@@ -318,7 +320,8 @@ saves load unchanged.
   as in `nextElite` and `objectiveAt`, is stored as the text `"Infinity"`). `loadRun` lays it over
   `freshState()` (and the hero over `freshHero()`), so fields added since take their fresh values;
   one with an unknown hero, a phase it can't resume in, an unknown planet or `next`, a `stage`
-  outside the crusade, unknown `nodes`, `offers` or `choices`, or a malformed `event` is dropped. Keep
+  outside the crusade, unknown `nodes`, `offers` or `choices`, a malformed `event`, or a list field of the state or
+  hero (`enemies`, `bullets`, `dashHit`, ...) that is not an array is dropped. Keep
   `GameState` plain data (no Maps, Sets, class instances or shared references), or teach
   `saveRun` and `loadRun` the new kind.
 

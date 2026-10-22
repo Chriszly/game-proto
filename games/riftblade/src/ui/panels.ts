@@ -36,7 +36,7 @@ export class Panel {
   /** How far `place` moved the panel from its designed 960x540 layout. */
   private offset = { x: 0, y: 0 };
 
-  constructor(private scene: Phaser.Scene) {}
+  constructor(readonly scene: Phaser.Scene) {}
 
   add<T extends Obj>(o: T, depth = 0): T {
     o.setScrollFactor(0).setDepth(DEPTH.overlay + depth);
@@ -136,8 +136,8 @@ function sideOf(hero: HeroDef) {
  * The hero select screen: twelve small cards (a hero still locked shows only a dark placeholder:
  * no art, name or colour, and never its deed) and the chosen hero's details with the Fight button.
  */
-export function heroSelect(scene: Phaser.Scene, progress: Progress, chosen: HeroId) {
-  const p = new Panel(scene);
+export function heroSelect(p: Panel, progress: Progress, chosen: HeroId) {
+  const scene = p.scene;
   p.dim(0.55);
   p.text(VIEW.w / 2, 12, 'RIFTBLADE', 32, '#9fd8ff', { bold: true, origin: [0.5, 0], glow: true });
   p.text(VIEW.w / 2, 54, t('selectSubtitle'), 14, C.muted, { origin: [0.5, 0] });
@@ -222,8 +222,8 @@ function fit(text: Phaser.GameObjects.Text, width: number) {
  * A hero unlocked mid-run: the game stands still behind this panel, with the hero's art and name,
  * until Continue (a tap, Enter or Space).
  */
-export function unlockPanel(scene: Phaser.Scene, id: HeroId) {
-  const p = new Panel(scene);
+export function unlockPanel(p: Panel, id: HeroId) {
+  const scene = p.scene;
   p.dim(0.75);
   const hero = HEROES[id];
   const sch = schemeOf(id);
@@ -260,8 +260,8 @@ function linkIcon(p: Panel, scene: Phaser.Scene, x: number, y: number, color: st
 }
 
 /** The level-up: three cards (four for Elara Voss) over the paused run. */
-export function levelUp(scene: Phaser.Scene, s: GameState) {
-  const p = new Panel(scene);
+export function levelUp(p: Panel, s: GameState) {
+  const scene = p.scene;
   p.dim(0.6);
   const reward = s.rewardPicks > 0;
   p.text(VIEW.w / 2, 70, reward ? t(s.after === 'run' ? 'objectiveReward' : 'arenaReward') : t('levelTitle', { n: s.level }), 30, reward ? C.elite : C.shard, { bold: true, origin: [0.5, 0], glow: true });
@@ -322,8 +322,7 @@ export function levelUp(scene: Phaser.Scene, s: GameState) {
 }
 
 /** The end of a run: won or fallen, with the numbers and a button to go again. */
-export function endScreen(scene: Phaser.Scene, s: GameState, progress: Progress) {
-  const p = new Panel(scene);
+export function endScreen(p: Panel, s: GameState, progress: Progress) {
   p.dim(0.7);
   const won = s.phase === 'won';
   const color = won ? C.elite : C.danger;
@@ -396,8 +395,8 @@ function nodeIcon(g: Phaser.GameObjects.Graphics, kind: NodeKind, x: number, y: 
 }
 
 /** The star map between planets: two or three nodes to choose from. */
-export function starMap(scene: Phaser.Scene, s: GameState) {
-  const p = new Panel(scene);
+export function starMap(p: Panel, s: GameState) {
+  const scene = p.scene;
   p.dim(0.9);
   stars(p, scene);
   const next = s.next >= 0 ? s.next : chartOptions(s)[0];
@@ -438,8 +437,8 @@ export function starMap(scene: Phaser.Scene, s: GameState) {
  * The space map: the crusade's four jumps as columns, the route flown so far lit, and the planets of
  * the next jump as cards to tap (their faction shows once the save has charted them).
  */
-export function spaceMap(scene: Phaser.Scene, s: GameState, charted: readonly string[]) {
-  const p = new Panel(scene);
+export function spaceMap(p: Panel, s: GameState, charted: readonly string[]) {
+  const scene = p.scene;
   p.dim(0.92);
   stars(p, scene);
   const options = chartOptions(s);
@@ -507,8 +506,8 @@ function button(p: Panel, r: Rect, id: string, label: string, color: string, ena
 }
 
 /** The trader: three offers bought with credits, a reroll and the way out. */
-export function trader(scene: Phaser.Scene, s: GameState) {
-  const p = new Panel(scene);
+export function trader(p: Panel, s: GameState) {
+  const scene = p.scene;
   p.dim(0.85);
   stars(p, scene);
   p.text(VIEW.w / 2, 40, t('traderTitle'), 30, NODE_INFO.trader.color, { bold: true, origin: [0.5, 0], glow: true });
@@ -544,8 +543,8 @@ export function trader(scene: Phaser.Scene, s: GameState) {
 }
 
 /** An event: what happened and two ways to answer it. */
-export function eventPanel(scene: Phaser.Scene, s: GameState) {
-  const p = new Panel(scene);
+export function eventPanel(p: Panel, s: GameState) {
+  const scene = p.scene;
   p.dim(0.85);
   stars(p, scene);
   const ev = s.event!;
