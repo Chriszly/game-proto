@@ -123,7 +123,7 @@ function scene(page: Page) {
 test('plays the first round', async ({ page }, testInfo) => {
   // Seeded like the other games' tests, so the map and the AI repeat from run to run.
   await page.addInitScript(() => {
-    let seed = 1234567;
+    let seed = 3456789;
     Math.random = () => {
       seed = (seed + 0x6d2b79f5) | 0;
       let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);

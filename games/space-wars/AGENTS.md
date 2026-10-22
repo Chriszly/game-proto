@@ -111,7 +111,10 @@ Implemented today:
 - Fog of war (`game/fog.ts`, stamped in `World.updateFog`): a 10 px grid of `explored` and
   `visible` cells for the player only. Ships see `sight` times 1.2 (scouts 1.6), harvesters 80 px,
   the hub 175 px and other buildings 110 px past their radius. Rival units show only in sight
-  (`seesUnit`); rival buildings once seen stay drawn (`known`, `knowsBuilding`); crystal nodes,
+  (`seesUnit`); rival buildings once seen stay drawn as last seen (`known`, a `SeenBuilding` per id
+  with its faction, type, place and whether it was finished, refreshed while in sight; the scene
+  draws fogged ones and their minimap squares from it, so their fall, completion or change of owner
+  shows only once their spot is in sight again, when a fallen one is forgotten); crystal nodes,
   the beacon, shards, beams and fireballs show only where explored or in sight; the player can only
   build on explored ground. `entityAt` skips what the player can't see. The AI is not fogged.
 - Expansions (`Build` = a building role or `'expansion'`, `expansionStats`): an outpost is a
@@ -167,7 +170,8 @@ Implemented today:
   `buildingStats`, `harvest` and the repair rule multiply in; then the board opens: `contract.goal`
   is null and `offer` holds two goals from `CONTRACT_POOL`, drawn by `boardOffer` from those open at
   that step (`from`), not `taken` yet and open in this battle (`contractOpen`: a living Veil rival
-  for `lattice`, a far field for `convoy`, fewer than two derelicts held for `derelicts`). The second
+  for `lattice`, a far field for `convoy`, fewer than two derelicts held for `derelicts`, a rival not under truce and not held by tribute for
+  `survive`; a `survive` card taken once every rival is at peace or paid off fails at once, `noRaiders`). The second
   board always offers `kills` first (the playthrough takes it). `World.pickContract(goal)` takes a
   card; after `BOARD_MS` (15 s) the first is taken. The draw uses the world's own `rng`
   (`localRandom` seeded from the player's start), never `Math.random`, so the battle's randomness is
@@ -322,7 +326,7 @@ File map (`src/`):
   `TRUCE_TRIBUTE`, `OFFER_MS`, `BRIBE_COST`, `BRIBE_MS`), `RALLY_SPOTS`, the flagship, convoy and pact constants
   (`FLAGSHIP_COST`, `FLAGSHIP_MS`, `FLAGSHIP_HP`, `FLAGSHIP_DAMAGE`, `FLAGSHIP_SPEED`, `FLAGSHIP_RANGE`,
   `CONVOY_SIZE`, `PACT_MS`, `PACT_WAVE_MS`), `flagshipStats` and the types `Beacon`, `Shard`, `Mine`,
-  `Pop`, `Build`, `ContractState`, `Pact`, `WorldEvent`, `Struck`, `Cue`, `Derelict`. Fields `fog`, `known`, `mines`,
+  `Pop`, `Build`, `ContractState`, `Pact`, `WorldEvent`, `Struck`, `Cue`, `Derelict`, `SeenBuilding`. Fields `fog`, `known`, `mines`,
   `derelicts`, `contract`, `convoyTo`, `pact`, `sector`. Methods the scene and test use: `update(dt)`, `build`, `train`, `research`,
   `command`, `fallBack`, `setRally`, `clearRally`, `fleet`, `pickContract`, `currentContract`, `buildFlagship`, `abilityOf`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
   `selectable`, `entityAt`, `derelictAt`, `placementProblem`, `count`, `hubOf`, `hubsOf`,
@@ -333,7 +337,8 @@ File map (`src/`):
   `pickCards` (the picker's card rectangles, in view pixels), `rivalsOpen` and `rivalButtons` (the
   rivals panel and its buttons as last drawn), `boardCards` and `keepCards` (`GoalCard`s: the
   contract board's and the victory's perk cards as last drawn), `campaign`, `sector` and
-  `sectorNodes`. The board, pact banner, convoy label, perk cards and sector strip texts, and the
+  `sectorNodes`. The board, pact banner, convoy label, derelict labels (one per `DERELICT_KINDS`,
+  placed by `drawDerelicts`), perk cards and sector strip texts, and the
   Flagship and Rally buttons' captions and the minimap, are made in `create` with `Math.random` swapped for a `localRandom`:
   every Phaser text draws its texture key from `Math.random`, so new texts made the ordinary way
   would shift the seeded playthrough's map and AI. `update(time)` steps the world by the frame
