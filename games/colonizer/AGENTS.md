@@ -230,7 +230,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
   player's sight, and `entityAt` finds what is under a point (a mouse click prefers
   the player's own unit over an enemy standing on it): a unit within 0.6 tiles of its feet or on its
-  figure up to `figureTall` above them (except over a node or farm, so gather orders still reach it),
+  figure up to `figureTall` above them (except over a node or farm, so gather orders still reach it,
+  and, with its `orders` flag, over any building's footprint, which right clicks, order taps, rally
+  flags and `sendToRally` pass so an order on a site or enemy building with units in front reaches it),
   then a building, its roof `BUILDING_TOP` (in `data.ts`) above the footprint included, then a node.
 - `src/game/planner.ts`: `think(state, dt, side = AI)` runs the AI for a side every 4 s of game time (`THINK_MS`). It issues
   the same commands a player would, through the sim's functions, and at most `ACTIONS_PER_THINK`
