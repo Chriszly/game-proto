@@ -228,7 +228,10 @@ below keep the shared corner buttons, about 12 to 114 by 498 to 528 CSS pixels i
 window, off the board's bottom row, whose cells end at y 512): `GameScene.create` takes `viewFrame(this)` as `frame`
 (moved by `clearCorner` when the buttons, which keep their CSS size, would still cover the board's
 bottom-left cell, as on a phone on its side: first up, as far as the view's top, then right, as far
-as its right edge; `cornerSize` measures the buttons in view pixels) and scrolls the camera
+as its right edge; `cornerSize` measures the buttons in view pixels; `relayout`, on the scale
+manager's `resize` event, places the frame again when the window is resized, a phone that started
+upright is turned or full screen changes, and moves the camera, the HUD, the `viewObjects` and the
+button rectangles to match, with `bakeTable` painting the table again for the new offset) and scrolls the camera
 to `-frame.x, -frame.y`, so the board, panel, banner, golem menu and the overlays (centred on
 `VIEW.w / 2`) sit in the middle of the view, and world coordinates stay the designed ones. Around
 them, the `table` image (at `-frame.x, -frame.y`, the view's size from `viewSize`) fills the view

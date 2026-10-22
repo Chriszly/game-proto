@@ -7,7 +7,7 @@ import { C, E, PI, Pp, R, addSharp, bake, blur, ctx, drop, ellipse, flower, gole
 // art units (2 per view pixel) around their anchor.
 //
 // table           the studio table over the whole view, with the HUD strip and its tags across its
-//                 top; baked once at the view's size (see `bakeTable`)
+//                 top; baked at the view's size, again when the frame moves (see `bakeTable`)
 // bg-<n>          garden n's static scene over the table, in the designed 960x540 frame: the
 //                 garden slab with its pressed paths and soil beds, the side panel and the wave
 //                 preview's dark pad (transparent where the table shows)
@@ -50,11 +50,20 @@ export function bakeGarden(scene: Phaser.Scene, n: number) {
   bake(scene, gardenBg(n), 960, 540, () => paintBackground(GARDENS[n]));
 }
 
+/** The view size and frame offset the table was last painted for. */
+let tableFor = '';
+
 /**
  * Bakes the table and the HUD strip for a view of `w` x `h` with the designed frame at (fx, fy),
- * and the edge that hides pests coming in, unless they are baked already (the view never changes).
+ * and the edge that hides pests coming in, unless they are baked already for that view and frame
+ * (the view never changes, but the frame moves off the corner buttons; see `GameScene.relayout`).
  */
 export function bakeTable(scene: Phaser.Scene, w: number, h: number, fx: number, fy: number) {
+  const wanted = `${w}x${h}+${fx},${fy}`;
+  if (wanted !== tableFor) {
+    for (const key of ['table', 'edge']) if (scene.textures.exists(key)) scene.textures.remove(key);
+    tableFor = wanted;
+  }
   const table = bake(scene, 'table', w, h, () => paintTable(w, h, fx, fy));
   if (table) {
     const edge = document.createElement('canvas');
