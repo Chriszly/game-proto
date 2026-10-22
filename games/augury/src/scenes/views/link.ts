@@ -57,6 +57,9 @@ export const linkView: PuzzleView<LinkState> = {
     p.g.lineStyle(1.5, C.gold, 1).strokeRect(x - 1, y - 1, n * cell + 2, n * cell + 2);
   },
   down(ctx, x, y) {
+    // A drag that solved the last puzzle never reached `up`, so its flags are cleared here.
+    moved = false;
+    start = '';
     const cell = cellAt(ctx, x, y);
     if (cell < 0) return;
     const k = endAt(ctx.s, cell) >= 0 ? endAt(ctx.s, cell) : pathAt(ctx.s, cell);

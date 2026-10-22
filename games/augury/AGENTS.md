@@ -76,7 +76,7 @@ File map (`src/`):
   `skip` in Practice deals a new puzzle of the same kind and level, with nothing recorded. `quit`
   (the Leave button) ends a run that is not over through `finish`, so its bests, the daily five's
   score and the run count; Practice records nothing. `end` also writes the daily five's score so
-  far, so a reload keeps it. A draft
+  far and raises its best, and `startRun` counts the daily five's run, so a reload keeps them. A draft
   deals at most `DRAFT_MAX` (3) cards, the deal layout's slots, so Crystal Ball is offered once;
   Blitz's queue is levelled again after every puzzle, so "Up next" shows the level that will be
   dealt, and Blitz ends where its clock runs out, without a result for the puzzle it cut off.
@@ -141,8 +141,8 @@ State model (`Run`): `mode`, `phase`, `hearts`, `maxHearts`, `hints`, `score`, `
 `draftOffer`, `player`, `totals`, `duelSolved`, `day`, `progress`, `newBest` and `events`.
 
 Persistence: one `localStorage` key, `augury-progress`, holding `Progress`. It is written when a run
-starts (the daily five counts as played from its first card), after every puzzle (with the daily
-five's score so far), when a run ends and when leaving to the menu, which ends the run and records
+starts (the daily five counts as played, and as a run, from its first card), after every puzzle
+(with the daily five's score so far and its best), when a run ends and when leaving to the menu, which ends the run and records
 it (`quit`). `loadProgress` keeps only known kinds and whole, non-negative numbers.
 
 ### Hub settings
@@ -230,5 +230,7 @@ cell is picked, the daily five played today), and a Hint tap that finds nothing 
   states plain data (no `Set`, `Map` or class instances).
 - Unjam's drag and pick (`drag`, `picked`) live in its view module; `resetUnjam` clears them when a
   puzzle is dealt.
+- Path Link's drag flags (`moved`, `start`) live in its view module; `down` clears them, since a
+  drag that solves the puzzle never reaches `up`.
 - The practice run has `hints: Infinity`, which JSON turns into `null` for the test.
 - Never use a red cross in any art (root AGENTS.md); the Calc Cages icon's plus is violet.

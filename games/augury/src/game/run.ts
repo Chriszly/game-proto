@@ -178,8 +178,9 @@ export function startRun(mode: Mode, progress: Progress, opts: { kind?: KindId; 
       const rand = seeded(run.day);
       const kinds = shuffle(rand, [...KINDS]).slice(0, DAILY_LEVELS.length);
       run.queue = kinds.map((kind, i) => ({ kind, level: DAILY_LEVELS[i], seed: Math.floor(rand() * 2 ** 31) }));
-      // One try a day: the day counts as played from its first card.
+      // One try a day: the day, and the run, count as played from its first card.
       progress.daily = { day: run.day, score: 0 };
+      progress.runs++;
       deal(run, run.queue[0]);
       break;
     }
@@ -329,8 +330,12 @@ function end(run: Run, reason: EndReason) {
   run.last = result;
   recordResult(run.progress, cur.card.kind, cur.card.level, solved, cur.elapsedMs, cur.hintsUsed);
   run.score += points;
-  // The day's score so far, so a reload or a crash keeps the points of the cards played.
-  if (run.mode === 'daily') run.progress.daily = { day: run.day, score: run.score };
+  // The day's score so far, and the daily best, so a reload or a crash keeps the points of the
+  // cards played.
+  if (run.mode === 'daily') {
+    run.progress.daily = { day: run.day, score: run.score };
+    if (run.score > run.progress.best.daily) (run.progress.best.daily = run.score), (run.newBest = true);
+  }
   if (solved) {
     run.solved++;
     run.streak++;
@@ -410,11 +415,9 @@ function finish(run: Run) {
     if (run.score > best[mode]) (best[mode] = run.score), (run.newBest = true);
   }
   if (mode === 'draft' && run.solved > best.draft) (best.draft = run.solved), (run.newBest = true);
-  if (mode === 'daily') {
-    run.progress.daily = { day: run.day, score: run.score };
-    if (run.score > best.daily) (best.daily = run.score), (run.newBest = true);
-  }
-  run.progress.runs++;
+  // The daily five records its score and best after every card (`end`) and counts its run when it
+  // starts, so a reload keeps them.
+  if (mode !== 'daily') run.progress.runs++;
   run.events.push({ type: 'over' });
 }
 
