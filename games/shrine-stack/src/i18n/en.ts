@@ -81,7 +81,7 @@ const en = {
   trial: 'Trial: {trial} {done}/{of}',
   trialFailed: 'Failed: {trial}',
   trialsFrom: 'Trials from tier {tier}',
-  curse: 'Curse: {curse} (x{mult})',
+  curse: 'Curse: {curse} x{mult}',
   materialTier: '{material} tier',
   patron: 'Patron: {patron}',
   choosePatron: 'Choose a patron',

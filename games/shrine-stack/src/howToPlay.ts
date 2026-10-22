@@ -73,7 +73,7 @@ const de: HowToPlay = {
     { input: 'Würfeln', action: '5 Gunst für neue Segen ausgeben' },
     {
       input: 'Laden-Tasten',
-      action: 'Zwischen Ebenen: Langsamen Fall, Breiteren Stein oder Gnade des Steinmetzes mit Gunst kaufen',
+      action: 'Zwischen Ebenen: Langsamen Fall, Breiteren Stein oder Steinmetzgnade mit Gunst kaufen',
     },
     {
       input: 'Weiterbauen',

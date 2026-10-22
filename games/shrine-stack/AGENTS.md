@@ -157,7 +157,7 @@ File map (`src/`):
   (the three on buttons) and `PATRONS`/`PatronId`/`PATRON_INFO` (name, boon, bane, colour). Every
   name and text is a `TextKey` of `i18n/en.ts`, which the scene shows with `t`.
 - `game/save.ts`: `loadBest` and `saveBest`.
-- `scenes/GameScene.ts`: everything drawn, plus `drawStone`, `materialColor`, `tierColor`,
+- `scenes/GameScene.ts`: everything drawn, plus `setFitted`, `drawStone`, `materialColor`, `tierColor`,
   `blend`, `shade`, `seeded`, `pin` and `place` helpers and the `UiPart` type.
 - `scenes/layout.ts`: `VIEW`, `PLINTH_Y`, `TOP_SCREEN_Y`, `PANEL`, `CARDS`, `CARDS_FOUR`,
   `PATRON_TITLE`, `PATRON_CARDS`, `BUTTON`, `OFFER_TITLE`, `REROLL`, `MATERIAL_TITLE`,
@@ -177,7 +177,8 @@ How it runs:
   the temple's top at `TOP_SCREEN_Y`.
 - Time: `GameScene.update(time)` takes `dt` from the frame timestamp, clamped to `MAX_STEP_MS`,
   and calls `tick(state, dt)`; the scene's `resume` and `wake` events clear `lastFrame`, so the
-  first frame after the shared pause steps nothing. `tick` moves the swinging stone at `swingSpeed` (bouncing at
+  first frame after the shared pause steps nothing (their listeners come off on `shutdown`, so
+  "Build again" doesn't pile them up). `tick` moves the swinging stone at `swingSpeed` (bouncing at
   `TOWER_X ± SWING`) or makes the falling one fall under `GRAVITY`, pushed by `wind`, until it
   reaches the temple's top, then `land` runs.
 - `land` decides perfect (within `perfectWindow`, and only when the overlap would also reach
@@ -238,6 +239,10 @@ How it runs:
   when its width, tier, kind or material changes; the drop guide, gust streaks and the lean meter
   (`drawLean`) are redrawn every frame. The break layer is rebuilt when the offer changes (`offerKey`). The crown
   is one `Graphics`, destroyed by "Keep building". Panel texts are set every frame (Phaser skips unchanged text).
+  Texts whose length depends on the language (the panel's patron, curse and blessings lines, the
+  blessing cards' names, the shop's labels and the curse toggle) go through `setFitted`, which
+  shrinks the font (down to `MIN_FONT`) until the text fits its box (`PANEL_TEXT_W` in the panel);
+  with a curse in force the panel shows the tier's material by name after it on the same line.
 
 State model (`GameState`): `phase` (`patron`, `swinging`, `falling`, `blessing`, `over`,
 `crowned`), `stones` (bottom first), `moving`, `tier` and `inTier`, `wobbly`, `tiersBuilt`,
