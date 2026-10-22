@@ -82,7 +82,8 @@ seconds without a tap.
   break ends an undecided omen is cleared (refused). `omenEffects(omen)` gives what an accepted one
   changes: `sight` (Night: `sightOf` caps it at `NIGHT_X`, so `targets` only takes foes left of
   it, and with it the arrows (and their turn to a new foe when theirs dies, they pierce one or
-  they fly on with none, every step until one is seen), lightning's leaps, fireballs, the mage and
+  they fly on with none, every step until one is seen; an arrow that has pierced a foe only
+  turns to one ahead of it, never back), lightning's leaps, fireballs, the mage and
   `crowdSpot`; `moveMissiles` only lets an arrow, fireball or magic bolt strike a foe left of
   `sightOf`, so a stray one flies on through the dark; `loose` and `strew` clamp to it through
   `fieldSpot`, so no volley or patch lands in the dark; the scene hides foes right of it, darkens

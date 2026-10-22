@@ -273,9 +273,13 @@ function moveMissiles(state: GameState, s: Stats, dt: number) {
     const speed = m.kind === 'arrow' ? ARROW_SPEED : m.kind === 'magic' ? MAGIC_SPEED : FIREBALL_SPEED;
     let target = state.enemies.find((e) => e.id === m.target);
     // A foe that fell before the arrow got there, or none was left to turn to: turn to the nearest
-    // seen one not yet hit.
+    // seen one not yet hit. An arrow that has pierced a foe never turns back: it only takes one ahead.
     if (!target) {
-      target = nearest(targets(state, 'nearest').filter((e) => !m.hit.includes(e.id)), m.x, m.y);
+      target = nearest(
+        targets(state, 'nearest').filter((e) => !m.hit.includes(e.id) && (m.hit.length === 0 || e.x > m.x - 20)),
+        m.x,
+        m.y,
+      );
       m.target = target?.id ?? null;
     }
     if (target) {
