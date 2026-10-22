@@ -930,12 +930,13 @@ export function tick(s: GameState, dt: number) {
       if (m.lightingMs >= mothLightMs(s, m)) {
         const lantern = s.lanterns[m.target];
         const fill = mothFill(s, m, lantern);
-        // A refill that adds oil draws a fill from the cask; with the cask dry, or a moth sent only
-        // to shield (no spare fill then, `m.fill`) finding none spare now, it leaves the lantern as
-        // it is. One that would add none (a guard tap on a full lantern) never lowers it.
+        // A refill that adds oil draws a fill from the cask, but only one no other moth has
+        // reserved; with the cask dry or every fill spoken for (say a moth sent only to shield, or
+        // one whose own reservation only appeared as its lantern burned down on the way), it leaves
+        // the lantern as it is. One that would add none (a guard tap on a full lantern) never lowers it.
         const adds = !lantern.lit || fill > lantern.oilMs;
         const refill = lantern.lit && adds && usesCask(s);
-        if (refill && (s.cask <= 0 || !(m.fill || caskSpare(s, m)))) {
+        if (refill && (s.cask <= 0 || !caskSpare(s, m))) {
           s.events.push({ type: 'dry', lantern: m.target });
           m.closeCall = false;
         } else {

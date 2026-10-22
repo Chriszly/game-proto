@@ -114,13 +114,14 @@ Implemented today:
   `caskSpare(s, except?)` is false once every fill is spoken for by moths already flying to or
   refilling lit lanterns whose fill would add oil (`drawsFill`: the moth's `fill` is set and the
   fill adds oil; a guard tap on a full lantern reserves none). `dispatch` sets `fill` to
-  `caskSpare` as the moth leaves, so a moth sent with every fill spoken for never takes one
-  reserved for another. `mayTap(s, i, except?)` allows a tap on a dark lantern, on a lit one while
+  `caskSpare` as the moth leaves, and a refill draws a fill only while `caskSpare(s, m)` (not
+  counting itself) still holds when it lands, so a moth never takes a fill reserved for another,
+  even one whose own reservation only appeared mid-flight as its lantern burned down. `mayTap(s, i, except?)` allows a tap on a dark lantern, on a lit one while
   `caskSpare`, and on a lit one that is `threatened` (a gust or the owl coming for it), so it can
   always be shielded (a bat is chased instead): `send` refuses the rest, a queued refill is
   dropped (in `tick` and a firefly's `nextHop`) once `mayTap` is false, and the scene hides the
   "Save it" tag and rings when `caskSpare` is false. A moth sent to shield a threatened lantern
-  that arrives to find the cask dry (or, sent without `fill`, no fill spare) pushes a `dry` event
+  that arrives to find the cask dry (or every fill reserved by other moths) pushes a `dry` event
   (its `clunk`, no `strike` or buzz) and leaves the lantern as it is (no close call), then guards
   it. `topUp(s)` in the night phase adds a fill for
   `CASK_COST` (3); the Cask card calls it. The HUD shows the cask at `CASK_HUD` (grey before night
