@@ -316,8 +316,9 @@ State model (`GameState` in `src/game/state.ts`):
   `claimed` while a moth is on its way to it, lighting it or guarding it.
 - `moths[i]` has a `kind`, a position, a `task` (`idle`, `out`, `lighting`, `guard`, `chase`,
   `home`, `rest`), its `target` lantern, `lightingMs`, `closeCall` (set when it arrived at a nearly
-  dry lantern), `bat` (the id it chases), `hops` (lanterns left on a firefly's flight), `fill`
-  (sent with a spare cask fill), `flights` (since it last rested) and `restMs`.
+  dry lantern), `bat` (the id it chases), `hops` (lanterns left on a firefly's flight),
+  `reserved` (left with a cask fill reserved: a spare fill and a fill that adds oil to its lit
+  lantern, settled in `dispatch`), `flights` (since it last rested) and `restMs`.
 - `kind` and `nextKind` are this night's and the next night's kind. `batTimes` are the bats still
   to come, `bats` those on screen (`id`, position, `target`, `task` `fly` or `flee`), `nextBat`
   the next id and `chased` the bats chased off this dusk. `festival` is set once the Great
