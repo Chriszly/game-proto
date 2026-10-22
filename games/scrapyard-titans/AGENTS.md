@@ -43,7 +43,8 @@ Implemented today:
   `FIGHT_LIMIT_S`. The player's fight is played back step by step; every other pairing runs
   `runToEnd` at once.
 - Pairings: `startFight` pairs the living seats at random, avoiding last round's opponent; with an
-  odd count one seat fights a ghost copy of another board. Rivals call a taunt bubble at the start.
+  odd count one seat fights a ghost copy of another board. Rivals call a taunt bubble at the start
+  (`drawCommanders` hides it once Play again clears the match).
 - Draft rounds (`startDraft`, `draftPick`): one robot with a part or item per living seat plus
   one, on a ring; lowest health picks first, `DRAFT_PICK_S` each.
 - Commander avatars walk the board's near edge (`COMMANDER_HOME`) and collect monster drops (orbs),

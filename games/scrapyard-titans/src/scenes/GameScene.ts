@@ -991,7 +991,11 @@ export class GameScene extends Phaser.Scene {
     this.avatar.setVisible(!!m && m.phase !== 'won' && m.phase !== 'lost');
     const walkDt = this.t - this.avatarT;
     this.avatarT = this.t;
-    if (!m) return;
+    // Play again clears the match while a rival's taunt may still be showing.
+    if (!m) {
+      this.bubble.setVisible(false);
+      return;
+    }
     // Walk to the oldest orb, pick it up, then back home.
     const orb = this.orbs[0];
     const goal = orb ? { x: orb.x, y: orb.y + 6 } : COMMANDER_HOME;
