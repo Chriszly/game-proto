@@ -199,23 +199,25 @@ export const CASK_COST = 3;
 export const usesCask = (s: GameState) => s.night >= CASK_NIGHT;
 /**
  * True when a refill can be sent now: before CASK_NIGHT always, after it while the cask holds a
- * fill that no moth (other than `except`) already flying to or refilling a lit lantern will draw.
- * A moth whose fill would add no oil (a guard tap on a full lantern) draws none, so it reserves none.
+ * fill that no moth (other than `except`) already flying to or refilling a lit lantern has
+ * reserved. A moth reserves a fill only as it leaves (`reserved`, set in `dispatch`), so no
+ * reservation appears mid-flight; one whose lantern goes dark on the way lights it free and gives
+ * its reservation back.
  */
 export function caskSpare(s: GameState, except?: Moth) {
   if (!usesCask(s)) return true;
-  const reserved = s.moths.filter((m) => m !== except && (m.task === 'out' || m.task === 'lighting') && drawsFill(s, m)).length;
+  const reserved = s.moths.filter((m) => m !== except && m.reserved && (m.task === 'out' || m.task === 'lighting') && drawsFill(s, m)).length;
   return s.cask - reserved > 0;
 }
 /** The oil a fill by moth `m` gives lantern `l`, in milliseconds of burning. */
 const mothFill = (s: GameState, m: Moth, l: Lantern) => stats(s).burnMs * MOTH_KINDS[m.kind].oil * LANTERN_KINDS[l.kind].oil;
 /**
- * True when moth `m`, on its way to its lantern, will draw a fill from the cask: it was sent with
- * a spare fill (`m.fill`), the lantern is lit and the fill adds oil.
+ * True when a refill by moth `m` of its lantern would draw a fill from the cask: the lantern is lit
+ * and the fill adds oil (a guard tap on a full lantern adds none).
  */
 function drawsFill(s: GameState, m: Moth) {
   const l = s.lanterns[m.target];
-  return m.fill && !!l?.lit && mothFill(s, m, l) > l.oilMs;
+  return !!l?.lit && mothFill(s, m, l) > l.oilMs;
 }
 /**
  * True when a tap on lantern `i` may go: a dark lantern always, a lit one while the cask has a
@@ -362,10 +364,10 @@ export interface Moth {
   /** More lanterns it lights on this flight before flying home: a firefly's second. */
   hops: number;
   /**
-   * True when it was sent with a spare fill in the cask, so a refill it makes may draw one; false
-   * for a moth sent only to shield a lantern with every fill spoken for.
+   * True when it left with a cask fill reserved for its refill: the cask had a spare fill and its
+   * fill would add oil to its lit lantern then. Settled in `dispatch` and never changed mid-flight.
    */
-  fill: boolean;
+  reserved: boolean;
   /** Flights out of the jar since it last rested this dusk, and the rest left while tired. */
   flights: number;
   restMs: number;
@@ -555,7 +557,7 @@ function makeMoths(s: GameState) {
     closeCall: false,
     bat: -1,
     hops: 0,
-    fill: false,
+    reserved: false,
     flights: 0,
     restMs: 0,
   }));
@@ -616,10 +618,10 @@ export function newGame(best = 0, bestPeril = 1): GameState {
 function dispatch(s: GameState, moth: Moth, i: number, hops = moth.kind === 'firefly' ? FIREFLY_LANTERNS - 1 : 0) {
   // Leaving the jar is a flight; a firefly flying on from its first lantern is the same one.
   if (moth.task === 'idle') moth.flights++;
-  // Whether its refill may draw on the cask is settled now, so it never takes a fill reserved for another moth.
-  moth.fill = caskSpare(s, moth);
   moth.task = 'out';
   moth.target = i;
+  // Whether it reserves a cask fill is settled now, so no reservation appears mid-flight.
+  moth.reserved = caskSpare(s, moth) && drawsFill(s, moth);
   moth.hops = hops;
   s.lanterns[i].claimed = true;
 }
@@ -930,13 +932,13 @@ export function tick(s: GameState, dt: number) {
       if (m.lightingMs >= mothLightMs(s, m)) {
         const lantern = s.lanterns[m.target];
         const fill = mothFill(s, m, lantern);
-        // A refill that adds oil draws a fill from the cask, but only one no other moth has
-        // reserved; with the cask dry or every fill spoken for (say a moth sent only to shield, or
-        // one whose own reservation only appeared as its lantern burned down on the way), it leaves
-        // the lantern as it is. One that would add none (a guard tap on a full lantern) never lowers it.
+        // A refill that adds oil draws a fill from the cask: the one it reserved as it left, or, for
+        // a moth that left with none (sent only to shield, or its lantern burned down below its
+        // fill on the way), only a fill no other moth has reserved. With none it leaves the lantern
+        // as it is. One that would add none (a guard tap on a full lantern) never lowers it.
         const adds = !lantern.lit || fill > lantern.oilMs;
         const refill = lantern.lit && adds && usesCask(s);
-        if (refill && (s.cask <= 0 || !caskSpare(s, m))) {
+        if (refill && (s.cask <= 0 || (!m.reserved && !caskSpare(s, m)))) {
           s.events.push({ type: 'dry', lantern: m.target });
           m.closeCall = false;
         } else {

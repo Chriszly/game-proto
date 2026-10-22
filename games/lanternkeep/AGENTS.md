@@ -111,12 +111,14 @@ Implemented today:
   and counts `callsKept`; running out pushes a `call` event with `kept` false and costs nothing.
 - Oil cask (LK9): `state.cask` fills, `CASK_START` (3) to `CASK_MAX` (6). From `CASK_NIGHT` (3)
   (`usesCask(s)`) a refill draws one fill when the moth finishes lighting a lit lantern.
-  `caskSpare(s, except?)` is false once every fill is spoken for by moths already flying to or
-  refilling lit lanterns whose fill would add oil (`drawsFill`: the moth's `fill` is set and the
-  fill adds oil; a guard tap on a full lantern reserves none). `dispatch` sets `fill` to
-  `caskSpare` as the moth leaves, and a refill draws a fill only while `caskSpare(s, m)` (not
-  counting itself) still holds when it lands, so a moth never takes a fill reserved for another,
-  even one whose own reservation only appeared mid-flight as its lantern burned down. `mayTap(s, i, except?)` allows a tap on a dark lantern, on a lit one while
+  `caskSpare(s, except?)` is false once every fill is reserved by moths flying to or refilling
+  lit lanterns. A moth reserves a fill only as it leaves: `dispatch` sets the moth's `reserved` to
+  `caskSpare && drawsFill` (its lantern is lit and its fill would add oil; a guard tap on a full
+  lantern reserves none), and it never changes mid-flight, so no reservation appears on the way
+  (a reserved moth whose lantern goes dark lights it free and gives the fill back). On landing a
+  `reserved` moth draws its fill; one without (sent only to shield, or whose lantern burned down
+  below its fill on the way) draws one only while `caskSpare(s, m)` holds, so a moth never takes a
+  fill reserved for another, whichever lands first. `mayTap(s, i, except?)` allows a tap on a dark lantern, on a lit one while
   `caskSpare`, and on a lit one that is `threatened` (a gust or the owl coming for it), so it can
   always be shielded (a bat is chased instead): `send` refuses the rest, a queued refill is
   dropped (in `tick` and a firefly's `nextHop`) once `mayTap` is false, and the scene hides the
