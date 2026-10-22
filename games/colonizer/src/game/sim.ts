@@ -487,8 +487,10 @@ export function footprintOf(s: GameState, id: number) {
  * also gives way to any building's footprint, so an order on a site, an enemy building or a camp
  * with its own units in front still reaches it, while an enemy standing in front of a building (a
  * raider at the player's house) still catches the click on its body. With `fog` (the player's
- * clicks and taps) a unit of another side that the player can't see doesn't count, so a hidden
- * enemy neither takes the click nor gives itself away.
+ * clicks and taps) a unit of another side that the player can't see doesn't count, nor does a
+ * building of another side or a node on land the player has never explored (the test the scene's
+ * sprites use, `seenBuilding` and `explored`), so a hidden enemy neither takes the click nor gives
+ * itself away.
  */
 export function entityAt(
   s: GameState,
@@ -499,9 +501,10 @@ export function entityAt(
   fog = false,
 ): { kind: 'unit' | 'building' | 'node'; id: number; owner: number } | null {
   const within = (tx: number, ty: number, w: number, h: number) => x >= tx && y >= ty && x < tx + w && y < ty + h;
-  const node = [...s.nodes.values()].find((n) => within(n.tx, n.ty, n.w, n.h));
-  const onFarm = [...s.buildings.values()].some((b) => BUILDINGS[b.type].farm && within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h));
-  const onBuilding = orders !== undefined && [...s.buildings.values()].some((b) => within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h));
+  const node = [...s.nodes.values()].find((n) => within(n.tx, n.ty, n.w, n.h) && (!fog || explored(s, n.tx, n.ty)));
+  const buildings = [...s.buildings.values()].filter((b) => !fog || seenBuilding(s, b));
+  const onFarm = buildings.some((b) => BUILDINGS[b.type].farm && within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h));
+  const onBuilding = orders !== undefined && buildings.some((b) => within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h));
   let best: { kind: 'unit' | 'building' | 'node'; id: number; owner: number; d: number } | null = null;
   for (const u of s.units.values()) {
     if (fog && u.owner !== PLAYER && !visible(s, Math.floor(u.x), Math.floor(u.y))) continue;
@@ -517,7 +520,7 @@ export function entityAt(
   }
   if (best) return best;
   let roofOf: Building | undefined;
-  for (const b of s.buildings.values()) {
+  for (const b of buildings) {
     const def = BUILDINGS[b.type];
     if (within(b.tx, b.ty, def.w, def.h)) return { kind: 'building', id: b.id, owner: b.owner };
     if (!roofOf && within(b.tx, b.ty - BUILDING_TOP / TILE, def.w, BUILDING_TOP / TILE)) roofOf = b;
@@ -560,9 +563,9 @@ export function unitCount(s: GameState, owner: number, type: string) {
   return n;
 }
 
-/** The trading post whose footprint covers a point, if any. */
-export function postAt(s: GameState, x: number, y: number): PostSpot | null {
-  for (const p of s.posts) if (x >= p.tx && y >= p.ty && x < p.tx + 2 && y < p.ty + 2) return p;
+/** The trading post whose footprint covers a point, if any; with `fog`, only one the player has explored. */
+export function postAt(s: GameState, x: number, y: number, fog = false): PostSpot | null {
+  for (const p of s.posts) if (x >= p.tx && y >= p.ty && x < p.tx + 2 && y < p.ty + 2 && (!fog || explored(s, p.tx, p.ty))) return p;
   return null;
 }
 
@@ -584,6 +587,16 @@ export function hasBuildingFor(s: GameState, owner: number, type: BuildingId) {
 
 export function visible(s: GameState, x: number, y: number) {
   return inMap(x, y) && s.sight[idx(x, y)] === 2;
+}
+
+/** Whether the player has ever seen a tile (it is explored or in sight now). */
+export function explored(s: GameState, x: number, y: number) {
+  return inMap(x, y) && s.sight[idx(x, y)] >= 1;
+}
+
+/** Whether the player knows of a building: their own, a Monument (seen by everyone) or one on explored land. */
+export function seenBuilding(s: GameState, b: Building) {
+  return b.owner === PLAYER || b.type === 'monument' || explored(s, b.tx, b.ty);
 }
 
 // ---------------------------------------------------------------- map state
@@ -2045,9 +2058,9 @@ export function campSpots(s: GameState, c: Camp) {
   return ringAround(s, c.tx, c.ty, 2, 2);
 }
 
-/** The camp whose footprint covers a point, if any is still on the map. */
-export function campAt(s: GameState, x: number, y: number): Camp | null {
-  for (const c of s.camps) if (!c.claimed && x >= c.tx && y >= c.ty && x < c.tx + 2 && y < c.ty + 2) return c;
+/** The camp whose footprint covers a point, if any is still on the map; with `fog`, only one the player has explored. */
+export function campAt(s: GameState, x: number, y: number, fog = false): Camp | null {
+  for (const c of s.camps) if (!c.claimed && x >= c.tx && y >= c.ty && x < c.tx + 2 && y < c.ty + 2 && (!fog || explored(s, c.tx, c.ty))) return c;
   return null;
 }
 

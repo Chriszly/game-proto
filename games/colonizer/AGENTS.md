@@ -237,7 +237,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   front of one's house still catches a click on its body), then a building, its roof `BUILDING_TOP`
   (in `data.ts`) above the footprint included, then a node. With its `fog` flag, which the scene's
   clicks and taps and the player's `sendToRally` pass, it skips other sides' units the player can't
-  see (`visible`), so a hidden enemy never takes a click.
+  see (`visible`) and other sides' buildings and nodes on land never explored (`seenBuilding`,
+  `explored`, the same tests the sprites use), and `campAt` and `postAt` take the same flag for
+  camps and trading posts, so a hidden enemy, camp or post never takes a click or gives itself away.
 - `src/game/planner.ts`: `think(state, dt, side = AI)` runs the AI for a side every 4 s of game time (`THINK_MS`). It issues
   the same commands a player would, through the sim's functions, and at most `ACTIONS_PER_THINK`
   (2) of them each time, about 30 a minute, so it can't out-click a player. Each command goes
