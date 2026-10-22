@@ -142,6 +142,15 @@ export class GameScene extends Phaser.Scene {
    * while the table and the HUD strip fill the whole view.
    */
   private frame = new Phaser.Geom.Rectangle(0, 0, VIEW.w, VIEW.h);
+  /**
+   * What is placed from the view's top-left rather than in the frame (the table, the edge strip and
+   * an open overlay's dim), and the HUD's objects (moved up by the frame's y), which `relayout`
+   * moves against the frame when it changes.
+   */
+  private viewObjects = new Set<Phaser.GameObjects.Components.Transform>();
+  private hudObjects: Phaser.GameObjects.Components.Transform[] = [];
+  private table!: Image;
+  private edge!: Image;
   /** Where the seed cards are, in view pixels; read by the playthrough test. */
   seedButtons: (Rect & { kind: SeedKind })[] = [];
   /** Where the wave button is, in view pixels; read by the playthrough test. */
@@ -221,6 +230,7 @@ export class GameScene extends Phaser.Scene {
     this.pests.clear();
     this.shots.clear();
     this.slimes.clear();
+    this.viewObjects.clear();
 
     // Everything is laid out in the designed frame, which the camera centres in the view (unless the
     // corner buttons would cover the board); the table fills the whole view and the HUD (moved up by
@@ -229,7 +239,8 @@ export class GameScene extends Phaser.Scene {
     const frame = (this.frame = this.clearCorner(viewFrame(this), view.width, view.height));
     this.cameras.main.setScroll(-frame.x, -frame.y);
     bakeTable(this, view.width, view.height, frame.x, frame.y);
-    this.add.image(-frame.x, -frame.y, 'table').setOrigin(0);
+    this.table = this.add.image(-frame.x, -frame.y, 'table').setOrigin(0);
+    this.viewObjects.add(this.table);
     bakeGarden(this, this.state.garden);
     this.add.image(0, 0, gardenBg(this.state.garden)).setOrigin(0);
     this.sunGfx = this.add.graphics().setDepth(1);
@@ -244,7 +255,8 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH - 31);
     const hudFrom = this.children.length;
     this.createHud();
-    for (const obj of this.children.list.slice(hudFrom)) (obj as unknown as { y: number }).y -= frame.y;
+    this.hudObjects = this.children.list.slice(hudFrom) as unknown as Phaser.GameObjects.Components.Transform[];
+    for (const obj of this.hudObjects) obj.y -= frame.y;
     this.createPanel();
     this.waveButton = { x: WAVE_BUTTON.x + frame.x, y: WAVE_BUTTON.y + frame.y, w: WAVE_BUTTON.w, h: WAVE_BUTTON.h };
     this.createMenu();
@@ -264,6 +276,31 @@ export class GameScene extends Phaser.Scene {
     this.refresh();
     this.musicPart = null;
     this.syncMusic();
+    // The corner buttons keep their CSS size, so a window resized or a phone turned after the start
+    // can bring them over the board again: place the frame afresh then.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.relayout, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.relayout, this));
+  }
+
+  /**
+   * Places the frame again for the window as it is now (see `clearCorner`), and moves what hangs
+   * on it: the camera, the table (painted again, since its HUD tags sit over the frame), the edge
+   * strip, an open overlay's dim, the HUD and the seed cards' and wave button's rectangles.
+   */
+  private relayout() {
+    const view = viewSize(this);
+    const next = this.clearCorner(viewFrame(this), view.width, view.height);
+    const [dx, dy] = [next.x - this.frame.x, next.y - this.frame.y];
+    if (!dx && !dy) return;
+    this.frame = next;
+    this.cameras.main.setScroll(-next.x, -next.y);
+    bakeTable(this, view.width, view.height, next.x, next.y);
+    this.table.setTexture('table');
+    this.edge.setTexture('edge');
+    for (const obj of this.viewObjects) obj.setPosition(obj.x - dx, obj.y - dy);
+    for (const obj of this.hudObjects) obj.y -= dy;
+    for (const button of this.seedButtons) [button.x, button.y] = [button.x + dx, button.y + dy];
+    this.waveButton = { ...this.waveButton, x: this.waveButton.x + dx, y: this.waveButton.y + dy };
   }
 
   update(time: number) {
@@ -382,7 +419,10 @@ export class GameScene extends Phaser.Scene {
   /** The dark cover behind an overlay, over the whole view, taking the taps behind it. */
   private dim() {
     const view = viewSize(this);
-    return this.add.rectangle(-this.frame.x, -this.frame.y, view.width, view.height, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
+    const dim = this.add.rectangle(-this.frame.x, -this.frame.y, view.width, view.height, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
+    this.viewObjects.add(dim);
+    dim.once(Phaser.GameObjects.Events.DESTROY, () => this.viewObjects.delete(dim));
+    return dim;
   }
 
   /** A pressed clay label: bold text with a light lower edge, as if stamped into the clay. */
@@ -399,7 +439,8 @@ export class GameScene extends Phaser.Scene {
     this.tree = this.add.image(heart.x, heart.y, 'tree').setOrigin(65 / 130, 70 / 120).setDepth(heart.y + 32);
     this.treeFlowers = TREE_FLOWERS.map(([dx, dy]) => this.add.image(heart.x + dx, heart.y + dy, 'bud').setDepth(heart.y + 33));
     // The table strip left of the board hides pests until they step onto the garden.
-    this.add.image(-this.frame.x, -this.frame.y, 'edge').setOrigin(0).setDepth(UI_DEPTH - 40);
+    this.edge = this.add.image(-this.frame.x, -this.frame.y, 'edge').setOrigin(0).setDepth(UI_DEPTH - 40);
+    this.viewObjects.add(this.edge);
 
     const zone = this.add.zone(GRID.x, GRID.y, GRID.cols * GRID.cell, GRID.rows * GRID.cell).setOrigin(0).setInteractive();
     zone.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = cellAt(p.worldX, p.worldY)));
@@ -1283,7 +1324,9 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: label, alpha: 0, y: still ? label.y : label.y - 18, delay: 350, duration: 650, onComplete: () => label.destroy() });
     if (still) return;
     const from = { x: pop.x, y: pop.y - 5 };
-    const to = { x: HUD.sap.icon, y: HUD.y - this.frame.y };
+    // The HUD's y is read as the drop flies, since `relayout` can move it meanwhile.
+    const toY = () => HUD.y - this.frame.y;
+    const to = { x: HUD.sap.icon };
     for (let k = 0; k < 3; k++) {
       const drop = this.add.image(from.x, from.y, 'sap').setScale(0.95 - k * 0.15).setDepth(UI_DEPTH - 4);
       this.tweens.addCounter({
@@ -1294,7 +1337,7 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeIn',
         onUpdate: (tween) => {
           const t = tween.getValue() ?? 0;
-          drop.setPosition(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t - Math.sin(t * Math.PI) * 80);
+          drop.setPosition(from.x + (to.x - from.x) * t, from.y + (toY() - from.y) * t - Math.sin(t * Math.PI) * 80);
         },
         onComplete: () => {
           drop.destroy();
