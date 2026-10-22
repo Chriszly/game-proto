@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { smooth } from '../art/paper';
 import type { Kind } from '../game/honey';
-import { FLOWERS, GRID, localSlot } from '../game/state';
+import { FLOWERS, GRID, MAX_BEES, localSlot } from '../game/state';
 import { viewFrame, viewSize } from '../../../../shared/scaling';
 
 // Where things are drawn in the 960x540 view: the hive with its comb on the left, the meadow the
@@ -64,8 +64,11 @@ export const PLAQUE = { x: 300, y: 68, w: 156, h: 18 };
 export const HIVE_TAB = { w: 54, h: 18 };
 export const hiveTab = (hive: number) => ({ x: 100 + hive * (HIVE_TAB.w + 6), y: 68 });
 export const ENTRANCE = { x: 233, y: 338 };
-/** Where the bees at home rest: eight side by side on the landing board, the rest on the hive above them. */
-export const homeSpot = (i: number) => ({ x: ENTRANCE.x - 105 + (i % 8) * 30, y: ENTRANCE.y + 6 - Math.floor(i / 8) * 24 });
+/**
+ * Where the bees at home rest: a hive's worth (`MAX_BEES`) side by side along the entrance, and a
+ * second hive's on the landing board in front of them, so no bee ever sits over the comb.
+ */
+export const homeSpot = (i: number) => ({ x: ENTRANCE.x - 132 + (i % MAX_BEES) * 24, y: ENTRANCE.y + 6 + Math.floor(i / MAX_BEES) * 24 });
 
 /** The flowers in the meadow the foragers visit (the head's centre), and the ground their stems stand on. */
 export const flowerSpot = (i: number) => ({ x: 590 + (i % FLOWERS) * 66, y: i % 2 ? 196 : 160 });

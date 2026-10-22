@@ -520,8 +520,10 @@ only `GameScene` (and the refusal buzz in `ui/Button.ts`) plays them, so the sim
   `UI_DEPTH + 5`. The away chip covers the market while it shows (a tap hides it); the swarm
   chip sits above the button board, so the market stays in reach while a swarm gathers. Anything new on the board or meadow must sit above `bg-front` (and below the season tint
   if the season should colour it).
-- `homeSpot` fits eight bees on the landing board and stacks the rest above it; `MAX_BEES` is 12
-  per hive, so two hives stack three rows.
+- `homeSpot` fits a row of `MAX_BEES` (12) bees along the entrance and puts the second hive's row
+  in front of it on the landing board, both below the comb (its bottom tips end at y 319) and
+  above the market (y 384). A third row would cover one or the other, so a third hive needs a new
+  place for its bees.
 - `Cell` is a union: check `type` (or `isHoney`/`isBrood`) before reading `phase` or `nectar`.
 - `cellAt` hits the nearest centre within half a hex width, so taps right on a corner between
   cells may miss.
