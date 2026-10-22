@@ -254,7 +254,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   tiles is refused and costs nothing), saves and animates the
   row fading out and growing back. Pestle's tap calls `pestle` and Funnel's second tap `funnel`
   (which refuses two plain tiles of one kind, a swap that changes nothing, and sets two specials off
-  together with `mixed`, as `trySwap` does); both go through `resolve` with no move spent (so a tool can sell the order) and the scene plays
+  together with `mixed`, as `trySwap` does, adding the first cell to its area so both are used up even
+  when the tiles are far apart); both go through `resolve` with no move spent (so a tool can sell the order) and the scene plays
   them in `playTool`. Buttons show `on`, `off` (not affordable or not playing) or `armed`; hovering
   one shows its `tip` in the caption (`refreshCaption`, which otherwise shows the armed tool's
   instruction or a tip for the order: forbidden kind, blockers, rush, then the specials).

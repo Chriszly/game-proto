@@ -384,7 +384,10 @@ export function funnel(s: GameState, a: Cell, b: Cell): Step[] | null {
   // Two plain tiles of one kind would only trade places.
   if (!special(ta) && !special(tb) && ta.kind === tb.kind) return null;
   s.coins -= TOOLS.funnel.cost;
-  return resolve(s, swapped(s.board, a, b), [b, a], mixed(ta, tb, b));
+  const extra = mixed(ta, tb, b);
+  // The tiles may be far apart, so the special left at `a` is used up too, not only the one at `b`.
+  if (extra) extra.cells.push(a);
+  return resolve(s, swapped(s.board, a, b), [b, a], extra);
 }
 
 /** After a sale, the next order; after running out of moves, the same order again. After an examination, back to the orders. */
