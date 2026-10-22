@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Bearclaw Saga</title>
+  <circle cx="7" cy="7" r="5" fill="#e37100"/>
+  <circle cx="25" cy="7" r="5" fill="#e37100"/>
+  <circle cx="7" cy="7" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="7" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="16.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="20.5" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="19.5" rx="2.2" ry="1.4" fill="#311300"/>
+  <path d="M21 31 L28 18 M24.5 31.5 L31 20 M18 30 L25 17" stroke="#f2efe6" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

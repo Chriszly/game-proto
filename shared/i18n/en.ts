@@ -124,6 +124,8 @@ const en = {
   apothecaryCover: 'The apothecary shop with a customer at the counter',
   auguryCard: 'Nine kinds of brain puzzle dealt like tarot cards: an endless medley, a daily five, Blitz, draft runs with relics, pass and play, and practice.',
   auguryCover: 'A path puzzle on a night-sky board framed in gold, with the next puzzles waiting as cards beside it',
+  bearclawSagaCard: "Play a hunter who doesn't know he can turn into a hybrid and a bear: survive the raid on his village, follow the tracks and defeat the wolf chief.",
+  bearclawSagaCover: 'A hunter facing hooded cultists in a burning fjord village at night',
   deadlineCard: 'Hold the bottom of the road against waves of zombies: move left and right, and shoot crates open for upgrades.',
   deadlineCover: 'A soldier behind sandbags shooting a zombie horde coming down a road',
   palisadeCard: 'Hold the barricade as a ranger: arrows fly on their own, every level-up offers three upgrades, and a boss comes every ten waves.',

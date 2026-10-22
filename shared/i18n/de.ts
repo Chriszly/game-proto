@@ -124,6 +124,8 @@ const de: Translation<typeof en> = {
   apothecaryCover: 'Die Apotheke mit einem Kunden an der Theke',
   auguryCard: 'Neun Arten von Denkrätseln, ausgeteilt wie Tarotkarten: eine endlose Mischung, die Tagesfünf, Blitz, Kartenwahl mit Relikten, Weitergeben und Üben.',
   auguryCover: 'Ein Pfadrätsel auf einem goldgerahmten Nachthimmel, daneben warten die nächsten Rätsel als Karten',
+  bearclawSagaCard: 'Spiele einen Jäger, der nicht weiß, dass er sich in einen Hybriden und einen Bären verwandeln kann: überlebe den Überfall auf sein Dorf, folge den Spuren und besiege den Wolf-Obersten.',
+  bearclawSagaCover: 'Ein Jäger vor vermummten Kultkriegern in einem brennenden Fjorddorf bei Nacht',
   deadlineCard: 'Halte das Ende der Straße gegen Zombiewellen: nach links und rechts laufen und Kisten für Verbesserungen aufschießen.',
   deadlineCover: 'Ein Soldat hinter Sandsäcken schießt auf eine Zombiehorde, die eine Straße herunterkommt',
   palisadeCard: 'Halte als Waldläufer die Barrikade: Pfeile fliegen von selbst, jeder Stufenaufstieg bietet drei Verbesserungen und alle zehn Wellen kommt ein Boss.',

@@ -13,7 +13,8 @@ Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, C
 Mapmaker, in `games/mapmaker/`, Lanternkeep, in `games/lanternkeep/`, Space Wars, in
 `games/space-wars/`, Lane Brawl, in `games/lane-brawl/`, Colonizer, in `games/colonizer/`, Riftblade,
 in `games/riftblade/`, Scrapyard Titans, in `games/scrapyard-titans/`, Bramblecrest, in
-`games/bramblecrest/`, Ninefold, in `games/ninefold/`, and Augury, in `games/augury/`.
+`games/bramblecrest/`, Ninefold, in `games/ninefold/`, Augury, in `games/augury/`, and Bearclaw Saga,
+in `games/bearclaw-saga/`.
 
 Each game's guide for agents, to read before changing it:
 
@@ -42,6 +43,7 @@ Each game's guide for agents, to read before changing it:
 | Bramblecrest | [games/bramblecrest/AGENTS.md](games/bramblecrest/AGENTS.md) |
 | Ninefold | [games/ninefold/AGENTS.md](games/ninefold/AGENTS.md) |
 | Augury | [games/augury/AGENTS.md](games/augury/AGENTS.md) |
+| Bearclaw Saga | [games/bearclaw-saga/AGENTS.md](games/bearclaw-saga/AGENTS.md) |
 
 ## Feedback and issues
 

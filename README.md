@@ -30,6 +30,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Bramblecrest](games/bramblecrest/README.md) | A small knight explores an overgrown kingdom by lamplight, finding a new tool in every dungeon that opens more of the world. |
 | [Ninefold](games/ninefold/README.md) | Fill every row, column and box with each digit once: a daily puzzle, Classic boards at three levels, and Delve, a run of ever bigger boards with hearts and relics, in nine unlockable art styles. |
 | [Augury](games/augury/README.md) | Nine kinds of brain puzzle dealt like tarot cards (picture grids, bridges, code breaking, calc cages, cross sums, sliding blocks, tile flips, path links and a memory echo), in six modes from an endless medley to pass and play. |
+| [Bearclaw Saga](games/bearclaw-saga/README.md) | A side-view action prototype: a hunter who doesn't know he can turn into a hybrid and a bear survives the raid on his village, follows the tracks and defeats the wolf chief, with rage that breaks the beast out when he is hit. |
 
 ## Settings
 
@@ -75,6 +76,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Bramblecrest | 5 hearts, and the bosses call in foes 25% less often | 2 hearts, and the bosses call in foes 30% more often |
   | Ninefold | 5 hints a Classic board, 4 hearts a Delve run | 2 hints a Classic board, 2 hearts a Delve run |
   | Augury | 4 hearts in Endless and Draft, 4 minutes of Blitz | 2 hearts in Endless and Draft, 2½ minutes of Blitz |
+  | Bearclaw Saga | foes deal 25% less damage | foes deal 30% more damage |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.

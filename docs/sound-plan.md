@@ -203,6 +203,14 @@ Nine kinds of brain puzzle dealt as tarot cards; calm, starlit, a harp in a quie
 | Memory Echo card turned | soft flick | `GameScene.ts:update` |
 | Relic taken | sparkle | `GameScene.ts:drain` (`relic`) |
 
+### Bearclaw Saga
+Side-view action in a nordic wilderness; dark and grown-up, not horror.
+
+**Done** (see `games/bearclaw-saga/AGENTS.md`, Sound): one song in D minor with calm, dark, battle
+and boss parts, stings for the outburst, a fall and a boss beaten, and effects for strikes, hits,
+blocks, parries, dodges, the outburst's roar, herbs, tracks, talk, the giant wolf's howl and Skarn's
+blow. Ambience and footsteps are left out.
+
 ### Beehive Baron
 Idle beehive in cut paper; warm, sunny, relaxed.
 

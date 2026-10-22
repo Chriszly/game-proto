@@ -133,6 +133,11 @@
     "description": "Game: Augury"
   },
   {
+    "name": "bearclaw-saga",
+    "color": "5b7a99",
+    "description": "Game: Bearclaw Saga"
+  },
+  {
     "name": "hub",
     "color": "5b7a99",
     "description": "Game: The hub page and its settings",
