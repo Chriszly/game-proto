@@ -191,7 +191,7 @@ hatch. Each queen has her own gift, and the plaque on her comb names her:
 | Hardy | Her bees eat half as much in winter (a jar for every 8 of them, not 4) |
 | Busy | Her bees bring 1 more drop of nectar a trip |
 
-![A swarm gathering under a full hive](docs/screenshots/swarm.webp)
+![A swarm gathering over a full hive's meadow, its chip above the buttons](docs/screenshots/swarm.webp)
 
 ![Catching the swarm: pick its queen](docs/screenshots/queen-pick.webp)
 
