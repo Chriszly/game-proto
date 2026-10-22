@@ -387,7 +387,7 @@ function bakeCards(scene: Phaser.Scene) {
   // The tabs on the hive roof that switch combs: cream when shown, flat brown otherwise.
   card('hive-tab-on', HIVE_TAB.w, HIVE_TAB.h, (ctx) => cut(ctx, rr(0, 0, HIVE_TAB.w, HIVE_TAB.h, 5), CARD.plaque, { depth: 2 }));
   card('hive-tab-off', HIVE_TAB.w, HIVE_TAB.h, (ctx) => cut(ctx, rr(0, 0, HIVE_TAB.w, HIVE_TAB.h, 5), CARD.roofTrim, { depth: 0.5, shadow: 0.2 }));
-  // The swarm chip under the hive, a warm card to tap while the swarm gathers.
+  // The swarm chip over the meadow, just above the button board, a warm card to tap while the swarm gathers.
   card('swarm-chip', SWARM.w, SWARM.h, (ctx) => cut(ctx, rr(0, 0, SWARM.w, SWARM.h, 8), CARD.roof, { depth: 4 }));
   // The end card, a big cream card with a gold rosette, when the fair makes the player the Baron.
   const bigCard = (ctx: CanvasRenderingContext2D) => {
