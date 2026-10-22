@@ -51,6 +51,7 @@ import {
   createGame,
   deedsDone,
   entityAt,
+  explored,
   figureTall,
   hasBuilt,
   inAura,
@@ -63,6 +64,7 @@ import {
   popCap,
   popUsed,
   postAt,
+  seenBuilding,
   releaseBell,
   research,
   ringBell,
@@ -470,7 +472,7 @@ export class GameScene extends Phaser.Scene {
       }
       const def = BUILDINGS[b.type];
       // A Monument is seen by everyone from the moment it is begun.
-      const seen = b.owner === PLAYER || b.type === 'monument' || s.sight[idx(b.tx, b.ty)] >= 1;
+      const seen = seenBuilding(s, b);
       img.setVisible(seen);
       img.setPosition(b.tx * TILE, b.ty * TILE - BUILDING_TOP);
       img.setDepth((b.ty + def.h) * TILE);
@@ -491,10 +493,10 @@ export class GameScene extends Phaser.Scene {
         img.setDepth((n.ty + n.h) * TILE - 1);
         this.nodeSprites.set(n.id, img);
       }
-      img.setVisible(s.sight[idx(n.tx, n.ty)] >= 1);
+      img.setVisible(explored(s, n.tx, n.ty));
     }
 
-    s.posts.forEach((p, i) => this.postSprites[i]?.setVisible(s.sight[idx(p.tx, p.ty)] >= 1));
+    s.posts.forEach((p, i) => this.postSprites[i]?.setVisible(explored(s, p.tx, p.ty)));
     for (const c of s.camps) {
       let img = this.campSprites.get(c.id);
       if (!img) {
@@ -507,7 +509,7 @@ export class GameScene extends Phaser.Scene {
       }
       const key = this.campKey(c);
       if (img.texture.key !== key) img.setTexture(key);
-      img.setVisible(s.sight[idx(c.tx, c.ty)] >= 1);
+      img.setVisible(explored(s, c.tx, c.ty));
     }
   }
 
@@ -861,9 +863,9 @@ export class GameScene extends Phaser.Scene {
       if (p.wasTouch && !watching && this.tapOrder(b.x, b.y, entityAt(this.state, b.x, b.y, undefined, PLAYER, true))) return;
       if (!hit) {
         if (!additive) this.selectOwn([]);
-        const camp = campAt(this.state, b.x, b.y);
+        const camp = campAt(this.state, b.x, b.y, true);
         if (camp) say(this.state, this.campText(camp));
-        else if (postAt(this.state, b.x, b.y)) say(this.state, t('tradingPost'));
+        else if (postAt(this.state, b.x, b.y, true)) say(this.state, t('tradingPost'));
         return;
       }
       if (hit.owner !== PLAYER && hit.kind !== 'node') {
@@ -926,7 +928,7 @@ export class GameScene extends Phaser.Scene {
     const units = this.selectedUnits();
     if (units.length === 0) return;
     sfx('order');
-    const camp = campAt(this.state, tx, ty);
+    const camp = campAt(this.state, tx, ty, true);
     if (camp) {
       // To a camp: stand round it, close enough to take it once its guards are down.
       const spots = campSpots(this.state, camp);
@@ -941,7 +943,7 @@ export class GameScene extends Phaser.Scene {
     const villagers = units.filter((u) => UNITS[u.type].role === 'villager');
     const carts = units.filter((u) => UNITS[u.type].role === 'cart');
     const army = units.filter((u) => isSoldier(UNITS[u.type].role));
-    if (postAt(this.state, tx, ty)) {
+    if (postAt(this.state, tx, ty, true)) {
       // To a trading post: carts set off trading, everyone else walks there.
       issue(this.state, PLAYER, carts.map((u) => u.id), { t: 'trade' });
       issue(this.state, PLAYER, [...villagers, ...army].map((u) => u.id), { t: 'move', x: tx, y: ty });
