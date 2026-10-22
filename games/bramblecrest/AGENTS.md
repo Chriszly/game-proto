@@ -160,7 +160,9 @@ All in code through `shared/audio.ts` (no audio files), in `src/audio/`:
 `bramblecrest-save` in localStorage: the whole `GameState` (map, position, facing, spawn, hearts,
 items, keys, moonstones, flags, quest, falls, foes beaten). It is written on a map change, on a
 chest, cut thorns, a key door unlocked, a plate, broken rock, the bells, a moonstone, a quest step
-and each boss. Flags in use: `chest-<id>`, `door-<id>`, `gate-cut`, `woods-thorns`, `plate`,
+and each boss, all through `GameScene.persist`, which holds a save asked for while the hookvine
+pulls the knight (a bellseed bursting, a moonstone picked up) until they land on the post, so a
+reload never puts them or their spawn over water or a pit. Flags in use: `chest-<id>`, `door-<id>`, `gate-cut`, `woods-thorns`, `plate`,
 `boss`, `foe-<i>`, `belfry-foe-<i>`, `broke-<map>-<x>-<y>`, `bells`, `wraith`, `cat-1` to `cat-3`,
 plus the flags of hidden places. `load` fills in fields a save from an older version lacks
 (`items.seeds`, `seeds`), and starts over when the saved `map` or `spawn` is not a map (`isMapId`)
