@@ -482,20 +482,32 @@ export function footprintOf(s: GameState, id: number) {
  * figure up to `figureTall` above them unless the point is on a tree, bush, mine or farm (so a
  * gather order behind a figure still reaches the node); then buildings, their roof included
  * (`BUILDING_TOP` above the footprint), then nodes. Among units the nearest wins (feet before
- * bodies), or with `prefer` the nearest of that side's when one is there. With `orders` (a right
- * click, a tap that gives an order, a rally flag) a figure's body also gives way to any building's
- * footprint, so an order on a site, an enemy building or a camp with units in front still reaches it.
+ * bodies), or with `prefer` the nearest of that side's when one is there. With `orders` (the side
+ * giving a right click, an order tap or a rally flag) the body of one of that side's own figures
+ * also gives way to any building's footprint, so an order on a site, an enemy building or a camp
+ * with its own units in front still reaches it, while an enemy standing in front of a building (a
+ * raider at the player's house) still catches the click on its body. With `fog` (the player's
+ * clicks and taps) a unit of another side that the player can't see doesn't count, so a hidden
+ * enemy neither takes the click nor gives itself away.
  */
-export function entityAt(s: GameState, x: number, y: number, prefer?: number, orders = false): { kind: 'unit' | 'building' | 'node'; id: number; owner: number } | null {
+export function entityAt(
+  s: GameState,
+  x: number,
+  y: number,
+  prefer?: number,
+  orders?: number,
+  fog = false,
+): { kind: 'unit' | 'building' | 'node'; id: number; owner: number } | null {
   const within = (tx: number, ty: number, w: number, h: number) => x >= tx && y >= ty && x < tx + w && y < ty + h;
   const node = [...s.nodes.values()].find((n) => within(n.tx, n.ty, n.w, n.h));
-  const under = [...s.buildings.values()].some(
-    (b) => (orders || BUILDINGS[b.type].farm) && within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h),
-  );
+  const onFarm = [...s.buildings.values()].some((b) => BUILDINGS[b.type].farm && within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h));
+  const onBuilding = orders !== undefined && [...s.buildings.values()].some((b) => within(b.tx, b.ty, BUILDINGS[b.type].w, BUILDINGS[b.type].h));
   let best: { kind: 'unit' | 'building' | 'node'; id: number; owner: number; d: number } | null = null;
   for (const u of s.units.values()) {
+    if (fog && u.owner !== PLAYER && !visible(s, Math.floor(u.x), Math.floor(u.y))) continue;
     const tall = figureTall(UNITS[u.type]);
     const feet = Math.hypot(u.x - x, u.y - y);
+    const under = onFarm || (onBuilding && u.owner === orders);
     const body = !node && !under && Math.abs(u.x - x) <= 0.45 && y <= u.y && y >= u.y - tall;
     if (feet > 0.6 && !body) continue;
     const d = feet <= 0.6 ? feet : 1 + Math.hypot(u.x - x, u.y - tall / 2 - y);
@@ -1342,7 +1354,7 @@ function sendToRally(s: GameState, b: Building, u: Unit) {
   const r = b.rally!;
   const role = UNITS[u.type].role;
   if (role === 'villager') {
-    const hit = entityAt(s, r.x, r.y, undefined, true);
+    const hit = entityAt(s, r.x, r.y, undefined, b.owner, b.owner === PLAYER);
     const own = hit?.kind === 'building' ? s.buildings.get(hit.id) : undefined;
     const mine = own && own.owner === b.owner && own.built ? own : undefined;
     const drops = mine ? BUILDINGS[mine.type].drops : undefined;

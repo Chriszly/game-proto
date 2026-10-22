@@ -740,7 +740,7 @@ export class GameScene extends Phaser.Scene {
   /** Plants the selected buildings' rally flags at a point, or takes them down on one of those buildings. */
   private plantRally(tx: number, ty: number) {
     const all = this.rallyBuildings();
-    const hit = entityAt(this.state, tx, ty, undefined, true);
+    const hit = entityAt(this.state, tx, ty, undefined, PLAYER, true);
     if (hit && hit.kind === 'building' && all.some((b) => b.id === hit.id)) {
       if (all.filter((b) => clearRally(this.state, PLAYER, b.id)).length > 0) {
         say(this.state, t('rallyCleared'));
@@ -856,9 +856,9 @@ export class GameScene extends Phaser.Scene {
     const additive = p.event.shiftKey;
     if (moved < 5) {
       // A click picks one's own unit over an enemy standing on it; a tap keeps the nearest, to order an attack on it.
-      const hit = entityAt(this.state, b.x, b.y, p.wasTouch ? undefined : PLAYER);
+      const hit = entityAt(this.state, b.x, b.y, p.wasTouch ? undefined : PLAYER, undefined, true);
       // A touch screen has no right click, so a tap gives the orders one would.
-      if (p.wasTouch && !watching && this.tapOrder(b.x, b.y, entityAt(this.state, b.x, b.y, undefined, true))) return;
+      if (p.wasTouch && !watching && this.tapOrder(b.x, b.y, entityAt(this.state, b.x, b.y, undefined, PLAYER, true))) return;
       if (!hit) {
         if (!additive) this.selectOwn([]);
         const camp = campAt(this.state, b.x, b.y);
@@ -937,7 +937,7 @@ export class GameScene extends Phaser.Scene {
       });
       return;
     }
-    const hit = entityAt(this.state, tx, ty, undefined, true);
+    const hit = entityAt(this.state, tx, ty, undefined, PLAYER, true);
     const villagers = units.filter((u) => UNITS[u.type].role === 'villager');
     const carts = units.filter((u) => UNITS[u.type].role === 'cart');
     const army = units.filter((u) => isSoldier(UNITS[u.type].role));
