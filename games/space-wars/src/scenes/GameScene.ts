@@ -1436,12 +1436,17 @@ export class GameScene extends Phaser.Scene {
       text = [head, ...(u.flagship ? flagshipLines(side) : unitLines(side, u.type))].join('\n');
       at = u;
     } else {
-      const b = this.state.building(target.id)!;
-      // A rival building under the fog shows as last seen: its name and role then, not its owner or hit points now.
-      const inSight = b.faction === PLAYER || this.state.fog.sees(b);
-      if (!inSight) side = this.state.sides[this.state.known.get(b.id)?.faction ?? b.faction];
+      // A rival building under the fog shows as last seen (even one fallen since): its owner, name and role then, not its hit points now.
+      const live = this.state.building(target.id);
+      const inSight = !!live && (live.faction === PLAYER || this.state.fog.sees(live));
+      const b = inSight ? live : this.state.known.get(target.id) ?? live;
+      if (!b) {
+        label.setVisible(false);
+        return;
+      }
+      side = this.state.sides[b.faction];
       const name = b.expansion ? buildInfo(side, 'expansion').name : tr(side.def.buildings[b.type].name);
-      const hp = inSight ? ` · ${tr('hp', { hp: Math.ceil(b.hp), max: b.maxHp })}` : '';
+      const hp = inSight && live ? ` · ${tr('hp', { hp: Math.ceil(live.hp), max: live.maxHp })}` : '';
       const head = `${name} · ${tr(ROLE_LABEL[b.expansion ? 'expansion' : b.type])}${hp}`;
       text = [head, ...(b.expansion ? expansionLines(side) : buildingLines(side, b.type))].join('\n');
       at = b;

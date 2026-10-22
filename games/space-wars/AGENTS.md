@@ -116,7 +116,11 @@ Implemented today:
   draws fogged ones and their minimap squares from it, so their fall, completion or change of owner
   shows only once their spot is in sight again, when a fallen one is forgotten); crystal nodes,
   the beacon, shards, beams and fireballs show only where explored or in sight; the player can only
-  build on explored ground. `entityAt` skips what the player can't see. The AI is not fogged.
+  build on explored ground. `entityAt` finds what the map shows: units in sight, the player's own
+  buildings and rivals' from `known` (so the hover label names a fogged one as last seen, even one
+  fallen since). A tap on a fogged one is an attack whose order carries `seen` (its spot and owner
+  as last seen): the ships fly at it, and if it has fallen they fly on to the spot until it is in
+  sight, then take up targets there; still standing, they attack it. The AI is not fogged.
 - Expansions (`Build` = a building role or `'expansion'`, `expansionStats`): an outpost is a
   `Building` of type `hub` with `expansion: true`, drawn at 0.8 of the hub's size and named by its
   faction's `outpost` (`Sun Outpost`). 250 crystal, 18 s, 60% of the hub's hp; it goes within 120 px of a
@@ -133,8 +137,8 @@ Implemented today:
   (`Barracks · 100`), and train and build messages name the faction's own building.
 - Training: a harvester is queued at the hub; the combat units (scout, gunship, heavy) are queued
   at a finished Barracks, up to five at a time per building.
-- Orders: move, attack a unit or building, and auto-attack anything in sight when a unit has no
-  order. Harvesters are never ordered.
+- Orders: move, attack a unit or building (one under the fog as last seen, see Fog of war), and
+  auto-attack anything in sight when a unit has no order. Harvesters are never ordered.
 - AI (`World.think`, once a second per rival): keeps four harvesters (three more per outpost),
   builds a Depot, a Barracks and up to two Turrets, trains combat units up to 20, and after the
   opening 75 seconds sends its army (less its picket and two ships kept home) every 12 seconds,
@@ -330,7 +334,7 @@ File map (`src/`):
   `derelicts`, `contract`, `convoyTo`, `pact`, `sector`. Methods the scene and test use: `update(dt)`, `build`, `train`, `research`,
   `command`, `fallBack`, `setRally`, `clearRally`, `fleet`, `pickContract`, `currentContract`, `buildFlagship`, `abilityOf`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
   `selectable`, `entityAt`, `derelictAt`, `placementProblem`, `count`, `hubOf`, `hubsOf`,
-  `seesUnit`, `knowsBuilding`, `seesMine`, `inNebula`, `atPeace`, `rankOf`, `veteranBonus`, `unit`,
+  `seesUnit`, `seesMine`, `inNebula`, `atPeace`, `rankOf`, `veteranBonus`, `unit`,
   `building`. No Phaser import.
 - `scenes/GameScene.ts`: `GameScene` (key `'Game'`). Holds `state` (the `World`), `layout`, `camera`
   (the map camera), `buttons`, `selected`, `placing`, `picking` (the faction picker is up),
