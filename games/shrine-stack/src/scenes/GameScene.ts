@@ -83,6 +83,8 @@ import {
 
 /** The longest step of game time one frame may take, so a hidden tab doesn't drop a stone through the temple. */
 const MAX_STEP_MS = 100;
+/** The widest a line of the side panel may be, so it stays inside the panel. */
+const PANEL_TEXT_W = PANEL.w - 24;
 /** How quickly the camera catches up with the temple's top: the time to close about two thirds of the gap. */
 const CAMERA_MS = 180;
 const POPUP_MS = 900;
@@ -111,6 +113,20 @@ const textStyle = (size: number, color = '#f3e9d2') => ({
   stroke: '#14101f',
   strokeThickness: 3,
 });
+
+/** The smallest font `setFitted` shrinks a text to. */
+const MIN_FONT = 9;
+
+/**
+ * Sets a text and shrinks its font from `size` (down to `MIN_FONT`) until it is no wider than
+ * `maxW`, so a long translation stays inside its box. An unchanged text is left as it is.
+ */
+function setFitted(text: Phaser.GameObjects.Text, value: string | string[], maxW: number, size: number) {
+  if (text.text === (Array.isArray(value) ? value.join('\n') : value)) return text;
+  text.setText(value).setFontSize(size);
+  for (let px = size; text.width > maxW && px > MIN_FONT; ) text.setFontSize(--px);
+  return text;
+}
 
 /** Where something to tap is on screen, by its centre and size; read by the playthrough test. */
 export interface Spot {
@@ -386,8 +402,14 @@ export class GameScene extends Phaser.Scene {
     // R swaps the stone in hand with the reserve, like the panel's button.
     this.input.keyboard?.on('keydown-R', () => this.trySwap());
     // The shared pause stops update but not the frame clock: the first frame after Resume steps nothing.
-    this.events.on(Phaser.Scenes.Events.RESUME, () => (this.lastFrame = null));
-    this.events.on(Phaser.Scenes.Events.WAKE, () => (this.lastFrame = null));
+    const onResume = () => (this.lastFrame = null);
+    this.events.on(Phaser.Scenes.Events.RESUME, onResume);
+    this.events.on(Phaser.Scenes.Events.WAKE, onResume);
+    // A restart ("Build again") shuts the scene down without clearing these, so take them off.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.RESUME, onResume);
+      this.events.off(Phaser.Scenes.Events.WAKE, onResume);
+    });
 
     this.offerParts = [];
     this.createGameOver();
@@ -822,9 +844,13 @@ export class GameScene extends Phaser.Scene {
       )
       .setColor(trial && !trial.failed ? '#9ad46a' : '#8a7ea0');
     const curse = curseNow(s);
-    const material = s.material !== 'limestone' ? t('materialTier', { material: t(MATERIAL_INFO[s.material].name) }) : '';
-    this.curseText.setText([curse ? t('curse', { curse: t(CURSE_INFO[curse].name), mult: CURSE_MULT }) : '', material].filter(Boolean).join('  '));
-    this.patronText.setText(s.patron ? t('patron', { patron: t(PATRON_INFO[s.patron].name) }) : t('choosePatron'));
+    // With a curse in force the material shows by name only, after it, so the line fits the panel.
+    const materialName = s.material !== 'limestone' ? t(MATERIAL_INFO[s.material].name) : '';
+    const curseLine = curse
+      ? [t('curse', { curse: t(CURSE_INFO[curse].name), mult: CURSE_MULT }), materialName].filter(Boolean).join(' · ')
+      : materialName && t('materialTier', { material: materialName });
+    setFitted(this.curseText, curseLine, PANEL_TEXT_W, 13);
+    setFitted(this.patronText, s.patron ? t('patron', { patron: t(PATRON_INFO[s.patron].name) }) : t('choosePatron'), PANEL_TEXT_W, 12);
     const reserveOn = s.tier >= RESERVE_FROM_TIER;
     this.reserveText
       .setText(reserveOn ? (s.reserve ? t('hold', { kind: t(KIND_INFO[s.reserve].short) }) : t('holdNothing')) : t('reserveFrom', { tier: RESERVE_FROM_TIER }))
@@ -841,7 +867,7 @@ export class GameScene extends Phaser.Scene {
       return b === 'grace' && s.grace ? t('graceHeld', { blessing: name, n: s.grace }) : name;
     });
     if (s.grace && !s.blessings.includes('grace')) counts.push(t('graceBought', { n: s.grace }));
-    this.blessingsText.setText(counts.length ? counts : [t('noBlessings')]);
+    setFitted(this.blessingsText, counts.length ? counts : [t('noBlessings')], PANEL_TEXT_W, 12);
     // The hint shows until the first drop, while the temple is still too short to reach it.
     this.hint.setVisible(s.dropped === 0 && s.phase === 'swinging');
 
@@ -920,7 +946,8 @@ export class GameScene extends Phaser.Scene {
       const bg = this.add.rectangle(x, y, w, h, 0x2c2446).setStrokeStyle(3, 0x6a5a9a);
       const icon = this.add.graphics().setPosition(x, y - 50);
       this.drawBlessingIcon(icon, id, info.color);
-      const name = this.add.text(x, y + 6, t(info.name), textStyle(w < 200 ? 15 : 17, '#f3c64e')).setOrigin(0.5);
+      const size = w < 200 ? 15 : 17;
+      const name = setFitted(this.add.text(x, y + 6, '', textStyle(size, '#f3c64e')).setOrigin(0.5), t(info.name), w - 16, size);
       const text = this.add
         .text(x, y + 30, t(info.text), { fontFamily: FONT, fontSize: '13px', color: '#e8dcf4', align: 'center', wordWrap: { width: w - 24 }, lineSpacing: 3 })
         .setOrigin(0.5, 0);
@@ -977,8 +1004,9 @@ export class GameScene extends Phaser.Scene {
       const bg = this.add.rectangle(0, 0, w, h, bought ? 0x3a3060 : 0x2c2446).setStrokeStyle(3, bought ? GOLD : afford ? info.color : 0x4a3a6a);
       const icon = this.add.graphics();
       this.drawShopIcon(icon, id, -w / 2 + 20, info.color);
-      const label = this.add.text(-w / 2 + 38, 0, t(info.name), textStyle(14)).setOrigin(0, 0.5);
       const cost = this.add.text(w / 2 - 10, 0, bought ? t('bought') : String(info.cost), textStyle(15, '#f3c64e')).setOrigin(1, 0.5);
+      // The name fits between the icon and the price.
+      const label = setFitted(this.add.text(-w / 2 + 38, 0, '', textStyle(14)).setOrigin(0, 0.5), t(info.name), w - 54 - cost.width, 14);
       const button = place([bg, icon, label, cost], x, y, afford || bought ? 1 : 0.5);
       bg.setInteractive({ useHandCursor: afford })
         .on('pointerover', () => afford && bg.setFillStyle(0x3a3060))
@@ -1117,9 +1145,12 @@ export class GameScene extends Phaser.Scene {
       // A tick, drawn as two strokes.
       box.lineStyle(3, 0xf3e9d2).lineBetween(bx - 4, 0, bx - 1, 4).lineBetween(bx - 1, 4, bx + 5, -4);
     }
-    const label = this.add
-      .text(bx + 18, 0, t('takeCurse', { tier: s.tier, curse: t(info.name), text: t(info.text), mult: CURSE_MULT }), textStyle(14, '#e8a0d4'))
-      .setOrigin(0, 0.5);
+    const label = setFitted(
+      this.add.text(bx + 18, 0, '', textStyle(14, '#e8a0d4')).setOrigin(0, 0.5),
+      t('takeCurse', { tier: s.tier, curse: t(info.name), text: t(info.text), mult: CURSE_MULT }),
+      w / 2 - 12 - (bx + 18),
+      14,
+    );
     const button = place([bg, box, label], x, y);
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       if (!toggleCurse(this.state)) return;

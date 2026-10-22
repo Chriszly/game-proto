@@ -12,7 +12,7 @@ const de: Translation<typeof en> = {
   steadyText: 'Perfekte Würfe fallen leichter: 6 Pixel mehr Spielraum.',
   goldenName: 'Goldene Gabe',
   goldenText: 'Jeder gesetzte Stein bringt 1 Gunst mehr.',
-  graceName: 'Gnade des Steinmetzes',
+  graceName: 'Steinmetzgnade',
   graceText: 'Der nächste Stein, der danebengeht, wird aufgefangen statt verloren.',
 
   // Shop
@@ -52,7 +52,7 @@ const de: Translation<typeof en> = {
   // Patrons: name, boon and bane
   gildedName: 'Die Goldene Hand',
   gildedBoon: 'Jeder Stein bringt 1 Gunst mehr.',
-  gildedBane: 'Keine Gnade des Steinmetzes: ein Fehlwurf beendet immer den Lauf.',
+  gildedBane: 'Keine Steinmetzgnade: ein Fehlwurf beendet immer den Lauf.',
   handsName: 'Der Vielhändige',
   handsBoon: 'Ausgewogene Ebenen bieten vier Segen.',
   handsBane: 'Steine schwingen 10 % schneller.',
@@ -81,9 +81,9 @@ const de: Translation<typeof en> = {
   trial: 'Prüfung: {trial} {done}/{of}',
   trialFailed: 'Verfehlt: {trial}',
   trialsFrom: 'Prüfungen ab Ebene {tier}',
-  curse: 'Fluch: {curse} (x{mult})',
+  curse: 'Fluch: {curse} x{mult}',
   materialTier: 'Ebene aus {material}',
-  patron: 'Schutzherr: {patron}',
+  patron: '{patron}',
   choosePatron: 'Wähle einen Schutzherrn',
   hold: 'Halten: {kind}',
   holdNothing: 'Halten: nichts',
@@ -126,7 +126,7 @@ const de: Translation<typeof en> = {
   stoneFor: 'Stein für Ebene {tier}: {material}',
   patronTitle: 'Wähle einen Schutzherrn für diesen Tempel',
   patronSub: 'Seine Regel gilt für den ganzen Lauf',
-  takeCurse: 'Fluch auf Ebene {tier} nehmen: {curse}, {text}. Bringt x{mult} Gunst.',
+  takeCurse: 'Fluch auf Ebene {tier}: {curse}, {text}. x{mult} Gunst.',
   buildOn: 'Weiterbauen',
 
   // End panel
