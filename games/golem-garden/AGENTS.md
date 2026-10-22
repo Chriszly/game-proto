@@ -126,9 +126,6 @@ Missing or rough:
 - Pests come in at the board's left edge from under a strip of table (`edge`), so they pop in at
   the first path cell's left half.
 - Pests on the same stretch can overlap; nothing spreads them out.
-- On a small screen (a phone on its side, under about 540 CSS pixels tall) the shared corner
-  buttons, which keep their CSS size, are taller than the 20-pixel strip under the board and still
-  overlap the bottom of the board's bottom-left cell a little.
 - The hit flash is a fill tint, which the canvas renderer (used by the playthrough) does not draw.
 - Calling early counts the current wave as done even though its last pests are still walking:
   they can still bite the Heartwood, but its bonus and bud are already paid.
@@ -228,7 +225,10 @@ Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pi
 the screen's shape (960 to 1344 wide, 560 to 720 tall). Everything is still laid out for the
 designed 960x560 frame (`VIEW`; the HUD, board and panel fill its top 540 pixels, and the 20
 below keep the shared corner buttons, about 12 to 114 by 498 to 528 CSS pixels in a 960x540
-window, off the board's bottom row, whose cells end at y 512): `GameScene.create` takes `viewFrame(this)` as `frame` and scrolls the camera
+window, off the board's bottom row, whose cells end at y 512): `GameScene.create` takes `viewFrame(this)` as `frame`
+(moved by `clearCorner` when the buttons, which keep their CSS size, would still cover the board's
+bottom-left cell, as on a phone on its side: first up, as far as the view's top, then right, as far
+as its right edge; `cornerSize` measures the buttons in view pixels) and scrolls the camera
 to `-frame.x, -frame.y`, so the board, panel, banner, golem menu and the overlays (centred on
 `VIEW.w / 2`) sit in the middle of the view, and world coordinates stay the designed ones. Around
 them, the `table` image (at `-frame.x, -frame.y`, the view's size from `viewSize`) fills the view

@@ -137,8 +137,9 @@ type Chip = { bg: Image; text: Text };
 export class GameScene extends Phaser.Scene {
   state!: GameState;
   /**
-   * The designed 960x560 frame (`VIEW`) in the middle of the view: the camera scrolls so the board, panel
-   * and overlays laid out for it sit there, while the table and the HUD strip fill the whole view.
+   * The designed 960x560 frame (`VIEW`) in the middle of the view (moved off the corner buttons by
+   * `clearCorner`): the camera scrolls so the board, panel and overlays laid out for it sit there,
+   * while the table and the HUD strip fill the whole view.
    */
   private frame = new Phaser.Geom.Rectangle(0, 0, VIEW.w, VIEW.h);
   /** Where the seed cards are, in view pixels; read by the playthrough test. */
@@ -221,10 +222,11 @@ export class GameScene extends Phaser.Scene {
     this.shots.clear();
     this.slimes.clear();
 
-    // Everything is laid out in the designed frame, which the camera centres in the view; the
-    // table fills the whole view and the HUD (moved up by the frame's y) sits at its top edge.
+    // Everything is laid out in the designed frame, which the camera centres in the view (unless the
+    // corner buttons would cover the board); the table fills the whole view and the HUD (moved up by
+    // the frame's y) sits at its top edge.
     const view = viewSize(this);
-    const frame = (this.frame = viewFrame(this));
+    const frame = (this.frame = this.clearCorner(viewFrame(this), view.width, view.height));
     this.cameras.main.setScroll(-frame.x, -frame.y);
     bakeTable(this, view.width, view.height, frame.x, frame.y);
     this.add.image(-frame.x, -frame.y, 'table').setOrigin(0);
@@ -303,6 +305,40 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** What the frame's sounds are told from: the next id, seeds still growing, hedges and armoured pests' health. */
+  /**
+   * Moves the frame off the shared corner buttons when they would cover the board's bottom-left
+   * cell, as on a short window (a phone on its side), where the buttons keep their CSS size and so
+   * grow in game pixels: first up, as far as the view's top, then right, as far as the view's right
+   * edge. A frame the buttons already miss stays centred.
+   */
+  private clearCorner(frame: Phaser.Geom.Rectangle, w: number, h: number) {
+    const corner = this.cornerSize(w, h);
+    const bottom = GRID.y + GRID.rows * GRID.cell;
+    if (frame.y + bottom <= h - corner.h) return frame;
+    frame.y = Math.max(0, Math.min(frame.y, Math.floor(h - corner.h - bottom)));
+    if (frame.y + bottom > h - corner.h) frame.x = Math.min(w - frame.width, Math.max(frame.x, Math.ceil(corner.w - GRID.x)));
+    return frame;
+  }
+
+  /**
+   * The shared corner buttons' footprint in view pixels, measured from the view's bottom-left, with
+   * the view shown as big as fits the page, plus a 4-pixel gap. The row (`shared/corner.ts`: three
+   * 30px buttons 6px apart, 12px from the edges) may not be on the page yet when the scene starts,
+   * so its size is taken from there unless it is.
+   */
+  private cornerSize(w: number, h: number) {
+    const parent = this.scale.parent as HTMLElement | undefined;
+    const pw = parent?.clientWidth || window.innerWidth;
+    const ph = parent?.clientHeight || window.innerHeight;
+    const k = Math.min(pw / w, ph / h);
+    const left = (pw - w * k) / 2;
+    const bottom = (ph + h * k) / 2;
+    const row = document.querySelector('.game-corner')?.getBoundingClientRect();
+    const right = Math.max(12 + 3 * 30 + 2 * 6, row?.width ? row.right : 0);
+    const top = Math.min(ph - 12 - 30, row?.width ? row.top : ph);
+    return { w: (right - left) / k + 4, h: (bottom - top) / k + 4 };
+  }
+
   private soundWatch() {
     const s = this.state;
     return {
