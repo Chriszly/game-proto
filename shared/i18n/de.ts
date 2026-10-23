@@ -47,6 +47,13 @@ const de: Translation<typeof en> = {
   genreManagement: 'Aufbau',
   genrePuzzle: 'Knobelei',
   genreAdventure: 'Abenteuer',
+  shareTitle: 'Den Hub teilen',
+  shareLede: 'Scanne den Code mit der Handykamera, um den Hub dort zu öffnen.',
+  shareQr: 'QR-Code mit dem Link zum Hub',
+  copyLink: 'Link kopieren',
+  linkCopied: 'Link kopiert',
+  copyFailed: 'Nicht kopiert',
+  shareLink: 'Link teilen',
 
   // Settings panel
   off: 'Aus',

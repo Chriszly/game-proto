@@ -108,6 +108,12 @@ with its folder name, see `shared/progress.ts`) and **Play**.
 
 ![A game's own settings](docs/screenshots/hub-game-settings.webp)
 
+The first card, **Share the hub**, shows a QR code of the hub's link to scan with a phone, with
+buttons to copy the link or share it. The code is drawn in the browser from the page's own address
+when it loads (`shared/qr.ts`, no outside service), so it points wherever the hub is hosted.
+
+![The share card](docs/screenshots/hub-share.webp)
+
 Above the cards, **Continue playing** links the last three games played on this device, and a link
 at the bottom of the hub opens the bug and feedback forms. The covers load as they scroll into view.
 
@@ -143,7 +149,7 @@ npm run preview   # serve the production build
 
 ## Layout
 
-- `index.html`: the hub page, one card per game.
+- `index.html`: the hub page, the share card and one card per game.
 - `games/<name>/`: one game, with its own `index.html`, `src/`, `e2e/` playthrough test, `docs/`
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
