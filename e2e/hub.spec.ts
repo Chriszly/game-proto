@@ -521,6 +521,67 @@ test('hub progress files', async ({ page }, testInfo) => {
   await expect.poll(() => alerts.at(-1)).toBe('This is not a .gh progress file, or it was changed.');
 });
 
+// A game's progress, or every game's, also moves as a QR code of a link that opens the hub and
+// imports it (shared/progressCode.ts), or as that link copied and pasted.
+test('hub progress codes', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{"coins":42}');
+    localStorage.setItem('palisade-best', '7');
+  });
+  await page.reload();
+  const messages: string[] = [];
+  let paste = '';
+  page.on('dialog', (d) => {
+    messages.push(d.message());
+    d.accept(d.type() === 'prompt' ? paste : undefined);
+  });
+  const stored = (key: string) => page.evaluate((k) => localStorage.getItem(k), key);
+
+  // One game's code: a QR code of a link with the sealed progress in its digits.
+  await page.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  await page.getByRole('dialog', { name: 'Apothecary' }).getByRole('button', { name: 'QR code' }).click();
+  const codeDialog = page.getByRole('dialog', { name: 'Apothecary: progress code' });
+  await expect(codeDialog.getByRole('img', { name: 'QR code of the progress' }).locator('svg')).toBeVisible();
+  testInfo.attach('progress code', { body: await codeDialog.screenshot({ path: testInfo.outputPath('progress-code.png') }), contentType: 'image/png' });
+  const link = await codeDialog.getByRole('textbox', { name: 'Progress code' }).inputValue();
+  expect(link).toMatch(/^http:\/\/localhost:5173\/#p=\d+$/);
+  await codeDialog.getByRole('button', { name: 'Done' }).click();
+
+  // Opening the link, as a phone camera does, asks and then brings that game's progress back.
+  await page.evaluate(() => localStorage.setItem('apothecary-save', '{"coins":1}'));
+  await page.goto('about:blank');
+  await page.goto(link);
+  await expect.poll(() => stored('apothecary-save')).toBe('{"coins":42}');
+  expect(messages.at(-1)).toMatch(/^Replace the progress of Apothecary on this device with the one in the code, saved .+\?$/);
+  expect(page.url()).toBe('http://localhost:5173/');
+
+  // A pasted code that was changed is refused and changes nothing.
+  const digits = link.split('#p=')[1];
+  paste = digits.slice(0, -1) + ((Number(digits.at(-1)) + 1) % 10);
+  await page.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  await page.getByRole('dialog', { name: 'Apothecary' }).getByRole('button', { name: 'Paste code' }).click();
+  await expect.poll(() => messages.at(-1)).toBe('This is not a progress code, or it was changed or cut short.');
+  expect(await stored('apothecary-save')).toBe('{"coins":42}');
+  await page.getByRole('dialog', { name: 'Apothecary' }).getByRole('button', { name: 'Close' }).click();
+
+  // Every game's code, pasted, brings every game and the settings back.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('group', { name: 'Difficulty' }).getByRole('button', { name: 'Hard' }).click();
+  await settings.getByRole('button', { name: 'QR code' }).click();
+  const allDialog = page.getByRole('dialog', { name: 'Progress code of every game' });
+  paste = await allDialog.getByRole('textbox', { name: 'Progress code' }).inputValue();
+  await allDialog.getByRole('button', { name: 'Done' }).click();
+  await page.evaluate(() => localStorage.clear());
+  const reloaded = page.waitForEvent('load');
+  await settings.getByRole('button', { name: 'Paste code' }).click();
+  await reloaded;
+  expect(await stored('apothecary-save')).toBe('{"coins":42}');
+  expect(await stored('palisade-best')).toBe('7');
+  expect(JSON.parse((await stored('hub-settings'))!).difficulty).toBe('hard');
+});
+
 // The hub and every game link their own web app manifest, so each installs as an app of its own.
 test('hub and games install as apps', async ({ page, request }) => {
   for (const [path, name] of [['/', 'Game hub'], ...GAMES.map((g) => [g.path, g.name])]) {

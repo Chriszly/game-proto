@@ -3,6 +3,7 @@ import { language, setLanguage, t } from './i18n';
 import { previewVolume } from './audio';
 import { clearAllProgress } from './progress';
 import { ALL, askToExport, askToImport, pickFile } from './saveFile';
+import { askToPasteCode, showProgressCode } from './progressCode';
 import { shareUpdates, updateNow } from './install';
 
 /**
@@ -11,14 +12,16 @@ import { shareUpdates, updateNow } from './install';
  * the language, which the hub switches to at once, and the hub-only settings: `onChange` is called
  * after every change to update the page. Below the settings, a Saved progress row exports the saves
  * of every game in `games` (their folder names) and the settings to a `.gh` file
- * (`saveFile.ts`), imports such a file (and reloads the page, since it brings its own settings) and
- * deletes the saves, calling `onChange` too,
+ * (`saveFile.ts`), imports such a file (and reloads the page, since it brings its own settings),
+ * shows the same as a QR code and takes a pasted code (`progressCode.ts`, `titleOf` naming a game
+ * whose code is pasted) and deletes the saves, calling `onChange` too,
  * and the panel ends with Restore defaults and Done, which closes the dialog.
  */
 export function mountSettingsPanel(
   root: HTMLElement,
   onChange: (settings: Settings) => void = () => {},
   games: string[] = [],
+  titleOf: (game: string) => string = (game) => game,
 ) {
   let current = loadSettings();
   const set = (patch: Partial<Settings>) => {
@@ -51,9 +54,14 @@ export function mountSettingsPanel(
   const importButton = action('import-progress', () =>
     pickFile((file) => askToImport(file, ALL, games, '', () => location.reload())),
   );
+  const qrButton = action('qr-progress', () => showProgressCode(ALL, games, ''));
+  // A pasted code of every game brings its settings too; one game's only changes that game.
+  const pasteButton = action('paste-progress', () =>
+    askToPasteCode(games, titleOf, (kind) => (kind === ALL ? location.reload() : onChange(current))),
+  );
   const resetRow = document.createElement('div');
   resetRow.className = 'setting-choices';
-  resetRow.append(exportButton, importButton, reset);
+  resetRow.append(exportButton, importButton, qrButton, pasteButton, reset);
   progress.append(progressName, resetRow, progressHint);
   root.append(progress);
 
@@ -83,6 +91,8 @@ export function mountSettingsPanel(
     if (!updateButton.disabled) updateButton.textContent = t('updateNow');
     exportButton.textContent = t('exportAll');
     importButton.textContent = t('importAll');
+    qrButton.textContent = t('qrCode');
+    pasteButton.textContent = t('pasteCode');
     progressName.textContent = t('savedProgress');
     progressHint.textContent = t('savedProgressHint');
     rows.replaceChildren(

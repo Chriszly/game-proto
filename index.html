@@ -64,6 +64,13 @@
       .settings-actions { display: flex; gap: 8px; padding-top: 14px; border-top: 2px solid #3d2b1f; }
       .settings-actions > * { flex: 1 1 0; min-width: 0; }
       #reset-progress, #reset-game { color: #f0b48a; }
+      /* Dark on light with a wide margin, which phone cameras read best for a dense code. */
+      #progress-code .code-body { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 16px; margin-bottom: 14px; }
+      #progress-code .qr { flex: none; width: min(100%, 320px, 55vh); background: #fff; }
+      #progress-code .code-side { flex: 1 1 220px; }
+      #progress-code .qr svg { display: block; width: 100%; height: auto; }
+      #progress-code .code-text { display: block; box-sizing: border-box; width: 100%; padding: 6px;
+        font: 12px monospace; color: #d8c7a6; background: #1f1712; border: 2px solid #5a3f2a; resize: none; word-break: break-all; }
       /* The first card shares the hub: its QR code sits where a game's cover would, in the page's cream
          text colour on the cards' brown, with its quiet zone. */
       .share-card { display: flex; flex-direction: column; background: #2c2018; border: 3px solid #5a3f2a; box-shadow: 0 4px 0 #0e0a08; }
@@ -109,6 +116,8 @@
             <div class="setting-choices">
               <button type="button" id="export-game" data-i18n="exportProgress">Export progress</button>
               <button type="button" id="import-game" data-i18n="importProgress">Import progress</button>
+              <button type="button" id="qr-game" data-i18n="qrCode">QR code</button>
+              <button type="button" id="paste-game" data-i18n="pasteCode">Paste code</button>
             </div>
             <div class="setting-hint" data-i18n="gameFileHint">Export saves this game's progress to a file, to keep or to load with Import on another device.</div>
           </div>
@@ -117,6 +126,25 @@
             <!-- A game installs from its own page, so this opens it with its Install button ready. -->
             <a class="button" id="install-game" href="" data-i18n="installApp">Install</a>
             <a class="button primary" id="play-game" href="" data-i18n="play">Play</a>
+          </div>
+          <button type="button" class="close" data-i18n-label="close" aria-label="Close">✕</button>
+        </div>
+      </dialog>
+      <!-- Progress as a QR code and a link to copy, for one game or every game (shared/progressCode.ts). -->
+      <dialog id="progress-code" aria-labelledby="progress-code-title">
+        <div class="panel">
+          <h2 id="progress-code-title"></h2>
+          <!-- The code beside its text on a wide screen, above it on a narrow one. -->
+          <div class="code-body">
+            <div class="qr" role="img" data-i18n-label="progressQr" aria-label="QR code of the progress"></div>
+            <div class="code-side">
+              <p class="lede"></p>
+              <textarea class="code-text" readonly rows="3" data-i18n-label="progressCodeText" aria-label="Progress code"></textarea>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button type="button" class="copy-code" data-i18n="copyCode">Copy code</button>
+            <button type="button" class="done primary" data-i18n="done" autofocus>Done</button>
           </div>
           <button type="button" class="close" data-i18n-label="close" aria-label="Close">✕</button>
         </div>
@@ -317,6 +345,7 @@
       import { installed, mountInstallButton, onOpenFile, registerServiceWorker } from './shared/install.ts';
       import { ALL, askToExport, askToImport, fileEnding, pickFile } from './shared/saveFile.ts';
       import { qrSvg } from './shared/qr.ts';
+      import { askToImportCode, askToPasteCode, hubLink, mountProgressCode, openedCode, showProgressCode } from './shared/progressCode.ts';
 
       const games = document.querySelector('.games');
       const shareCard = games.querySelector('.share-card');
@@ -366,6 +395,18 @@
           showRecent();
         });
       document.getElementById('import-game').addEventListener('click', () => pickFile((file) => importGame(shown, file)));
+      document.getElementById('qr-game').addEventListener('click', () => showProgressCode(folder(shown), [], title(shown)));
+      // A code names its own game, which may be another than the one whose ⚙ is open.
+      const titleOf = (game) => title(cards.find((c) => folder(c) === game));
+      const codeImported = (kind) => {
+        if (kind === ALL) {
+          location.reload();
+          return;
+        }
+        if (shown) showGame();
+        showRecent();
+      };
+      document.getElementById('paste-game').addEventListener('click', () => askToPasteCode(cards.map(folder), titleOf, codeImported));
 
       // Continue playing: the last three games played, linked by icon and name.
       const recent = document.querySelector('.recent');
@@ -428,18 +469,19 @@
           showRecent();
         },
         cards.map(folder),
+        titleOf,
       );
       document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
 
       // Share: the hub's address as it is loaded (without a query, a hash or index.html), so the code
       // points to wherever the hub is hosted.
-      const hubLink = `${location.origin}${location.pathname.replace(/index\.html$/, '')}`;
-      shareCard.querySelector('.qr').innerHTML = qrSvg(hubLink, { dark: '#f1e3c6', light: '#2c2018' });
-      shareCard.querySelector('.share-link').textContent = hubLink;
+      const hub = hubLink();
+      shareCard.querySelector('.qr').innerHTML = qrSvg(hub, { dark: '#f1e3c6', light: '#2c2018' });
+      shareCard.querySelector('.share-link').textContent = hub;
       const copyButton = document.getElementById('copy-link');
       copyButton.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText(hubLink);
+          await navigator.clipboard.writeText(hub);
           copyButton.textContent = t('linkCopied');
         } catch {
           copyButton.textContent = t('copyFailed');
@@ -448,12 +490,16 @@
       });
       const shareButton = document.getElementById('share-link');
       shareButton.hidden = !navigator.share;
-      shareButton.addEventListener('click', () => navigator.share({ title: t('hubTitle'), url: hubLink }).catch(() => {}));
+      shareButton.addEventListener('click', () => navigator.share({ title: t('hubTitle'), url: hub }).catch(() => {}));
       for (const d of [dialog, gameDialog]) {
         d.querySelector('.close').addEventListener('click', () => d.close());
         // A click on the backdrop closes it too.
         d.addEventListener('click', (e) => e.target === d && d.close());
       }
+      mountProgressCode();
+      // A progress code scanned with a phone's camera opens the hub with the code in its address.
+      const opened = openedCode();
+      if (opened) askToImportCode(opened, cards.map(folder), titleOf, codeImported);
       showPlayCounts(document.querySelectorAll('.game a'));
       registerServiceWorker();
       mountInstallButton(document.getElementById('install-app'));

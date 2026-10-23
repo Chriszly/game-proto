@@ -1,6 +1,7 @@
 /**
- * A small QR code encoder, so the hub can show its own link as a code to scan without fetching
- * anything from another site. It encodes text as bytes (UTF-8) at error correction level M, in the
+ * A small QR code encoder, so the hub can show its own link and progress codes (`progressCode.ts`)
+ * as codes to scan without fetching anything from another site. It encodes text as bytes (UTF-8),
+ * with long runs of digits in the denser numeric mode, at error correction level M, in the
  * smallest version (1 to 40) that fits, and picks the mask with the lowest penalty. Follows the
  * QR code standard (ISO/IEC 18004) the way most small encoders do.
  */
@@ -130,26 +131,68 @@ const MASKS: ((x: number, y: number) => boolean)[] = [
   (x, y) => (((x + y) % 2) + ((x * y) % 3)) % 2 === 0,
 ];
 
+interface Segment {
+  numeric: boolean;
+  text: string;
+}
+
+// A run of digits shorter than this costs more in its own segment's header than numeric mode saves.
+const MIN_DIGITS = 12;
+
+/** `text` cut into byte segments and numeric segments, one for each long run of digits. */
+function segments(text: string): Segment[] {
+  const parts: Segment[] = [];
+  let rest = '';
+  for (const run of text.split(/(\d+)/)) {
+    if (run.length >= MIN_DIGITS && /^\d/.test(run)) {
+      if (rest) parts.push({ numeric: false, text: rest });
+      parts.push({ numeric: true, text: run });
+      rest = '';
+    } else rest += run;
+  }
+  if (rest || !parts.length) parts.push({ numeric: false, text: rest });
+  return parts;
+}
+
+const countBits = (p: Segment, ver: number) =>
+  p.numeric ? (ver < 10 ? 10 : ver < 27 ? 12 : 14) : ver < 10 ? 8 : 16;
+
+// Numeric mode packs three digits into 10 bits, and a last one or two into 4 or 7.
+const dataBits = (p: Segment) =>
+  p.numeric ? Math.floor(p.text.length / 3) * 10 + [0, 4, 7][p.text.length % 3] : new TextEncoder().encode(p.text).length * 8;
+
 /**
  * The QR code for `text`, as rows of modules (true is dark), without the quiet zone around it.
  * `mask` forces one of the eight masks; by default the one with the lowest penalty is used.
  */
 export function qrCode(text: string, mask?: number): boolean[][] {
-  const bytes = [...new TextEncoder().encode(text)];
+  const parts = segments(text);
   let ver = 1;
-  const bitsNeeded = (v: number) => 4 + (v < 10 ? 8 : 16) + bytes.length * 8;
+  const bitsNeeded = (v: number) => parts.reduce((sum, p) => sum + 4 + countBits(p, v) + dataBits(p), 0);
   while (bitsNeeded(ver) > dataCodewords(ver) * 8) {
     if (++ver > 40) throw new Error('Text too long for a QR code');
   }
 
-  // Byte mode, the length, the bytes, then the terminator and padding up to the capacity.
+  // Each segment's mode, length and data, then the terminator and padding up to the capacity.
   const bits: number[] = [];
   const put = (value: number, len: number) => {
     for (let i = len - 1; i >= 0; i--) bits.push((value >>> i) & 1);
   };
-  put(0b0100, 4);
-  put(bytes.length, ver < 10 ? 8 : 16);
-  for (const b of bytes) put(b, 8);
+  for (const p of parts) {
+    if (p.numeric) {
+      put(0b0001, 4);
+      put(p.text.length, countBits(p, ver));
+      for (let i = 0; i < p.text.length; i += 3) {
+        const group = p.text.slice(i, i + 3);
+        put(Number(group), group.length * 3 + 1);
+      }
+    } else {
+      const bytes = new TextEncoder().encode(p.text);
+      put(0b0100, 4);
+      put(bytes.length, countBits(p, ver));
+      for (const b of bytes) put(b, 8);
+    }
+  }
   const capacity = dataCodewords(ver) * 8;
   put(0, Math.min(4, capacity - bits.length));
   put(0, (8 - (bits.length % 8)) % 8);
