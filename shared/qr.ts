@@ -250,8 +250,8 @@ export function qrCode(text: string, mask?: number): boolean[][] {
 
 /**
  * The QR code for `text` as an SVG image with the standard 4-module margin, `dark` modules on a
- * `light` background (black on white by default). Keep the two far apart in brightness, dark on
- * light, so every scanner reads it.
+ * `light` background (black on white by default). Keep the two far apart in brightness; light
+ * modules on a dark background also work in today's phone cameras.
  */
 export function qrSvg(text: string, { dark = '#000', light = '#fff' } = {}): string {
   const m = qrCode(text);
