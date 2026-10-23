@@ -41,6 +41,7 @@ export const FOE_COLOUR: Record<FoeKind, number> = {
   stag: 0x3c3c46,
   moth: C.moth,
   mole: 0x4a3a33,
+  weevil: 0x7d6a52,
   queen: 0x5b2a7a,
 };
 
@@ -110,8 +111,81 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
   g.fillCircle(x - 2, y - 3, 9);
   g.save();
   g.translateCanvas(x, y);
-  if (kind !== 'frost') g.rotateCanvas(aim);
-  if (kind === 'bow') {
+  if (kind !== 'frost' && kind !== 'beehive' && kind !== 'apple' && kind !== 'puffball') g.rotateCanvas(aim);
+  if (kind === 'storm') {
+    // A copper rod with a charged ball on top.
+    g.fillStyle(0xb06a35, alpha);
+    g.fillRect(-2, -2, 12, 4);
+    g.fillStyle(0x6fd3ff, alpha);
+    g.fillCircle(-1, 0, 6.5);
+    g.fillStyle(0xfff27a, alpha);
+    g.fillCircle(-2, -1.5, 3);
+  } else if (kind === 'crossbow') {
+    // A long stock with a short, stiff bow across its front.
+    g.fillStyle(C.wood, alpha);
+    g.fillRoundedRect(-9, -2.5, 20, 5, 2);
+    g.lineStyle(3, 0x5a3417, alpha);
+    g.lineBetween(7, -9, 7, 9);
+    g.lineStyle(1, 0x2d3b1f, alpha);
+    g.lineBetween(7, -9, -1, 0);
+    g.lineBetween(7, 9, -1, 0);
+    g.fillStyle(0x3e3e46, alpha);
+    g.fillTriangle(11, -2, 15, 0, 11, 2);
+  } else if (kind === 'bonfire') {
+    // An iron brazier with flames leaning the way it points.
+    g.fillStyle(C.iron, alpha);
+    g.fillCircle(0, 0, 9);
+    g.fillStyle(0xff8a2a, alpha);
+    g.fillTriangle(-4, -6, 13, 0, -4, 6);
+    g.fillStyle(0xffd24a, alpha);
+    g.fillTriangle(-2, -3.5, 9, 0, -2, 3.5);
+  } else if (kind === 'puffball') {
+    // A round puffball with spots and a little cloud of spores.
+    g.fillStyle(0xe9dfc4, alpha);
+    g.fillCircle(0, 1, 9);
+    g.fillStyle(0xcbbd98, alpha);
+    for (const [a, b] of [[-4, -1], [3, -3], [1, 4], [-2, 5]]) g.fillCircle(a, b, 1.6);
+    g.fillStyle(0xa6d96a, alpha * 0.8);
+    for (const [a, b] of [[-5, -10], [1, -12], [6, -9]]) g.fillCircle(a, b, 2.2);
+  } else if (kind === 'sunglass') {
+    // A brass-rimmed lens on an arm, looking the way it shines.
+    g.fillStyle(0xb38b2e, alpha);
+    g.fillRect(-6, -2, 8, 4);
+    g.fillStyle(0xd9a93a, alpha);
+    g.fillCircle(5, 0, 7.5);
+    g.fillStyle(0xcff3ff, alpha);
+    g.fillCircle(5, 0, 5.5);
+    g.fillStyle(0xffffff, alpha * 0.8);
+    g.fillCircle(3.5, -2, 1.8);
+  } else if (kind === 'beehive') {
+    // A straw skep: a striped dome with a dark door.
+    g.fillStyle(0xe0a93a, alpha);
+    g.fillEllipse(0, 1, 20, 18);
+    g.lineStyle(1.4, 0xb27a1e, alpha);
+    for (const b of [-3, 1, 5]) g.lineBetween(-9 + Math.abs(b) * 0.3, b, 9 - Math.abs(b) * 0.3, b);
+    g.fillStyle(0x3b2410, alpha);
+    g.fillEllipse(0, 7, 5, 3.5);
+    g.fillStyle(0xffe066, alpha);
+    g.fillCircle(8, -7, 2);
+    g.fillCircle(-8, -6, 2);
+  } else if (kind === 'apple') {
+    // A little tree: a round crown with apples on it.
+    g.fillStyle(0x2f7a2f, alpha);
+    g.fillCircle(0, -1, 10);
+    g.fillStyle(0x4c9a3e, alpha);
+    g.fillCircle(-3, -4, 5);
+    g.fillStyle(0xd9412e, alpha);
+    for (const [a, b] of [[-5, 2], [4, -4], [5, 4]]) g.fillCircle(a, b, 2.4);
+  } else if (kind === 'whirligig') {
+    // A pinwheel of four coloured blades.
+    for (const [i, colour] of [0xf7a8c0, 0xffe066, 0xa8c8ff, 0xa6d96a].entries()) {
+      const a = (i * Math.PI) / 2;
+      g.fillStyle(colour, alpha);
+      g.fillTriangle(0, 0, Math.cos(a) * 11, Math.sin(a) * 11, Math.cos(a + 0.9) * 8, Math.sin(a + 0.9) * 8);
+    }
+    g.fillStyle(C.wood, alpha);
+    g.fillCircle(0, 0, 2.4);
+  } else if (kind === 'bow') {
     g.lineStyle(2.6, C.wood, alpha);
     g.beginPath();
     g.arc(-3, 0, 8, -1.1, 1.1);
@@ -160,10 +234,31 @@ export function cottage(g: G, x: number, y: number) {
   g.fillRect(x - 11, y, 5, 5);
 }
 
+/** What ails a foe: frost, fire and poison each tint it. */
+export interface Ailments {
+  chilled: boolean;
+  burning: boolean;
+  poisoned: boolean;
+}
+
 /** A foe at its middle, facing `angle`. `size` is its radius in pixels. */
-export function foe(g: G, kind: FoeKind, x: number, y: number, angle: number, size: number, chilled: boolean) {
-  if (kind === 'moth') return moth(g, x, y, size);
-  if (kind === 'mole') return mole(g, x, y, angle, size);
+export function foe(g: G, kind: FoeKind, x: number, y: number, angle: number, size: number, ails: Ailments) {
+  if (kind === 'moth') moth(g, x, y, size);
+  else if (kind === 'mole') mole(g, x, y, angle, size);
+  else beetle(g, kind, x, y, angle, size, ails.chilled);
+  if (ails.poisoned) {
+    g.fillStyle(0x8fd14f, 0.4);
+    g.fillCircle(x, y, size * 1.15);
+  }
+  if (ails.burning) {
+    g.fillStyle(0xff8a2a, 0.9);
+    g.fillTriangle(x - 4, y - size, x - 1, y - size - 7, x + 2, y - size);
+    g.fillStyle(0xffd24a, 0.9);
+    g.fillTriangle(x + 1, y - size, x + 4, y - size - 5, x + 6, y - size);
+  }
+}
+
+function beetle(g: G, kind: FoeKind, x: number, y: number, angle: number, size: number, chilled: boolean) {
   const r = size;
   g.save();
   g.translateCanvas(x, y);
@@ -179,6 +274,13 @@ export function foe(g: G, kind: FoeKind, x: number, y: number, angle: number, si
   if (kind === 'ladybird') {
     g.fillStyle(0x1d1d22, 1);
     for (const [a, b] of [[-3, -3], [-2, 3], [3, -2], [2, 4]]) g.fillCircle(a, b, 1.5);
+  }
+  if (kind === 'weevil') {
+    // Armour plates across its back, and a long snout.
+    g.lineStyle(1.4, 0x4f4232, 1);
+    for (const k of [-0.45, 0, 0.45]) g.lineBetween(k * r, -r * 0.8, k * r, r * 0.8);
+    g.lineStyle(2.4, 0x1d1d22, 1);
+    g.lineBetween(r * 1.1, 0, r * 1.9, 0);
   }
   if (kind === 'queen') {
     g.fillStyle(C.gold, 1);

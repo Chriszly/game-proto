@@ -15,10 +15,10 @@ beetle already on the lawn) is refused with an orange no-entry ring.
 
 | Control | Action |
 | --- | --- |
-| Tap or click a tool, or keys 1 to 4 | Pick a hedge, bow, frost or cannon |
+| Tap or click a tool, or keys 1 to 6 | Pick a tower from your pouch |
 | Tap, click or drag on the lawn | Plant the tool there, or a whole line of them |
 | Hover the lawn | See the new route before you plant |
-| Tap or click a tower | Open its panel: Upgrade or Sell |
+| Tap or click a tower | Open its panel: Upgrade, Sell, and Turn for a bonfire or sunglass |
 | Start wave, or Space | Send the next wave; once the last one is all out, send the next early for 5 gold |
 | Speed button, or F | Play at double speed |
 | Gardens | Back to the garden picker |
@@ -34,10 +34,13 @@ Three gardens, each with its own rocks and burrows, so each asks for its own maz
 and the cottage in the corner. Rocks never move and nothing is planted on them. The picker shows
 the best wave reached in each garden.
 
+Under the cards is your **pouch**: the hedge and the bow always come along, and you pick up to four
+more of the other ten towers. The pick is kept for the next game.
+
 ### Towers
 
-Every tower stands on a hedge and blocks its tile. Bows, frost and cannons rise to level 3; selling
-gives back 70% of what a tower cost.
+Every tower stands on a hedge and blocks its tile. Every tower but the hedge rises to level 3;
+selling gives back 70% of what a tower cost.
 
 | Tower | Cost | Reach | What it does |
 | --- | --- | --- | --- |
@@ -45,6 +48,16 @@ gives back 70% of what a tower cost.
 | Bow | 10 | 3 tiles | Quick single shots at the foe closest to the cottage; hits moths |
 | Frost | 15 | 2.5 tiles | A pulse every second that chills (slows to about half) and nicks everything near it |
 | Cannon | 25 | 3.5 tiles | Slow shots that hit every foe on the ground around the target; not moths |
+| Storm rod | 30 | 3 tiles | A bolt that jumps on to up to 3 more foes standing close together (4 and 5 at higher levels); hits moths |
+| Crossbow | 35 | 7 tiles | Slow, heavy bolts at the toughest foe in reach; hits moths |
+| Bonfire | 25 | 2.2 tiles, one way | Breathes flames down the way it points and sets ground foes alight; turn it from its panel |
+| Puffball | 20 | 2.5 tiles | Poisons a foe, and the poison spreads to ground foes walking close to it; goes through armour |
+| Sunglass | 40 | its row or column | A beam down the way it points, up to the first rock or tower, hitting every foe in the line |
+| Beehive | 30 | the 8 tiles round it | Doesn't shoot: the towers round it reload 20% faster (30%, 40%) |
+| Apple tree | 30 | | Doesn't shoot: drops 5 gold each time a wave is held (8, 12) |
+| Whirligig | 20 | 2.5 tiles | Darts that come faster the longer it keeps firing; hits moths |
+
+![A storm rod's bolt, bonfires, crossbows and beehives along a serpentine maze](docs/screenshots/towers.webp)
 
 ### Foes
 
@@ -55,6 +68,7 @@ gives back 70% of what a tower cost.
 | Stag beetle | slow and tough | 2 |
 | Moth | flies straight from its burrow to the cottage, over the maze | 1 |
 | Mole | walks the maze, but chews through a hedge (not a tower) that stands in the way of a much shorter route | 1 |
+| Weevil | from wave 8; armoured, so each hit does 5 less (at least 1), though burning and poison go through | 1 |
 | Beetle queen | waves 10 and 20, very tough | 5 |
 
 ![A mole chewing through the first hedge](docs/screenshots/mole.webp)

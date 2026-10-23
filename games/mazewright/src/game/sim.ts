@@ -1,9 +1,9 @@
-import { distances, nextStep, UNREACHABLE } from './grid';
-import { cellIndex, cellOf, MAPS, type MapDef } from './maps';
+import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
+import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
-  CHEW_GAIN, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  SECOND_GATE, SELL_BACK, SHOT_SPEED, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
-  type FoeKind, type TowerKind,
+  attacks, CHEW_GAIN, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
+  SECOND_GATE, SELL_BACK, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  type FoeKind, type ShotKind, type TowerKind,
 } from './rules';
 
 // A game of Mazewright, with no Phaser: the grid, the towers, the foes, the shots and the waves.
@@ -22,6 +22,11 @@ export interface Tower {
   cooldown: number;
   /** Which way it last aimed, in radians, for drawing. */
   aim: number;
+  /** Bonfire and sunglass: the way it points, an index into `DIRS`. */
+  face: number;
+  /** Whirligig: how far it has spun up (0 to 1), and the seconds since its last shot. */
+  spin: number;
+  idle: number;
 }
 
 export interface Foe {
@@ -45,6 +50,14 @@ export interface Foe {
   /** Chilled by frost until this time, walking at `slowFactor` of its speed. */
   slowUntil: number;
   slowFactor: number;
+  /** Set alight by a bonfire, or poisoned by a puffball, until these times, taking this much a second. */
+  burnUntil: number;
+  burnDps: number;
+  poisonUntil: number;
+  poisonDps: number;
+  /** Puffball poison spreads to foes walking close; spores caught that way spread no further. */
+  spreads: boolean;
+  spreadAt: number;
   /** A mole chewing a hedge: the hedge's cell and the seconds left. */
   chew: { cell: number; left: number } | null;
   /** A mole chews one hedge in its life. */
@@ -53,7 +66,7 @@ export interface Foe {
 }
 
 export interface Shot {
-  kind: 'bow' | 'cannon';
+  kind: ShotKind;
   x: number;
   y: number;
   target: number;
@@ -69,7 +82,12 @@ export type GameEvent =
   | { type: 'refused'; cell: number; reason: Refusal }
   | { type: 'upgraded'; cell: number }
   | { type: 'sold'; cell: number; gold: number }
-  | { type: 'shot'; kind: 'bow' | 'cannon' }
+  | { type: 'shot'; kind: TowerKind }
+  | { type: 'bolt'; points: { x: number; y: number }[] }
+  | { type: 'flame'; x: number; y: number; angle: number; r: number; cone: number }
+  | { type: 'beam'; x: number; y: number; x2: number; y2: number }
+  | { type: 'puff'; x: number; y: number }
+  | { type: 'apples'; cell: number; gold: number }
   | { type: 'pulse'; x: number; y: number; r: number }
   | { type: 'boom'; x: number; y: number; r: number }
   | { type: 'hit'; x: number; y: number }
@@ -189,11 +207,61 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
     return refusal;
   }
   g.gold -= TOWER[kind].cost;
-  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: 0 });
+  const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
+  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0 });
   g.blocked[cell] = 2;
   g.dist = distances(g.blocked, g.goal);
   g.events.push({ type: 'built', kind, cell });
   return null;
+}
+
+/** The route cells foes walk now, from both burrows. */
+function routeCells(g: Game) {
+  return new Set(g.gates.flatMap((gate) => route(g.dist, gate)));
+}
+
+/** The cells a sunglass on `cell` facing `face` shines over: up to the first rock or tower. */
+export function beamCells(g: Game, cell: number, face: number) {
+  const cells: number[] = [];
+  let [x, y] = cellOf(cell);
+  const [dx, dy] = DIRS[face];
+  for (x += dx, y += dy; inGrid(x, y) && !g.blocked[y * COLS + x]; x += dx, y += dy) cells.push(y * COLS + x);
+  return cells;
+}
+
+/** Whether a point (in cells) is in a bonfire's cone from `cell` facing `face`, within `extra` of its reach. */
+export function inCone(cell: number, face: number, px: number, py: number, extra = 0) {
+  const { x, y } = centre(cell);
+  const d = Math.hypot(px - x, py - y);
+  if (d > TOWER.bonfire.range + extra || d < 0.01) return false;
+  const off = Math.atan2(py - y, px - x) - Math.atan2(DIRS[face][1], DIRS[face][0]);
+  return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= TOWER.bonfire.cone!;
+}
+
+/** The way a new bonfire or sunglass first points: where it covers the most of today's route. */
+export function bestFace(g: Game, cell: number, kind: TowerKind) {
+  const path = routeCells(g);
+  let best = 0;
+  let most = -1;
+  DIRS.forEach((_, face) => {
+    let n = 0;
+    if (kind === 'sunglass') for (const c of beamCells(g, cell, face)) n += path.has(c) ? 1 : 0;
+    else for (const c of path) {
+      const m = centre(c);
+      if (inCone(cell, face, m.x, m.y)) n++;
+    }
+    if (n > most) (most = n), (best = face);
+  });
+  return best;
+}
+
+/** Turns a bonfire or sunglass a quarter round, clockwise. */
+export function turn(g: Game, cell: number) {
+  const tower = towerAt(g, cell);
+  if (!tower || !TOWER[tower.kind].faces || over(g)) return false;
+  tower.face = [1, 3, 0, 2][tower.face];
+  tower.aim = Math.atan2(DIRS[tower.face][1], DIRS[tower.face][0]);
+  return true;
 }
 
 /** The gold an upgrade of `tower` costs, or null when it can't go higher. */
@@ -262,7 +330,8 @@ function spawn(g: Game, kind: FoeKind, gate: 0 | 1, wave: number) {
   const { x, y } = centre(cell);
   g.foes.push({
     id: g.nextId++, kind, hp, maxHp: hp, gate, x, y, from: cell, to: cell, t: 1, heading: 0, angle: 0,
-    slowUntil: 0, slowFactor: 1, chew: null, chewed: false, dead: false,
+    slowUntil: 0, slowFactor: 1, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0,
+    chew: null, chewed: false, dead: false,
   });
 }
 
@@ -302,9 +371,11 @@ function hedgeToChew(g: Game, from: number) {
   return best;
 }
 
-function hurt(g: Game, f: Foe, damage: number) {
+/** Takes `damage` off a foe; armour blunts each hit, but not burning or poison (`through`). */
+function hurt(g: Game, f: Foe, damage: number, through = false) {
   if (f.dead) return;
-  f.hp -= damage;
+  const armour = FOE[f.kind].armour;
+  f.hp -= armour && !through ? Math.max(1, damage - armour) : damage;
   if (f.hp > 0) return;
   f.dead = true;
   const gold = FOE[f.kind].gold;
@@ -378,13 +449,77 @@ function leak(g: Game, f: Foe) {
   g.events.push({ type: 'leak', kind: f.kind, lives });
 }
 
-function fire(g: Game, tower: Tower, dt: number) {
+/** Burning and poison, and poison spreading to the foes walking close. */
+function afflict(g: Game, f: Foe, dt: number) {
+  if (g.clock < f.burnUntil) hurt(g, f, f.burnDps * dt, true);
+  if (g.clock >= f.poisonUntil) return;
+  hurt(g, f, f.poisonDps * dt, true);
+  if (!f.spreads || g.clock < f.spreadAt) return;
+  f.spreadAt = g.clock + SPREAD.every;
+  for (const o of g.foes) {
+    if (o === f || o.dead || FOE[o.kind].flies || Math.hypot(o.x - f.x, o.y - f.y) > SPREAD.reach || o.poisonUntil > g.clock) continue;
+    o.poisonUntil = g.clock + 2;
+    o.poisonDps = f.poisonDps;
+    o.spreads = false;
+  }
+}
+
+/** How much faster each tower reloads, from the beehives round it (the best one counts). */
+function boosts(g: Game) {
+  const out = new Map<number, number>();
+  for (const hive of g.towers) {
+    if (hive.kind !== 'beehive') continue;
+    const [hx, hy] = cellOf(hive.cell);
+    const boost = TOWER.beehive.boost![hive.level - 1];
+    for (const t of g.towers) {
+      const [x, y] = cellOf(t.cell);
+      if (t !== hive && Math.abs(x - hx) <= 1 && Math.abs(y - hy) <= 1) out.set(t.id, Math.max(out.get(t.id) ?? 0, boost));
+    }
+  }
+  return out;
+}
+
+/** The foe a tower aims at: the closest to the cottage, or for a crossbow the toughest. */
+function pick(g: Game, foes: Foe[], strongest = false) {
+  let target = foes[0];
+  for (const f of foes) if (strongest ? f.hp > target.hp : remaining(g, f) < remaining(g, target)) target = f;
+  return target;
+}
+
+function fire(g: Game, tower: Tower, dt: number, boost: number) {
   const def = TOWER[tower.kind];
-  tower.cooldown = Math.max(0, tower.cooldown - dt);
-  if (tower.kind === 'hedge' || tower.cooldown > 0) return;
+  tower.cooldown = Math.max(0, tower.cooldown - dt * (1 + boost));
+  if (!attacks(tower.kind)) return;
+  if (tower.kind === 'whirligig' && (tower.idle += dt) > 1) tower.spin = Math.max(0, tower.spin - dt / def.spinUp!);
+  if (tower.cooldown > 0) return;
   const { x, y } = centre(tower.cell);
   const lvl = tower.level - 1;
-  const inRange = g.foes.filter((f) => !f.dead && (def.air || !FOE[f.kind].flies) && Math.hypot(f.x - x, f.y - y) <= def.range);
+  const reaches = (f: Foe) => !f.dead && (def.air || !FOE[f.kind].flies);
+  if (tower.kind === 'sunglass') {
+    const cells = beamCells(g, tower.cell, tower.face);
+    const lit = new Set(cells);
+    const hit = g.foes.filter((f) => reaches(f) && lit.has(Math.floor(f.y) * COLS + Math.floor(f.x)));
+    if (hit.length === 0) return;
+    tower.cooldown = def.reload[lvl];
+    for (const f of hit) hurt(g, f, def.damage[lvl]);
+    const end = cells.length ? centre(cells[cells.length - 1]) : { x, y };
+    const [dx, dy] = DIRS[tower.face];
+    g.events.push({ type: 'beam', x, y, x2: end.x + dx * 0.5, y2: end.y + dy * 0.5 }, { type: 'shot', kind: 'sunglass' });
+    return;
+  }
+  if (tower.kind === 'bonfire') {
+    const hit = g.foes.filter((f) => reaches(f) && inCone(tower.cell, tower.face, f.x, f.y, FOE[f.kind].size));
+    if (hit.length === 0) return;
+    tower.cooldown = def.reload[lvl];
+    for (const f of hit) {
+      hurt(g, f, def.damage[lvl]);
+      f.burnUntil = g.clock + def.dotFor!;
+      f.burnDps = def.dot![lvl];
+    }
+    g.events.push({ type: 'flame', x, y, angle: tower.aim, r: def.range, cone: def.cone! }, { type: 'shot', kind: 'bonfire' });
+    return;
+  }
+  const inRange = g.foes.filter((f) => reaches(f) && Math.hypot(f.x - x, f.y - y) <= def.range);
   if (inRange.length === 0) return;
   tower.cooldown = def.reload[lvl];
   if (tower.kind === 'frost') {
@@ -396,12 +531,46 @@ function fire(g: Game, tower: Tower, dt: number) {
     g.events.push({ type: 'pulse', x, y, r: def.range });
     return;
   }
-  let target = inRange[0];
-  for (const f of inRange) if (remaining(g, f) < remaining(g, target)) target = f;
+  if (tower.kind === 'storm') {
+    // The bolt strikes the foe closest to the cottage, then jumps on to the nearest foe not yet struck.
+    const struck = [pick(g, inRange)];
+    while (struck.length < def.chain![lvl]) {
+      const last = struck[struck.length - 1];
+      let next: Foe | undefined;
+      let best = def.jump!;
+      for (const f of g.foes) {
+        const d = Math.hypot(f.x - last.x, f.y - last.y);
+        if (reaches(f) && !struck.includes(f) && d <= best) (best = d), (next = f);
+      }
+      if (!next) break;
+      struck.push(next);
+    }
+    const points = [{ x, y }, ...struck.map((f) => ({ x: f.x, y: f.y }))];
+    for (const f of struck) hurt(g, f, def.damage[lvl]);
+    tower.aim = Math.atan2(points[1].y - y, points[1].x - x);
+    g.events.push({ type: 'bolt', points }, { type: 'shot', kind: 'storm' });
+    return;
+  }
+  if (tower.kind === 'puffball') {
+    // Spores for a foe not yet poisoned, if there is one.
+    const clean = inRange.filter((f) => f.poisonUntil <= g.clock);
+    const target = pick(g, clean.length ? clean : inRange);
+    target.poisonUntil = g.clock + def.dotFor!;
+    target.poisonDps = def.dot![lvl];
+    target.spreads = true;
+    g.events.push({ type: 'puff', x: target.x, y: target.y }, { type: 'shot', kind: 'puffball' });
+    return;
+  }
+  const target = pick(g, inRange, def.strongest);
   tower.aim = Math.atan2(target.y - y, target.x - x);
-  const kind = tower.kind === 'bow' ? 'bow' : 'cannon';
+  if (tower.kind === 'whirligig') {
+    tower.cooldown = def.reload[lvl] + (def.spinTo![lvl] - def.reload[lvl]) * tower.spin;
+    tower.spin = Math.min(1, tower.spin + tower.cooldown / def.spinUp!);
+    tower.idle = 0;
+  }
+  const kind = tower.kind as ShotKind;
   g.shots.push({ kind, x, y, target: target.id, tx: target.x, ty: target.y, damage: def.damage[lvl], splash: def.splash ?? 0 });
-  g.events.push({ type: 'shot', kind });
+  g.events.push({ type: 'shot', kind: tower.kind });
 }
 
 function moveShot(g: Game, s: Shot, dt: number) {
@@ -416,7 +585,7 @@ function moveShot(g: Game, s: Shot, dt: number) {
     s.y += (dy / d) * travel;
     return false;
   }
-  if (s.kind === 'bow') {
+  if (s.kind !== 'cannon') {
     if (target) {
       hurt(g, target, s.damage);
       g.events.push({ type: 'hit', x: s.tx, y: s.ty });
@@ -437,7 +606,9 @@ export function step(g: Game, dt: number) {
     spawn(g, s.kind, s.gate, s.wave);
   }
   for (const f of g.foes) if (!f.dead) moveFoe(g, f, dt);
-  for (const t of g.towers) fire(g, t, dt);
+  for (const f of g.foes) if (!f.dead) afflict(g, f, dt);
+  const boost = boosts(g);
+  for (const t of g.towers) fire(g, t, dt, boost.get(t.id) ?? 0);
   g.shots = g.shots.filter((s) => !moveShot(g, s, dt));
   g.foes = g.foes.filter((f) => !f.dead);
   if (g.lives <= 0) {
@@ -449,6 +620,12 @@ export function step(g: Game, dt: number) {
     let gold = 0;
     for (; g.paid < g.wave; g.paid++) gold += waveReward(g.paid + 1);
     g.gold += gold;
+    for (const t of g.towers) {
+      if (t.kind !== 'apple') continue;
+      const apples = TOWER.apple.apples![t.level - 1];
+      g.gold += apples;
+      g.events.push({ type: 'apples', cell: t.cell, gold: apples });
+    }
     g.shots = [];
     g.events.push({ type: 'cleared', wave: g.wave, gold });
     if (g.wave >= WAVES.length) {

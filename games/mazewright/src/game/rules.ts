@@ -7,12 +7,18 @@ import { byDifficulty } from '../../../../shared/settings';
 export const COLS = 22;
 export const ROWS = 11;
 
-export const TOWERS = ['hedge', 'bow', 'frost', 'cannon'] as const;
+export const TOWERS = ['hedge', 'bow', 'frost', 'cannon', 'storm', 'crossbow', 'bonfire', 'puffball', 'sunglass', 'beehive', 'apple', 'whirligig'] as const;
 export type TowerKind = (typeof TOWERS)[number];
+
+/** The pouch: the towers a run can plant. Hedge and bow are always in it, with up to four more. */
+export const ALWAYS: TowerKind[] = ['hedge', 'bow'];
+export const POUCH_PICKS = 4;
+/** Today's four, the pouch of a first game. */
+export const DEFAULT_POUCH: TowerKind[] = ['hedge', 'bow', 'frost', 'cannon'];
 
 export interface TowerDef {
   cost: number;
-  /** Reach in cells; 0 for a hedge, which only blocks. */
+  /** Reach in cells; 0 for a tower that never shoots (hedge, beehive, apple tree). */
   range: number;
   /** Damage per shot (frost: per pulse), by level 1 to 3. */
   damage: [number, number, number];
@@ -25,6 +31,24 @@ export interface TowerDef {
   /** Frost: how fast a chilled foe still walks (0.5 is half speed), by level, and for how long. */
   slow?: [number, number, number];
   slowFor?: number;
+  /** Storm rod: how many foes a bolt reaches in all, by level, and how far it jumps between them. */
+  chain?: [number, number, number];
+  jump?: number;
+  /** Bonfire: burn damage per second, by level, and for how long. Puffball: the same for poison. */
+  dot?: [number, number, number];
+  dotFor?: number;
+  /** Bonfire and sunglass point one way (an index into `DIRS`); the bonfire's cone half-width in radians. */
+  faces?: boolean;
+  cone?: number;
+  /** Beehive: how much faster the towers round it reload, by level. */
+  boost?: [number, number, number];
+  /** Apple tree: gold dropped each time a wave is held, by level. */
+  apples?: [number, number, number];
+  /** Whirligig: the reload it spins up to, by level, and the seconds of firing it takes. */
+  spinTo?: [number, number, number];
+  spinUp?: number;
+  /** Crossbow: aims at the toughest foe in reach rather than the one closest to the cottage. */
+  strongest?: boolean;
 }
 
 export const TOWER: Record<TowerKind, TowerDef> = {
@@ -32,7 +56,18 @@ export const TOWER: Record<TowerKind, TowerDef> = {
   bow: { cost: 10, range: 3, damage: [6, 10, 16], reload: [0.6, 0.55, 0.5], air: true },
   frost: { cost: 15, range: 2.5, damage: [2, 3, 5], reload: [1, 1, 1], air: true, slow: [0.55, 0.5, 0.42], slowFor: 1.5 },
   cannon: { cost: 25, range: 3.5, damage: [16, 26, 40], reload: [1.6, 1.5, 1.4], air: false, splash: 1 },
+  storm: { cost: 30, range: 3, damage: [14, 22, 34], reload: [1.4, 1.3, 1.2], air: true, chain: [4, 5, 6], jump: 1.5 },
+  crossbow: { cost: 35, range: 7, damage: [50, 80, 125], reload: [2.5, 2.3, 2.1], air: true, strongest: true },
+  bonfire: { cost: 25, range: 2.2, damage: [4, 7, 11], reload: [0.5, 0.5, 0.5], air: false, dot: [6, 9, 14], dotFor: 2, faces: true, cone: 0.7 },
+  puffball: { cost: 20, range: 2.5, damage: [0, 0, 0], reload: [1.2, 1.1, 1], air: true, dot: [4, 6, 9], dotFor: 4 },
+  sunglass: { cost: 40, range: 22, damage: [22, 34, 50], reload: [1.4, 1.3, 1.2], air: true, faces: true },
+  beehive: { cost: 30, range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, boost: [0.2, 0.3, 0.4] },
+  apple: { cost: 30, range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, apples: [5, 8, 12] },
+  whirligig: { cost: 20, range: 2.5, damage: [3, 4, 6], reload: [0.6, 0.6, 0.6], air: true, spinTo: [0.15, 0.13, 0.11], spinUp: 3 },
 };
+
+/** Whether a tower kind shoots or pulses at foes (a hedge, beehive or apple tree doesn't). */
+export const attacks = (kind: TowerKind) => TOWER[kind].range > 0;
 
 /** The highest level a tower reaches; hedges stay at 1. */
 export const MAX_LEVEL = 3;
@@ -41,9 +76,12 @@ export const SELL_BACK = 0.7;
 /** The cost of raising a tower from `level` to the next. */
 export const upgradeCost = (kind: TowerKind, level: number) => TOWER[kind].cost * level;
 /** Arrow and cannon ball speeds, in cells per second. */
-export const SHOT_SPEED = { bow: 12, cannon: 7 } as const;
+export const SHOT_SPEED = { bow: 12, cannon: 7, crossbow: 20, whirligig: 14 } as const;
+export type ShotKind = keyof typeof SHOT_SPEED;
+/** Puffball spores jump from a poisoned foe to ground foes this close, once a second. */
+export const SPREAD = { reach: 0.9, every: 1 };
 
-export const FOES = ['beetle', 'ladybird', 'stag', 'moth', 'mole', 'queen'] as const;
+export const FOES = ['beetle', 'ladybird', 'stag', 'moth', 'mole', 'weevil', 'queen'] as const;
 export type FoeKind = (typeof FOES)[number];
 
 export interface FoeDef {
@@ -59,6 +97,8 @@ export interface FoeDef {
   flies?: boolean;
   /** Moles chew through a hedge that stands in the way of a much shorter route. */
   digs?: boolean;
+  /** Weevils: each hit does this much less damage (at least 1). Burn and poison go through it. */
+  armour?: number;
   /** Its body's radius in cells, for drawing and for cannon splash. */
   size: number;
 }
@@ -69,6 +109,7 @@ export const FOE: Record<FoeKind, FoeDef> = {
   stag: { hp: 90, speed: 1, gold: 5, lives: 2, gap: 1.6, size: 0.3 },
   moth: { hp: 22, speed: 1.4, gold: 3, lives: 1, gap: 1, flies: true, size: 0.22 },
   mole: { hp: 50, speed: 1.3, gold: 4, lives: 1, gap: 1.4, digs: true, size: 0.26 },
+  weevil: { hp: 55, speed: 1.2, gold: 4, lives: 1, gap: 1.2, armour: 5, size: 0.24 },
   queen: { hp: 600, speed: 0.8, gold: 40, lives: 5, gap: 2, size: 0.42 },
 };
 
@@ -92,19 +133,19 @@ export const WAVES: Group[][] = [
   [['beetle', 8], ['mole', 3]],
   [['beetle', 12], ['ladybird', 6]],
   [['stag', 5], ['beetle', 8]],
-  [['moth', 8], ['beetle', 10]],
+  [['moth', 8], ['beetle', 6], ['weevil', 4]],
   [['mole', 5], ['ladybird', 10]],
   [['beetle', 10], ['queen', 1]],
-  [['beetle', 16], ['moth', 6]],
+  [['beetle', 10], ['weevil', 5], ['moth', 6]],
   [['stag', 8], ['mole', 4]],
   [['ladybird', 20]],
   [['moth', 12], ['stag', 4]],
-  [['mole', 8], ['beetle', 14]],
+  [['mole', 8], ['weevil', 8], ['beetle', 6]],
   [['stag', 10], ['ladybird', 12]],
   [['moth', 14], ['mole', 6]],
-  [['beetle', 24], ['stag', 8]],
+  [['beetle', 14], ['weevil', 8], ['stag', 8]],
   [['ladybird', 20], ['moth', 10], ['mole', 6]],
-  [['stag', 8], ['moth', 8], ['queen', 1]],
+  [['stag', 8], ['weevil', 6], ['moth', 8], ['queen', 1]],
 ];
 export const SECOND_GATE = 6;
 /** Seconds between two groups of a wave. */
