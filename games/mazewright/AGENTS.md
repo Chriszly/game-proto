@@ -1,0 +1,130 @@
+# Mazewright: guide for agents
+
+How Mazewright is built and where things stand, for agents changing it. README.md covers how to
+play, the towers, the foes and the gardens. Keep this file up to date with any change to the game,
+per the root AGENTS.md.
+
+## Current state
+
+Mazewright is a maze-building tower defense in a Hedge Garden look, drawn in flat vector shapes
+(clean fills, soft drop shadows, no outlines). There is no road: foes walk from a burrow to the
+cottage by the shortest free way across a 22x11 grid, and every hedge and tower is a wall. The core
+rule is that a free route always remains: a placement is refused when it would leave either burrow,
+or any foe on the ground, without a way to the cottage.
+
+Implemented today:
+
+- Three gardens (`MAPS`): Meadow, Orchard and Millpond, each with two burrows, a cottage and fixed
+  rocks. The picker shows each garden's best wave.
+- Towers (`TOWERS`): `hedge` (blocks only), `bow`, `frost` (pulse, slows) and `cannon` (splash,
+  ground only), levels 1 to 3 (hedges stay at 1), sold for 70% of what they cost.
+- Foes (`FOES`): `beetle`, `ladybird`, `stag`, `moth` (flies straight over the maze), `mole` (chews
+  through one hedge in its life when that saves it at least `CHEW_GAIN` steps; towers and rocks are
+  never chewed) and the `queen` (waves 10 and 20).
+- 20 waves (`WAVES`); the second burrow is used from wave `SECOND_GATE` (6), but both routes must
+  stay open all game. Waves start by hand (Start wave), and the next can be sent early for
+  `EARLY_BONUS` gold once the current one is all out.
+- Building during a wave is allowed; a tile with a foe on it (or walking onto it) is refused.
+- Hover preview: the routes as they would be with the hovered tile planted, or the no-entry ring.
+- Drag to plant a line; keys 1 to 4, Space and F; a 2x speed button.
+- Banners name each new foe kind the first time it comes, the second burrow and a chewing mole.
+
+Missing or rough:
+
+- A game in play is not saved; a reload starts at the garden picker.
+- No Watch AI mode, no upright layout (an upright phone gets the turn hint).
+- Balance was tuned with a scripted bot (a fixed serpentine on the Meadow): building only between
+  waves it loses at the final queen on Normal, building during waves it wins with a few lives left.
+- `docs/screenshots/gardens.webp`, `maze.webp`, `mole.webp` and `cover.png` were taken by hand (a
+  Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
+  playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
+
+## Architecture
+
+File map (`src/`):
+
+- `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Phaser.Scale.FIT`) with `GameScene`,
+  calls `setupGame(game, { howToPlay })` and then `setupScaling(game, { fill: true })`, and in dev
+  builds puts `game` on `window`.
+- `howToPlay.ts`: the How to play text in English (also US English) and German.
+- `i18n.ts` and `i18n/`: the game's texts. `en.ts` is the British English source, `de.ts` the
+  German (with `keepEnglish` for the title and Frost) and `en-US.ts` empty. Keys built from ids
+  (`${map}Name`, `${map}Text`, `${tower}Name`, `${tower}Text`, `refuse_${reason}`, `new_${foe}`)
+  must exist for every id.
+- `audio.ts`: `SONG` and the `SFX` table (see Sound).
+- `game/rules.ts`: `COLS`, `ROWS`, `TOWERS`/`TOWER` (cost, range, damage and reload by level, air,
+  splash, slow), `MAX_LEVEL`, `SELL_BACK`, `upgradeCost`, `SHOT_SPEED`, `FOES`/`FOE` (hp, speed,
+  gold, lives, gap, flies, digs, size), `CHEW_TIME`, `CHEW_GAIN`, `WAVES`, `SECOND_GATE`,
+  `GROUP_GAP`, `HP_PER_WAVE`, `FINAL_QUEEN`, `startLives`, `START_GOLD`, `hpScale`, `waveReward`,
+  `EARLY_BONUS`. No Phaser.
+- `game/maps.ts`: `MAPS` (`MapDef`: `id`, `gates`, `goal`, `rocks`), `cellIndex`, `cellOf`,
+  `inGrid`. A cell index is `row * COLS + col`.
+- `game/grid.ts`: `distances` (breadth-first search out from the cottage over free cells, 4
+  neighbours), `nextStep` (a neighbour one step closer, keeping the heading on ties, then right,
+  down, up, left), `route`, `UNREACHABLE`, `DIRS`.
+- `game/sim.ts`: `Game`, `Tower`, `Foe`, `Shot`, `GameEvent`, `Refusal` and the actions:
+  `newGame`, `canBuild`, `wouldBlock`, `build`, `nextUpgrade`, `upgrade`, `sellValue`, `sell`,
+  `canStartWave`, `startWave`, `step`, `remaining`, `routeLength`, `towerAt`. Only this file
+  changes a `Game`. `g.blocked` is 0 free, 1 rock, 2 tower; `g.dist` is made again whenever a cell
+  is blocked or freed. A ground foe walks from `from` to `to` (neighbouring cells) with `t` from 0
+  to 1, and picks its next cell from `g.dist` on arrival, so a maze changed mid-wave takes effect at
+  its next step. `canBuild` refuses a tile in this order: `reserved` (a burrow or the cottage),
+  `taken` (a rock or tower; the scene opens the tower's panel instead), `foe`, `blocks` (the
+  never-close rule: `open` checks both burrows and every ground foe's `to` cell against the new
+  field) and `gold`. Towers aim at the foe with the least `remaining` distance in reach.
+- `game/save.ts`: `loadRecords`, `noteRecord`.
+- `scenes/layout.ts`: `VIEW`, `CELL` (40), `GRID` (the grid's corner in the 960x540 frame), the bar
+  height, the tool, wave, speed and Gardens buttons, the tower panel, the garden cards and `DEPTH`.
+- `scenes/art.ts`: `C` (colours), `FOE_COLOUR` and the drawing functions (`lawn`, `flowers`,
+  `hedge`, `chewedHedge`, `rock`, `tower`, `burrow`, `cottage`, `foe`, `healthBar`, `dotted`,
+  `dashedCircle`, `noEntry`), all on a Phaser Graphics at a cell's middle.
+- `scenes/GameScene.ts`: the only scene. Screens `menu` (the garden picker) and `play`. It steps the
+  game in fixed `STEP`s (1/60 s, times `speed`), drains `g.events` for sound, flashes and records,
+  redraws the rocks, burrows and cottage when the board changes (`boardG`), everything that moves
+  each frame (`fxG`: routes, towers, the hover preview, foes, shots, flashes) and the bars, buttons,
+  tower panel, banner and end panel when what they show changes (`hudG` and texts). The lawn
+  fills the whole view; the bars are pinned to its top and bottom and the grid sits in the middle of
+  `viewFrame`. Tools start 176 pixels in, clear of the corner buttons.
+
+Save keys: `mazewright-best` (per garden: best wave and whether it was won).
+
+Test hooks (read by `e2e/playthrough.spec.ts` through `window.game.scene.getScene('Game')`):
+`screen`, `state` (the `Game`), `buttons` (every button by id, centred, in view pixels:
+`map-<garden>`, `tool-<tower>`, `wave`, `speed`, `gardens`, `upgrade`, `sell`, `again`) and `grid`
+(the grid's corner and cell size in view pixels).
+
+Difficulty: `startLives` (30, 20, 12) and `hpScale` (0.8, 1, 1.25) use `byDifficulty`. Reduced
+motion holds the frost pulse and cannon boom rings at full size and the gold numbers still.
+
+## Sound
+
+`SONG` (104 BPM, G major): `calm` (the picker and between waves), `battle` (a wave in play, E minor),
+`boss` (while a queen is out or to come) and the stings `win` and `lose`.
+
+| Sound | Where |
+| --- | --- |
+| `plant`, `build` | a hedge or another tower built (`built` event) |
+| `upgrade`, `sell` | `upgraded`, `sold` |
+| `bow`, `cannon` | a shot fired (`shot`), one per shot, rate-limited |
+| `frost` | a frost pulse |
+| `pop` | a foe beaten |
+| `leak` | a foe reaches the cottage |
+| `horn`, `cleared` | a wave starts, a wave is held |
+| `chew` | a mole starts chewing, and the hedge is gone |
+| shared `refuse` | a refused placement, a disabled button, Start wave while a wave is still coming out |
+| shared `click` | every button |
+
+## Common changes
+
+- **A tower's numbers**: `TOWER` in `rules.ts`. A new tower kind also needs its drawing in
+  `art.tower`, its `${kind}Name`/`${kind}Text` texts, a tool button (the bar has room for one more
+  at 118 pixels) and a sound.
+- **A foe**: add it to `FOES` and `FOE`, its look in `art.foe`, its colour in `FOE_COLOUR`, its
+  `new_${kind}` text, and put it in `WAVES`.
+- **A garden**: add a `MapDef` to `MAPS` (keep both burrows and the cottage free of rocks and the
+  burrows able to reach the cottage), its `${id}Name`/`${id}Text` texts and a picker card slot in
+  `CARDS.xs`.
+- **The playthrough** plays the first wave on the Meadow: hedges in column 4 rows 0 to 9 (a drag),
+  a refused tap on (4, 10), bows at (3, 9), (5, 9) and (5, 7), then wave 1 (six beetles). A change to
+  `START_GOLD`, the hedge or bow cost or numbers, the beetle or wave 1, `waveReward`, the Meadow's
+  rocks, `GRID` or `CELL` goes with its update in `e2e/playthrough.spec.ts`.

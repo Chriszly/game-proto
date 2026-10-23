@@ -26,6 +26,7 @@ const GAMES = [
   { name: 'Bramblecrest', path: '/games/bramblecrest/' },
   { name: 'Ninefold', path: '/games/ninefold/' },
   { name: 'Augury', path: '/games/augury/' },
+  { name: 'Mazewright', path: '/games/mazewright/' },
 ];
 
 // The games with a Watch AI mode (`?watch`, see shared/watch.ts); there is no hub link to it.

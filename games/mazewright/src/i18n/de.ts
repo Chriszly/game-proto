@@ -1,0 +1,67 @@
+import type { Translation } from '../../../../shared/i18n';
+import type en from './en';
+
+/** Mazewright's texts in German. */
+const de: Translation<typeof en> = {
+  title: 'Mazewright',
+  tagline: 'Pflanze das Labyrinth, durch das die Käfer laufen müssen. Schließe nie den letzten Weg.',
+  pickGarden: 'Wähle einen Garten',
+  meadowName: 'Wiese',
+  meadowText: 'Offener Rasen und ein paar Felsen: Platz für ein langes Labyrinth.',
+  orchardName: 'Obstgarten',
+  orchardText: 'Reihen von Felsen teilen den Rasen in Bahnen.',
+  millpondName: 'Mühlteich',
+  millpondText: 'Ein Bau oben und das Häuschen in der Ecke.',
+  best: 'Bestwert: Welle {n}',
+  bestWon: 'Bestwert: alle 20 Wellen gehalten',
+  notPlayed: 'Noch nicht gespielt',
+
+  wave: 'Welle {n} / {total}',
+  routeOne: 'Weg {n} Schritte',
+  routeTwo: 'Wege {a} und {b} Schritte',
+  startWave: 'Welle {n} starten',
+  nextEarly: 'Nächste Welle +{n}',
+  incoming: 'Käfer im Anmarsch',
+  speed: '{n}×',
+  gardens: 'Gärten',
+
+  hedgeName: 'Hecke',
+  bowName: 'Bogen',
+  frostName: 'Frost',
+  cannonName: 'Kanone',
+  hedgeText: 'Versperrt nur den Weg',
+  bowText: 'Schnelle Schüsse, trifft auch Motten',
+  frostText: 'Kühlt und bremst alles in der Nähe',
+  cannonText: 'Trifft eine Gruppe, aber keine Motten',
+
+  level: 'Stufe {n}',
+  upgrade: 'Ausbauen {n}',
+  topLevel: 'Höchste Stufe',
+  sell: 'Verkaufen +{n}',
+
+  refuse_blocks: 'Versperrt: Die Käfer brauchen einen Weg',
+  refuse_gold: 'Nicht genug Gold',
+  refuse_foe: 'Ein Käfer steht im Weg',
+  refuse_reserved: 'Halte die Baue und das Häuschen frei',
+
+  waveBanner: 'Welle {n}',
+  cleared: 'Welle {n} gehalten! +{gold} Gold',
+  secondBurrow: 'Der zweite Bau öffnet sich: Jetzt werden beide Wege genutzt',
+  chewing: 'Ein Maulwurf frisst sich durch eine Hecke!',
+  new_beetle: 'Käfer laufen den kürzesten Weg zum Häuschen',
+  new_ladybird: 'Neu: Marienkäfer, schnell, aber schwach',
+  new_stag: 'Neu: Hirschkäfer, langsam und zäh, kosten 2 Leben',
+  new_moth: 'Neu: Motten fliegen geradewegs über das Labyrinth',
+  new_mole: 'Neu: Maulwürfe fressen sich durch eine Hecke vor einer Abkürzung',
+  new_queen: 'Die Käferkönigin kommt!',
+
+  won: 'Der Garten ist sicher!',
+  wonText: { one: 'Alle 20 Wellen abgewehrt, mit {n} Leben übrig.', other: 'Alle 20 Wellen abgewehrt, mit {n} Leben übrig.' },
+  lost: 'Die Käfer sind durch',
+  lostText: 'Du hast sie bis Welle {n} aufgehalten.',
+  again: 'Nochmal spielen',
+};
+
+export const keepEnglish: (keyof typeof en)[] = ['title', 'frostName'];
+
+export default de;
