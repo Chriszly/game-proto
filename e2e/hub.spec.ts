@@ -279,6 +279,26 @@ test('games have a sound menu and volumes', async ({ page }, testInfo) => {
   await expect(page.locator('.sound-menu').getByRole('slider', { name: 'Effects', includeHidden: true })).toHaveValue('40');
 });
 
+// The first card shows a QR code of the hub's own address, drawn on load, so it fits wherever the hub is hosted.
+test('hub shares its link as a QR code', async ({ page, context }, testInfo) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/index.html?from=test#top');
+  const card = page.locator('.games > li').first();
+  await expect(card.getByRole('heading')).toHaveText('Share the hub');
+  // The link drops the query, the hash and index.html.
+  await expect(card.locator('.share-link')).toHaveText('http://localhost:5173/');
+  const qr = card.getByRole('img', { name: "QR code of the hub's link" });
+  await expect(qr.locator('svg path')).toHaveCount(1);
+  // Version 2 holds this link: 25 modules plus the 4-module margin on each side.
+  await expect(qr.locator('svg')).toHaveAttribute('viewBox', '0 0 33 33');
+  const box = (await qr.boundingBox())!;
+  expect(box.width).toBeGreaterThan(120);
+  testInfo.attach('share', { body: await page.screenshot({ path: testInfo.outputPath('share.png') }), contentType: 'image/png' });
+  await card.getByRole('button', { name: 'Copy link' }).click();
+  await expect(card.getByRole('button', { name: 'Link copied' })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('http://localhost:5173/');
+});
+
 // The game grid fills the width: wide screens get more than three columns, a phone gets one and nothing scrolls sideways.
 test('hub grid fills the screen width', async ({ page }) => {
   const columns = () => page.locator('.games').evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);

@@ -47,6 +47,13 @@ const en = {
   genreManagement: 'Management',
   genrePuzzle: 'Puzzle',
   genreAdventure: 'Adventure',
+  shareTitle: 'Share the hub',
+  shareLede: 'Scan the code with a phone camera to open the hub there.',
+  shareQr: "QR code of the hub's link",
+  copyLink: 'Copy link',
+  linkCopied: 'Link copied',
+  copyFailed: 'Could not copy',
+  shareLink: 'Share link',
 
   // Settings panel
   off: 'Off',
