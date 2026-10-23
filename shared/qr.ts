@@ -248,11 +248,15 @@ export function qrCode(text: string, mask?: number): boolean[][] {
   return best;
 }
 
-/** The QR code for `text` as an SVG image, dark modules on white with the standard 4-module margin. */
-export function qrSvg(text: string): string {
+/**
+ * The QR code for `text` as an SVG image with the standard 4-module margin, `dark` modules on a
+ * `light` background (black on white by default). Keep the two far apart in brightness; light
+ * modules on a dark background also work in today's phone cameras.
+ */
+export function qrSvg(text: string, { dark = '#000', light = '#fff' } = {}): string {
   const m = qrCode(text);
   const size = m.length + 8;
   let path = '';
   m.forEach((row, y) => row.forEach((dark, x) => dark && (path += `M${x + 4} ${y + 4}h1v1h-1z`)));
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="${light}"/><path d="${path}" fill="${dark}"/></svg>`;
 }
