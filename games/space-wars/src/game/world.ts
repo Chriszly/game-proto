@@ -163,8 +163,14 @@ export const RALLY_SPOTS: readonly Point[] = [
   ...Array.from({ length: 12 }, (_, k) => ({ x: Math.cos(((k + 0.5) * Math.PI) / 6) * 46, y: Math.sin(((k + 0.5) * Math.PI) / 6) * 46 })),
 ];
 
-/** Where a unit is going: a point to move to, or an entity to attack. */
-export type Order = { kind: 'move'; x: number; y: number } | { kind: 'attack'; id: number; auto: boolean };
+/**
+ * Where a unit is going: a point to move to, or an entity to attack. A player's attack on a rival
+ * building under the fog carries `seen`, the spot and owner it was last seen with: while that spot
+ * is out of sight and the building is gone, the ships fly there to look rather than give up.
+ */
+export type Order =
+  | { kind: 'move'; x: number; y: number }
+  | { kind: 'attack'; id: number; auto: boolean; seen?: { x: number; y: number; faction: number } };
 
 export interface Mining {
   node: number;
@@ -698,11 +704,6 @@ export class World {
     return 1 + VETERAN_STEP * this.rankOf(u);
   }
 
-  /** Whether the player knows a building is there: its own, or a rival's it has seen. */
-  knowsBuilding(b: Building) {
-    return b.faction === PLAYER || this.known.has(b.id);
-  }
-
   /** Whether the player sees a mine: its own, or a rival's in sight with a player ship close by. */
   seesMine(m: Mine) {
     if (m.faction === PLAYER) return true;
@@ -806,6 +807,9 @@ export class World {
   command(ids: number[], x: number, y: number): boolean {
     if (this.phase !== 'playing') return false;
     const target = this.entityAt(x, y);
+    // A rival building under the fog is attacked as last seen, whether it still stands or has fallen.
+    const known = target?.kind === 'building' ? this.known.get(target.id) : undefined;
+    const seen = known && !this.fog.sees(known) ? known : undefined;
     const units = ids.map((id) => this.unit(id)).filter((u): u is Unit => !!u && this.commandable(u));
     // An attack on a rival under truce breaks the truce.
     if (units.length && target && target.faction !== PLAYER && this.atPeace(PLAYER, target.faction)) {
@@ -819,7 +823,7 @@ export class World {
     units.forEach((u, k) => {
       const spot = units.length > 1 ? RALLY_SPOTS[k % RALLY_SPOTS.length] : { x: 0, y: 0 };
       u.order = target && target.faction !== PLAYER
-        ? { kind: 'attack', id: target.id, auto: false }
+        ? { kind: 'attack', id: target.id, auto: false, seen: seen ? { x: seen.x, y: seen.y, faction: seen.faction } : undefined }
         : {
           kind: 'move',
           x: Math.min(ARENA.x + ARENA.w - 8, Math.max(ARENA.x + 8, x + spot.x)),
@@ -977,7 +981,11 @@ export class World {
     return !!u && this.commandable(u);
   }
 
-  /** The nearest unit or building under (x, y), units first. */
+  /**
+   * The nearest unit or building under (x, y), units first, as the player's map shows them: units
+   * in sight, the player's own buildings, and rivals' as last seen (`known`), even one that has
+   * fallen under the fog since, whose id then names no building.
+   */
   entityAt(x: number, y: number): Target | null {
     let best: Target | null = null;
     let bestD = Infinity;
@@ -989,10 +997,11 @@ export class World {
       }
     }
     if (best) return best;
-    for (const b of this.buildings) {
+    const shown: (Building | SeenBuilding)[] = [...this.buildings.filter((b) => b.faction === PLAYER), ...this.known.values()];
+    for (const b of shown) {
       const d = dist(b, { x, y });
       const r = buildingStats(this.sides[b.faction], b.type).radius + 4;
-      if (d < r && d < bestD && this.knowsBuilding(b)) {
+      if (d < r && d < bestD) {
         best = { kind: 'building', id: b.id, faction: b.faction };
         bestD = d;
       }
@@ -1139,6 +1148,13 @@ export class World {
       return;
     }
     const target = this.unit(order.id) ?? this.building(order.id);
+    // A building attacked under the fog that has fallen since: fly to where it was last seen until
+    // that spot is in sight (when the player forgets it), then take up targets there.
+    const seen = order.seen;
+    if (!target && seen && !this.fog.sees(seen) && !this.atPeace(u.faction, seen.faction)) {
+      this.approach(u, seen.x, seen.y, 2, dt, speed);
+      return;
+    }
     // A target can change sides when a hack takes it over, slip into a nebula, or come under a truce.
     if (!target || target.hp <= 0 || target.faction === u.faction || this.hidden(target, u.faction) || this.atPeace(u.faction, target.faction)) {
       u.order = null;

@@ -182,7 +182,8 @@ rises from the beacon each time it pays you.
 
 You only see what your ships and buildings see. Space you have never seen is near black; space you
 have seen before is dimmed, with rival buildings shown as you last saw them (one that has fallen,
-been finished or changed hands since looks the same until you see its spot again), and rival ships
+been finished or changed hands since looks the same until you see its spot again; tap one to attack
+it, and your ships fly there and fight it, or find it gone and take on whatever is there), and rival ships
 show only while in sight. Scouts see furthest (1.6 times their weapon sight), other warships 1.2
 times, harvesters 80 pixels, a hub 175 and other buildings 110 past their edge. The relay beacon
 and the crystal fields show once you have seen them, and you can only build on ground you have
