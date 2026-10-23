@@ -172,6 +172,8 @@ const en = {
   shrineStackCover: 'A temple of stacked stones with lanterns on its balanced tiers, a stone swinging above it at dusk',
   mapmakerCard: 'Reveal a fog-covered island tile by tile on a limited store of supplies, and trade your charts at port for upgrades.',
   mapmakerCover: 'A bear surveyor charting a fog-covered island tile by tile',
+  mazewrightCard: 'Plant hedges and towers on an open lawn to build the maze the beetles must walk, but never close the last way through.',
+  mazewrightCover: 'A hedge maze on a garden lawn, with stone towers in the hedges and beetles walking a dotted route to a cottage',
   ninefoldCard: 'Solve number puzzles in nine unlockable art styles: a daily puzzle, Classic boards at three levels, and Delve, a run of ever bigger boards with hearts and relics.',
   ninefoldCover: 'A number puzzle board on layered paper, with a few digits written in and one cell picked',
   lanternkeepCard: "Send moths from their jar to light the castle's lanterns before night falls, and spend the coins on wicks, oil and more moths.",

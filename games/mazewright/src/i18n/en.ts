@@ -1,0 +1,62 @@
+/** Mazewright's texts in British English, the source for the other languages. */
+const en = {
+  title: 'Mazewright',
+  tagline: 'Plant the maze the beetles must walk. Never close the last way through.',
+  pickGarden: 'Pick a garden',
+  meadowName: 'Meadow',
+  meadowText: 'Open lawn and a few rocks: room for a long maze.',
+  orchardName: 'Orchard',
+  orchardText: 'Rows of rocks split the lawn into lanes.',
+  millpondName: 'Millpond',
+  millpondText: 'One burrow at the top, and the cottage in the corner.',
+  best: 'Best: wave {n}',
+  bestWon: 'Best: all 20 waves held',
+  notPlayed: 'Not played yet',
+
+  wave: 'Wave {n} / {total}',
+  routeOne: 'Route {n} steps',
+  routeTwo: 'Routes {a} and {b} steps',
+  startWave: 'Start wave {n}',
+  nextEarly: 'Next wave +{n}',
+  incoming: 'Beetles coming',
+  speed: '{n}x',
+  gardens: 'Gardens',
+
+  hedgeName: 'Hedge',
+  bowName: 'Bow',
+  frostName: 'Frost',
+  cannonName: 'Cannon',
+  hedgeText: 'Only blocks the way',
+  bowText: 'Quick shots, hits moths too',
+  frostText: 'Chills and slows all near it',
+  cannonText: 'Hits a crowd, but not moths',
+
+  level: 'Level {n}',
+  upgrade: 'Upgrade {n}',
+  topLevel: 'Top level',
+  sell: 'Sell +{n}',
+
+  refuse_blocks: 'Blocked: the beetles need a way through',
+  refuse_gold: 'Not enough gold',
+  refuse_foe: 'A beetle is in the way',
+  refuse_reserved: 'Keep the burrows and the cottage clear',
+
+  waveBanner: 'Wave {n}',
+  cleared: 'Wave {n} held! +{gold} gold',
+  secondBurrow: 'The second burrow opens: both routes are in use now',
+  chewing: 'A mole is chewing through a hedge!',
+  new_beetle: 'Beetles walk the shortest way to the cottage',
+  new_ladybird: 'New: ladybirds, quick but frail',
+  new_stag: 'New: stag beetles, slow and tough, cost 2 lives',
+  new_moth: 'New: moths fly straight over the maze',
+  new_mole: 'New: moles chew through a hedge that blocks a short cut',
+  new_queen: 'The beetle queen is coming!',
+
+  won: 'The garden is safe!',
+  wonText: { one: 'All 20 waves held off, with {n} life left.', other: 'All 20 waves held off, with {n} lives left.' },
+  lost: 'The beetles got in',
+  lostText: 'You held them off until wave {n}.',
+  again: 'Play again',
+};
+
+export default en;
