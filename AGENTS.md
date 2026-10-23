@@ -188,7 +188,8 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   setting (`updates`) holds new versions back (`scripts/sw.js`), and Update now lets one through. Keep every file a game loads inside the build (no
   files fetched from other sites), so it still plays offline. Its progress exports and imports from
   the hub as an encrypted `.gh<code>` file (`shared/saveFile.ts`), which carries every storage key
-  with the game's prefix.
+  with the game's prefix, and as a progress code, a QR code or copied link with the same data
+  (`shared/progressCode.ts`).
 - **Play counts come for free.** `setupGame` also bumps the game's public play counter
   (`shared/playCount.ts`, keyed by the game's folder name) and the hub shows the count on its card,
   so a new game needs nothing for it. Tests never count: browser automation skips it.

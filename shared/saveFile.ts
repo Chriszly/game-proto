@@ -18,7 +18,8 @@ const KEY_TEXT = 'game-proto progress file, v1';
 export const ALL = 'gamehub';
 
 let key: Promise<CryptoKey> | undefined;
-function cryptoKey() {
+/** The AES-GCM key progress files and progress codes (`progressCode.ts`) are sealed with. */
+export function cryptoKey() {
   key ??= crypto.subtle
     .digest('SHA-256', new TextEncoder().encode(KEY_TEXT))
     .then((raw) => crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']));
@@ -36,19 +37,31 @@ export function fileEnding(kind: string) {
   return ending(kind === ALL ? undefined : kind);
 }
 
-/**
- * The progress of one game (`kind` is its folder name), or of every game in `games` with the hub's
- * settings (`kind` is `ALL`), as an encrypted file.
- */
-export async function exportProgress(kind: string, games: string[]): Promise<Blob> {
+/** What a file or code holds: its kind, when it was saved and every storage key it carries. */
+export interface ProgressPayload {
+  kind: string;
+  saved: string;
+  data: Record<string, string>;
+}
+
+/** The progress `kind` covers on this device, saved now. */
+export function progressPayload(kind: string, games: string[]): ProgressPayload {
   const keys = kind === ALL ? [...games.flatMap(progressKeys), RECENT_KEY, SETTINGS_KEY] : progressKeys(kind);
   const data: Record<string, string> = {};
   for (const k of keys) {
     const value = localStorage.getItem(k);
     if (value !== null) data[k] = value;
   }
+  return { kind, saved: new Date().toISOString(), data };
+}
+
+/**
+ * The progress of one game (`kind` is its folder name), or of every game in `games` with the hub's
+ * settings (`kind` is `ALL`), as an encrypted file.
+ */
+export async function exportProgress(kind: string, games: string[]): Promise<Blob> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const plain = new TextEncoder().encode(JSON.stringify({ kind, saved: new Date().toISOString(), data }));
+  const plain = new TextEncoder().encode(JSON.stringify(progressPayload(kind, games)));
   const sealed = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await cryptoKey(), plain);
   return new Blob([MAGIC, iv, sealed], { type: 'application/x-gamehub-progress' });
 }
@@ -62,15 +75,25 @@ export async function importProgress(file: Blob, kind: string, games: string[]):
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (new TextDecoder().decode(bytes.subarray(0, MAGIC.length)) !== MAGIC) return 'invalid';
   const iv = bytes.subarray(MAGIC.length, MAGIC.length + 12);
-  let payload: { kind?: unknown; data?: unknown };
+  let payload: unknown;
   try {
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, await cryptoKey(), bytes.subarray(MAGIC.length + 12));
     payload = JSON.parse(new TextDecoder().decode(plain));
   } catch {
     return 'invalid';
   }
-  if (payload?.kind !== kind || !payload.data || typeof payload.data !== 'object') return 'invalid';
-  const entries = Object.entries(payload.data).filter(
+  return writeProgress(payload, kind, games);
+}
+
+/**
+ * Replaces the progress `kind` covers with the decrypted `payload` of a file or code. Returns `ok`,
+ * or, changing nothing, `invalid` when it is of another kind, and `noSpace` when storage is full or
+ * blocked (the progress there before is put back).
+ */
+export function writeProgress(payload: unknown, kind: string, games: string[]): 'ok' | 'invalid' | 'noSpace' {
+  const p = payload as { kind?: unknown; data?: unknown } | null;
+  if (p?.kind !== kind || !p.data || typeof p.data !== 'object') return 'invalid';
+  const entries = Object.entries(p.data).filter(
     (entry): entry is [string, string] => typeof entry[1] === 'string' && belongs(entry[0], kind, games),
   );
   // Every key the import removes or writes, with its value before, to put back if a write fails.

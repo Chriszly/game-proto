@@ -93,7 +93,8 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 
   ![The Updates setting](docs/screenshots/hub-updates.webp)
 - **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
-  and **Import all** loads one back, on this or another device. **Delete all progress** erases every
+  and **Import all** loads one back, on this or another device. **QR code** and **Paste code** move
+  the same as a progress code (see Progress codes). **Delete all progress** erases every
   game's saves and the Continue playing row, and keeps the settings and any other site's storage on
   the same origin.
 
@@ -102,7 +103,8 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 
 Each card also has a **⚙** in its corner that opens that game's own settings: whether it has
 anything saved on this device, **Export progress** and **Import progress** for just that game's
-progress (see Progress files), **Install**, which opens the game ready to install as an app (see
+progress (see Progress files), **QR code** and **Paste code** for the same as a progress code (see
+Progress codes), **Install**, which opens the game ready to install as an app (see
 Install as an app), **Delete this game's progress** (its storage keys, which all start
 with its folder name, see `shared/progress.ts`) and **Play**.
 
@@ -155,9 +157,9 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `audio.ts`, the sound effects and music made in code, `corner.ts`, the corner buttons, `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion, full screen and the sound button
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `progressCode.ts`, the progress codes (see Progress codes), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files, that the hub and every game have an app manifest, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files and codes, that the hub and every game have an app manifest, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks
@@ -238,6 +240,23 @@ The files are encrypted (AES-GCM, `shared/saveFile.ts`), so they can't be read o
 an edited file, or another game's, is refused. The key ships with the code, so this keeps out
 casual editing, not a determined player. The installed hub on a computer also opens these files
 directly.
+
+## Progress codes
+
+The same progress also moves as a code, with no file and no outside service: **QR code** (on a
+game's ⚙, or in the Settings panel for every game) shows a QR code of a link to the hub with the
+progress in its `#p=` part. Scanning it with another device's camera opens the hub there, which asks
+and then loads it; **Copy code** copies the link, to send by chat or mail, and **Paste code** loads
+one. The link part after `#` never reaches the web server. `shared/progressCode.ts` makes the code:
+a format version, the game's code from `shared/saveCodes.ts` (`gh` for every game), then the JSON a
+file holds, deflated and sealed with the same AES-GCM key, all written as digits (7 bytes to 17
+digits) so the QR code packs them in its dense numeric mode (`shared/qr.ts`). A changed, cut short or
+unknown code is refused, and one from a newer hub asks to update first. Most games' progress fits
+one QR code; when it doesn't (a long run under way, or every game at once), the dialog says so and
+offers Copy code instead. On an iPhone the camera opens the link in Safari, which keeps other saves
+than the installed app.
+
+![A game's progress as a QR code](docs/screenshots/hub-progress-code.webp)
 
 ## Play online
 
