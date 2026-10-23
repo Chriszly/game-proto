@@ -50,7 +50,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.games != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Installing the browser's system packages can take most of 10 minutes on a slow Ubuntu mirror.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
