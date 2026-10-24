@@ -11,13 +11,15 @@ let bar: HTMLDivElement | null = null;
  * The row of buttons in the bottom left corner of every game: full screen, sound and pause, in that
  * order (`setupGame.ts` and `startScreen.ts` add them). It keeps 12px clear of the edges, plus the
  * screen's safe area where a phone reports one, so rounded corners and notches never cut a button.
+ * The safe area is read through `--safe-left` and `--safe-bottom`, which `scaling.ts` sets to the
+ * screen's other sides while it turns the page round.
  */
 export function cornerBar() {
   if (bar) return bar;
   const style = document.createElement('style');
   style.textContent = `
 .game-corner { position: fixed; z-index: 10; display: flex; gap: 6px;
-  left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  left: calc(12px + var(--safe-left, env(safe-area-inset-left, 0px))); bottom: calc(12px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); }
 .corner-button { width: 30px; height: 30px; padding: 5px; cursor: pointer; color: #f3e9d2; background: rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(243, 233, 210, 0.35); border-radius: 3px; }
 .corner-button[hidden] { display: none; }
@@ -166,7 +168,7 @@ function injectMenuStyles() {
   const style = document.createElement('style');
   style.textContent = `
 .sound-menu { position: fixed; z-index: 11; box-sizing: border-box; width: 240px; max-width: calc(100vw - 24px);
-  left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+  left: calc(12px + var(--safe-left, env(safe-area-inset-left, 0px))); bottom: calc(50px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; font: 14px system-ui, sans-serif; color: #f3e9d2;
   background: rgba(20, 16, 12, 0.92); border: 1px solid rgba(243, 233, 210, 0.35); border-radius: 6px; }
 .sound-menu[hidden] { display: none; }

@@ -42,6 +42,14 @@ export const WIFI_KNOWN =
 const UPDATE_CHOICES = UPDATE_MODES.filter((u) => u !== 'wifi' || WIFI_KNOWN);
 const UPDATE_LABELS = { auto: 'updatesAuto', wifi: 'updatesWifi', off: 'off' } as const;
 
+/**
+ * What a game does on a phone held the wrong way for it (`scaling.ts`): turns its picture round to
+ * fill the screen, or asks the player to turn the phone and waits.
+ */
+export const TURN_MODES = ['turn', 'ask'] as const;
+export type TurnMode = (typeof TURN_MODES)[number];
+const TURN_LABELS = { turn: 'turnGame', ask: 'turnAsk' } as const;
+
 export interface Settings {
   /** How hard every game plays; each game decides what that scales. Normal is the game as designed. */
   difficulty: Difficulty;
@@ -63,6 +71,8 @@ export interface Settings {
   genreFilter: boolean;
   /** When the installed apps download a new version. */
   updates: UpdateMode;
+  /** What a game does on a phone held the wrong way for it. */
+  turn: TurnMode;
 }
 
 export const DEFAULTS: Settings = {
@@ -76,6 +86,7 @@ export const DEFAULTS: Settings = {
   muted: false,
   genreFilter: false,
   updates: WIFI_KNOWN ? 'wifi' : 'auto',
+  turn: 'turn',
 };
 
 /**
@@ -126,6 +137,13 @@ export const SETTING_FIELDS: readonly SettingField[] = [
     kind: 'choice',
     options: UPDATE_CHOICES.map((u) => ({ value: u, label: UPDATE_LABELS[u] })),
   },
+  {
+    key: 'turn',
+    label: 'settingTurn',
+    hint: 'settingTurnHint',
+    kind: 'choice',
+    options: TURN_MODES.map((m) => ({ value: m, label: TURN_LABELS[m] })),
+  },
 ];
 
 export const SETTINGS_KEY = 'hub-settings';
@@ -152,6 +170,7 @@ export function loadSettings(): Settings {
       saved.updates === 'wifi' && !WIFI_KNOWN
         ? 'auto'
         : (UPDATE_CHOICES.find((u) => u === saved.updates) ?? DEFAULTS.updates),
+    turn: TURN_MODES.find((m) => m === saved.turn) ?? DEFAULTS.turn,
   };
 }
 

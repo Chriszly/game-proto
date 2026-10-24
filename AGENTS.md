@@ -203,8 +203,12 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   `getWorldPoint` and `worldView` rather than `pointer.x/y` or `scrollX/Y`, give a camera that
   follows, scrolls or has bounds `scrollingCamera(camera)` and keep scroll-factor-0 objects off it
   (`splitHudCamera(scene)` draws them with a second, fixed camera; read pointers with `viewPoint`), multiply a game's own camera zoom by `renderScale`, and
-  paint canvas art at `sharpRes(w, h, res)`. A phone held the wrong way for the game gets a hint
-  to turn it. `e2e/screens.spec.ts` picks the game up on its own and checks it on five screens; the
+  paint canvas art at `sharpRes(w, h, res)`. On a phone held the wrong way for the game the
+  whole page (the canvas and the shared screens over it) is turned a quarter round to fill the
+  screen, and taps are turned back before Phaser reads them, so games need nothing for it; with the
+  hub's Phone held the wrong way setting on Ask me to turn it, a hint to turn the phone covers the
+  paused game instead. Shared overlays pin to the safe area with `var(--safe-left, env(...))` (and
+  `--safe-right`, `--safe-top`, `--safe-bottom`), which follow the turn. `e2e/screens.spec.ts` picks the game up on its own and checks it on five screens; the
   **Screens** workflow (`.github/workflows/screens.yml`) runs it in one job per game, on a PR only for
   the games whose folder changed (every game when `shared/` or the test changes).
   Give its `index.html` the same `100dvh` and `touch-action: none` styles as Apothecary's.
