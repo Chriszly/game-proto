@@ -91,18 +91,36 @@ export const SFX = sounds({
   sunglass: { wave: 'sine', freq: 880, to: 1320, length: 0.18, volume: 0.1, gap: 180 },
   /** A whirligig's dart. */
   whirligig: { wave: 'triangle', freq: 1100, to: 900, length: 0.03, volume: 0.06, gap: 90, vary: 0.1 },
+  /** A swallow darts out of its nest. */
+  swallow: { wave: 'sine', freq: 2400, to: 3200, length: 0.06, volume: 0.08, gap: 90, vary: 0.1 },
+  /** A nettle patch stings. */
+  nettle: { wave: 'noise', freq: 5200, to: 3800, length: 0.07, volume: 0.07, gap: 200 },
+  /** A toadstool ring shrinks a foe. */
+  toadstool: { wave: 'sine', freq: 990, to: 330, length: 0.3, volume: 0.12, gap: 250 },
+  /** A honey pot starts drawing foes in. */
+  honey: { wave: 'sine', freq: 520, to: 780, length: 0.3, volume: 0.12, gap: 300 },
+  /** A bramble snare catches a foe. */
+  snare: { wave: 'noise', freq: 2600, to: 900, length: 0.14, volume: 0.14, gap: 150 },
   /** Apples dropped by an apple tree when a wave is held. */
   apples: { wave: 'triangle', freq: 784, arp: [0, 4], arpStep: 0.05, length: 0.12, volume: 0.14, gap: 120 },
   /** A frost pulse. */
   frost: { wave: 'sine', freq: 1400, to: 2100, length: 0.16, volume: 0.1, gap: 150 },
   /** A foe beaten. */
   pop: { wave: 'square', freq: 700, to: 1100, length: 0.06, volume: 0.12, gap: 50, vary: 0.06 },
-  /** A foe reaches the cottage. */
+  /** A foe takes cabbages from the patch. */
   leak: { wave: 'square', freq: 260, to: 110, length: 0.28, volume: 0.24, gap: 150 },
+  /** Cabbages carried into a burrow, lost for good. */
+  lost: { wave: 'triangle', freq: 330, to: 98, length: 0.4, volume: 0.22, gap: 200 },
+  /** Loose cabbages roll back into the patch. */
+  saved: { wave: 'triangle', freq: 660, arp: [0, 7], arpStep: 0.07, length: 0.16, volume: 0.16, gap: 150 },
   /** A wave starts. */
   horn: { wave: 'pulse25', freq: 330, arp: [0, 5, 7], arpStep: 0.09, length: 0.36, volume: 0.22 },
   /** A wave held. */
   cleared: { wave: 'triangle', freq: 523, arp: [0, 4, 7, 12, 16], arpStep: 0.06, length: 0.44, volume: 0.28 },
+  /** Summer: a tower wilts in the heat. */
+  wilt: { wave: 'triangle', freq: 440, to: 220, length: 0.3, volume: 0.12, gap: 300 },
+  /** Winter: frost freezes a tower. */
+  freeze: { wave: 'sine', freq: 2600, to: 1800, length: 0.25, volume: 0.1, gap: 300 },
   /** A mole starts chewing, and a hedge gone. */
   chew: { wave: 'noise', freq: 900, to: 300, length: 0.22, volume: 0.18, gap: 200 },
 });

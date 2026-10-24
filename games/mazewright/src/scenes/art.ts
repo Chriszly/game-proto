@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
-import type { FoeKind, TowerKind } from '../game/rules';
+import type { Season } from '../game/maps';
+import type { FoeKind, TowerKind, TrapKind } from '../game/rules';
 
 // The Hedge Garden in flat vector shapes: clean fills, soft drop shadows, no outlines. Every piece
 // is drawn with a Phaser Graphics at a cell's middle, in pixels, and sized for 40-pixel cells.
@@ -8,6 +9,8 @@ type G = Phaser.GameObjects.Graphics;
 
 export const C = {
   lawn: 0x8cc265,
+  /** A pouch chip for a tower still in the potting shed. */
+  locked: 0x6b5a44,
   lawn2: 0x7db457,
   lawnEdge: 0x6fa24c,
   hedge: 0x3f8a3a,
@@ -31,7 +34,7 @@ export const C = {
   cream: 0xf8ecd0,
   gold: 0xf2c14e,
   warn: 0xff9d2e,
-  life: 0xff7b7b,
+  life: 0xa6e07a,
   health: 0x7be36b,
 };
 
@@ -42,6 +45,10 @@ export const FOE_COLOUR: Record<FoeKind, number> = {
   moth: C.moth,
   mole: 0x4a3a33,
   weevil: 0x7d6a52,
+  woodlouse: 0x8a8f99,
+  snail: 0xc9a36b,
+  ember: 0x9c3b1c,
+  earwig: 0x6e4126,
   queen: 0x5b2a7a,
 };
 
@@ -50,12 +57,21 @@ const shadow = (g: G, draw: () => void) => {
   draw();
 };
 
-export function lawn(g: G, x: number, y: number, w: number, h: number, cols: number, rows: number, cell: number) {
+/** Each season's lawn: its two checks and its edge. Spring is the picker's lawn. */
+export const SEASON_LAWN: Record<Season, { lawn: number; lawn2: number; edge: number }> = {
+  spring: { lawn: C.lawn, lawn2: C.lawn2, edge: C.lawnEdge },
+  summer: { lawn: 0xa3c35c, lawn2: 0x97b752, edge: 0x7f9c40 },
+  autumn: { lawn: 0xb39d58, lawn2: 0xa69050, edge: 0x8a7640 },
+  winter: { lawn: 0x9db5c2, lawn2: 0x92aab8, edge: 0x7a95a4 },
+};
+
+export function lawn(g: G, x: number, y: number, w: number, h: number, cols: number, rows: number, cell: number, season: Season = 'spring') {
+  const look = SEASON_LAWN[season];
   for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) if ((i + j) % 2) {
-    g.fillStyle(C.lawn2, 1);
+    g.fillStyle(look.lawn2, 1);
     g.fillRect(x + i * cell, y + j * cell, cell, cell);
   }
-  g.lineStyle(2, C.lawnEdge, 1);
+  g.lineStyle(2, look.edge, 1);
   g.strokeRect(x - 1, y - 1, w + 2, h + 2);
 }
 
@@ -70,6 +86,34 @@ export function flowers(g: G, x: number, y: number, w: number, h: number) {
     g.fillStyle(0xe8a33d, 1);
     g.fillCircle(fx, fy, 1.5);
   }
+}
+
+/** A cell of water by its top-left corner, `cell` wide; ice in winter. */
+export function pond(g: G, x: number, y: number, cell: number, ice: boolean) {
+  g.fillStyle(ice ? 0xd6ecf6 : 0x4f9fd1, 1);
+  g.fillRect(x, y, cell, cell);
+  g.fillStyle(ice ? 0xffffff : 0x7cc0e8, ice ? 0.8 : 1);
+  if (ice) g.fillTriangle(x + cell * 0.2, y + cell * 0.75, x + cell * 0.55, y + cell * 0.25, x + cell * 0.62, y + cell * 0.32);
+  else {
+    g.fillRoundedRect(x + cell * 0.18, y + cell * 0.3, cell * 0.36, 3, 1.5);
+    g.fillRoundedRect(x + cell * 0.46, y + cell * 0.62, cell * 0.36, 3, 1.5);
+  }
+}
+
+/** A raised bank by its top-left corner: a lighter top with a step along its foot. */
+export function bank(g: G, x: number, y: number, cell: number) {
+  g.fillStyle(0xfff3c4, 0.4);
+  g.fillRect(x + 1, y + 1, cell - 2, cell - 7);
+  g.fillStyle(0x4b5d2a, 0.6);
+  g.fillRect(x + 1, y + cell - 6, cell - 2, 5);
+}
+
+/** A cell of a path garden's gravel path, by its top-left corner. */
+export function gravel(g: G, x: number, y: number, cell: number) {
+  g.fillStyle(0xd9c79f, 1);
+  g.fillRect(x, y, cell, cell);
+  g.fillStyle(0xb8a37a, 1);
+  for (const [a, b] of [[0.22, 0.3], [0.6, 0.18], [0.78, 0.6], [0.35, 0.72], [0.52, 0.46]]) g.fillCircle(x + a * cell, y + b * cell, cell / 16);
 }
 
 export function hedge(g: G, x: number, y: number, alpha = 1) {
@@ -111,7 +155,7 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
   g.fillCircle(x - 2, y - 3, 9);
   g.save();
   g.translateCanvas(x, y);
-  if (kind !== 'frost' && kind !== 'beehive' && kind !== 'apple' && kind !== 'puffball') g.rotateCanvas(aim);
+  if (kind !== 'frost' && kind !== 'beehive' && kind !== 'apple' && kind !== 'puffball' && kind !== 'nettle' && kind !== 'toadstool') g.rotateCanvas(aim);
   if (kind === 'storm') {
     // A copper rod with a charged ball on top.
     g.fillStyle(0xb06a35, alpha);
@@ -185,6 +229,39 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
     }
     g.fillStyle(C.wood, alpha);
     g.fillCircle(0, 0, 2.4);
+  } else if (kind === 'swallow') {
+    // A mud nest with a swallow peeking out the way it looks.
+    g.fillStyle(0xa47a4e, alpha);
+    g.fillCircle(-2, 0, 9);
+    g.fillStyle(0x3b2410, alpha);
+    g.fillCircle(2, 0, 5);
+    g.fillStyle(0x3a4a7a, alpha);
+    g.fillTriangle(1, -4, 12, 0, 1, 4);
+    g.fillStyle(0xf3e6d0, alpha);
+    g.fillCircle(4, 1.5, 1.8);
+  } else if (kind === 'nettle') {
+    // A clump of jagged nettle leaves.
+    for (const [i, colour] of [0x3f8a35, 0x56a645, 0x3f8a35, 0x56a645, 0x6fbf55].entries()) {
+      const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+      g.fillStyle(colour, alpha);
+      g.fillTriangle(Math.cos(a - 0.45) * 3, Math.sin(a - 0.45) * 3, Math.cos(a) * 12, Math.sin(a) * 12, Math.cos(a + 0.45) * 3, Math.sin(a + 0.45) * 3);
+    }
+    g.fillStyle(0xd7f0a8, alpha);
+    g.fillCircle(0, 0, 2.2);
+  } else if (kind === 'toadstool') {
+    // A ring of little toadstools round a big one.
+    for (let i = 0; i < 5; i++) {
+      const a = (i * Math.PI * 2) / 5;
+      g.fillStyle(0xd98ad9, alpha);
+      g.fillCircle(Math.cos(a) * 9, Math.sin(a) * 9, 2.6);
+    }
+    g.fillStyle(0xf3e6d0, alpha);
+    g.fillRect(-1.5, 0, 3, 5);
+    g.fillStyle(0x9b4fb0, alpha);
+    g.fillEllipse(0, 0, 13, 9);
+    g.fillStyle(0xf3e6d0, alpha);
+    g.fillCircle(-2.5, -1.5, 1.3);
+    g.fillCircle(2.5, -0.5, 1.1);
   } else if (kind === 'bow') {
     g.lineStyle(2.6, C.wood, alpha);
     g.beginPath();
@@ -210,7 +287,33 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
   g.restore();
   // Level pips along the bottom of the plinth.
   g.fillStyle(C.gold, alpha);
-  for (let i = 1; i < level; i++) g.fillCircle(x - 4 + (i - 1) * 8, y + 13, 2.6);
+  for (let i = 1; i < level; i++) g.fillCircle(x - (level - 2) * 4 + (i - 1) * 8, y + 13, 2.6);
+  // The master level: a gold ring round the plinth.
+  if (level >= 4) {
+    g.lineStyle(2, C.gold, alpha);
+    g.strokeCircle(x, y, 15.5);
+  }
+}
+
+/** Over a tower wilted in the summer heat: a brown wash and a drooping leaf. */
+export function wilted(g: G, x: number, y: number) {
+  g.fillStyle(0x8a5a2b, 0.45);
+  g.fillCircle(x, y, 17);
+  g.fillStyle(0xc9a45c, 1);
+  g.fillEllipse(x + 9, y - 12, 10, 6);
+  g.fillStyle(0x7a4a22, 1);
+  g.fillRect(x + 4, y - 13, 5, 2);
+}
+
+/** Over a tower frozen by winter frost: a cold wash and a white spark. */
+export function frozen(g: G, x: number, y: number) {
+  g.fillStyle(0xbfe6ff, 0.75);
+  g.fillRoundedRect(x - 17, y - 17, 34, 34, 8);
+  g.lineStyle(2, 0xffffff, 0.95);
+  g.strokeRoundedRect(x - 17, y - 17, 34, 34, 8);
+  g.fillStyle(0xffffff, 0.95);
+  g.fillRect(x + 7, y - 15, 2, 10);
+  g.fillRect(x + 3, y - 11, 10, 2);
 }
 
 export function burrow(g: G, x: number, y: number, open: boolean) {
@@ -234,6 +337,44 @@ export function cottage(g: G, x: number, y: number) {
   g.fillRect(x - 11, y, 5, 5);
 }
 
+/** A garden trap on the lawn: a honey pot (glowing once sprung) or a bramble snare. */
+export function trap(g: G, kind: TrapKind, x: number, y: number, alpha: number, sprung: boolean) {
+  if (kind === 'honey') {
+    g.fillStyle(C.shadow, 0.22 * alpha);
+    g.fillEllipse(x + 2, y + 9, 22, 8);
+    if (sprung) {
+      g.fillStyle(0xffd24a, 0.35);
+      g.fillCircle(x, y, 16);
+    }
+    g.fillStyle(0xc98a3a, alpha);
+    g.fillEllipse(x, y + 2, 20, 18);
+    g.fillStyle(0xe0a84e, alpha);
+    g.fillRect(x - 7, y - 9, 14, 4);
+    g.fillStyle(0xffc23a, alpha);
+    g.fillEllipse(x, y - 6, 12, 5);
+    g.fillTriangle(x + 3, y - 5, x + 7, y - 5, x + 5, y + 2);
+    return;
+  }
+  // Two crossed thorny bramble loops.
+  g.lineStyle(2.4, 0x6b3f2a, alpha);
+  g.strokeEllipse(x, y, 26, 14);
+  g.strokeEllipse(x, y, 14, 26);
+  g.fillStyle(0x3f8a35, alpha);
+  for (const [a, b] of [[-11, -2], [10, 3], [2, -11], [-3, 11]]) g.fillTriangle(x + a - 2, y + b, x + a + 2, y + b, x + a, y + b - 4);
+}
+
+/** A cabbage from the patch, `r` pixels round. */
+export function cabbage(g: G, x: number, y: number, r: number) {
+  g.fillStyle(C.shadow, 0.22);
+  g.fillCircle(x + 1.5, y + 2, r);
+  g.fillStyle(0x5f9e3c, 1);
+  g.fillCircle(x, y, r);
+  g.fillStyle(0x8fcf5f, 1);
+  g.fillCircle(x - r * 0.15, y - r * 0.15, r * 0.65);
+  g.fillStyle(0xc4ec9a, 1);
+  g.fillCircle(x - r * 0.25, y - r * 0.25, r * 0.3);
+}
+
 /** What ails a foe: frost, fire and poison each tint it. */
 export interface Ailments {
   chilled: boolean;
@@ -241,13 +382,18 @@ export interface Ailments {
   poisoned: boolean;
   /** Sunglass and bonfire heat, 0 to 1. */
   heat: number;
+  /** A crowned king. */
+  king?: boolean;
 }
 
 /** A foe at its middle, facing `angle`. `size` is its radius in pixels. */
 export function foe(g: G, kind: FoeKind, x: number, y: number, angle: number, size: number, ails: Ailments) {
   if (kind === 'moth') moth(g, x, y, size);
   else if (kind === 'mole') mole(g, x, y, angle, size);
+  else if (kind === 'woodlouse') woodlouse(g, x, y, angle, size);
+  else if (kind === 'snail') snail(g, x, y, angle, size);
   else beetle(g, kind, x, y, angle, size, ails.chilled);
+  if (ails.king) crown(g, x, y - size - 4, Math.max(6, size * 0.5));
   if (ails.heat > 0.05) {
     // A warm glow that turns bright once the foe is fully heated.
     g.lineStyle(ails.heat >= 1 ? 2.5 : 1.5, ails.heat >= 1 ? 0xffd24a : 0xff8a2a, 0.35 + 0.5 * ails.heat);
@@ -287,6 +433,17 @@ function beetle(g: G, kind: FoeKind, x: number, y: number, angle: number, size: 
     g.fillStyle(0x1d1d22, 1);
     for (const [a, b] of [[-3, -3], [-2, 3], [3, -2], [2, 4]]) g.fillCircle(a, b, 1.5);
   }
+  if (kind === 'ember') {
+    // Glowing spots: fire can't hurt it.
+    g.fillStyle(0xffb04a, 1);
+    for (const [a, b] of [[-0.4, -0.3], [-0.4, 0.3], [0.2, 0]]) g.fillCircle(r * a, r * b, r * 0.18);
+  }
+  if (kind === 'earwig') {
+    // A long body with pincers at the back.
+    g.lineStyle(2, 0x3b2413, 1);
+    g.lineBetween(-r, -2, -r * 1.7, -4);
+    g.lineBetween(-r, 2, -r * 1.7, 4);
+  }
   if (kind === 'weevil') {
     // Armour plates across its back, and a long snout.
     g.lineStyle(1.4, 0x4f4232, 1);
@@ -310,6 +467,54 @@ function beetle(g: G, kind: FoeKind, x: number, y: number, angle: number, size: 
     g.fillStyle(C.frost, 0.45);
     g.fillEllipse(0, 0, r * 2.2, r * 1.9);
   }
+  g.restore();
+}
+
+/** A gold crown above a king. */
+function crown(g: G, x: number, y: number, w: number) {
+  g.fillStyle(C.gold, 1);
+  g.fillRect(x - w, y - w * 0.3, w * 2, w * 0.6);
+  for (const k of [-1, 0, 1]) g.fillTriangle(x + k * w * 0.8 - w * 0.3, y - w * 0.3, x + k * w * 0.8, y - w * 1.1, x + k * w * 0.8 + w * 0.3, y - w * 0.3);
+}
+
+function woodlouse(g: G, x: number, y: number, angle: number, size: number) {
+  g.save();
+  g.translateCanvas(x, y);
+  g.rotateCanvas(angle);
+  g.fillStyle(C.shadow, 0.22);
+  g.fillEllipse(2, 3, size * 2.2, size * 1.6);
+  g.fillStyle(FOE_COLOUR.woodlouse, 1);
+  g.fillEllipse(0, 0, size * 2.2, size * 1.6);
+  // Its banded plates.
+  g.lineStyle(1.2, 0x5f646d, 1);
+  for (const k of [-0.6, -0.2, 0.2, 0.6]) g.lineBetween(size * k, -size * 0.75, size * k, size * 0.75);
+  g.lineStyle(1, 0x2d3b1f, 1);
+  g.lineBetween(size * 1.05, -2, size * 1.45, -5);
+  g.lineBetween(size * 1.05, 2, size * 1.45, 5);
+  g.restore();
+}
+
+function snail(g: G, x: number, y: number, angle: number, size: number) {
+  g.save();
+  g.translateCanvas(x, y);
+  g.rotateCanvas(angle);
+  g.fillStyle(C.shadow, 0.22);
+  g.fillEllipse(2, 3, size * 2.4, size * 1.2);
+  // Its soft body, then the spiral shell on top.
+  g.fillStyle(0xb8c48a, 1);
+  g.fillEllipse(size * 0.2, 0, size * 2.4, size * 0.9);
+  g.lineStyle(1, 0x6f7a4a, 1);
+  g.lineBetween(size * 1.2, -2, size * 1.6, -5);
+  g.lineBetween(size * 1.2, 2, size * 1.6, 5);
+  g.fillStyle(FOE_COLOUR.snail, 1);
+  g.fillCircle(-size * 0.2, 0, size * 0.85);
+  g.lineStyle(1.4, 0x8a6a3a, 1);
+  g.beginPath();
+  g.arc(-size * 0.2, 0, size * 0.55, 0, Math.PI * 1.5);
+  g.strokePath();
+  g.beginPath();
+  g.arc(-size * 0.2, 0, size * 0.25, 0, Math.PI * 1.5);
+  g.strokePath();
   g.restore();
 }
 

@@ -21,10 +21,10 @@ export const SPEED_BUTTON = { w: 52, h: 34 };
 /** The Gardens button, at the right of the top bar. */
 export const BACK_BUTTON = { w: 104, h: 30 };
 /** The panel that opens over a picked tower; one more row for the Aim or Turn button. */
-export const PANEL = { w: 172, h: 98, row: 32 };
+export const PANEL = { w: 172, h: 98, row: 32, trick: 34 };
 /** The garden cards on the picker, by their centres in the frame. */
 export const CARDS = { xs: [190, 480, 770], y: 262, w: 260, h: 232 };
-/** The pouch's tower chips under the cards, centred in the frame and clear of the corner buttons. */
-export const CHIPS = { y: 450, w: 84, h: 40, gap: 6, labelY: 436 };
+/** The pouch's tower chips under the cards, in rows of up to `perRow`, centred in the frame and clear of the corner buttons. */
+export const CHIPS = { y: 442, w: 84, h: 32, gap: 6, perRow: 8, labelY: 430 };
 
 export const DEPTH = { lawn: 0, board: 1, fx: 2, hud: 5, panel: 6, overlay: 8 };
