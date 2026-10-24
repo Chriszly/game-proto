@@ -24,7 +24,10 @@ const en: HowToPlay = {
     'Moles chew through a hedge that blocks a much shorter way: put a tower there instead.',
     'From wave 6 the second burrow opens, so plan a maze that serves both routes.',
     'Shells: stag beetles are waxy (heat does half, blast more), moles hairy (blast half, sharp more), weevils hard (sharp half, spark more). Poison goes through every shell.',
-    'A sunglass or bonfire heats foes up; a glowing foe takes double heat damage.',
+    'A sunglass or bonfire heats foes up; a glowing foe takes double heat damage. Ember beetles are fire-proof.',
+    'Snails heal unless chilled or poisoned, and woodlice split in two when beaten.',
+    'A crowned king is six foes in one: put your strongest towers on the route it walks.',
+    'The Empress on wave 20 lays beetles and turns her shell against the damage that hurt her most, so mix your damage kinds.',
     'A bonfire or sunglass likes a long straight corridor; a storm rod likes foes bunched in tight bends.',
   ],
 };
@@ -52,7 +55,10 @@ const de: HowToPlay = {
     'Maulwürfe fressen sich durch eine Hecke, die einen viel kürzeren Weg versperrt: Stell dort lieber einen Turm hin.',
     'Ab Welle 6 öffnet sich der zweite Bau, also plane ein Labyrinth für beide Wege.',
     'Schalen: Hirschkäfer sind wachsig (Hitze halb, Wucht mehr), Maulwürfe haarig (Wucht halb, Spitzes mehr), Rüsselkäfer hart (Spitzes halb, Funken mehr). Gift geht durch jede Schale.',
-    'Brennglas und Feuerkorb heizen Gegner auf; ein glühender Gegner nimmt doppelten Hitzeschaden.',
+    'Brennglas und Feuerkorb heizen Gegner auf; ein glühender Gegner nimmt doppelten Hitzeschaden. Glutkäfer sind feuerfest.',
+    'Schnecken heilen sich, außer gekühlt oder vergiftet, und Asseln zerfallen besiegt in zwei.',
+    'Ein gekrönter König ist sechs Gegner in einem: Stell deine stärksten Türme an seinen Weg.',
+    'Die Kaiserin in Welle 20 legt Käfer und wechselt ihre Schale gegen den Schaden, der ihr am meisten wehtat, also mische die Schadensarten.',
     'Feuerkorb und Brennglas mögen einen langen geraden Gang, der Sturmstab Gegner dicht gedrängt in engen Kurven.',
   ],
 };

@@ -42,6 +42,10 @@ export const FOE_COLOUR: Record<FoeKind, number> = {
   moth: C.moth,
   mole: 0x4a3a33,
   weevil: 0x7d6a52,
+  woodlouse: 0x8a8f99,
+  snail: 0xc9a36b,
+  ember: 0x9c3b1c,
+  earwig: 0x6e4126,
   queen: 0x5b2a7a,
 };
 
@@ -241,13 +245,18 @@ export interface Ailments {
   poisoned: boolean;
   /** Sunglass and bonfire heat, 0 to 1. */
   heat: number;
+  /** A crowned king. */
+  king?: boolean;
 }
 
 /** A foe at its middle, facing `angle`. `size` is its radius in pixels. */
 export function foe(g: G, kind: FoeKind, x: number, y: number, angle: number, size: number, ails: Ailments) {
   if (kind === 'moth') moth(g, x, y, size);
   else if (kind === 'mole') mole(g, x, y, angle, size);
+  else if (kind === 'woodlouse') woodlouse(g, x, y, angle, size);
+  else if (kind === 'snail') snail(g, x, y, angle, size);
   else beetle(g, kind, x, y, angle, size, ails.chilled);
+  if (ails.king) crown(g, x, y - size - 4, Math.max(6, size * 0.5));
   if (ails.heat > 0.05) {
     // A warm glow that turns bright once the foe is fully heated.
     g.lineStyle(ails.heat >= 1 ? 2.5 : 1.5, ails.heat >= 1 ? 0xffd24a : 0xff8a2a, 0.35 + 0.5 * ails.heat);
@@ -287,6 +296,17 @@ function beetle(g: G, kind: FoeKind, x: number, y: number, angle: number, size: 
     g.fillStyle(0x1d1d22, 1);
     for (const [a, b] of [[-3, -3], [-2, 3], [3, -2], [2, 4]]) g.fillCircle(a, b, 1.5);
   }
+  if (kind === 'ember') {
+    // Glowing spots: fire can't hurt it.
+    g.fillStyle(0xffb04a, 1);
+    for (const [a, b] of [[-0.4, -0.3], [-0.4, 0.3], [0.2, 0]]) g.fillCircle(r * a, r * b, r * 0.18);
+  }
+  if (kind === 'earwig') {
+    // A long body with pincers at the back.
+    g.lineStyle(2, 0x3b2413, 1);
+    g.lineBetween(-r, -2, -r * 1.7, -4);
+    g.lineBetween(-r, 2, -r * 1.7, 4);
+  }
   if (kind === 'weevil') {
     // Armour plates across its back, and a long snout.
     g.lineStyle(1.4, 0x4f4232, 1);
@@ -310,6 +330,54 @@ function beetle(g: G, kind: FoeKind, x: number, y: number, angle: number, size: 
     g.fillStyle(C.frost, 0.45);
     g.fillEllipse(0, 0, r * 2.2, r * 1.9);
   }
+  g.restore();
+}
+
+/** A gold crown above a king. */
+function crown(g: G, x: number, y: number, w: number) {
+  g.fillStyle(C.gold, 1);
+  g.fillRect(x - w, y - w * 0.3, w * 2, w * 0.6);
+  for (const k of [-1, 0, 1]) g.fillTriangle(x + k * w * 0.8 - w * 0.3, y - w * 0.3, x + k * w * 0.8, y - w * 1.1, x + k * w * 0.8 + w * 0.3, y - w * 0.3);
+}
+
+function woodlouse(g: G, x: number, y: number, angle: number, size: number) {
+  g.save();
+  g.translateCanvas(x, y);
+  g.rotateCanvas(angle);
+  g.fillStyle(C.shadow, 0.22);
+  g.fillEllipse(2, 3, size * 2.2, size * 1.6);
+  g.fillStyle(FOE_COLOUR.woodlouse, 1);
+  g.fillEllipse(0, 0, size * 2.2, size * 1.6);
+  // Its banded plates.
+  g.lineStyle(1.2, 0x5f646d, 1);
+  for (const k of [-0.6, -0.2, 0.2, 0.6]) g.lineBetween(size * k, -size * 0.75, size * k, size * 0.75);
+  g.lineStyle(1, 0x2d3b1f, 1);
+  g.lineBetween(size * 1.05, -2, size * 1.45, -5);
+  g.lineBetween(size * 1.05, 2, size * 1.45, 5);
+  g.restore();
+}
+
+function snail(g: G, x: number, y: number, angle: number, size: number) {
+  g.save();
+  g.translateCanvas(x, y);
+  g.rotateCanvas(angle);
+  g.fillStyle(C.shadow, 0.22);
+  g.fillEllipse(2, 3, size * 2.4, size * 1.2);
+  // Its soft body, then the spiral shell on top.
+  g.fillStyle(0xb8c48a, 1);
+  g.fillEllipse(size * 0.2, 0, size * 2.4, size * 0.9);
+  g.lineStyle(1, 0x6f7a4a, 1);
+  g.lineBetween(size * 1.2, -2, size * 1.6, -5);
+  g.lineBetween(size * 1.2, 2, size * 1.6, 5);
+  g.fillStyle(FOE_COLOUR.snail, 1);
+  g.fillCircle(-size * 0.2, 0, size * 0.85);
+  g.lineStyle(1.4, 0x8a6a3a, 1);
+  g.beginPath();
+  g.arc(-size * 0.2, 0, size * 0.55, 0, Math.PI * 1.5);
+  g.strokePath();
+  g.beginPath();
+  g.arc(-size * 0.2, 0, size * 0.25, 0, Math.PI * 1.5);
+  g.strokePath();
   g.restore();
 }
 

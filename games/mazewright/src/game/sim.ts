@@ -1,9 +1,9 @@
 import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
-  AIMS, attacks, CHEW_GAIN, HEAT, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
+  AIMS, attacks, BIG, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
   SECOND_GATE, SELL_BACK, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
-  type Aim, type DamageKind, type FoeKind, type ShotKind, type TowerKind,
+  type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
 // A game of Mazewright, with no Phaser: the grid, the towers, the foes, the shots and the waves.
@@ -64,8 +64,22 @@ export interface Foe {
   heat: number;
   /** A mole chewing a hedge: the hedge's cell and the seconds left. */
   chew: { cell: number; left: number } | null;
-  /** A mole chews one hedge in its life. */
-  chewed: boolean;
+  /** Hedges a mole may still chew: one, or three for a king. */
+  chews: number;
+  /** A crowned king, and a bigger beetle's size (1, 2 or 3). */
+  king: boolean;
+  big: 1 | 2 | 3;
+  /** Its body's radius in cells. */
+  body: number;
+  /** Gold when beaten and lives when it gets in. */
+  gold: number;
+  lives: number;
+  /** Woodlice it splits into when beaten. */
+  splits: number;
+  /** Its shell now: its kind's, or the Empress's latest. */
+  shell: ShellKind | undefined;
+  /** The Empress: when she next lays a beetle and turns her shell, and the damage she took since. */
+  empress: { eggAt: number; turnAt: number; taken: Partial<Record<DamageKind, number>> } | null;
   dead: boolean;
 }
 
@@ -100,6 +114,11 @@ export type GameEvent =
   | { type: 'leak'; kind: FoeKind; lives: number }
   | { type: 'chewing'; cell: number }
   | { type: 'chewed'; cell: number }
+  | { type: 'king'; kind: FoeKind }
+  | { type: 'rush' }
+  | { type: 'split'; x: number; y: number }
+  | { type: 'egg'; x: number; y: number }
+  | { type: 'shell'; shell: ShellKind }
   | { type: 'wave'; wave: number; early: boolean }
   | { type: 'cleared'; wave: number; gold: number }
   | { type: 'won' }
@@ -109,6 +128,18 @@ export type GameEvent =
 export type Refusal = 'blocks' | 'gold' | 'foe' | 'taken' | 'reserved';
 
 export type Phase = 'build' | 'wave' | 'won' | 'lost';
+
+/** A foe still to come out of a burrow. */
+export interface Spawn {
+  kind: FoeKind;
+  gate: 0 | 1;
+  at: number;
+  wave: number;
+  big?: 2 | 3;
+  king?: boolean;
+  /** The first king of the last wave's rush. */
+  rush?: boolean;
+}
 
 export interface Game {
   map: MapDef;
@@ -130,7 +161,7 @@ export interface Game {
   foes: Foe[];
   shots: Shot[];
   /** Foes still to come out, by the time they do. */
-  spawns: { kind: FoeKind; gate: 0 | 1; at: number; wave: number }[];
+  spawns: Spawn[];
   /** Seconds of play so far. */
   clock: number;
   kills: number;
@@ -324,28 +355,79 @@ export function startWave(g: Game) {
   g.phase = 'wave';
   let at = g.clock + 0.5;
   let turn = 0;
-  for (const [kind, count] of WAVES[g.wave - 1]) {
+  const gateFor = () => (g.wave >= SECOND_GATE ? ((turn++ % 2) as 0 | 1) : 0);
+  for (const [kind, count, opts] of WAVES[g.wave - 1]) {
     for (let i = 0; i < count; i++) {
-      const gate = g.wave >= SECOND_GATE ? ((turn++ % 2) as 0 | 1) : 0;
-      g.spawns.push({ kind, gate, at, wave: g.wave });
-      at += FOE[kind].gap;
+      g.spawns.push({ kind, gate: gateFor(), at, wave: g.wave, big: opts?.size, king: opts?.king });
+      at += FOE[kind].gap * (opts?.king ? 2 : 1);
     }
     at += GROUP_GAP - FOE[kind].gap;
+  }
+  if (g.wave === WAVES.length) {
+    // The rush: one king of every kind, a while after the queen is out.
+    at += RUSH.delay;
+    RUSH_KINDS.forEach((kind, i) => {
+      g.spawns.push({ kind, gate: gateFor(), at, wave: g.wave, king: true, rush: i === 0 });
+      at += RUSH.gap;
+    });
   }
   g.events.push({ type: 'wave', wave: g.wave, early });
   return true;
 }
 
-function spawn(g: Game, kind: FoeKind, gate: 0 | 1, wave: number) {
+function spawn(g: Game, sp: Spawn) {
+  const { kind, wave } = sp;
   const def = FOE[kind];
-  const hp = Math.round(def.hp * (1 + HP_PER_WAVE * (wave - 1)) * hpScale() * (kind === 'queen' && wave === WAVES.length ? FINAL_QUEEN : 1));
-  const cell = g.gates[gate];
+  const plain = { hp: 1, gold: 1, lives: 1, body: 1 };
+  const sized = sp.big ? BIG[sp.big] : plain;
+  const king = sp.king ? KING : plain;
+  const empress = kind === 'queen' && wave === WAVES.length;
+  const hp = Math.round(def.hp * (1 + HP_PER_WAVE * (wave - 1)) * hpScale() * (empress ? FINAL_QUEEN : 1) * sized.hp * king.hp);
+  const cell = g.gates[sp.gate];
   const { x, y } = centre(cell);
-  g.foes.push({
+  const f = makeFoe(g, kind, hp, sp.gate, x, y, cell);
+  f.king = !!sp.king;
+  f.big = sp.big ?? 1;
+  f.body = def.size * sized.body * king.body;
+  f.gold = def.gold * sized.gold * king.gold;
+  f.lives = def.lives * sized.lives * king.lives;
+  if (f.king) {
+    f.chews = def.digs ? KING_TRICKS.chews : 0;
+    f.splits = def.splits ? KING_TRICKS.splits : 0;
+    g.events.push({ type: 'king', kind });
+  }
+  if (empress) f.empress = { eggAt: g.clock + EMPRESS.egg, turnAt: g.clock + EMPRESS.turn, taken: {} };
+  if (sp.rush) g.events.push({ type: 'rush' });
+}
+
+/** A new foe of `kind` with `hp` at a point, standing on `cell`. */
+function makeFoe(g: Game, kind: FoeKind, hp: number, gate: 0 | 1, x: number, y: number, cell: number): Foe {
+  const def = FOE[kind];
+  const f: Foe = {
     id: g.nextId++, kind, hp, maxHp: hp, gate, x, y, from: cell, to: cell, t: 1, heading: 0, angle: 0,
     slowUntil: 0, slowFactor: 1, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0, heat: 0,
-    chew: null, chewed: false, dead: false,
-  });
+    chew: null, chews: def.digs ? 1 : 0, king: false, big: 1, body: def.size, gold: def.gold, lives: def.lives,
+    splits: def.splits ?? 0, shell: def.shell, empress: null, dead: false,
+  };
+  g.foes.push(f);
+  return f;
+}
+
+/** A foe born from another (a split woodlouse, an egg, a king moth's moths), walking on from where it was. */
+function offspring(g: Game, parent: Foe, kind: FoeKind, hp: number, lag: number) {
+  const f = makeFoe(g, kind, hp, parent.gate, parent.x, parent.y, parent.from);
+  if (!FOE[kind].flies && !FOE[parent.kind].flies) {
+    f.from = parent.from;
+    f.to = parent.to;
+    f.t = Math.max(0, parent.t - lag);
+    f.heading = parent.heading;
+  } else if (!FOE[kind].flies) {
+    // Off a flier, onto the cell under it.
+    const cell = Math.floor(parent.y) * COLS + Math.floor(parent.x);
+    f.from = f.to = g.blocked[cell] ? parent.from : cell;
+  }
+  f.angle = parent.angle;
+  return f;
 }
 
 /** How far a foe still has to go, in cells: what towers aim by (the closest to the cottage first). */
@@ -387,20 +469,35 @@ function hedgeToChew(g: Game, from: number) {
 /** Takes `damage` of a kind off a foe: its shell lets some of it through, and heat doubles on a glowing foe. */
 function hurt(g: Game, f: Foe, damage: number, kind: DamageKind) {
   if (f.dead) return;
-  let dealt = damage * shellFactor(FOE[f.kind].shell, kind);
+  let dealt = damage * shellFactor(f.shell, kind);
   if (kind === 'heat' && f.heat >= 1) dealt *= HEAT.boost;
   f.hp -= dealt;
+  if (f.empress) f.empress.taken[kind] = (f.empress.taken[kind] ?? 0) + dealt;
   if (f.hp > 0) return;
   f.dead = true;
-  const gold = FOE[f.kind].gold;
+  const gold = f.gold;
   g.gold += gold;
   g.kills++;
   g.events.push({ type: 'kill', kind: f.kind, x: f.x, y: f.y, gold });
+  if (f.splits > 0) {
+    // A woodlouse falls apart into smaller ones, which split no further.
+    for (let i = 0; i < f.splits; i++) {
+      const child = offspring(g, f, 'woodlouse', Math.round(f.maxHp * (f.king ? 0.2 : 0.35)), i * 0.3);
+      child.body = FOE.woodlouse.size * 0.65;
+      child.gold = 1;
+      child.splits = 0;
+    }
+    g.events.push({ type: 'split', x: f.x, y: f.y });
+  }
+  if (f.king && f.kind === 'moth') {
+    const hp = Math.round(FOE.moth.hp * (1 + HP_PER_WAVE * (g.wave - 1)) * hpScale());
+    for (let i = 0; i < KING_TRICKS.moths; i++) offspring(g, f, 'moth', hp, 0);
+  }
 }
 
 function moveFoe(g: Game, f: Foe, dt: number) {
   const def = FOE[f.kind];
-  const speed = def.speed * (g.clock < f.slowUntil ? f.slowFactor : 1);
+  const speed = def.speed * (f.king ? KING.speed : 1) * (g.clock < f.slowUntil ? f.slowFactor : 1);
   if (def.flies) {
     const goal = centre(g.goal);
     const dx = goal.x - f.x;
@@ -421,14 +518,14 @@ function moveFoe(g: Game, f: Foe, dt: number) {
       g.events.push({ type: 'chewed', cell: f.chew.cell });
     }
     f.chew = null;
-    f.chewed = true;
+    f.chews--;
   }
   f.t += speed * dt;
   while (f.t >= 1) {
     f.t -= 1;
     f.from = f.to;
     if (f.from === g.goal) return leak(g, f);
-    if (def.digs && !f.chewed) {
+    if (f.chews > 0) {
       const hedge = hedgeToChew(g, f.from);
       if (hedge >= 0) {
         f.chew = { cell: hedge, left: CHEW_TIME };
@@ -458,7 +555,7 @@ function moveFoe(g: Game, f: Foe, dt: number) {
 function leak(g: Game, f: Foe) {
   f.dead = true;
   g.leaks++;
-  const lives = FOE[f.kind].lives;
+  const lives = f.lives;
   g.lives = Math.max(0, g.lives - lives);
   g.events.push({ type: 'leak', kind: f.kind, lives });
 }
@@ -466,6 +563,9 @@ function leak(g: Game, f: Foe) {
 /** Burning and poison, and poison spreading to the foes walking close. */
 function afflict(g: Game, f: Foe, dt: number) {
   f.heat = Math.max(0, f.heat - HEAT.cool * dt);
+  const heals = FOE[f.kind].heals;
+  if (heals && g.clock >= f.slowUntil && g.clock >= f.poisonUntil) f.hp = Math.min(f.maxHp, f.hp + heals * f.maxHp * dt);
+  if (f.empress) empress(g, f);
   if (g.clock < f.burnUntil) hurt(g, f, f.burnDps * dt, 'heat');
   if (g.clock >= f.poisonUntil) return;
   hurt(g, f, f.poisonDps * dt, 'poison');
@@ -476,6 +576,29 @@ function afflict(g: Game, f: Foe, dt: number) {
     o.poisonUntil = g.clock + 2;
     o.poisonDps = f.poisonDps;
     o.spreads = false;
+  }
+}
+
+/** The shell that halves each damage kind, for the Empress to turn to. */
+const RESISTS: Partial<Record<DamageKind, ShellKind>> = { sharp: 'hard', heat: 'waxy', blast: 'hairy', spark: 'rubbery' };
+
+/** The Empress lays a beetle now and then, and turns her shell against what hurt her most. */
+function empress(g: Game, f: Foe) {
+  const e = f.empress!;
+  if (g.clock >= e.eggAt && !FOE[f.kind].flies) {
+    e.eggAt += EMPRESS.egg;
+    offspring(g, f, 'beetle', Math.round(FOE.beetle.hp * (1 + HP_PER_WAVE * (g.wave - 1)) * hpScale()), 0.5);
+    g.events.push({ type: 'egg', x: f.x, y: f.y });
+  }
+  if (g.clock < e.turnAt) return;
+  e.turnAt += EMPRESS.turn;
+  let top: DamageKind | undefined;
+  for (const [kind, dealt] of Object.entries(e.taken) as [DamageKind, number][]) if (RESISTS[kind] && dealt > (e.taken[top!] ?? 0)) top = kind;
+  e.taken = {};
+  const shell = top && RESISTS[top];
+  if (shell && shell !== f.shell) {
+    f.shell = shell;
+    g.events.push({ type: 'shell', shell });
   }
 }
 
@@ -535,7 +658,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     return;
   }
   if (tower.kind === 'bonfire') {
-    const hit = g.foes.filter((f) => reaches(f) && inCone(tower.cell, tower.face, f.x, f.y, FOE[f.kind].size));
+    const hit = g.foes.filter((f) => reaches(f) && inCone(tower.cell, tower.face, f.x, f.y, f.body));
     if (hit.length === 0) return;
     tower.cooldown = def.reload[lvl];
     for (const f of hit) {
@@ -618,7 +741,7 @@ function moveShot(g: Game, s: Shot, dt: number) {
       g.events.push({ type: 'hit', x: s.tx, y: s.ty });
     }
   } else {
-    for (const f of g.foes) if (!f.dead && !FOE[f.kind].flies && Math.hypot(f.x - s.tx, f.y - s.ty) <= s.splash + FOE[f.kind].size) hurt(g, f, s.damage, s.hits);
+    for (const f of g.foes) if (!f.dead && !FOE[f.kind].flies && Math.hypot(f.x - s.tx, f.y - s.ty) <= s.splash + f.body) hurt(g, f, s.damage, s.hits);
     g.events.push({ type: 'boom', x: s.tx, y: s.ty, r: s.splash });
   }
   return true;
@@ -630,7 +753,7 @@ export function step(g: Game, dt: number) {
   g.clock += dt;
   while (g.spawns.length && g.spawns[0].at <= g.clock) {
     const s = g.spawns.shift()!;
-    spawn(g, s.kind, s.gate, s.wave);
+    spawn(g, s);
   }
   for (const f of g.foes) if (!f.dead) moveFoe(g, f, dt);
   for (const f of g.foes) if (!f.dead) afflict(g, f, dt);

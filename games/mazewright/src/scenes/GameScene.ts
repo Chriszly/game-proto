@@ -95,6 +95,8 @@ export class GameScene extends Phaser.Scene {
   private banner: { text: string; left: number } | null = null;
   /** Foe kinds already met in this game, to name each new one once. */
   private seen = new Set<FoeKind>();
+  /** The last wave's rush of kings has begun, so each king isn't named again. */
+  private rushing = false;
 
   constructor() {
     super('Game');
@@ -160,7 +162,7 @@ export class GameScene extends Phaser.Scene {
   private musicPart() {
     const g = this.state;
     if (!g || this.screen !== 'play' || g.phase !== 'wave') return 'calm';
-    return g.foes.some((f) => f.kind === 'queen') || g.spawns.some((s) => s.kind === 'queen') ? 'boss' : 'battle';
+    return g.foes.some((f) => f.kind === 'queen' || f.king) || g.spawns.some((s) => s.kind === 'queen' || s.king) ? 'boss' : 'battle';
   }
 
   /** Sound, effects and records for what happened in the last step. */
@@ -234,6 +236,22 @@ export class GameScene extends Phaser.Scene {
       case 'chewed':
         SFX('chew');
         this.changed();
+        break;
+      case 'king':
+        if (!this.rushing) this.say(t('kingComing', { name: t(`foe_${e.kind}` as TextKey) }));
+        break;
+      case 'rush':
+        this.rushing = true;
+        this.say(t('rush'));
+        break;
+      case 'split':
+        this.flash({ kind: 'hit', x: px(e.x), y: py(e.y), r: 10, life: 0.25 });
+        break;
+      case 'egg':
+        this.flash({ kind: 'hit', x: px(e.x), y: py(e.y), r: 8, life: 0.3 });
+        break;
+      case 'shell':
+        this.say(t('empressShell', { shell: t(`shell_${e.shell}` as TextKey) }));
         break;
       case 'wave': {
         SFX('horn');
@@ -386,6 +404,7 @@ export class GameScene extends Phaser.Scene {
     this.acc = 0;
     this.clearFlashes();
     this.seen.clear();
+    this.rushing = false;
     this.banner = null;
     this.changed();
     this.drawLawn();
@@ -480,8 +499,8 @@ export class GameScene extends Phaser.Scene {
         if (!!def.flies !== flying) continue;
         const x = this.grid.x + f.x * CELL;
         const y = this.grid.y + f.y * CELL;
-        const r = def.size * CELL;
-        art.foe(g, f.kind, x, y, f.angle, r, { chilled: s.clock < f.slowUntil, burning: s.clock < f.burnUntil, poisoned: s.clock < f.poisonUntil, heat: f.heat });
+        const r = f.body * CELL;
+        art.foe(g, f.kind, x, y, f.angle, r, { chilled: s.clock < f.slowUntil, burning: s.clock < f.burnUntil, poisoned: s.clock < f.poisonUntil, heat: f.heat, king: f.king });
         if (f.hp < f.maxHp) art.healthBar(g, x, y - r - 9, f.hp / f.maxHp);
       }
     }

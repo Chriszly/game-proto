@@ -81,8 +81,21 @@ First.
 | Stag beetle | slow and tough, with a waxy shell | 2 |
 | Moth | flies straight from its burrow to the cottage, over the maze | 1 |
 | Mole | a hairy coat; walks the maze, but chews through a hedge (not a tower) that stands in the way of a much shorter route | 1 |
+| Woodlouse | from wave 6; splits into two small woodlice when beaten | 1 |
+| Earwig | from wave 7; the fastest foe, and tough | 1 |
 | Weevil | from wave 8; a hard shell | 1 |
-| Beetle queen | waves 10 and 20, very tough | 5 |
+| Snail | from wave 9; slow, a rubbery shell (half Spark, 1.5 times Cold), and heals unless chilled or poisoned | 1 |
+| Ember beetle | from wave 11; fire-proof, Heat does nothing to it | 1 |
+| Beetle queen | wave 10, very tough | 5 |
+| Beetle Empress | wave 20: lays a beetle every 5 seconds and turns her shell against the kind of damage that hurt her most | 5 |
+
+**Kings and big foes.** A king wears a crown: six times the health, slower, eight times the gold
+and three lives. A king beetle leads wave 5, a king stag beetle wave 10 and a king mole wave 15,
+and some kings bring a trick: a king mole chews three hedges, a king woodlouse splits into four, a
+king moth lets three moths go when beaten. Big foes (size 2 and 3, from wave 12) are bigger,
+tougher and cost more lives. After the Empress, one king of every kind rushes in.
+
+![A king stag beetle with its crown, and the queen behind it](docs/screenshots/kings.webp)
 
 ![A mole chewing through the first hedge](docs/screenshots/mole.webp)
 
