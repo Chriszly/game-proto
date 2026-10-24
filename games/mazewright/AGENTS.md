@@ -35,6 +35,14 @@ Implemented today:
   or poisoned), `ember` (shell `ember`: no Heat) and the `queen` (wave 10). On wave 20 the queen is
   the Empress (`EMPRESS`: lays a beetle every `egg` seconds, and every `turn` seconds takes the
   shell in `RESISTS` against the damage kind that hurt her most; event `shell`).
+- Stolen cabbages: `lives` are the cabbages in the patch. A foe reaching the cottage `grab`s
+  `min(f.lives, g.lives)` into `carry`, turns `home` and walks `homeDist[gate]` (a field to each
+  burrow, made again with `dist` in `refield`) back; at its burrow they are lost (event `leak`). A
+  beaten carrier `drop`s them as a `Loose` cabbage that `roll`s back along `dist` at `CABBAGE.speed`
+  (straight, off a moth) and is picked up by any foe with free hands within `CABBAGE.reach`; back
+  in the patch it adds to `lives` (event `saved`). `remaining` for a foe going home is its way to
+  the burrow. The game is lost when `cabbagesLeft` is 0; building on a loose cabbage is refused
+  like a foe.
 - Kings and big foes: a `Group` may carry `{ king: true }` (`KING`: hp, gold, lives, body, speed;
   `KING_TRICKS`: a king mole chews 3 hedges, a king woodlouse splits into 4, a king moth lets 3
   moths go) or `{ size: 2 | 3 }` (`BIG`). `makeFoe` and `offspring` build foes; a `Foe` keeps its
@@ -54,7 +62,8 @@ Implemented today:
 - Hover preview: the routes as they would be with the hovered tile planted, or the no-entry ring.
 - Drag to plant a line; keys 1 to 6 (the pouch, in order), Space and F; a 2x speed button. The
   picked tool's use is told in the top bar.
-- Banners name each new foe kind the first time it comes, the second burrow, a chewing mole, a king
+- Banners name each new foe kind the first time it comes, the second burrow, the first stolen
+  cabbage (`grabbed`), a chewing mole, a king
   (`kingComing`), the final rush (`rush`) and the Empress's shell turns (`empressShell`). Kings
   wear a crown (`art.foe` with `king`).
 
@@ -63,12 +72,13 @@ Missing or rough:
 - A game in play is not saved; a reload starts at the garden picker.
 - No Watch AI mode, no upright layout (an upright phone gets the turn hint).
 - Balance was tuned with a scripted bot (a fixed serpentine on the Meadow): building only between
-  waves it loses at the final queen on Normal, building during waves it wins with a few lives left.
+  waves it loses at the final queen on Normal, building during waves it wins with a few lives left
+  (before stolen cabbages, which made every maze hold foes twice and the game easier).
   The new towers were checked one at a time beside a serpentine corridor for damage per gold:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -154,7 +164,9 @@ motion holds the frost pulse and cannon boom rings at full size and the gold num
 | `apples` | an apple tree drops its gold (`apples`) |
 | `frost` | a frost pulse |
 | `pop` | a foe beaten |
-| `leak` | a foe reaches the cottage |
+| `leak` | a foe takes cabbages from the patch |
+| `lost` | cabbages carried into a burrow |
+| `saved` | loose cabbages roll back into the patch |
 | `horn`, `cleared` | a wave starts, a wave is held |
 | `chew` | a mole starts chewing, and the hedge is gone |
 | shared `refuse` | a refused placement, a disabled button, Start wave while a wave is still coming out |

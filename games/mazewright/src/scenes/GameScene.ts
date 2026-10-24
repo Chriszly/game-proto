@@ -7,7 +7,7 @@ import { distances, route } from '../game/grid';
 import { cellOf, MAPS, type MapDef } from '../game/maps';
 import { loadPouch, loadRecords, noteRecord, pouchOf, savePouch, type Records } from '../game/save';
 import {
-  beamCells, bestFace, build, canStartWave, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
+  beamCells, bestFace, build, cabbagesLeft, canStartWave, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
@@ -97,6 +97,8 @@ export class GameScene extends Phaser.Scene {
   private seen = new Set<FoeKind>();
   /** The last wave's rush of kings has begun, so each king isn't named again. */
   private rushing = false;
+  /** A foe has taken a cabbage this game, so the banner telling what to do is not shown again. */
+  private grabbed = false;
 
   constructor() {
     super('Game');
@@ -225,8 +227,19 @@ export class GameScene extends Phaser.Scene {
         SFX('pop');
         this.flash({ kind: 'coin', x: px(e.x), y: py(e.y), r: 0, life: 0.8, text: `+${e.gold}` });
         break;
-      case 'leak':
+      case 'grab':
         SFX('leak');
+        if (!this.grabbed) this.say(t('grabbed'));
+        this.grabbed = true;
+        break;
+      case 'leak':
+        SFX('lost');
+        break;
+      case 'drop':
+        this.flash({ kind: 'hit', x: px(e.x), y: py(e.y), r: 10, life: 0.3 });
+        break;
+      case 'saved':
+        SFX('saved');
         break;
       case 'chewing':
         SFX('chew');
@@ -405,6 +418,7 @@ export class GameScene extends Phaser.Scene {
     this.clearFlashes();
     this.seen.clear();
     this.rushing = false;
+    this.grabbed = false;
     this.banner = null;
     this.changed();
     this.drawLawn();
@@ -492,6 +506,7 @@ export class GameScene extends Phaser.Scene {
       g.strokeRoundedRect(m.x - 20, m.y - 20, 40, 40, 8);
       this.drawReach(g, s, picked.kind, picked.cell, picked.face, 0.85, true);
     }
+    for (const c of s.loose) art.cabbage(g, this.grid.x + c.x * CELL, this.grid.y + c.y * CELL, 7);
     // Ground foes, then moths above them.
     for (const flying of [false, true]) {
       for (const f of s.foes) {
@@ -501,6 +516,7 @@ export class GameScene extends Phaser.Scene {
         const y = this.grid.y + f.y * CELL;
         const r = f.body * CELL;
         art.foe(g, f.kind, x, y, f.angle, r, { chilled: s.clock < f.slowUntil, burning: s.clock < f.burnUntil, poisoned: s.clock < f.poisonUntil, heat: f.heat, king: f.king });
+        if (f.carry > 0) art.cabbage(g, x, y, Math.min(r * 0.9, 8));
         if (f.hp < f.maxHp) art.healthBar(g, x, y - r - 9, f.hp / f.maxHp);
       }
     }
@@ -682,7 +698,8 @@ export class GameScene extends Phaser.Scene {
     const cy = BAR_H / 2;
     this.text(16, cy, t('wave', { n: s.wave, total: WAVES.length }), 16, css(C.cream));
     this.text(172, cy, `◆ ${s.gold}`, 16, css(C.gold));
-    this.text(262, cy, `♥ ${s.lives}`, 16, css(C.life));
+    art.cabbage(g, 268, cy, 7);
+    this.text(280, cy, `${s.lives}`, 16, css(C.life));
     const a = s.dist[s.gates[0]];
     const b = s.dist[s.gates[1]];
     this.text(342, cy, s.wave >= SECOND_GATE - 1 ? t('routeTwo', { a, b }) : t('routeOne', { n: a }), 13, css(C.cream), 0, false);
@@ -763,7 +780,7 @@ export class GameScene extends Phaser.Scene {
     g.fillRoundedRect(x, y, w, h, 14);
     const won = s.phase === 'won';
     this.text(this.vw / 2, y + 44, t(won ? 'won' : 'lost'), 26, css(won ? C.gold : C.cream), 0.5);
-    this.text(this.vw / 2, y + 88, won ? t('wonText', { n: s.lives }) : t('lostText', { n: s.wave }), 15, css(C.cream), 0.5, false);
+    this.text(this.vw / 2, y + 88, won ? t('wonText', { n: cabbagesLeft(s) }) : t('lostText', { n: s.wave }), 15, css(C.cream), 0.5, false);
     this.button('again', x + 40, y + 128, 170, 40, t('again'), () => this.start(s.map), { fill: C.gold });
     this.button('gardens', x + w - 210, y + 128, 170, 40, t('gardens'), () => this.toMenu());
   }

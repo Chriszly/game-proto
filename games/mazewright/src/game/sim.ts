@@ -1,7 +1,7 @@
 import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
-  AIMS, attacks, BIG, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
+  AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
   SECOND_GATE, SELL_BACK, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
@@ -78,9 +78,24 @@ export interface Foe {
   splits: number;
   /** Its shell now: its kind's, or the Empress's latest. */
   shell: ShellKind | undefined;
+  /** Cabbages it carries off; once it has some (or found the patch empty) it walks home to its burrow. */
+  carry: number;
+  home: boolean;
   /** The Empress: when she next lays a beetle and turns her shell, and the damage she took since. */
   empress: { eggAt: number; turnAt: number; taken: Partial<Record<DamageKind, number>> } | null;
   dead: boolean;
+}
+
+/** Cabbages dropped by a beaten foe, rolling back to the patch until a foe picks them up. */
+export interface Loose {
+  id: number;
+  n: number;
+  x: number;
+  y: number;
+  /** On the ground like a foe: the cell it left, the cell it rolls to and how far along. In the air (off a moth) `from` is -1 and it rolls straight. */
+  from: number;
+  to: number;
+  t: number;
 }
 
 export interface Shot {
@@ -111,7 +126,11 @@ export type GameEvent =
   | { type: 'boom'; x: number; y: number; r: number }
   | { type: 'hit'; x: number; y: number }
   | { type: 'kill'; kind: FoeKind; x: number; y: number; gold: number }
+  | { type: 'grab'; kind: FoeKind; n: number }
   | { type: 'leak'; kind: FoeKind; lives: number }
+  | { type: 'drop'; x: number; y: number; n: number }
+  | { type: 'pickup'; x: number; y: number }
+  | { type: 'saved'; n: number }
   | { type: 'chewing'; cell: number }
   | { type: 'chewed'; cell: number }
   | { type: 'king'; kind: FoeKind }
@@ -149,13 +168,17 @@ export interface Game {
   /** The last wave whose reward has been paid. */
   paid: number;
   gold: number;
+  /** Cabbages in the patch by the cottage (the lives), and how many it started with. */
   lives: number;
   maxLives: number;
+  /** Cabbages lying loose on the lawn. */
+  loose: Loose[];
   /** Per cell: 0 free, 1 a rock, 2 a tower. */
   blocked: Uint8Array;
   towers: Tower[];
-  /** The steps from every cell to the cottage. */
+  /** The steps from every cell to the cottage, and to each burrow for foes carrying cabbages home. */
   dist: Int16Array;
+  homeDist: [Int16Array, Int16Array];
   gates: [number, number];
   goal: number;
   foes: Foe[];
@@ -178,6 +201,7 @@ export function newGame(mapId: string): Game {
   for (const rock of map.rocks) blocked[cellIndex(rock)] = 1;
   const goal = cellIndex(map.goal);
   const lives = startLives();
+  const gates: [number, number] = [cellIndex(map.gates[0]), cellIndex(map.gates[1])];
   return {
     map,
     phase: 'build',
@@ -186,10 +210,12 @@ export function newGame(mapId: string): Game {
     gold: START_GOLD,
     lives,
     maxLives: lives,
+    loose: [],
     blocked,
     towers: [],
     dist: distances(blocked, goal),
-    gates: [cellIndex(map.gates[0]), cellIndex(map.gates[1])],
+    homeDist: [distances(blocked, gates[0]), distances(blocked, gates[1])],
+    gates,
     goal,
     foes: [],
     shots: [],
@@ -210,6 +236,15 @@ const centre = (cell: number) => {
 };
 const over = (g: Game) => g.phase === 'won' || g.phase === 'lost';
 
+/** Makes the walking fields again after a cell was blocked or freed. */
+function refield(g: Game) {
+  g.dist = distances(g.blocked, g.goal);
+  g.homeDist = [distances(g.blocked, g.gates[0]), distances(g.blocked, g.gates[1])];
+}
+
+/** All the cabbages still in the game: in the patch, carried and loose. */
+export const cabbagesLeft = (g: Game) => g.lives + g.foes.reduce((n, f) => n + (f.dead ? 0 : f.carry), 0) + g.loose.reduce((n, c) => n + c.n, 0);
+
 /** Whether a field leaves both burrows, and every foe on the ground, a way to the cottage. */
 function open(g: Game, dist: Int16Array) {
   if (dist[g.gates[0]] === UNREACHABLE || dist[g.gates[1]] === UNREACHABLE) return false;
@@ -221,6 +256,7 @@ export function canBuild(g: Game, cell: number, kind: TowerKind): Refusal | null
   if (cell === g.goal || g.gates.includes(cell)) return 'reserved';
   if (g.blocked[cell]) return 'taken';
   if (g.foes.some((f) => !f.dead && !FOE[f.kind].flies && (f.from === cell || f.to === cell))) return 'foe';
+  if (g.loose.some((c) => c.from === cell || c.to === cell)) return 'foe';
   if (wouldBlock(g, cell)) return 'blocks';
   if (g.gold < TOWER[kind].cost) return 'gold';
   return null;
@@ -246,7 +282,7 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
   const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
   g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first' });
   g.blocked[cell] = 2;
-  g.dist = distances(g.blocked, g.goal);
+  refield(g);
   g.events.push({ type: 'built', kind, cell });
   return null;
 }
@@ -340,7 +376,7 @@ export function sell(g: Game, cell: number) {
 function removeTower(g: Game, tower: Tower) {
   g.towers.splice(g.towers.indexOf(tower), 1);
   g.blocked[tower.cell] = 0;
-  g.dist = distances(g.blocked, g.goal);
+  refield(g);
 }
 
 /** Whether the next wave can be started: between waves, or once the wave in play is all out. */
@@ -407,7 +443,7 @@ function makeFoe(g: Game, kind: FoeKind, hp: number, gate: 0 | 1, x: number, y: 
     id: g.nextId++, kind, hp, maxHp: hp, gate, x, y, from: cell, to: cell, t: 1, heading: 0, angle: 0,
     slowUntil: 0, slowFactor: 1, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0, heat: 0,
     chew: null, chews: def.digs ? 1 : 0, king: false, big: 1, body: def.size, gold: def.gold, lives: def.lives,
-    splits: def.splits ?? 0, shell: def.shell, empress: null, dead: false,
+    splits: def.splits ?? 0, shell: def.shell, carry: 0, home: false, empress: null, dead: false,
   };
   g.foes.push(f);
   return f;
@@ -432,6 +468,14 @@ function offspring(g: Game, parent: Foe, kind: FoeKind, hp: number, lag: number)
 
 /** How far a foe still has to go, in cells: what towers aim by (the closest to the cottage first). */
 export function remaining(g: Game, f: Foe) {
+  if (f.home) {
+    // On its way out, a foe is as close as its way home is short.
+    if (FOE[f.kind].flies) {
+      const gate = centre(g.gates[f.gate]);
+      return Math.hypot(gate.x - f.x, gate.y - f.y);
+    }
+    return g.homeDist[f.gate][f.to] + (1 - f.t);
+  }
   if (FOE[f.kind].flies) {
     const goal = centre(g.goal);
     return Math.hypot(goal.x - f.x, goal.y - f.y);
@@ -479,6 +523,7 @@ function hurt(g: Game, f: Foe, damage: number, kind: DamageKind) {
   g.gold += gold;
   g.kills++;
   g.events.push({ type: 'kill', kind: f.kind, x: f.x, y: f.y, gold });
+  if (f.carry > 0) drop(g, f);
   if (f.splits > 0) {
     // A woodlouse falls apart into smaller ones, which split no further.
     for (let i = 0; i < f.splits; i++) {
@@ -499,12 +544,12 @@ function moveFoe(g: Game, f: Foe, dt: number) {
   const def = FOE[f.kind];
   const speed = def.speed * (f.king ? KING.speed : 1) * (g.clock < f.slowUntil ? f.slowFactor : 1);
   if (def.flies) {
-    const goal = centre(g.goal);
+    const goal = centre(f.home ? g.gates[f.gate] : g.goal);
     const dx = goal.x - f.x;
     const dy = goal.y - f.y;
     const d = Math.hypot(dx, dy);
     f.angle = Math.atan2(dy, dx);
-    if (d <= speed * dt) return leak(g, f);
+    if (d <= speed * dt) return f.home ? leak(g, f) : grab(g, f);
     f.x += (dx / d) * speed * dt;
     f.y += (dy / d) * speed * dt;
     return;
@@ -524,8 +569,12 @@ function moveFoe(g: Game, f: Foe, dt: number) {
   while (f.t >= 1) {
     f.t -= 1;
     f.from = f.to;
-    if (f.from === g.goal) return leak(g, f);
-    if (f.chews > 0) {
+    if (f.home ? f.from === g.gates[f.gate] : f.from === g.goal) {
+      if (f.home) return leak(g, f);
+      grab(g, f);
+      if (f.dead) return;
+    }
+    if (f.chews > 0 && !f.home) {
       const hedge = hedgeToChew(g, f.from);
       if (hedge >= 0) {
         f.chew = { cell: hedge, left: CHEW_TIME };
@@ -537,7 +586,7 @@ function moveFoe(g: Game, f: Foe, dt: number) {
         break;
       }
     }
-    const step = nextStep(g.dist, f.from, f.heading);
+    const step = nextStep(f.home ? g.homeDist[f.gate] : g.dist, f.from, f.heading);
     if (!step) {
       f.t = 0;
       break;
@@ -552,12 +601,75 @@ function moveFoe(g: Game, f: Foe, dt: number) {
   if (f.to !== f.from) f.angle = Math.atan2(b.y - a.y, b.x - a.x);
 }
 
+/** A foe reaches the patch: it takes its share of cabbages (`lives`) and turns for home. */
+function grab(g: Game, f: Foe) {
+  g.leaks++;
+  const n = Math.min(f.lives, g.lives);
+  g.lives -= n;
+  f.carry = n;
+  f.home = true;
+  f.chew = null;
+  // An empty patch: it has nothing to take, and is gone.
+  if (n === 0) f.dead = true;
+  else g.events.push({ type: 'grab', kind: f.kind, n });
+}
+
+/** A foe gets back into its burrow, and the cabbages it carries are lost. */
 function leak(g: Game, f: Foe) {
   f.dead = true;
-  g.leaks++;
-  const lives = f.lives;
-  g.lives = Math.max(0, g.lives - lives);
+  const lives = f.carry;
+  f.carry = 0;
   g.events.push({ type: 'leak', kind: f.kind, lives });
+}
+
+/** A beaten foe drops its cabbages where it fell. */
+function drop(g: Game, f: Foe) {
+  const flier = FOE[f.kind].flies;
+  g.loose.push({ id: g.nextId++, n: f.carry, x: f.x, y: f.y, from: flier ? -1 : f.from, to: flier ? -1 : f.to, t: flier ? 0 : f.t });
+  g.events.push({ type: 'drop', x: f.x, y: f.y, n: f.carry });
+  f.carry = 0;
+}
+
+/** Loose cabbages roll back to the patch, and a passing foe with free hands picks them up. */
+function roll(g: Game, c: Loose, dt: number) {
+  for (const f of g.foes) {
+    if (f.dead || f.carry > 0 || Math.hypot(f.x - c.x, f.y - c.y) > CABBAGE.reach + f.body) continue;
+    f.carry = c.n;
+    f.home = true;
+    f.chew = null;
+    g.events.push({ type: 'pickup', x: c.x, y: c.y });
+    return true;
+  }
+  const move = CABBAGE.speed * dt;
+  if (c.from < 0) {
+    const goal = centre(g.goal);
+    const d = Math.hypot(goal.x - c.x, goal.y - c.y);
+    if (d > move) {
+      c.x += ((goal.x - c.x) / d) * move;
+      c.y += ((goal.y - c.y) / d) * move;
+      return false;
+    }
+  } else {
+    c.t += move;
+    while (c.t >= 1 && c.to !== g.goal) {
+      c.t -= 1;
+      c.from = c.to;
+      const step = nextStep(g.dist, c.from);
+      if (!step) break;
+      c.to = step.cell;
+    }
+    if (c.to !== g.goal || c.t < 1) {
+      c.t = Math.min(c.t, 1);
+      const a = centre(c.from);
+      const b = centre(c.to);
+      c.x = a.x + (b.x - a.x) * c.t;
+      c.y = a.y + (b.y - a.y) * c.t;
+      return false;
+    }
+  }
+  g.lives += c.n;
+  g.events.push({ type: 'saved', n: c.n });
+  return true;
 }
 
 /** Burning and poison, and poison spreading to the foes walking close. */
@@ -757,11 +869,12 @@ export function step(g: Game, dt: number) {
   }
   for (const f of g.foes) if (!f.dead) moveFoe(g, f, dt);
   for (const f of g.foes) if (!f.dead) afflict(g, f, dt);
+  g.loose = g.loose.filter((c) => !roll(g, c, dt));
   const boost = boosts(g);
   for (const t of g.towers) fire(g, t, dt, boost.get(t.id) ?? 0);
   g.shots = g.shots.filter((s) => !moveShot(g, s, dt));
   g.foes = g.foes.filter((f) => !f.dead);
-  if (g.lives <= 0) {
+  if (cabbagesLeft(g) <= 0) {
     g.phase = 'lost';
     g.events.push({ type: 'lost' });
     return;

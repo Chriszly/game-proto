@@ -97,8 +97,12 @@ export const SFX = sounds({
   frost: { wave: 'sine', freq: 1400, to: 2100, length: 0.16, volume: 0.1, gap: 150 },
   /** A foe beaten. */
   pop: { wave: 'square', freq: 700, to: 1100, length: 0.06, volume: 0.12, gap: 50, vary: 0.06 },
-  /** A foe reaches the cottage. */
+  /** A foe takes cabbages from the patch. */
   leak: { wave: 'square', freq: 260, to: 110, length: 0.28, volume: 0.24, gap: 150 },
+  /** Cabbages carried into a burrow, lost for good. */
+  lost: { wave: 'triangle', freq: 330, to: 98, length: 0.4, volume: 0.22, gap: 200 },
+  /** Loose cabbages roll back into the patch. */
+  saved: { wave: 'triangle', freq: 660, arp: [0, 7], arpStep: 0.07, length: 0.16, volume: 0.16, gap: 150 },
   /** A wave starts. */
   horn: { wave: 'pulse25', freq: 330, arp: [0, 5, 7], arpStep: 0.09, length: 0.36, volume: 0.22 },
   /** A wave held. */
