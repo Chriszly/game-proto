@@ -204,8 +204,8 @@ export const KING_TRICKS = { chews: 3, splits: 4, moths: 3 };
 export const EMPRESS = { egg: 5, turn: 5 };
 
 /**
- * The waves, in order. From wave `SECOND_GATE` on, foes come out of both burrows in turn; before
- * that only the first burrow is open, though both routes must stay free all game.
+ * The waves, in order. Each burrow opens on its wave in `GATE_WAVES`, and foes come out of the
+ * open ones in turn; before that a burrow is closed, though every route must stay free all game.
  */
 export const WAVES: Group[][] = [
   [['beetle', 6]],
@@ -235,7 +235,11 @@ export const CABBAGE = { speed: 1.2, reach: 0.3 };
 /** Seconds from the last wave's queen to the rush, and between two of its kings. */
 export const RUSH = { delay: 16, gap: 3 };
 export const RUSH_KINDS: FoeKind[] = ['beetle', 'ladybird', 'stag', 'moth', 'mole', 'weevil', 'woodlouse', 'snail', 'ember', 'earwig'];
-export const SECOND_GATE = 6;
+/** The wave each of a garden's burrows opens on, in its order: the first from the start. */
+export const GATE_WAVES = [1, 6, 10, 13, 15, 17];
+export const SECOND_GATE = GATE_WAVES[1];
+/** A tower on a raised bank reaches this much further. */
+export const BANK_REACH = 1.25;
 /** Seconds between two groups of a wave. */
 export const GROUP_GAP = 2;
 

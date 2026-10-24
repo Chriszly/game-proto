@@ -9,13 +9,24 @@ per the root AGENTS.md.
 Mazewright is a maze-building tower defense in a Hedge Garden look, drawn in flat vector shapes
 (clean fills, soft drop shadows, no outlines). There is no road: foes walk from a burrow to the
 cottage by the shortest free way across a 22x11 grid, and every hedge and tower is a wall. The core
-rule is that a free route always remains: a placement is refused when it would leave either burrow,
+rule is that a free route always remains: a placement is refused when it would leave any burrow,
 or any foe on the ground, without a way to the cottage.
 
 Implemented today:
 
-- Three gardens (`MAPS`): Meadow, Orchard and Millpond, each with two burrows, a cottage and fixed
-  rocks. The picker shows each garden's best wave.
+- Twelve gardens (`MAPS`), three a season (`MapDef.season`, `SEASONS`): spring's Meadow, Orchard
+  and Millpond, summer's Brook, Warren and Gravel Walk, autumn's Hillside, Crossroads and Leaf Walk,
+  winter's Ice Pond, Last Cabbage and Snow Path. Each has one to six burrows (`gates`, opening on
+  the waves in `GATE_WAVES`: 1, 6, 10, 13, 15, 17), a cottage, rocks, and maybe `ponds` (water:
+  walkers go round, moths and sunglass beams cross, nothing is planted), `banks` (a tower there
+  reaches `BANK_REACH` (1.25) times further, `reachOf`), a `path` (a path garden: foes keep to the
+  gravel, towers go only on the lawn beside it, which never changes a route) and its own `lives`
+  (Last Cabbage: 1). The picker has a tab per season (`season-<season>` buttons); a season opens
+  at `SEASON_STARS` (0, 4, 10, 18) stars won across all gardens, and a shut one's cards are dimmed
+  and refuse a tap. Each season has its own lawn colours (`art.SEASON_LAWN`), and winter's water is
+  ice. A greedy bot (each hedge where it lengthens the routes most, towers where they cover most
+  route; for a path garden, towers on the lawn that covers most path) wins all twelve on Normal
+  with a bow, frost and cannon pouch; later seasons are not yet harder than spring.
 - The pouch: under the garden cards, chips in two rows (`CHIPS.perRow`) for the thirteen towers and two traps besides `hedge` and `bow` (`ALWAYS`);
   up to `POUCH_PICKS` (4) are picked, saved, and make the run's tool bar (six buttons at most).
   `DEFAULT_POUCH` is today's four (hedge, bow, frost, cannon), which the playthrough uses.
@@ -81,8 +92,8 @@ Implemented today:
 - Aim (`AIMS`, a tower's `target`): first, last, strongest, weakest or fliers first, set from the
   panel for the towers where `aims(kind)` holds; a `TowerDef.aim` sets the start (crossbow:
   strongest). Sell asks for a second tap within 2 seconds.
-- 20 waves (`WAVES`); the second burrow is used from wave `SECOND_GATE` (6), but both routes must
-  stay open all game. Wave 1 starts by hand (Start wave). After it, unless `calm` (the picker's
+- 20 waves (`WAVES`); each burrow is used from its wave in `GATE_WAVES` (`openGates`), with foes
+  sent out of the open ones in turn, but every route must stay open all game. Wave 1 starts by hand (Start wave). After it, unless `calm` (the picker's
   toggle, saved), `nextAt` is set `WAVE_TIMER` (20) seconds after a wave is all out and `step`
   starts the next then; Start wave still sends it early, for `EARLY_BONUS` gold while foes are out.
 - Growing (`GROW_RATE`): `build` and `upgrade` set a tower's `grow` (and `growFull`) to its cost
@@ -92,7 +103,8 @@ Implemented today:
 - Hover preview: the routes as they would be with the hovered tile planted, or the no-entry ring.
 - Drag to plant a line; keys 1 to 8 (the pouch, in order), Space and F; a 2x speed button. The
   picked tool's use is told in the top bar.
-- Banners name each new foe kind the first time it comes, the second burrow, the first stolen
+- Banners name each new foe kind the first time it comes, the second burrow (and each later one,
+  `burrowOpens`), the first stolen
   cabbage (`grabbed`), a chewing mole, a king
   (`kingComing`), the final rush (`rush`) and the Empress's shell turns (`empressShell`). Kings
   wear a crown (`art.foe` with `king`).
@@ -108,7 +120,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `traps.webp`, `shed.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker on its autumn tab, with the pouch), `path.webp` (Gravel Walk), `ponds.webp` (Ice Pond, towers on its banks), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `traps.webp`, `shed.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -128,27 +140,31 @@ File map (`src/`):
 - `audio.ts`: `SONG` and the `SFX` table (see Sound).
 - `game/rules.ts`: `COLS`, `ROWS`, `TOWERS`/`TOWER` (cost, range, damage and reload by level, air,
   splash, slow, stun, shrink, airOnly), `MAX_LEVEL`, `MASTER`, `tier`, `MASTER_TRICKS`, `harms`, `SELL_BACK`, `upgradeCost`, `SHOT_SPEED`, `FOES`/`FOE` (hp, speed,
-  gold, lives, gap, flies, digs, size), `CHEW_TIME`, `CHEW_GAIN`, `WAVES`, `SECOND_GATE`,
+  gold, lives, gap, flies, digs, size), `CHEW_TIME`, `CHEW_GAIN`, `WAVES`, `GATE_WAVES`, `SECOND_GATE`, `BANK_REACH`,
   `GROUP_GAP`, `HP_PER_WAVE`, `FINAL_QUEEN`, `startLives`, `START_GOLD`, `hpScale`, `waveReward`,
   `EARLY_BONUS`, `ALWAYS`, `POUCH_PICKS`, `DEFAULT_POUCH`, `attacks`, `ShotKind`, `SPREAD`. A
   `TowerDef` carries the extra numbers of the towers that need them (`chain`/`jump`, `dot`/`dotFor`,
   `faces`/`cone`, `boost`, `apples`, `spinTo`/`spinUp`, `aim`), `DAMAGE_KINDS`, `SHELLS`,
   `shellFactor`, `HEAT`, `AIMS`, `aims`. No Phaser.
-- `game/maps.ts`: `MAPS` (`MapDef`: `id`, `gates`, `goal`, `rocks`), `cellIndex`, `cellOf`,
-  `inGrid`. A cell index is `row * COLS + col`.
+- `game/maps.ts`: `MAPS` (`MapDef`: `id`, `season`, `gates`, `goal`, `rocks`, and optional `ponds`,
+  `banks`, `path`, `lives`; `line` and `block` spell paths and ponds), `SEASONS`, `SEASON_STARS`,
+  `cellIndex`, `cellOf`, `inGrid`. A cell index is `row * COLS + col`.
 - `game/grid.ts`: `distances` (breadth-first search out from the cottage over free cells, 4
   neighbours), `nextStep` (a neighbour one step closer, keeping the heading on ties, then right,
   down, up, left), `route`, `UNREACHABLE`, `DIRS`.
 - `game/sim.ts`: `Game`, `Tower`, `Foe`, `Shot`, `GameEvent`, `Refusal` and the actions:
   `newGame`, `canBuild`, `wouldBlock`, `build`, `nextUpgrade`, `upgrade`, `sellValue`, `sell`, `turn`, `setAim`,
   `canStartWave`, `startWave`, `step`, `remaining`, `routeLength`, `towerAt`, and `beamCells`,
-  `inCone` and `bestFace` for the towers that point one way. Only this file
-  changes a `Game`. `g.blocked` is 0 free, 1 rock, 2 tower; `g.dist` is made again whenever a cell
+  `inCone` and `bestFace` for the towers that point one way, `reachOf` and `openGates`. Only this file
+  changes a `Game`. `g.blocked` is 0 free (a path garden's path), 1 rock, 2 tower, 3 water, 4
+  (`LAWN`) a path garden's lawn; `g.ground` is the same without towers (selling puts it back), and
+  `g.banks` marks banks. `g.dist` (and `homeDist`, one per burrow) is made again whenever a cell
   is blocked or freed. A ground foe walks from `from` to `to` (neighbouring cells) with `t` from 0
   to 1, and picks its next cell from `g.dist` on arrival, so a maze changed mid-wave takes effect at
   its next step. `canBuild` refuses a tile in this order: `reserved` (a burrow or the cottage),
-  `taken` (a rock or tower; the scene opens the tower's panel instead), `foe`, `blocks` (the
-  never-close rule: `open` checks both burrows and every ground foe's `to` cell against the new
+  `taken` (a rock, water or tower; the scene opens the tower's panel instead; a trap off the
+  walking cells), a path garden's lawn is then only checked for `gold` and its path is `reserved`,
+  then `foe`, `blocks` (the never-close rule: `open` checks every burrow and every ground foe's `to` cell against the new
   field) and `gold`. Towers pick a foe in reach by their aim (`pick`;
   First is the least `remaining` distance). `step` moves foes, then `afflict` (burning, poison and its
   spread, and cooling), then fires every tower with its beehive `boosts`; `hurt` takes a damage kind
@@ -160,7 +176,7 @@ File map (`src/`):
   tower panel (taller with Turn), the garden cards, the pouch's `CHIPS` (two rows, above the corner buttons)
   and `DEPTH`.
 - `scenes/art.ts`: `C` (colours), `FOE_COLOUR` and the drawing functions (`lawn`, `flowers`,
-  `hedge`, `chewedHedge`, `rock`, `tower`, `burrow`, `cottage`, `foe`, `healthBar`, `dotted`,
+  `hedge`, `chewedHedge`, `rock`, `pond`, `bank`, `gravel`, `tower`, `burrow`, `cottage`, `foe`, `healthBar`, `dotted`,
   `dashedCircle`, `noEntry`), all on a Phaser Graphics at a cell's middle.
 - `scenes/GameScene.ts`: the only scene. Screens `menu` (the garden picker) and `play`. It steps the
   game in fixed `STEP`s (1/60 s, times `speed`), drains `g.events` for sound, flashes and records,
@@ -177,7 +193,7 @@ stars, fastest win in seconds and the Endless best), `mazewright-pouch` (the tow
 
 Test hooks (read by `e2e/playthrough.spec.ts` through `window.game.scene.getScene('Game')`):
 `screen`, `state` (the `Game`), `pouch`, `buttons` (every button by id, centred, in view pixels:
-`map-<garden>`, `pouch-<tower>`, `tool-<tower>`, `wave`, `speed`, `gardens`, `upgrade`, `sell`,
+`map-<garden>` (the cards of the season shown, `season-<season>`), `pouch-<tower>`, `tool-<tower>`, `wave`, `speed`, `gardens`, `upgrade`, `sell`,
 `turn`, `aim`, `again`) and `grid` (the grid's corner and cell size in view pixels).
 
 Difficulty: `startLives` (30, 20, 12) and `hpScale` (0.8, 1, 1.25) use `byDifficulty`. Reduced
@@ -213,9 +229,9 @@ motion holds the frost pulse and cannon boom rings at full size and the gold num
   pixels, so an eleventh pickable tower needs a second row or narrower chips.
 - **A foe**: add it to `FOES` and `FOE`, its look in `art.foe` (beetle-shaped foes in `beetle`), its colour in `FOE_COLOUR`, its
   `new_${kind}` text, and put it in `WAVES`.
-- **A garden**: add a `MapDef` to `MAPS` (keep both burrows and the cottage free of rocks and the
-  burrows able to reach the cottage), its `${id}Name`/`${id}Text` texts and a picker card slot in
-  `CARDS.xs`.
+- **A garden**: add a `MapDef` to `MAPS` with its season (three a season fill `CARDS.xs`; keep the
+  burrows and the cottage free of rocks and water, the burrows able to reach the cottage, and a path
+  garden's banks on its lawn), and its `${id}Name`/`${id}Text` texts (two lines on the card).
 - **The playthrough** plays the first wave on the Meadow with the default pouch: hedges in column 4 rows 0 to 9 (a drag),
   a refused tap on (4, 10), bows at (3, 9), (5, 9) and (5, 7), then wave 1 (six beetles). A change to
   `START_GOLD`, the hedge or bow cost or numbers, the beetle or wave 1, `waveReward`, the Meadow's

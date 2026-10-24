@@ -38,10 +38,23 @@ come, and upgrade between waves rather than in the thick of one.
 
 ![The garden picker](docs/screenshots/gardens.webp)
 
-Three gardens, each with its own rocks and burrows, so each asks for its own maze: the open
-**Meadow**, the **Orchard** with its rows of rocks, and the **Millpond** with one burrow at the top
-and the cottage in the corner. Rocks never move and nothing is planted on them. The picker shows
-the best wave reached in each garden.
+Twelve gardens in four seasons, three a season, each with its own rocks, water and burrows, so
+each asks for its own maze. The picker has a tab for each season: spring is open from the start,
+and summer, autumn and winter open once 4, 10 and 18 stars are won across all gardens.
+
+| Season | Gardens |
+| --- | --- |
+| Spring | **Meadow** (open lawn), **Orchard** (rows of rocks), **Millpond** (a pond, a burrow at the top and the cottage in the corner) |
+| Summer | **Brook** (a brook with two fords and banks), **Warren** (three burrows), **Gravel Walk** (a path garden) |
+| Autumn | **Hillside** (a raised terrace), **Crossroads** (the cottage in the middle, four burrows), **Leaf Walk** (a winding path garden) |
+| Winter | **Ice Pond** (a frozen pond, three burrows), **Last Cabbage** (one cabbage, six burrows), **Snow Path** (a path garden with banks) |
+
+Rocks never move and nothing is planted on them. **Water** is the same for walkers, but moths fly
+over it and a sunglass beam shines across it. A tower on a raised **bank** (a lighter tile with a
+step) reaches a quarter further. In a **path garden** the foes keep to the gravel path, and towers
+go only on the lawn beside it: there is no maze to build, only where to put each tower. A garden
+with more burrows opens them on waves 6, 10, 13, 15 and 17, and every route must stay open from the
+start.
 
 Under the cards is your **pouch**: the hedge and the bow always come along, and you pick up to four
 more of the other thirteen towers and the two garden traps. The pick is kept for the next game.
@@ -54,6 +67,10 @@ its gold price, each tower's master level twice that, and the pouch's fifth and 
 already played, so seeds are waiting for players from before the shed.
 
 ![The potting shed](docs/screenshots/shed.webp)
+
+![Gravel Walk, a path garden: towers on the lawn beside the path](docs/screenshots/path.webp)
+
+![Ice Pond in winter: crossbows and a storm rod on the banks round the frozen pond](docs/screenshots/ponds.webp)
 
 ### Towers
 
@@ -148,8 +165,8 @@ tougher and take more cabbages. After the Empress, one king of every kind rushes
 ![A mole chewing through the first hedge](docs/screenshots/mole.webp)
 
 There are 20 waves, each tougher than the last. The second burrow opens at wave 6, and from then on
-foes come out of both in turn, so the maze has to serve two routes; both must stay open from the
-start. Beaten foes pay gold, and a held wave pays 6 more plus its number. Hold all 20 to save the
+foes come out of the open burrows in turn, so the maze has to serve every route; all must stay open
+from the start. Beaten foes pay gold, and a held wave pays 6 more plus its number. Hold all 20 to save the
 garden.
 
 **Stolen cabbages.** The patch by the cottage holds 20 cabbages, the lives. A foe that gets there
@@ -176,10 +193,10 @@ played, and is kept for the next game:
 ## Code layout
 
 - `src/game/rules.ts`: the grid size, towers, foes, waves and tuning numbers.
-- `src/game/maps.ts`: the three gardens (burrows, cottage, rocks).
+- `src/game/maps.ts`: the twelve gardens and their seasons (burrows, cottage, rocks, water, banks, paths).
 - `src/game/grid.ts`: the walking field (steps from every tile to the cottage) and routes.
 - `src/game/sim.ts`: a game: building and the never-close rule, foes, shots, waves and events.
-- `src/game/save.ts`: the best wave per garden.
+- `src/game/save.ts`: the records per garden, the pouch, the way of play and the potting shed.
 - `src/scenes/GameScene.ts`: the garden picker and the game screen: input, drawing and the bars.
 - `src/scenes/art.ts`, `layout.ts`: the flat vector art and where things go.
 - `src/audio.ts`: music and sound effects.

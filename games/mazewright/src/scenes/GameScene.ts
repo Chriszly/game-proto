@@ -5,14 +5,14 @@ import { formatNumber } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
 import { SFX, SONG } from '../audio';
 import { distances, route } from '../game/grid';
-import { cellOf, MAPS, type MapDef } from '../game/maps';
+import { cellIndex, cellOf, MAPS, SEASON_STARS, SEASONS, type MapDef, type Season } from '../game/maps';
 import { loadCalm, loadMode, loadPouch, loadRecords, loadShed, noteRecord, picksOf, pouchOf, saveCalm, saveMode, savePouch, saveShed, usable, type Records, type Shed } from '../game/save';
 import {
-  beamCells, bestFace, build, cabbagesLeft, canStartWave, masterOpen, seedsFor, stars, totalWaves, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
+  beamCells, bestFace, build, LAWN, openGates, reachOf, cabbagesLeft, canStartWave, masterOpen, seedsFor, stars, totalWaves, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
-import { aims, ALWAYS, FREE, harms, MASTER, masterSeeds, SLOT_SEEDS, towerSeeds, COLS, FOE, MODES, ROWS, SANDBOX_GOLD, SECOND_GATE, TOWER, TOWERS, waveGroups, WAVES, type FoeKind, type Mode, type TowerKind, type TrapKind } from '../game/rules';
+import { aims, ALWAYS, FREE, harms, MASTER, masterSeeds, SLOT_SEEDS, towerSeeds, COLS, FOE, MODES, ROWS, SANDBOX_GOLD, GATE_WAVES, TOWER, TOWERS, waveGroups, WAVES, type FoeKind, type Mode, type TowerKind, type TrapKind } from '../game/rules';
 import { t, type TextKey } from '../i18n';
 import * as art from './art';
 import { C } from './art';
@@ -69,6 +69,8 @@ export class GameScene extends Phaser.Scene {
   calm = false;
   /** The way of play picked on the garden picker. */
   mode: Mode = 'classic';
+  /** The season whose gardens the picker shows. */
+  season: Season = 'spring';
   /** The potting shed, and the seeds the last finished game paid into it. */
   shed!: Shed;
   earned = 0;
@@ -300,9 +302,10 @@ export class GameScene extends Phaser.Scene {
         const fresh = kinds.find((k) => !this.seen.has(k));
         for (const k of kinds) this.seen.add(k);
         if (fresh) this.say(t(`new_${fresh}` as TextKey));
-        else if (e.wave === SECOND_GATE) this.say(t('secondBurrow'));
-        else this.say(t('waveBanner', { n: e.wave }));
-        if (e.wave === SECOND_GATE) this.changed();
+        const opens = GATE_WAVES.indexOf(e.wave) > 0 && GATE_WAVES.indexOf(e.wave) < g.gates.length;
+        if (!fresh && opens) this.say(e.wave === GATE_WAVES[1] ? t('secondBurrow') : t('burrowOpens'));
+        else if (!fresh) this.say(t('waveBanner', { n: e.wave }));
+        if (opens) this.changed();
         break;
       }
       case 'cleared':
@@ -414,7 +417,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.state;
     if (!this.painting || !down || !g || cell < 0 || cell === this.lastPainted) return;
     this.lastPainted = cell;
-    if (!g.blocked[cell]) this.place(cell);
+    if (!g.blocked[cell] || g.blocked[cell] === LAWN) this.place(cell);
   }
 
   private place(cell: number) {
@@ -497,11 +500,26 @@ export class GameScene extends Phaser.Scene {
 
   private drawLawn() {
     const g = this.lawnG.clear();
-    g.fillStyle(C.lawn, 1);
+    const map = this.screen === 'play' ? this.state?.map : undefined;
+    g.fillStyle(map ? art.SEASON_LAWN[map.season].lawn : C.lawn, 1);
     g.fillRect(0, 0, this.vw, this.vh);
-    if (this.screen === 'play') {
-      art.lawn(g, this.grid.x, this.grid.y, GRID.w, GRID.h, COLS, ROWS, CELL);
+    if (map) {
+      art.lawn(g, this.grid.x, this.grid.y, GRID.w, GRID.h, COLS, ROWS, CELL, map.season);
       art.flowers(g, this.grid.x + 6, this.grid.y + 6, GRID.w - 12, GRID.h - 12);
+      // The garden's ground: its gravel path, water and raised banks.
+      const corner = (c: [number, number]) => ({ x: this.grid.x + c[0] * CELL, y: this.grid.y + c[1] * CELL });
+      if (map.path) for (const c of new Set([...map.path, map.goal, ...map.gates].map(cellIndex))) {
+        const p = corner(cellOf(c));
+        art.gravel(g, p.x, p.y, CELL);
+      }
+      for (const c of map.ponds ?? []) {
+        const p = corner(c);
+        art.pond(g, p.x, p.y, CELL, map.season === 'winter');
+      }
+      for (const c of map.banks ?? []) {
+        const p = corner(c);
+        art.bank(g, p.x, p.y, CELL);
+      }
     } else art.flowers(g, 8, 8, this.vw - 16, this.vh - 16);
   }
 
@@ -517,7 +535,7 @@ export class GameScene extends Phaser.Scene {
     }
     s.gates.forEach((cell, i) => {
       const m = this.mid(cell);
-      art.burrow(g, m.x, m.y, i === 0 || s.wave >= SECOND_GATE);
+      art.burrow(g, m.x, m.y, i < openGates(s));
     });
     const goal = this.mid(s.goal);
     art.cottage(g, goal.x, goal.y);
@@ -534,7 +552,7 @@ export class GameScene extends Phaser.Scene {
     const pv = this.previewFor(s);
     const routes = pv && !pv.blocks ? pv.routes : s.gates.map((gate) => route(s.dist, gate));
     routes.forEach((cells, i) => {
-      const live = i === 0 || s.wave >= SECOND_GATE - 1;
+      const live = i === 0 || s.wave >= GATE_WAVES[i] - 1;
       art.dotted(g, cells.map((c) => this.mid(c)), C.route, live ? 0.85 : 0.4);
     });
     // The moths' straight line, once moths have been met.
@@ -606,6 +624,7 @@ export class GameScene extends Phaser.Scene {
   /** A tower's reach: a circle, a bonfire's cone, a sunglass's line or a beehive's ring of tiles. */
   private drawReach(g: Phaser.GameObjects.Graphics, s: Game, kind: TowerKind, cell: number, face: number, alpha: number, fill: boolean) {
     const def = TOWER[kind];
+    const range = reachOf(s, cell, kind);
     const m = this.mid(cell);
     const light = 0xfff3c4;
     if (kind === 'sunglass') {
@@ -617,10 +636,10 @@ export class GameScene extends Phaser.Scene {
     } else if (kind === 'bonfire') {
       const a = Math.atan2(DIRS[face][1], DIRS[face][0]);
       g.fillStyle(0xffb36b, fill ? 0.25 : 0.16);
-      g.slice(m.x, m.y, def.range * CELL, a - def.cone!, a + def.cone!, false);
+      g.slice(m.x, m.y, range * CELL, a - def.cone!, a + def.cone!, false);
       g.fillPath();
       g.lineStyle(2, light, alpha);
-      g.slice(m.x, m.y, def.range * CELL, a - def.cone!, a + def.cone!, false);
+      g.slice(m.x, m.y, range * CELL, a - def.cone!, a + def.cone!, false);
       g.strokePath();
     } else if (kind === 'beehive') {
       g.lineStyle(2, C.gold, alpha);
@@ -628,9 +647,9 @@ export class GameScene extends Phaser.Scene {
     } else if (def.range) {
       if (fill) {
         g.fillStyle(light, 0.1);
-        g.fillCircle(m.x, m.y, def.range * CELL);
+        g.fillCircle(m.x, m.y, range * CELL);
       }
-      art.dashedCircle(g, m.x, m.y, def.range * CELL, light, alpha);
+      art.dashedCircle(g, m.x, m.y, range * CELL, light, alpha);
     }
   }
 
@@ -690,11 +709,15 @@ export class GameScene extends Phaser.Scene {
   /** The route preview for the hovered tile, when it is free and nothing else is picked. */
   private previewFor(s: Game) {
     const cell = this.hover;
-    if (cell < 0 || this.selected >= 0 || s.blocked[cell] || cell === s.goal || s.gates.includes(cell) || s.phase === 'won' || s.phase === 'lost') return null;
+    if (cell < 0 || this.selected >= 0 || cell === s.goal || s.gates.includes(cell) || s.phase === 'won' || s.phase === 'lost') return null;
     if (s.traps.some((t) => t.cell === cell)) return null;
+    // Traps go where foes walk; in a path garden towers go only on the lawn beside the path.
+    const trap = !!TOWER[this.tool].trap;
+    if (s.blocked[cell] && !(s.blocked[cell] === LAWN && !trap)) return null;
+    if (s.map.path && !s.blocked[cell] && !trap) return null;
     if (this.preview?.cell === cell && this.preview.version === this.version && this.preview.tool === this.tool) return this.preview;
-    // A trap never blocks: the routes stay as they are.
-    if (TOWER[this.tool].trap) {
+    // A trap, or a tower beside a path, never blocks: the routes stay as they are.
+    if (trap || s.blocked[cell] === LAWN) {
       this.preview = { cell, version: this.version, tool: this.tool, blocks: false, face: 0, routes: s.gates.map((gate) => route(s.dist, gate)) };
       return this.preview;
     }
@@ -744,8 +767,8 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const key = JSON.stringify([
-      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text, this.shed, this.earned,
-      s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.dist[s.gates[0]], s.dist[s.gates[1]], s.nextAt === null ? -1 : Math.ceil(s.nextAt - s.clock), this.version], this.calm,
+      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text, this.shed, this.earned, this.season, this.mode,
+      s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.gates.map((gate) => s.dist[gate]), s.nextAt === null ? -1 : Math.ceil(s.nextAt - s.clock), this.version], this.calm,
     ]);
     if (key === this.hudKey) return;
     this.hudKey = key;
@@ -777,9 +800,11 @@ export class GameScene extends Phaser.Scene {
     this.text(172, cy, `◆ ${s.gold}`, 16, css(C.gold));
     art.cabbage(g, 268, cy, 7);
     this.text(280, cy, `${s.lives}`, 16, css(C.life));
-    const a = s.dist[s.gates[0]];
-    const b = s.dist[s.gates[1]];
-    this.text(342, cy, s.wave >= SECOND_GATE - 1 ? t('routeTwo', { a, b }) : t('routeOne', { n: a }), 13, css(C.cream), 0, false);
+    // The routes in use, and the next one a wave before its burrow opens.
+    const live = s.gates.filter((_, i) => i === 0 || s.wave >= GATE_WAVES[i] - 1).map((gate) => s.dist[gate]);
+    const [a, b] = live;
+    const routes = live.length === 1 ? t('routeOne', { n: a }) : live.length === 2 ? t('routeTwo', { a, b }) : t('routeMany', { n: live.length, s: Math.min(...live) });
+    this.text(342, cy, routes, 13, css(C.cream), 0, false);
     const backX = vw - 16 - BACK_BUTTON.w;
     this.button('gardens', backX, (BAR_H - BACK_BUTTON.h) / 2, BACK_BUTTON.w, BACK_BUTTON.h, t('gardens'), () => this.toMenu(), { size: 13 });
     // The picked tool's use, in the top bar.
@@ -882,8 +907,19 @@ export class GameScene extends Phaser.Scene {
     const { fx, fy } = this;
     this.text(this.vw / 2, fy + 62, t('title'), 44, css(C.cream), 0.5).setStroke('#2e6b2b', 8);
     this.text(this.vw / 2, fy + 112, t('tagline'), 16, '#2d3b1f', 0.5);
-    this.text(this.vw / 2, fy + 148, t('pickGarden'), 14, '#2d3b1f', 0.5, false);
-    MAPS.forEach((map, i) => {
+    // The four seasons, each opened by the stars won across all gardens.
+    const won = Object.values(this.records).reduce((n, r) => n + r.stars, 0);
+    const tw = 140;
+    SEASONS.forEach((season, i) => {
+      const need = SEASON_STARS[season];
+      const x = this.vw / 2 - (SEASONS.length * (tw + 8) - 8) / 2 + i * (tw + 8);
+      g.fillStyle(C.bar, 1);
+      g.fillRoundedRect(x, fy + 132, tw, 30, 7);
+      const label = won >= need ? t(`season_${season}` as TextKey) : `${t(`season_${season}` as TextKey)} · ★ ${need}`;
+      this.button(`season-${season}`, x, fy + 132, tw, 30, label, () => (this.season = season), { on: this.season === season, size: 13 });
+    });
+    const locked = won < SEASON_STARS[this.season];
+    MAPS.filter((map) => map.season === this.season).forEach((map, i) => {
       const cx = fx + CARDS.xs[i];
       const x = cx - CARDS.w / 2;
       const y = fy + CARDS.y - CARDS.h / 2 + 40;
@@ -891,12 +927,20 @@ export class GameScene extends Phaser.Scene {
       g.fillRoundedRect(x + 3, y + 5, CARDS.w, CARDS.h, 14);
       g.fillStyle(C.bar, 1);
       g.fillRoundedRect(x, y, CARDS.w, CARDS.h, 14);
-      // A small plan of the garden: its rocks, burrows and cottage.
+      // A small plan of the garden: its path, water, banks, rocks, burrows and cottage.
       const cell = 10;
       const mx = cx - (COLS * cell) / 2;
       const my = y + 16;
-      g.fillStyle(C.lawn, 1);
+      const look = art.SEASON_LAWN[map.season];
+      g.fillStyle(look.lawn, 1);
       g.fillRoundedRect(mx - 4, my - 4, COLS * cell + 8, ROWS * cell + 8, 6);
+      const square = (cells: [number, number][], colour: number, alpha = 1) => {
+        g.fillStyle(colour, alpha);
+        for (const [cx2, cy2] of cells) g.fillRect(mx + cx2 * cell, my + cy2 * cell, cell, cell);
+      };
+      square(map.path ?? [], 0xd9c79f);
+      square(map.ponds ?? [], map.season === 'winter' ? 0xd6ecf6 : 0x4f9fd1);
+      square(map.banks ?? [], 0xfff3c4, 0.5);
       g.fillStyle(C.rock, 1);
       for (const [rx, ry] of map.rocks) g.fillRoundedRect(mx + rx * cell + 1, my + ry * cell + 1, cell - 2, cell - 2, 2);
       g.fillStyle(C.soil, 1);
@@ -911,8 +955,13 @@ export class GameScene extends Phaser.Scene {
         : this.mode === 'endless' ? (r.endless > 0 ? t('bestEndless', { n: r.endless }) : t('notPlayed'))
         : r.won ? `${starText(r.stars)}${r.time ? ` · ${clockText(r.time)}` : ''}`
         : r.wave > 0 ? t('best', { n: r.wave }) : t('notPlayed');
-      this.text(cx, y + CARDS.h - 22, best, 13, css(C.gold), 0.5);
-      this.hits.push({ x, y, w: CARDS.w, h: CARDS.h, onTap: () => this.start(map), enabled: true });
+      if (locked) {
+        // A season still shut: the card dims and says how many stars open it.
+        g.fillStyle(C.bar, 0.6);
+        g.fillRoundedRect(x, y, CARDS.w, CARDS.h, 14);
+        this.text(cx, y + CARDS.h - 22, t('seasonLocked', { n: SEASON_STARS[this.season], have: won }), 13, css(C.cream), 0.5);
+      } else this.text(cx, y + CARDS.h - 22, best, 13, css(C.gold), 0.5);
+      this.hits.push({ x, y, w: CARDS.w, h: CARDS.h, onTap: () => (locked ? ui('refuse') : this.start(map)), enabled: true });
       this.buttons[`map-${map.id}`] = { x: cx, y: y + CARDS.h / 2, w: CARDS.w, h: CARDS.h };
     });
     // The way of play, at the top left; Calm or the wave timer, at the top right.

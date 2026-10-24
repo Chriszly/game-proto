@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import type { Season } from '../game/maps';
 import type { FoeKind, TowerKind, TrapKind } from '../game/rules';
 
 // The Hedge Garden in flat vector shapes: clean fills, soft drop shadows, no outlines. Every piece
@@ -56,12 +57,21 @@ const shadow = (g: G, draw: () => void) => {
   draw();
 };
 
-export function lawn(g: G, x: number, y: number, w: number, h: number, cols: number, rows: number, cell: number) {
+/** Each season's lawn: its two checks and its edge. Spring is the picker's lawn. */
+export const SEASON_LAWN: Record<Season, { lawn: number; lawn2: number; edge: number }> = {
+  spring: { lawn: C.lawn, lawn2: C.lawn2, edge: C.lawnEdge },
+  summer: { lawn: 0xa3c35c, lawn2: 0x97b752, edge: 0x7f9c40 },
+  autumn: { lawn: 0xb39d58, lawn2: 0xa69050, edge: 0x8a7640 },
+  winter: { lawn: 0x9db5c2, lawn2: 0x92aab8, edge: 0x7a95a4 },
+};
+
+export function lawn(g: G, x: number, y: number, w: number, h: number, cols: number, rows: number, cell: number, season: Season = 'spring') {
+  const look = SEASON_LAWN[season];
   for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) if ((i + j) % 2) {
-    g.fillStyle(C.lawn2, 1);
+    g.fillStyle(look.lawn2, 1);
     g.fillRect(x + i * cell, y + j * cell, cell, cell);
   }
-  g.lineStyle(2, C.lawnEdge, 1);
+  g.lineStyle(2, look.edge, 1);
   g.strokeRect(x - 1, y - 1, w + 2, h + 2);
 }
 
@@ -76,6 +86,34 @@ export function flowers(g: G, x: number, y: number, w: number, h: number) {
     g.fillStyle(0xe8a33d, 1);
     g.fillCircle(fx, fy, 1.5);
   }
+}
+
+/** A cell of water by its top-left corner, `cell` wide; ice in winter. */
+export function pond(g: G, x: number, y: number, cell: number, ice: boolean) {
+  g.fillStyle(ice ? 0xd6ecf6 : 0x4f9fd1, 1);
+  g.fillRect(x, y, cell, cell);
+  g.fillStyle(ice ? 0xffffff : 0x7cc0e8, ice ? 0.8 : 1);
+  if (ice) g.fillTriangle(x + cell * 0.2, y + cell * 0.75, x + cell * 0.55, y + cell * 0.25, x + cell * 0.62, y + cell * 0.32);
+  else {
+    g.fillRoundedRect(x + cell * 0.18, y + cell * 0.3, cell * 0.36, 3, 1.5);
+    g.fillRoundedRect(x + cell * 0.46, y + cell * 0.62, cell * 0.36, 3, 1.5);
+  }
+}
+
+/** A raised bank by its top-left corner: a lighter top with a step along its foot. */
+export function bank(g: G, x: number, y: number, cell: number) {
+  g.fillStyle(0xfff3c4, 0.4);
+  g.fillRect(x + 1, y + 1, cell - 2, cell - 7);
+  g.fillStyle(0x4b5d2a, 0.6);
+  g.fillRect(x + 1, y + cell - 6, cell - 2, 5);
+}
+
+/** A cell of a path garden's gravel path, by its top-left corner. */
+export function gravel(g: G, x: number, y: number, cell: number) {
+  g.fillStyle(0xd9c79f, 1);
+  g.fillRect(x, y, cell, cell);
+  g.fillStyle(0xb8a37a, 1);
+  for (const [a, b] of [[0.22, 0.3], [0.6, 0.18], [0.78, 0.6], [0.35, 0.72], [0.52, 0.46]]) g.fillCircle(x + a * cell, y + b * cell, cell / 16);
 }
 
 export function hedge(g: G, x: number, y: number, alpha = 1) {
