@@ -11,7 +11,7 @@ import {
   type Game, type GameEvent, type Refusal, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
-import { aims, ALWAYS, harms, MASTER, COLS, FOE, POUCH_PICKS, ROWS, SECOND_GATE, TOWER, TOWERS, WAVES, type FoeKind, type TowerKind } from '../game/rules';
+import { aims, ALWAYS, harms, MASTER, COLS, FOE, POUCH_PICKS, ROWS, SECOND_GATE, TOWER, TOWERS, WAVES, type FoeKind, type TowerKind, type TrapKind } from '../game/rules';
 import { t, type TextKey } from '../i18n';
 import * as art from './art';
 import { C } from './art';
@@ -181,7 +181,7 @@ export class GameScene extends Phaser.Scene {
     const py = (y: number) => this.grid.y + y * CELL;
     switch (e.type) {
       case 'built':
-        SFX(e.kind === 'hedge' ? 'plant' : 'build');
+        SFX(e.kind === 'hedge' || TOWER[e.kind].trap ? 'plant' : 'build');
         this.changed();
         break;
       case 'refused':
@@ -196,7 +196,7 @@ export class GameScene extends Phaser.Scene {
         this.changed();
         break;
       case 'shot':
-        if (e.kind !== 'frost') SFX(e.kind as Exclude<TowerKind, 'hedge' | 'frost' | 'beehive' | 'apple'>);
+        if (e.kind !== 'frost') SFX(e.kind as Exclude<TowerKind, 'hedge' | 'frost' | 'beehive' | 'apple' | 'honey' | 'snare'>);
         break;
       case 'bolt':
         this.flash({ kind: 'bolt', x: 0, y: 0, r: 0, life: 0.25, points: e.points.map((p) => ({ x: px(p.x), y: py(p.y) })) });
@@ -219,6 +219,17 @@ export class GameScene extends Phaser.Scene {
       case 'pulse':
         SFX('frost');
         this.flash({ kind: 'pulse', x: px(e.x), y: py(e.y), r: e.r * CELL, life: 0.4 });
+        break;
+      case 'lured':
+        SFX('honey');
+        break;
+      case 'burst':
+        SFX('cannon');
+        this.flash({ kind: 'boom', x: px(e.x), y: py(e.y), r: e.r * CELL, life: 0.4 });
+        break;
+      case 'snared':
+        SFX('snare');
+        this.flash({ kind: 'hit', x: px(e.x), y: py(e.y), r: 12, life: 0.3 });
         break;
       case 'sting':
         this.flash({ kind: 'sting', x: px(e.x), y: py(e.y), r: e.r * CELL, life: 0.35 });
@@ -494,6 +505,11 @@ export class GameScene extends Phaser.Scene {
     });
     // The moths' straight line, once moths have been met.
     if (this.seen.has('moth')) s.gates.forEach((gate) => art.dotted(g, [this.mid(gate), this.mid(s.goal)], C.moth, 0.45, 1.6, 8));
+    for (const trap of s.traps) {
+      const m = this.mid(trap.cell);
+      art.trap(g, trap.kind, m.x, m.y, 1, trap.sprung);
+      if (trap.sprung) art.dashedCircle(g, m.x, m.y, TOWER.honey.range * CELL, 0xffd24a, 0.8);
+    }
     for (const tw of s.towers) {
       const m = this.mid(tw.cell);
       if (chewing.has(tw.cell)) art.chewedHedge(g, m.x, m.y, chewing.get(tw.cell)!);
@@ -511,7 +527,8 @@ export class GameScene extends Phaser.Scene {
       const m = this.mid(pv.cell);
       if (pv.blocks) art.noEntry(g, m.x, m.y);
       else {
-        art.tower(g, this.tool, m.x, m.y, 1, Math.atan2(DIRS[pv.face][1], DIRS[pv.face][0]), 0.45);
+        if (TOWER[this.tool].trap) art.trap(g, this.tool as TrapKind, m.x, m.y, 0.5, false);
+        else art.tower(g, this.tool, m.x, m.y, 1, Math.atan2(DIRS[pv.face][1], DIRS[pv.face][0]), 0.45);
         this.drawReach(g, s, this.tool, pv.cell, pv.face, 0.7, false);
       }
     }
@@ -640,7 +657,13 @@ export class GameScene extends Phaser.Scene {
   private previewFor(s: Game) {
     const cell = this.hover;
     if (cell < 0 || this.selected >= 0 || s.blocked[cell] || cell === s.goal || s.gates.includes(cell) || s.phase === 'won' || s.phase === 'lost') return null;
+    if (s.traps.some((t) => t.cell === cell)) return null;
     if (this.preview?.cell === cell && this.preview.version === this.version && this.preview.tool === this.tool) return this.preview;
+    // A trap never blocks: the routes stay as they are.
+    if (TOWER[this.tool].trap) {
+      this.preview = { cell, version: this.version, tool: this.tool, blocks: false, face: 0, routes: s.gates.map((gate) => route(s.dist, gate)) };
+      return this.preview;
+    }
     const blocks = wouldBlock(s, cell);
     let routes: number[][] = [];
     if (!blocks) {
