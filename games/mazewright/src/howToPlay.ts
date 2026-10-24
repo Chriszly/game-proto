@@ -16,7 +16,7 @@ const en: HowToPlay = {
     'Plant hedges and towers to make that way long, past as many towers as you can.',
     'A placement that would close the last way through is refused: one route must stay open from each burrow.',
     'Beaten foes pay gold; a held wave pays more. Spend it between waves, or during them.',
-    'Each foe that gets in costs lives. Hold all 20 waves to save the garden.',
+    'A foe that reaches the patch takes cabbages, your lives, and walks back to its burrow. Beat it on the way and they roll back home. Hold all 20 waves to save the garden.',
   ],
   tips: [
     'Hold the pointer over the lawn to see the new route before you plant.',
@@ -47,7 +47,7 @@ const de: HowToPlay = {
     'Pflanze Hecken und Türme, damit dieser Weg lang wird und an möglichst vielen Türmen vorbeiführt.',
     'Was den letzten Weg schließen würde, wird abgelehnt: Von jedem Bau muss ein Weg offen bleiben.',
     'Besiegte Gegner bringen Gold, eine gehaltene Welle mehr. Gib es zwischen den Wellen aus oder währenddessen.',
-    'Jeder Gegner, der durchkommt, kostet Leben. Halte alle 20 Wellen, um den Garten zu retten.',
+    'Ein Gegner, der das Beet erreicht, nimmt Kohlköpfe, deine Leben, und läuft zurück zu seinem Bau. Besiege ihn unterwegs, dann rollen sie heim. Halte alle 20 Wellen, um den Garten zu retten.',
   ],
   tips: [
     'Halte den Zeiger über den Rasen, um den neuen Weg zu sehen, bevor du pflanzt.',

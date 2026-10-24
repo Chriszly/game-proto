@@ -78,7 +78,7 @@ const en = {
   chewing: 'A mole is chewing through a hedge!',
   new_beetle: 'Beetles walk the shortest way to the cottage',
   new_ladybird: 'New: ladybirds, quick but frail',
-  new_stag: 'New: stag beetles, slow and tough with waxy shells, cost 2 lives',
+  new_stag: 'New: stag beetles, slow and tough with waxy shells, take 2 cabbages',
   new_moth: 'New: moths fly straight over the maze',
   new_mole: 'New: hairy moles chew through a hedge that blocks a short cut',
   new_weevil: 'New: weevils have hard shells: sharp hits do half, sparks crack them',
@@ -108,8 +108,9 @@ const en = {
   new_queen: 'The beetle queen is coming!',
 
   won: 'The garden is safe!',
-  wonText: { one: 'All 20 waves held off, with {n} life left.', other: 'All 20 waves held off, with {n} lives left.' },
-  lost: 'The beetles got in',
+  wonText: { one: 'All 20 waves held off, with {n} cabbage left.', other: 'All 20 waves held off, with {n} cabbages left.' },
+  grabbed: 'A foe took a cabbage! Beat it before it gets home, and the cabbage rolls back',
+  lost: 'The cabbages are gone',
   lostText: 'You held them off until wave {n}.',
   again: 'Play again',
 };

@@ -74,7 +74,7 @@ First.
 
 ### Foes
 
-| Foe | | Lives it costs |
+| Foe | | Cabbages it takes |
 | --- | --- | --- |
 | Beetle | the usual walker | 1 |
 | Ladybird | quick and frail | 1 |
@@ -90,10 +90,10 @@ First.
 | Beetle Empress | wave 20: lays a beetle every 5 seconds and turns her shell against the kind of damage that hurt her most | 5 |
 
 **Kings and big foes.** A king wears a crown: six times the health, slower, eight times the gold
-and three lives. A king beetle leads wave 5, a king stag beetle wave 10 and a king mole wave 15,
+and takes three cabbages. A king beetle leads wave 5, a king stag beetle wave 10 and a king mole wave 15,
 and some kings bring a trick: a king mole chews three hedges, a king woodlouse splits into four, a
 king moth lets three moths go when beaten. Big foes (size 2 and 3, from wave 12) are bigger,
-tougher and cost more lives. After the Empress, one king of every kind rushes in.
+tougher and take more cabbages. After the Empress, one king of every kind rushes in.
 
 ![A king stag beetle with its crown, and the queen behind it](docs/screenshots/kings.webp)
 
@@ -104,8 +104,16 @@ foes come out of both in turn, so the maze has to serve two routes; both must st
 start. Beaten foes pay gold, and a held wave pays 6 more plus its number. Hold all 20 to save the
 garden.
 
-**Difficulty** (hub setting): Easy gives 30 lives and foes 20% less health, Hard 12 lives and 25%
-more health; Normal is 20 lives.
+**Stolen cabbages.** The patch by the cottage holds 20 cabbages, the lives. A foe that gets there
+takes its share (a stag beetle two) and walks the maze back to its burrow with them, so every maze
+holds foes twice. Beat it on the way and the cabbages drop and roll back along the route to the
+patch, unless another foe picks them up. Cabbages carried into a burrow are lost, and the garden
+falls once none are left in the patch, carried or rolling.
+
+![Ladybirds carrying cabbages home, and dropped cabbages rolling back to the patch](docs/screenshots/cabbages.webp)
+
+**Difficulty** (hub setting): Easy gives 30 cabbages and foes 20% less health, Hard 12 cabbages and
+25% more health; Normal is 20 cabbages.
 
 ## Code layout
 

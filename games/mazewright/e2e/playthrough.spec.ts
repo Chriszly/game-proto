@@ -10,7 +10,9 @@ interface State {
   phase: 'build' | 'wave' | 'won' | 'lost';
   wave: number;
   gold: number;
+  /** Cabbages in the patch, and loose on the lawn. */
   lives: number;
+  loose: number;
   kills: number;
   leaks: number;
   refusals: number;
@@ -53,6 +55,7 @@ function scene(page: Page) {
         wave: s.state?.wave,
         gold: s.state?.gold,
         lives: s.state?.lives,
+        loose: s.state?.loose.length,
         kills: s.state?.kills,
         leaks: s.state?.leaks,
         refusals: s.state?.refusals,
@@ -160,7 +163,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   }
   const cell = (col: number, row: number) => row * COLS + col;
 
-  // The garden picker; the Meadow opens with an empty lawn, the gold and lives of Normal.
+  // The garden picker; the Meadow opens with an empty lawn, the gold and cabbages of Normal.
   await snap('playthrough-0-gardens');
   expect((await game.state()).screen).toBe('menu');
   await press('map-meadow');
@@ -221,7 +224,8 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.wave).toBe(1);
   expect(s.kills).toBe(WAVE_1);
   expect(s.leaks).toBe(0);
-  expect(s.lives).toBe(LIVES_NORMAL);
+  expect(s.lives, 'every cabbage still in the patch').toBe(LIVES_NORMAL);
+  expect(s.loose).toBe(0);
   expect(s.foes).toBe(0);
   expect(s.gold).toBe(goldBefore + WAVE_1 * BEETLE_GOLD + WAVE_1_REWARD);
   await snap('playthrough-4-held');

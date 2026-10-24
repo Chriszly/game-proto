@@ -192,6 +192,8 @@ export const WAVES: Group[][] = [
   [['stag', 8], ['weevil', 6], ['moth', 8], ['beetle', 2, { size: 3 }], ['queen', 1]],
 ];
 /** After the last wave's queen, a rush of one king of every kind met in the game. */
+/** Loose cabbages roll back to the patch at `speed` cells a second; a foe within `reach` of one (plus its body) picks it up. */
+export const CABBAGE = { speed: 1.2, reach: 0.3 };
 /** Seconds from the last wave's queen to the rush, and between two of its kings. */
 export const RUSH = { delay: 16, gap: 3 };
 export const RUSH_KINDS: FoeKind[] = ['beetle', 'ladybird', 'stag', 'moth', 'mole', 'weevil', 'woodlouse', 'snail', 'ember', 'earwig'];

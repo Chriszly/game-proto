@@ -31,7 +31,7 @@ export const C = {
   cream: 0xf8ecd0,
   gold: 0xf2c14e,
   warn: 0xff9d2e,
-  life: 0xff7b7b,
+  life: 0xa6e07a,
   health: 0x7be36b,
 };
 
@@ -236,6 +236,18 @@ export function cottage(g: G, x: number, y: number) {
   g.fillStyle(0xffe6a0, 1);
   g.fillRect(x + 6, y, 5, 5);
   g.fillRect(x - 11, y, 5, 5);
+}
+
+/** A cabbage from the patch, `r` pixels round. */
+export function cabbage(g: G, x: number, y: number, r: number) {
+  g.fillStyle(C.shadow, 0.22);
+  g.fillCircle(x + 1.5, y + 2, r);
+  g.fillStyle(0x5f9e3c, 1);
+  g.fillCircle(x, y, r);
+  g.fillStyle(0x8fcf5f, 1);
+  g.fillCircle(x - r * 0.15, y - r * 0.15, r * 0.65);
+  g.fillStyle(0xc4ec9a, 1);
+  g.fillCircle(x - r * 0.25, y - r * 0.25, r * 0.3);
 }
 
 /** What ails a foe: frost, fire and poison each tint it. */

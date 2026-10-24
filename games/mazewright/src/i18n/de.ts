@@ -81,7 +81,7 @@ const de: Translation<typeof en> = {
   chewing: 'Ein Maulwurf frisst sich durch eine Hecke!',
   new_beetle: 'Käfer laufen den kürzesten Weg zum Häuschen',
   new_ladybird: 'Neu: Marienkäfer, schnell, aber schwach',
-  new_stag: 'Neu: Hirschkäfer, langsam und zäh mit Wachsschale, kosten 2 Leben',
+  new_stag: 'Neu: Hirschkäfer, langsam und zäh mit Wachsschale, nehmen 2 Kohlköpfe',
   new_moth: 'Neu: Motten fliegen geradewegs über das Labyrinth',
   new_mole: 'Neu: Haarige Maulwürfe fressen sich durch eine Hecke vor einer Abkürzung',
   new_weevil: 'Neu: Rüsselkäfer mit harter Schale: Spitzes macht halben Schaden, Funken knacken sie',
@@ -111,8 +111,9 @@ const de: Translation<typeof en> = {
   new_queen: 'Die Käferkönigin kommt!',
 
   won: 'Der Garten ist sicher!',
-  wonText: { one: 'Alle 20 Wellen abgewehrt, mit {n} Leben übrig.', other: 'Alle 20 Wellen abgewehrt, mit {n} Leben übrig.' },
-  lost: 'Die Käfer sind durch',
+  wonText: { one: 'Alle 20 Wellen abgewehrt, mit {n} Kohlkopf übrig.', other: 'Alle 20 Wellen abgewehrt, mit {n} Kohlköpfen übrig.' },
+  grabbed: 'Ein Gegner hat einen Kohlkopf geklaut! Besiege ihn vor seinem Bau, dann rollt der Kohl zurück',
+  lost: 'Der Kohl ist weg',
   lostText: 'Du hast sie bis Welle {n} aufgehalten.',
   again: 'Nochmal spielen',
 };
