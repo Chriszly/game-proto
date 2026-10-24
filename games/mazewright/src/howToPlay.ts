@@ -10,6 +10,7 @@ const en: HowToPlay = {
     { input: 'Start wave button, Space', action: 'Send the next wave, early for a bonus; after wave 1 the wave timer sends it after 20 seconds (Calm on the garden picker turns it off)' },
     { input: 'Speed button, F', action: 'Play at double speed' },
     { input: 'Way of play (garden picker)', action: 'Classic, Swarm (no waiting, more gold), Endless or Sandbox' },
+    { input: 'One gardener / Two gardeners (garden picker)', action: 'Play together on one screen: each gardener plants on their half of the lawn with their own gold and tools' },
     { input: 'Watch on a garden card', action: 'Watch your latest win in that garden again, at up to four times the speed' },
   ],
   loop: [
@@ -50,6 +51,7 @@ const de: HowToPlay = {
     { input: 'Knopf Welle starten, Leertaste', action: 'Die nächste Welle schicken, früh mit Bonus; nach Welle 1 schickt die Wellen-Uhr sie nach 20 Sekunden (Ruhig in der Gartenauswahl schaltet sie ab)' },
     { input: 'Tempo-Knopf, F', action: 'Mit doppeltem Tempo spielen' },
     { input: 'Spielart (Gartenauswahl)', action: 'Klassisch, Schwarm (ohne Pause, mehr Gold), Endlos oder Sandkasten' },
+    { input: 'Allein / Zu zweit gärtnern (Gartenauswahl)', action: 'Zu zweit an einem Bildschirm spielen: Jede Person pflanzt auf ihrer Rasenhälfte, mit eigenem Gold und eigenen Werkzeugen' },
     { input: 'Ansehen auf einer Gartenkarte', action: 'Deinen letzten Sieg in diesem Garten noch einmal ansehen, mit bis zu vierfachem Tempo' },
   ],
   loop: [

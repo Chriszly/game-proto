@@ -2,33 +2,41 @@ import { MAPS } from './maps';
 import type { Replay } from './sim';
 import { ALWAYS, DEFAULT_POUCH, FREE, MODES, POUCH_PICKS, SEEDS, SLOT_SEEDS, TOWERS, type Mode, type TowerKind } from './rules';
 
-// Mazewright keeps six keys: each garden's records (best wave, win, stars, best time, Endless
-// best), the towers picked for the pouch, whether waves wait to be started (calm), the way of play
+// Mazewright keeps seven keys: each garden's records (best wave, win, stars, best time, Endless
+// best), the towers picked for the pouch, whether waves wait to be started (calm), whether two
+// gardeners play (duo), the way of play
 // picked (mode), the potting shed (seeds, the towers and master levels bought, extra slots) and
 // each garden's latest win to watch again (replays). A game in play is not saved; a reload starts at the garden picker.
 const KEY = 'mazewright-best';
 const POUCH_KEY = 'mazewright-pouch';
 const CALM_KEY = 'mazewright-calm';
+const DUO_KEY = 'mazewright-duo';
 const MODE_KEY = 'mazewright-mode';
 const SHED_KEY = 'mazewright-shed';
 const REPLAY_KEY = 'mazewright-replays';
 
-/** Calm: waves come only when started, with no wave timer. */
-export function loadCalm() {
+function loadFlag(key: string) {
   try {
-    return localStorage.getItem(CALM_KEY) === '1';
+    return localStorage.getItem(key) === '1';
   } catch {
     return false;
   }
 }
 
-export function saveCalm(calm: boolean) {
+function saveFlag(key: string, on: boolean) {
   try {
-    localStorage.setItem(CALM_KEY, calm ? '1' : '0');
+    localStorage.setItem(key, on ? '1' : '0');
   } catch {
     // Storage can be full or blocked; the choice holds until the page is closed.
   }
 }
+
+/** Calm: waves come only when started, with no wave timer. */
+export const loadCalm = () => loadFlag(CALM_KEY);
+export const saveCalm = (calm: boolean) => saveFlag(CALM_KEY, calm);
+/** Two gardeners share the screen. */
+export const loadDuo = () => loadFlag(DUO_KEY);
+export const saveDuo = (duo: boolean) => saveFlag(DUO_KEY, duo);
 
 /**
  * Per garden: the best wave reached and whether it was won (Classic or Swarm), the most stars, the
