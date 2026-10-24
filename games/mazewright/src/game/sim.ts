@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  GROW_RATE, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -215,6 +215,8 @@ export interface Game {
   shots: Shot[];
   /** Foes still to come out, by the time they do. */
   spawns: Spawn[];
+  /** The way the garden is played (`MODES`). */
+  mode: Mode;
   /** Calm: waves come only when started. Otherwise, after wave 1, the next comes by itself at `nextAt`. */
   calm: boolean;
   nextAt: number | null;
@@ -228,7 +230,7 @@ export interface Game {
   nextId: number;
 }
 
-export function newGame(mapId: string, calm = false): Game {
+export function newGame(mapId: string, calm = false, mode: Mode = 'classic'): Game {
   const map = MAPS.find((m) => m.id === mapId) ?? MAPS[0];
   const blocked = new Uint8Array(COLS * ROWS);
   for (const rock of map.rocks) blocked[cellIndex(rock)] = 1;
@@ -240,7 +242,7 @@ export function newGame(mapId: string, calm = false): Game {
     phase: 'build',
     wave: 0,
     paid: 0,
-    gold: START_GOLD,
+    gold: mode === 'sandbox' ? SANDBOX_GOLD : START_GOLD,
     lives,
     maxLives: lives,
     loose: [],
@@ -254,6 +256,7 @@ export function newGame(mapId: string, calm = false): Game {
     foes: [],
     shots: [],
     spawns: [],
+    mode,
     calm,
     nextAt: null,
     clock: 0,
@@ -325,7 +328,7 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
   }
   const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
   g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first', grow: 0, growFull: 0 });
-  growFor(g.towers[g.towers.length - 1], TOWER[kind].cost);
+  growFor(g.towers[g.towers.length - 1], TOWER[kind].cost, g);
   g.blocked[cell] = 2;
   refield(g);
   g.events.push({ type: 'built', kind, cell });
@@ -333,8 +336,8 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
 }
 
 /** A tower starts growing for what it cost. */
-function growFor(tower: Tower, cost: number) {
-  tower.grow = tower.growFull = cost / GROW_RATE;
+function growFor(tower: Tower, cost: number, g: Game) {
+  tower.grow = tower.growFull = g.mode === 'sandbox' ? 0 : cost / GROW_RATE;
 }
 
 /** The route cells foes walk now, from both burrows. */
@@ -406,7 +409,7 @@ export function upgrade(g: Game, cell: number) {
   g.gold -= cost;
   tower.spent += cost;
   tower.level++;
-  growFor(tower, cost);
+  growFor(tower, cost, g);
   g.events.push({ type: 'upgraded', cell });
   return true;
 }
@@ -431,7 +434,21 @@ function removeTower(g: Game, tower: Tower) {
 }
 
 /** Whether the next wave can be started: between waves, or once the wave in play is all out. */
-export const canStartWave = (g: Game) => !over(g) && g.wave < WAVES.length && g.spawns.length === 0;
+export const canStartWave = (g: Game) => !over(g) && g.wave < totalWaves(g) && g.spawns.length === 0;
+
+/** How many waves the game has: 20, or no end in Endless and Sandbox. */
+export const totalWaves = (g: Game) => (g.mode === 'endless' || g.mode === 'sandbox' ? Infinity : WAVES.length);
+
+/** Gold paid for beating foes and holding waves: more in Swarm. */
+const pay = (g: Game, gold: number) => (g.mode === 'swarm' ? Math.round(gold * SWARM_GOLD) : gold);
+
+/** Stars for a won game: by cabbages kept, and a fourth for a Swarm won without losing one. */
+export function stars(g: Game) {
+  if (g.phase !== 'won') return 0;
+  const kept = cabbagesLeft(g);
+  if (g.mode === 'swarm' && kept >= g.maxLives) return 4;
+  return kept >= g.maxLives * STARS.three ? 3 : kept >= g.maxLives * STARS.two ? 2 : 1;
+}
 
 /** Starts the next wave; called while foes are still out, it pays a small bonus. */
 export function startWave(g: Game) {
@@ -444,7 +461,7 @@ export function startWave(g: Game) {
   let at = g.clock + 0.5;
   let turn = 0;
   const gateFor = () => (g.wave >= SECOND_GATE ? ((turn++ % 2) as 0 | 1) : 0);
-  for (const [kind, count, opts] of WAVES[g.wave - 1]) {
+  for (const [kind, count, opts] of waveGroups(g.wave)) {
     for (let i = 0; i < count; i++) {
       g.spawns.push({ kind, gate: gateFor(), at, wave: g.wave, big: opts?.size, king: opts?.king });
       at += FOE[kind].gap * (opts?.king ? 2 : 1);
@@ -571,7 +588,7 @@ function hurt(g: Game, f: Foe, damage: number, kind: DamageKind, pierce = false)
   if (f.empress) f.empress.taken[kind] = (f.empress.taken[kind] ?? 0) + dealt;
   if (f.hp > 0) return;
   f.dead = true;
-  const gold = f.gold;
+  const gold = pay(g, f.gold);
   g.gold += gold;
   g.kills++;
   g.events.push({ type: 'kill', kind: f.kind, x: f.x, y: f.y, gold });
@@ -1031,7 +1048,7 @@ export function step(g: Game, dt: number) {
   }
   if (g.phase === 'wave' && g.spawns.length === 0 && g.foes.length === 0) {
     let gold = 0;
-    for (; g.paid < g.wave; g.paid++) gold += waveReward(g.paid + 1);
+    for (; g.paid < g.wave; g.paid++) gold += pay(g, waveReward(g.paid + 1));
     g.gold += gold;
     for (const t of g.towers) {
       if (t.kind !== 'apple') continue;
@@ -1041,13 +1058,14 @@ export function step(g: Game, dt: number) {
     }
     g.shots = [];
     g.events.push({ type: 'cleared', wave: g.wave, gold });
-    if (g.wave >= WAVES.length) {
+    if (g.wave >= totalWaves(g)) {
       g.phase = 'won';
       g.events.push({ type: 'won' });
     } else g.phase = 'build';
   }
   // The wave timer starts once the last wave is all out.
-  if (!g.calm && g.nextAt === null && g.wave >= 1 && canStartWave(g)) g.nextAt = g.clock + WAVE_TIMER;
+  // In Swarm it sends the next at once, whatever Calm says.
+  if ((!g.calm || g.mode === 'swarm') && g.nextAt === null && g.wave >= 1 && canStartWave(g)) g.nextAt = g.clock + (g.mode === 'swarm' ? 0 : WAVE_TIMER);
 }
 
 /** The cells of the route from a burrow to the cottage, as foes would walk it now. */

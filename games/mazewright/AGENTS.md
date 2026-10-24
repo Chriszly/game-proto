@@ -49,6 +49,13 @@ Implemented today:
   in the patch it adds to `lives` (event `saved`). `remaining` for a foe going home is its way to
   the burrow. The game is lost when `cabbagesLeft` is 0; building on a loose cabbage is refused
   like a foe.
+- Ways of play (`MODES`, `Game.mode`, picked by the `mode` button on the picker): `classic`,
+  `swarm` (the wave timer at 0 whatever Calm says, `SWARM_GOLD` on kill and wave gold through
+  `pay`), `endless` and `sandbox` (`totalWaves` is Infinity: `waveGroups` repeats waves 11 to 20
+  bigger each round; sandbox starts with `SANDBOX_GOLD` and towers grow at once). `stars` gives a
+  won game one to three stars by `cabbagesLeft` (`STARS`) and four for a Swarm with none lost. The
+  scene notes the records (`note`, `noteRecord` merges best of each; Sandbox keeps none) and the
+  cards show stars and the best time, or the Endless best.
 - Garden traps: `honey` and `snare` are pouch picks with `TowerDef.trap`. `build` puts them in
   `g.traps` (`Trap`), not `towers`: they never block, need no open way and may lie under foes
   (`canBuild`), and can't be upgraded or sold. `springTraps` (each `step`): a honey pot springs
@@ -157,8 +164,9 @@ File map (`src/`):
   fills the whole view; the bars are pinned to its top and bottom and the grid sits in the middle of
   `viewFrame`. Tools start 176 pixels in, clear of the corner buttons.
 
-Save keys: `mazewright-best` (per garden: best wave and whether it was won), `mazewright-pouch`
-(the towers picked) and `mazewright-calm` (`'1'` when waves wait for Start wave).
+Save keys: `mazewright-best` (per garden, `GardenRecord`: best wave, whether it was won, most
+stars, fastest win in seconds and the Endless best), `mazewright-pouch` (the towers picked),
+`mazewright-calm` (`'1'` when waves wait for Start wave) and `mazewright-mode` (the way of play).
 
 Test hooks (read by `e2e/playthrough.spec.ts` through `window.game.scene.getScene('Game')`):
 `screen`, `state` (the `Game`), `pouch`, `buttons` (every button by id, centred, in view pixels:

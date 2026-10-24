@@ -239,6 +239,26 @@ export const START_GOLD = 90;
 export const hpScale = () => byDifficulty(0.8, 1, 1.25);
 /** Gold for clearing a wave, and for calling the next one before the field is clear. */
 export const waveReward = (wave: number) => 6 + wave;
+
+/**
+ * Ways to play a garden: Classic (the 20 waves), Swarm (every wave the moment the last is out, for
+ * `SWARM_GOLD` times the gold and a fourth star), Endless (waves never stop) and Sandbox
+ * (`SANDBOX_GOLD`, towers grow at once, endless waves, no records).
+ */
+export const MODES = ['classic', 'swarm', 'endless', 'sandbox'] as const;
+export type Mode = (typeof MODES)[number];
+export const SWARM_GOLD = 1.25;
+export const SANDBOX_GOLD = 10000;
+/** Stars for a win: three with at least `three` of the cabbages kept, two with `two`, else one. */
+export const STARS = { three: 0.9, two: 0.5 };
+
+/** The groups of wave `n` (from 1): the table, and past it waves 11 to 20 again, bigger each round. */
+export function waveGroups(n: number): Group[] {
+  if (n <= WAVES.length) return WAVES[n - 1];
+  const past = n - WAVES.length - 1;
+  const round = Math.floor(past / 10) + 1;
+  return WAVES[10 + (past % 10)].map(([kind, count, opts]) => [kind, Math.ceil(count * (1 + 0.25 * round)), opts ?? {}] as Group);
+}
 export const EARLY_BONUS = 5;
 /** A tower grows one second for every `GROW_RATE` gold it (or its upgrade) cost, and doesn't fire meanwhile. */
 export const GROW_RATE = 10;
