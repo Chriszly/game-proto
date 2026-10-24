@@ -25,7 +25,7 @@
       .game h2, .share-card h2 { display: flex; align-items: center; gap: 10px; margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
       .game .icon, .share-card .icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
       .game p, .share-card p { margin: 0 14px 16px; color: #d8c7a6; }
-      .game .plays { margin-top: -10px; font-size: 13px; color: #a8957a; }
+      .game .plays, .game .trophy-count { margin-top: -10px; font-size: 13px; color: #a8957a; }
       /* Each card's ⚙ opens that game's own settings. */
       .game .game-gear { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; padding: 0; font-size: 20px;
         line-height: 1; background: rgba(44, 32, 24, 0.85); }
@@ -95,6 +95,7 @@
         <div class="header-actions">
           <!-- Shown where the hub can be installed as an app; see shared/install.ts. -->
           <button type="button" id="install-app" data-i18n="installApp" hidden>Install</button>
+          <button type="button" id="open-trophies" data-i18n="trophies">Trophies</button>
           <button type="button" id="open-settings" data-i18n="settings">Settings</button>
         </div>
       </header>
@@ -107,6 +108,16 @@
         </div>
       </dialog>
       <!-- One game's settings, opened from the ⚙ on its card. -->
+      <!-- The trophy shelf: every trophy earned on this device, by game (shared/trophies.ts). -->
+      <dialog id="trophies" aria-labelledby="trophies-title">
+        <div class="panel">
+          <h2 id="trophies-title" data-i18n="trophies">Trophies</h2>
+          <p class="lede" data-i18n="trophyShelfLede">Every trophy earned on this device, by game.</p>
+          <div class="trophy-shelf"></div>
+          <button type="button" class="close" data-i18n-label="close" aria-label="Close">✕</button>
+        </div>
+      </dialog>
+
       <dialog id="game-settings" aria-labelledby="game-settings-title">
         <div class="panel">
           <h2 id="game-settings-title"></h2>
@@ -353,6 +364,10 @@
       import { ALL, askToExport, askToImport, fileEnding, pickFile } from './shared/saveFile.ts';
       import { qrSvg } from './shared/qr.ts';
       import { askToImportCode, askToPasteCode, hubLink, mountProgressCode, openedCode, showProgressCode } from './shared/progressCode.ts';
+      import { trophyCount, trophyCountText, trophyShelfHtml } from './shared/trophies.ts';
+
+      // Each game with trophies lists them in games/<name>/src/trophies/index.ts.
+      const trophySets = Object.values(import.meta.glob('./games/*/src/trophies/index.ts', { eager: true, import: 'trophies' }));
 
       const games = document.querySelector('.games');
       const shareCard = games.querySelector('.share-card');
@@ -388,11 +403,37 @@
         });
         card.append(gear);
       }
+      // Each card of a game with trophies counts the ones earned, and the header's Trophies opens the shelf.
+      const showTrophies = () => {
+        for (const set of trophySets) {
+          const card = cards.find((c) => folder(c) === set.game);
+          if (!card) continue;
+          let line = card.querySelector('.trophy-count');
+          if (!line) {
+            line = document.createElement('p');
+            line.className = 'trophy-count';
+            card.querySelector('a').append(line);
+          }
+          line.textContent = trophyCountText(set);
+          line.setAttribute('aria-label', t('trophyCountLabel', trophyCount(set)));
+        }
+        document.querySelector('.trophy-shelf').innerHTML = trophyShelfHtml(trophySets, (game) => {
+          const card = cards.find((c) => folder(c) === game);
+          return { title: title(card), icon: card.querySelector('h2 .icon').getAttribute('src') };
+        });
+      };
+      const trophyDialog = document.getElementById('trophies');
+      document.getElementById('open-trophies').addEventListener('click', () => {
+        showTrophies();
+        trophyDialog.showModal();
+      });
+
       document.getElementById('reset-game').addEventListener('click', () => {
         if (!confirm(t('resetGameConfirm', { game: title(shown) }))) return;
         clearProgress(folder(shown));
         showGame();
         showRecent();
+        showTrophies();
       });
 
       document.getElementById('export-game').addEventListener('click', () => askToExport(folder(shown), []));
@@ -400,6 +441,7 @@
         askToImport(file, folder(card), [], title(card), () => {
           showGame();
           showRecent();
+          showTrophies();
         });
       document.getElementById('import-game').addEventListener('click', () => pickFile((file) => importGame(shown, file)));
       document.getElementById('qr-game').addEventListener('click', () => showProgressCode(folder(shown), [], title(shown)));
@@ -412,6 +454,7 @@
         }
         if (shown) showGame();
         showRecent();
+        showTrophies();
       };
       document.getElementById('paste-game').addEventListener('click', () => askToPasteCode(cards.map(folder), titleOf, codeImported));
 
@@ -464,6 +507,7 @@
         for (const card of cards) card.querySelector('.game-gear').setAttribute('aria-label', t('gameSettings', { game: title(card) }));
         if (shown) showGame();
         showGenres();
+        showTrophies();
       };
       setLanguage(language());
       translate();
@@ -498,7 +542,7 @@
       const shareButton = document.getElementById('share-link');
       shareButton.hidden = !navigator.share;
       shareButton.addEventListener('click', () => navigator.share({ title: t('hubTitle'), url: hub }).catch(() => {}));
-      for (const d of [dialog, gameDialog]) {
+      for (const d of [dialog, gameDialog, trophyDialog]) {
         d.querySelector('.close').addEventListener('click', () => d.close());
         // A click on the backdrop closes it too.
         d.addEventListener('click', (e) => e.target === d && d.close());

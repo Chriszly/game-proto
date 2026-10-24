@@ -32,6 +32,9 @@ const de: Translation<typeof en> = {
   installInsideAppHint: 'Das öffnet sich in der installierten App. Öffne das Spiel im Browser, um es einzeln zu installieren.',
   installGame: 'Als App installieren',
   plays: { one: '{n}-mal gespielt', other: '{n}-mal gespielt' },
+  trophyShelfLede: 'Alle auf diesem Gerät gewonnenen Trophäen, nach Spiel.',
+  trophyShelfEmpty: 'Noch keine Trophäen. Spiel ein Spiel mit Trophäen, um das Regal zu füllen.',
+  trophyCountLabel: '{earned} von {total} Trophäen',
   continuePlaying: 'Weiterspielen',
   feedback: 'Fehler melden oder Idee teilen',
   gameSettings: 'Einstellungen für {game}',
@@ -124,6 +127,14 @@ const de: Translation<typeof en> = {
   controls: 'Steuerung',
   roundSteps: 'So läuft eine Runde',
   goodToKnow: 'Gut zu wissen',
+  trophies: 'Trophäen',
+  trophiesTitle: 'Trophäen: {game}',
+  trophyEarned: 'Trophäe gewonnen',
+  trophyHidden: 'Geheime Trophäe',
+  trophyHiddenText: 'Spiel weiter, um herauszufinden, wofür es sie gibt.',
+  trophyBronze: 'Bronze',
+  trophySilver: 'Silber',
+  trophyGold: 'Gold',
   back: 'Zurück',
   pauseInput: 'P oder die Pausetaste',
   pauseAction: 'Pause',
@@ -195,4 +206,4 @@ const de: Translation<typeof en> = {
 export default de;
 
 /** Texts that are the same in German, so the translation check doesn't flag them. */
-export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction', 'soundInput'];
+export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'trophyBronze', 'trophyGold', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction', 'soundInput'];

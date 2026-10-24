@@ -353,6 +353,40 @@ test('games have start and pause screens', async ({ page }, testInfo) => {
   expect(await running(), 'playing after P twice').toBe(true);
 });
 
+// Trophies (shared/trophies.ts): a stored trophy shows in its card's count, on the hub's trophy shelf
+// and in the game's Trophies list on the start and pause screens.
+test('hub and games show trophies', async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('apothecary-trophies', JSON.stringify({ firstSale: Date.UTC(2026, 9, 24) }));
+    Object.assign(window, { showStartScreen: true });
+  });
+  await page.goto('/');
+  const card = page.locator('.game', { has: page.locator('a[href="games/apothecary/"]') });
+  await expect(card.locator('.trophy-count')).toHaveText('🏆 1/10');
+  await expect(card.locator('.trophy-count')).toHaveAttribute('aria-label', '1 of 10 trophies');
+  await page.getByRole('button', { name: 'Trophies' }).click();
+  const shelf = page.locator('#trophies');
+  await expect(shelf).toBeVisible();
+  await expect(shelf.locator('.trophy-game h3')).toHaveText(/Apothecary/);
+  await expect(shelf.locator('.trophy-chip')).toHaveText(['🧪First customer']);
+  await expect(shelf.locator('.trophy-total').first()).toHaveText('🏆Bronze 1');
+  testInfo.attach('trophy shelf', { body: await shelf.screenshot({ path: testInfo.outputPath('trophy-shelf.png') }), contentType: 'image/png' });
+  await shelf.locator('.close').click();
+
+  await page.goto('/games/apothecary/');
+  await page.getByRole('button', { name: 'Trophies 🏆 1/10' }).click();
+  await expect(page.getByRole('heading', { name: 'Trophies of Apothecary' })).toBeVisible();
+  const rows = page.locator('.trophy-row');
+  await expect(rows).toHaveCount(10);
+  await expect(rows.first()).toHaveClass(/earned/);
+  await expect(rows.first()).toContainText('First customer');
+  // A hidden trophy keeps its name until it is earned.
+  await expect(rows.last()).toContainText('Hidden trophy');
+  testInfo.attach('trophy list', { body: await page.screenshot({ path: testInfo.outputPath('trophy-list.png') }), contentType: 'image/png' });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.game-start-button')).toBeVisible();
+});
+
 // The hub shows each game's play count from its counter (shared/playCount.ts), here answered by a
 // stand-in so the test never reaches the real service. A game never played, or a counter that fails,
 // shows no line.

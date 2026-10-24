@@ -125,6 +125,8 @@ Every game also has a full screen button in its bottom left corner, and the **F*
 
 Every game shows a loading screen while its art is drawn, then waits on a start screen until **Start** is pressed (or Enter or Space). The pause button next to full screen, the **P** key or leaving the tab pauses it; Resume, P, Space or Esc play on, and the pause screen links back to all games. Both screens have a **How to play** button (or the **H** key) that shows the game's goal, its controls, how a round goes and a few tips; Back, H or Esc close it.
 
+Games with trophies (Apothecary so far) award bronze, silver and gold trophies for milestones, with a short toast and fanfare, and their start and pause screens list them under **Trophies**, earned or still to earn; hidden ones keep their name until earned. Each hub card shows how many of its game's trophies are earned (🏆 4/10), and the hub's **Trophies** button opens a shelf of every trophy earned on this device, by game. Trophies are saved with the game's progress (`shared/trophies.ts`), so they move with its progress file or code and go when its progress is deleted.
+
 ## Watch AI
 
 Games whose AI can play every side have a watch mode: add `?watch` to the game's URL, such as
@@ -159,9 +161,9 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `audio.ts`, the sound effects and music made in code, `corner.ts`, the corner buttons, `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion, full screen and the sound button
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `progressCode.ts`, the progress codes (see Progress codes), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `trophies.ts`, the trophies, their toast and the hub's trophy shelf, `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `progressCode.ts`, the progress codes (see Progress codes), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files and codes, that the hub and every game have an app manifest, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files and codes, that the hub and every game have an app manifest, the genre filter and Continue playing row, that a game starts and pauses, that trophies show on the cards, the shelf and the pause screen, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks
