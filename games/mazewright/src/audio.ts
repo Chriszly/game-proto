@@ -91,6 +91,12 @@ export const SFX = sounds({
   sunglass: { wave: 'sine', freq: 880, to: 1320, length: 0.18, volume: 0.1, gap: 180 },
   /** A whirligig's dart. */
   whirligig: { wave: 'triangle', freq: 1100, to: 900, length: 0.03, volume: 0.06, gap: 90, vary: 0.1 },
+  /** A swallow darts out of its nest. */
+  swallow: { wave: 'sine', freq: 2400, to: 3200, length: 0.06, volume: 0.08, gap: 90, vary: 0.1 },
+  /** A nettle patch stings. */
+  nettle: { wave: 'noise', freq: 5200, to: 3800, length: 0.07, volume: 0.07, gap: 200 },
+  /** A toadstool ring shrinks a foe. */
+  toadstool: { wave: 'sine', freq: 990, to: 330, length: 0.3, volume: 0.12, gap: 250 },
   /** Apples dropped by an apple tree when a wave is held. */
   apples: { wave: 'triangle', freq: 784, arp: [0, 4], arpStep: 0.05, length: 0.12, volume: 0.14, gap: 120 },
   /** A frost pulse. */

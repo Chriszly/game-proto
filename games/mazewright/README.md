@@ -43,12 +43,14 @@ and the cottage in the corner. Rocks never move and nothing is planted on them. 
 the best wave reached in each garden.
 
 Under the cards is your **pouch**: the hedge and the bow always come along, and you pick up to four
-more of the other ten towers. The pick is kept for the next game.
+more of the other thirteen towers. The pick is kept for the next game.
 
 ### Towers
 
-Every tower stands on a hedge and blocks its tile. Every tower but the hedge rises to level 3;
-selling gives back 70% of what a tower cost.
+Every tower stands on a hedge and blocks its tile. Every tower but the hedge rises to level 3, and
+then to a master level, which costs as much as the first three together, keeps level 3's numbers
+and adds a trick of its own (its panel tells it from level 3). Selling gives back 70% of what a
+tower cost.
 
 | Tower | Cost | Reach | What it does |
 | --- | --- | --- | --- |
@@ -64,6 +66,26 @@ selling gives back 70% of what a tower cost.
 | Beehive | 30 | the 8 tiles round it | Doesn't shoot: the towers round it reload 20% faster (30%, 40%) |
 | Apple tree | 30 | | Doesn't shoot: drops 5 gold each time a wave is held (8, 12) |
 | Whirligig | 20 | 2.5 tiles | Darts that come faster the longer it keeps firing; hits moths |
+| Swallow nest | 15 | 3.5 tiles | Strong, quick darts at fliers only |
+| Nettle patch | 20 | 1.6 tiles | Stings every ground foe next to it still for half a second, now and then |
+| Toadstools | 30 | 2.5 tiles | Shrinks one foe at a time, the toughest first: a quarter less health, and it takes a cabbage less |
+
+| Master trick | |
+| --- | --- |
+| Bow, swallow nest | Two foes at once |
+| Frost | Hard freeze: a newly chilled ground foe stops for a second |
+| Cannon | Thunderclap: a wider blast that knocks foes back |
+| Storm rod | Tempest: the bolt jumps to 10 foes |
+| Crossbow, bonfire | Bolts and flames go through every shell |
+| Puffball | Spore cloud: poisons every foe in reach |
+| Sunglass | Heats foes twice as fast |
+| Beehive | Towers round it reload 55% faster |
+| Apple tree | 20 gold a held wave |
+| Whirligig | Never spins down |
+| Nettle patch | Stings hold twice as long |
+| Toadstools | Shrinks two foes at once |
+
+![A master crossbow's panel, with nettle patches, toadstools and swallow nests in the maze](docs/screenshots/master.webp)
 
 ![A storm rod's bolt, bonfires, crossbows and beehives along a serpentine maze](docs/screenshots/towers.webp)
 

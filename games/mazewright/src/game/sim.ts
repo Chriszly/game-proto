@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  GROW_RATE, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -60,11 +60,16 @@ export interface Foe {
   burnDps: number;
   poisonUntil: number;
   poisonDps: number;
+  /** Stung still by a nettle (or a master frost) until this time; shrunk by a toadstool ring. */
+  stunUntil: number;
+  shrunk: boolean;
   /** Puffball poison spreads to foes walking close; spores caught that way spread no further. */
   spreads: boolean;
   spreadAt: number;
   /** Sunglass and bonfire heat, 0 to 1; a fully heated foe takes double heat damage. */
   heat: number;
+  /** Set alight by a master bonfire, whose blue flame burns through shells. */
+  blueFlame: boolean;
   /** A mole chewing a hedge: the hedge's cell and the seconds left. */
   chew: { cell: number; left: number } | null;
   /** Hedges a mole may still chew: one, or three for a king. */
@@ -112,6 +117,9 @@ export interface Shot {
   damage: number;
   splash: number;
   hits: DamageKind;
+  /** A master crossbow's bolt goes through shells; a master cannon's ball knocks foes back. */
+  pierce?: boolean;
+  knock?: boolean;
 }
 
 export type GameEvent =
@@ -126,6 +134,8 @@ export type GameEvent =
   | { type: 'puff'; x: number; y: number }
   | { type: 'apples'; cell: number; gold: number }
   | { type: 'pulse'; x: number; y: number; r: number }
+  | { type: 'sting'; x: number; y: number; r: number }
+  | { type: 'shrink'; x: number; y: number }
   | { type: 'boom'; x: number; y: number; r: number }
   | { type: 'hit'; x: number; y: number }
   | { type: 'kill'; kind: FoeKind; x: number; y: number; gold: number }
@@ -457,7 +467,7 @@ function makeFoe(g: Game, kind: FoeKind, hp: number, gate: 0 | 1, x: number, y: 
   const def = FOE[kind];
   const f: Foe = {
     id: g.nextId++, kind, hp, maxHp: hp, gate, x, y, from: cell, to: cell, t: 1, heading: 0, angle: 0,
-    slowUntil: 0, slowFactor: 1, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0, heat: 0,
+    slowUntil: 0, slowFactor: 1, stunUntil: 0, shrunk: false, blueFlame: false, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0, heat: 0,
     chew: null, chews: def.digs ? 1 : 0, king: false, big: 1, body: def.size, gold: def.gold, lives: def.lives,
     splits: def.splits ?? 0, shell: def.shell, carry: 0, home: false, empress: null, dead: false,
   };
@@ -527,9 +537,9 @@ function hedgeToChew(g: Game, from: number) {
 }
 
 /** Takes `damage` of a kind off a foe: its shell lets some of it through, and heat doubles on a glowing foe. */
-function hurt(g: Game, f: Foe, damage: number, kind: DamageKind) {
+function hurt(g: Game, f: Foe, damage: number, kind: DamageKind, pierce = false) {
   if (f.dead) return;
-  let dealt = damage * shellFactor(f.shell, kind);
+  let dealt = damage * (pierce ? 1 : shellFactor(f.shell, kind));
   if (kind === 'heat' && f.heat >= 1) dealt *= HEAT.boost;
   f.hp -= dealt;
   if (f.empress) f.empress.taken[kind] = (f.empress.taken[kind] ?? 0) + dealt;
@@ -570,6 +580,7 @@ function moveFoe(g: Game, f: Foe, dt: number) {
     f.y += (dy / d) * speed * dt;
     return;
   }
+  if (g.clock < f.stunUntil) return;
   if (f.chew) {
     f.chew.left -= dt;
     if (f.chew.left > 0) return;
@@ -694,7 +705,7 @@ function afflict(g: Game, f: Foe, dt: number) {
   const heals = FOE[f.kind].heals;
   if (heals && g.clock >= f.slowUntil && g.clock >= f.poisonUntil) f.hp = Math.min(f.maxHp, f.hp + heals * f.maxHp * dt);
   if (f.empress) empress(g, f);
-  if (g.clock < f.burnUntil) hurt(g, f, f.burnDps * dt, 'heat');
+  if (g.clock < f.burnUntil) hurt(g, f, f.burnDps * dt, 'heat', f.blueFlame);
   if (g.clock >= f.poisonUntil) return;
   hurt(g, f, f.poisonDps * dt, 'poison');
   if (!f.spreads || g.clock < f.spreadAt) return;
@@ -736,7 +747,7 @@ function boosts(g: Game) {
   for (const hive of g.towers) {
     if (hive.kind !== 'beehive' || hive.grow > 0) continue;
     const [hx, hy] = cellOf(hive.cell);
-    const boost = TOWER.beehive.boost![hive.level - 1];
+    const boost = hive.level === MASTER ? MASTER_TRICKS.hiveBoost : TOWER.beehive.boost![tier(hive.level)];
     for (const t of g.towers) {
       const [x, y] = cellOf(t.cell);
       if (t !== hive && Math.abs(x - hx) <= 1 && Math.abs(y - hy) <= 1) out.set(t.id, Math.max(out.get(t.id) ?? 0, boost));
@@ -759,8 +770,8 @@ function pick(g: Game, foes: Foe[], aim: Aim = 'first') {
 }
 
 /** A sunglass or bonfire hit: heat damage, and heat that builds up on the foe. */
-function scorch(g: Game, f: Foe, damage: number) {
-  hurt(g, f, damage, 'heat');
+function scorch(g: Game, f: Foe, damage: number, pierce = false) {
+  hurt(g, f, damage, 'heat', pierce);
   f.heat = Math.min(1, f.heat + HEAT.hit);
 }
 
@@ -772,18 +783,23 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
   }
   tower.cooldown = Math.max(0, tower.cooldown - dt * (1 + boost));
   if (!attacks(tower.kind)) return;
-  if (tower.kind === 'whirligig' && (tower.idle += dt) > 1) tower.spin = Math.max(0, tower.spin - dt / def.spinUp!);
+  const master = tower.level === MASTER;
+  if (tower.kind === 'whirligig' && !master && (tower.idle += dt) > 1) tower.spin = Math.max(0, tower.spin - dt / def.spinUp!);
   if (tower.cooldown > 0) return;
   const { x, y } = centre(tower.cell);
-  const lvl = tower.level - 1;
-  const reaches = (f: Foe) => !f.dead && (def.air || !FOE[f.kind].flies);
+  const lvl = tier(tower.level);
+  const reaches = (f: Foe) => !f.dead && (def.air || !FOE[f.kind].flies) && (!def.airOnly || !!FOE[f.kind].flies);
   if (tower.kind === 'sunglass') {
     const cells = beamCells(g, tower.cell, tower.face);
     const lit = new Set(cells);
     const hit = g.foes.filter((f) => reaches(f) && lit.has(Math.floor(f.y) * COLS + Math.floor(f.x)));
     if (hit.length === 0) return;
     tower.cooldown = def.reload[lvl];
-    for (const f of hit) scorch(g, f, def.damage[lvl]);
+    for (const f of hit) {
+      scorch(g, f, def.damage[lvl]);
+      // A master sunglass heats twice as fast.
+      if (master) f.heat = Math.min(1, f.heat + HEAT.hit);
+    }
     const end = cells.length ? centre(cells[cells.length - 1]) : { x, y };
     const [dx, dy] = DIRS[tower.face];
     g.events.push({ type: 'beam', x, y, x2: end.x + dx * 0.5, y2: end.y + dy * 0.5 }, { type: 'shot', kind: 'sunglass' });
@@ -794,9 +810,10 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     if (hit.length === 0) return;
     tower.cooldown = def.reload[lvl];
     for (const f of hit) {
-      scorch(g, f, def.damage[lvl]);
+      scorch(g, f, def.damage[lvl], master);
       f.burnUntil = g.clock + def.dotFor!;
       f.burnDps = def.dot![lvl];
+      f.blueFlame = master;
     }
     g.events.push({ type: 'flame', x, y, angle: tower.aim, r: def.range, cone: def.cone! }, { type: 'shot', kind: 'bonfire' });
     return;
@@ -806,6 +823,8 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
   tower.cooldown = def.reload[lvl];
   if (tower.kind === 'frost') {
     for (const f of inRange) {
+      // A master frost stops a foe it newly chills, for a moment.
+      if (master && f.slowUntil <= g.clock && !FOE[f.kind].flies) f.stunUntil = g.clock + MASTER_TRICKS.freeze;
       f.slowUntil = g.clock + def.slowFor!;
       f.slowFactor = def.slow![lvl];
       hurt(g, f, def.damage[lvl], 'cold');
@@ -813,10 +832,39 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     g.events.push({ type: 'pulse', x, y, r: def.range });
     return;
   }
+  if (tower.kind === 'nettle') {
+    // Stings every ground foe in reach still for a moment (twice as long at master level).
+    for (const f of inRange) {
+      f.stunUntil = Math.max(f.stunUntil, g.clock + def.stun![lvl] * (master ? 2 : 1));
+      hurt(g, f, def.damage[lvl], 'sharp');
+    }
+    g.events.push({ type: 'sting', x, y, r: def.range }, { type: 'shot', kind: 'nettle' });
+    return;
+  }
+  if (tower.kind === 'toadstool') {
+    // Shrinks the foes in reach not shrunk yet: one, or two at master level.
+    let shrunk = 0;
+    while (shrunk < (master ? 2 : 1)) {
+      const big = inRange.filter((f) => !f.shrunk);
+      if (big.length === 0) break;
+      const f = pick(g, big, tower.target);
+      shrunk++;
+      f.shrunk = true;
+      f.hp *= def.shrink!;
+      f.maxHp *= def.shrink!;
+      f.body *= 0.8;
+      f.lives = Math.max(1, f.lives - 1);
+      g.events.push({ type: 'shrink', x: f.x, y: f.y });
+    }
+    // Nothing left to shrink: look again soon rather than waiting a whole reload.
+    if (shrunk === 0) tower.cooldown = 0.3;
+    else g.events.push({ type: 'shot', kind: 'toadstool' });
+    return;
+  }
   if (tower.kind === 'storm') {
     // The bolt strikes the foe closest to the cottage, then jumps on to the nearest foe not yet struck.
     const struck = [pick(g, inRange, tower.target)];
-    while (struck.length < def.chain![lvl]) {
+    while (struck.length < (master ? MASTER_TRICKS.stormChain : def.chain![lvl])) {
       const last = struck[struck.length - 1];
       let next: Foe | undefined;
       let best = def.jump!;
@@ -836,11 +884,15 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
   if (tower.kind === 'puffball') {
     // Spores for a foe not yet poisoned, if there is one.
     const clean = inRange.filter((f) => f.poisonUntil <= g.clock);
-    const target = pick(g, clean.length ? clean : inRange, tower.target);
-    target.poisonUntil = g.clock + def.dotFor!;
-    target.poisonDps = def.dot![lvl];
-    target.spreads = true;
-    g.events.push({ type: 'puff', x: target.x, y: target.y }, { type: 'shot', kind: 'puffball' });
+    // A master puffball's spore cloud poisons every foe in reach at once.
+    const targets = master ? inRange : [pick(g, clean.length ? clean : inRange, tower.target)];
+    for (const target of targets) {
+      target.poisonUntil = g.clock + def.dotFor!;
+      target.poisonDps = def.dot![lvl];
+      target.spreads = true;
+      g.events.push({ type: 'puff', x: target.x, y: target.y });
+    }
+    g.events.push({ type: 'shot', kind: 'puffball' });
     return;
   }
   const target = pick(g, inRange, tower.target);
@@ -851,7 +903,12 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     tower.idle = 0;
   }
   const kind = tower.kind as ShotKind;
-  g.shots.push({ kind, x, y, target: target.id, tx: target.x, ty: target.y, damage: def.damage[lvl], splash: def.splash ?? 0, hits: def.hits });
+  const masterCannon = master && kind === 'cannon';
+  const shot = { kind, x, y, damage: def.damage[lvl], splash: masterCannon ? MASTER_TRICKS.splash : def.splash ?? 0, hits: def.hits, pierce: master && kind === 'crossbow', knock: masterCannon };
+  g.shots.push({ ...shot, target: target.id, tx: target.x, ty: target.y });
+  // A master bow or swallow nest looses a second shot at another foe.
+  const second = master && (kind === 'bow' || kind === 'swallow') && inRange.length > 1 ? pick(g, inRange.filter((f) => f !== target), tower.target) : undefined;
+  if (second) g.shots.push({ ...shot, target: second.id, tx: second.x, ty: second.y });
   g.events.push({ type: 'shot', kind: tower.kind });
 }
 
@@ -869,11 +926,16 @@ function moveShot(g: Game, s: Shot, dt: number) {
   }
   if (s.kind !== 'cannon') {
     if (target) {
-      hurt(g, target, s.damage, s.hits);
+      hurt(g, target, s.damage, s.hits, s.pierce);
       g.events.push({ type: 'hit', x: s.tx, y: s.ty });
     }
   } else {
-    for (const f of g.foes) if (!f.dead && !FOE[f.kind].flies && Math.hypot(f.x - s.tx, f.y - s.ty) <= s.splash + f.body) hurt(g, f, s.damage, s.hits);
+    for (const f of g.foes) {
+      if (f.dead || FOE[f.kind].flies || Math.hypot(f.x - s.tx, f.y - s.ty) > s.splash + f.body) continue;
+      hurt(g, f, s.damage, s.hits);
+      // A master cannon's thunderclap knocks foes back along their way.
+      if (s.knock && !f.chew) f.t = Math.max(0, f.t - MASTER_TRICKS.knock);
+    }
     g.events.push({ type: 'boom', x: s.tx, y: s.ty, r: s.splash });
   }
   return true;
@@ -906,7 +968,7 @@ export function step(g: Game, dt: number) {
     g.gold += gold;
     for (const t of g.towers) {
       if (t.kind !== 'apple') continue;
-      const apples = TOWER.apple.apples![t.level - 1];
+      const apples = t.level === MASTER ? MASTER_TRICKS.apples : TOWER.apple.apples![tier(t.level)];
       g.gold += apples;
       g.events.push({ type: 'apples', cell: t.cell, gold: apples });
     }
