@@ -148,6 +148,13 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when
   `settings.reduceMotion` is on. A new setting goes into `shared/settings.ts` (its type, default and
   `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
+- **Play with a controller.** `shared/gamepad.ts` reads game controllers (standard layout) and
+  moves the focus on the hub and the shared start, pause and How to play screens and the sound menu
+  (`moveFocus`, `pressFocused`), and `shared/padCursor.ts`, added by `setupGame`, steers a cursor
+  over the game that sends real mouse and pointer events, so a game needs nothing of its own for it.
+  The hub's Controller setting turns both off and Cursor speed sets the cursor's pace. Tests stand
+  in for a controller by replacing `navigator.getGamepads` (`fakePad` in `e2e/hub.spec.ts`); a
+  playthrough never uses one.
 - **Make sound in code.** `shared/audio.ts` plays every game's sound, with no audio files:
   `sounds({ name: SoundDef })` gives a game a `play(name)` for its own table of synthesized effects
   (each with its own rate limit, at most 12 at once), `ui` has the shared `click`, `coin` and the

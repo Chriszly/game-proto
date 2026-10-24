@@ -6,6 +6,8 @@ import { setVolumes, ui, unlockAudio } from './audio';
 const SOUND_KEY = 'm';
 
 let bar: HTMLDivElement | null = null;
+/** The sound menu, once `addSoundButton` has made it, and how to open or close it. */
+let soundMenu: { menu: HTMLDivElement; open: (on: boolean) => void } | null = null;
 
 /**
  * The row of buttons in the bottom left corner of every game: full screen, sound and pause, in that
@@ -101,6 +103,7 @@ export function addSoundButton() {
     menu.hidden = !on;
     button.setAttribute('aria-expanded', String(on));
   };
+  soundMenu = { menu, open };
   button.addEventListener('click', () => {
     unlockAudio();
     ui('click');
@@ -130,6 +133,21 @@ export function addSoundButton() {
   });
   cornerBar().append(button);
   document.body.append(menu);
+}
+
+/** The sound menu while it is open, for a controller to move around in (`startScreen.ts`). */
+export function openSoundMenu() {
+  return soundMenu && !soundMenu.menu.hidden ? soundMenu.menu : null;
+}
+
+/** Opens the sound menu, or closes it when it is open: the controller's Select button. */
+export function toggleSoundMenu() {
+  if (!soundMenu) return;
+  unlockAudio();
+  ui('click');
+  const { menu, open } = soundMenu;
+  if (!menu.hidden && menu.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+  open(menu.hidden !== false);
 }
 
 /**

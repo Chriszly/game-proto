@@ -124,6 +124,8 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     // Desktop Chromium can't tell WiFi from mobile data, so Wi-Fi only isn't offered.
     updates: 'auto',
     turn: 'turn',
+    controller: true,
+    cursorSpeed: 5,
   });
   await expect(dialog.getByRole('slider', { name: 'Music' })).toHaveValue('35');
 
@@ -477,6 +479,149 @@ test('hub favourites, time played and sort', async ({ page }, testInfo) => {
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-playtime')!))).toEqual({ deadline: 150, palisade: 30 });
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(star).toHaveAttribute('aria-pressed', 'true');
+});
+
+// A stand-in controller (shared/gamepad.ts reads it through navigator.getGamepads), with its
+// buttons pressed and its stick tilted by the test, since a test browser has no real one. A press
+// lasts exactly one read of the pad, so a slow frame never makes a held direction repeat.
+async function fakePad(page: Page) {
+  await page.addInitScript(() => {
+    const pad = {
+      id: 'Test pad',
+      index: 0,
+      connected: true,
+      mapping: 'standard',
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+    };
+    /** Called once the pad has been read and that frame's presses handled. */
+    let afterRead: (() => void)[] = [];
+    navigator.getGamepads = () => {
+      const waiting = afterRead;
+      afterRead = [];
+      queueMicrotask(() => waiting.forEach((f) => f()));
+      return [pad as unknown as Gamepad];
+    };
+    const nextRead = () => new Promise<void>((done) => afterRead.push(done));
+    Object.assign(window, { testPad: { pad, nextRead } });
+  });
+  const BUTTONS = { a: 0, b: 1, x: 2, select: 8, start: 9, up: 12, down: 13, left: 14, right: 15 };
+  return {
+    press: (button: keyof typeof BUTTONS) =>
+      page.evaluate(async (i) => {
+        const { pad, nextRead } = (window as any).testPad;
+        Object.assign(pad.buttons[i], { pressed: true, value: 1 });
+        await nextRead();
+        Object.assign(pad.buttons[i], { pressed: false, value: 0 });
+        await nextRead();
+      }, BUTTONS[button]),
+    stick: (x: number, y: number) =>
+      page.evaluate(async ([ax, ay]) => {
+        const { pad, nextRead } = (window as any).testPad;
+        pad.axes = [ax, ay, 0, 0];
+        await nextRead();
+      }, [x, y]),
+  };
+}
+
+// A controller walks the hub: the D-pad moves the focus between cards, X opens a card's ⚙, B closes
+// the dialog, and Start opens Settings, where A picks a choice and left and right move a slider.
+test('hub works with a controller', async ({ page }, testInfo) => {
+  const pad = await fakePad(page);
+  await page.goto('/');
+  const cards = page.locator('.game > a');
+  await cards.first().focus();
+  await pad.press('down');
+  // The card below the first one, in a grid of several columns.
+  const columns = await page.locator('.games').evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+  const below = await page.evaluate(() => document.activeElement?.closest('.game')?.querySelector('h2')?.textContent?.trim());
+  const names = (await page.locator('.game h2').allTextContents()).map((n) => n.trim());
+  expect(below).toBe(names[columns]);
+  await expect(page.locator('html')).toHaveClass(/pad-focus/);
+  testInfo.attach('focus', { body: await page.screenshot({ path: testInfo.outputPath('pad-focus.png') }), contentType: 'image/png' });
+  await pad.press('up');
+  await expect(cards.first()).toBeFocused();
+  await pad.press('x');
+  const gameDialog = page.getByRole('dialog', { name: names[0] });
+  await expect(gameDialog).toBeVisible();
+  await pad.press('b');
+  await expect(gameDialog).toBeHidden();
+
+  await pad.press('start');
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await expect(settings).toBeVisible();
+  // A pick in Settings draws the row again, and the focus stays on it.
+  const hard = settings.getByRole('group', { name: 'Difficulty' }).getByRole('button', { name: 'Hard', exact: true });
+  await hard.focus();
+  await pad.press('a');
+  await expect(hard).toHaveAttribute('aria-pressed', 'true');
+  await expect(hard).toBeFocused();
+  const speed = settings.getByRole('slider', { name: 'Cursor speed' });
+  await speed.focus();
+  await pad.press('right');
+  await expect(speed).toHaveValue('6');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-settings')!).cursorSpeed)).toBe(6);
+  await pad.press('start');
+  await expect(settings).toBeHidden();
+});
+
+// In a game the controller moves around the start and pause screens, and steers a cursor that taps
+// the game like a mouse: here the cursor sends the doctor walking.
+test('games work with a controller', async ({ page }, testInfo) => {
+  await page.addInitScript(() => Object.assign(window, { showStartScreen: true }));
+  const pad = await fakePad(page);
+  await page.goto('/games/apothecary/');
+  const running = () => page.evaluate(() => (window as any).game.scene.getScene('Game')?.sys.isActive() === true);
+  await expect(page.locator('.game-start-button')).toBeFocused();
+  // Down goes to How to play, A opens it and B goes back.
+  await pad.press('down');
+  await expect(page.getByRole('button', { name: 'How to play' })).toBeFocused();
+  await pad.press('a');
+  await expect(page.getByRole('heading', { name: 'How to play Apothecary' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Controller: left stick, A, B' })).toBeVisible();
+  await pad.press('b');
+  await expect(page.locator('.game-start-button')).toBeVisible();
+  await pad.press('start');
+  await expect(page.locator('.game-overlay')).toBeHidden();
+  expect(await running(), 'playing after Start').toBe(true);
+
+  // Start pauses; on the pause screen left and right move a focused volume, and B resumes.
+  await pad.press('start');
+  await expect(page.locator('.game-resume-button')).toBeFocused();
+  expect(await running(), 'paused by Start').toBe(false);
+  const music = page.locator('.game-overlay .volume-music');
+  await music.focus();
+  await pad.press('left');
+  await expect(music).toHaveValue('55');
+  await pad.press('b');
+  await expect(page.locator('.game-overlay')).toBeHidden();
+
+  // Select opens the sound menu, where the D-pad moves, and B closes it.
+  await pad.press('select');
+  await expect(page.locator('.sound-menu')).toBeVisible();
+  await pad.press('down');
+  await expect(page.locator('.sound-menu .volume-music')).toBeFocused();
+  await pad.press('b');
+  await expect(page.locator('.sound-menu')).toBeHidden();
+
+  // The stick brings up the cursor and moves it left; A taps there, and the doctor sets off.
+  const cursor = page.locator('.pad-cursor');
+  const left = () => cursor.evaluate((el) => el.getBoundingClientRect().left);
+  await expect(cursor).toBeHidden();
+  const middle = await page.evaluate(() => innerWidth / 2);
+  await pad.stick(-1, 0);
+  await expect(cursor).toBeVisible();
+  await expect.poll(left).toBeLessThan(middle - 150);
+  await pad.stick(0, 0);
+  const pointerTarget = () => page.evaluate(() => (window as any).game.scene.getScene('Game').pointerTarget);
+  expect(await pointerTarget(), 'standing before the tap').toBeNull();
+  await pad.press('a');
+  await expect.poll(pointerTarget).not.toBeNull();
+  testInfo.attach('cursor', { body: await page.screenshot({ path: testInfo.outputPath('pad-cursor.png') }), contentType: 'image/png' });
+  // A real mouse move hides it again.
+  await page.mouse.move(100, 100);
+  await expect(cursor).toBeHidden();
 });
 
 // The hub shows each game's play count from its counter (shared/playCount.ts), here answered by a
