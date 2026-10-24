@@ -237,6 +237,13 @@ export interface Game {
   nextAt: number | null;
   /** Winter: when frost next freezes a tower, while a wave is in play. */
   frostAt: number | null;
+  /** The seed of its random numbers and their state now, and the foes' health scale (the difficulty). */
+  seed: number;
+  rng: number;
+  toughness: number;
+  /** Fixed steps played, and the player's actions so far, for a replay. */
+  steps: number;
+  log: Action[];
   /** Seconds of play so far. */
   clock: number;
   kills: number;
@@ -251,7 +258,46 @@ export interface Game {
 const WATER = 3;
 export const LAWN = 4;
 
-export function newGame(mapId: string, calm = false, mode: Mode = 'classic', masters: readonly TowerKind[] | null = null): Game {
+/** A player's action, at the step it was taken: what a replay plays back. */
+export interface Action {
+  /** Steps of play before it (`Game.steps`). */
+  s: number;
+  a: 'build' | 'upgrade' | 'sell' | 'turn' | 'aim' | 'wave';
+  c?: number;
+  k?: TowerKind;
+}
+
+/** What makes a game play the same again: the numbers drawn at its start. */
+export interface Fixed {
+  seed: number;
+  toughness: number;
+  lives: number;
+}
+
+/** A game kept to watch again: how it began, and every action taken in it. */
+export interface Replay extends Fixed {
+  map: string;
+  calm: boolean;
+  mode: Mode;
+  masters: TowerKind[] | null;
+  log: Action[];
+  /** Steps it lasted, and its stars and time. */
+  steps: number;
+  stars: number;
+  time: number;
+}
+
+/** A small seeded random number generator (mulberry32), so a replay draws the same numbers. */
+function rand(g: Game) {
+  let t = (g.rng = (g.rng + 0x6d2b79f5) >>> 0);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+const note = (g: Game, a: Action['a'], c?: number, k?: TowerKind) => g.log.push(k ? { s: g.steps, a, c, k } : c === undefined ? { s: g.steps, a } : { s: g.steps, a, c });
+
+export function newGame(mapId: string, calm = false, mode: Mode = 'classic', masters: readonly TowerKind[] | null = null, fixed?: Fixed): Game {
   const map = MAPS.find((m) => m.id === mapId) ?? MAPS[0];
   const blocked = new Uint8Array(COLS * ROWS);
   const goal = cellIndex(map.goal);
@@ -264,7 +310,8 @@ export function newGame(mapId: string, calm = false, mode: Mode = 'classic', mas
   for (const pond of map.ponds ?? []) blocked[cellIndex(pond)] = WATER;
   const banks = new Uint8Array(COLS * ROWS);
   for (const bank of map.banks ?? []) banks[cellIndex(bank)] = 1;
-  const lives = map.lives ?? startLives();
+  const lives = fixed?.lives ?? map.lives ?? startLives();
+  const seed = fixed?.seed ?? Math.floor(Math.random() * 4294967296);
   return {
     map,
     phase: 'build',
@@ -291,6 +338,11 @@ export function newGame(mapId: string, calm = false, mode: Mode = 'classic', mas
     calm,
     nextAt: null,
     frostAt: null,
+    seed,
+    rng: seed,
+    toughness: fixed?.toughness ?? hpScale(),
+    steps: 0,
+    log: [],
     clock: 0,
     kills: 0,
     leaks: 0,
@@ -360,6 +412,7 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
   if (TOWER[kind].trap) {
     g.traps.push({ id: g.nextId++, kind: kind as TrapKind, cell, sprung: false, until: 0, field: null });
     g.events.push({ type: 'built', kind, cell });
+    note(g, 'build', cell, kind);
     return null;
   }
   const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
@@ -368,6 +421,7 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
   g.blocked[cell] = 2;
   refield(g);
   g.events.push({ type: 'built', kind, cell });
+  note(g, 'build', cell, kind);
   return null;
 }
 
@@ -425,6 +479,7 @@ export function setAim(g: Game, cell: number) {
   const tower = towerAt(g, cell);
   if (!tower || over(g)) return false;
   tower.target = AIMS[(AIMS.indexOf(tower.target) + 1) % AIMS.length];
+  note(g, 'aim', cell);
   return true;
 }
 
@@ -434,6 +489,7 @@ export function turn(g: Game, cell: number) {
   if (!tower || !TOWER[tower.kind].faces || over(g)) return false;
   tower.face = [1, 3, 0, 2][tower.face];
   tower.aim = Math.atan2(DIRS[tower.face][1], DIRS[tower.face][0]);
+  note(g, 'turn', cell);
   return true;
 }
 
@@ -463,6 +519,7 @@ export function upgrade(g: Game, cell: number) {
   tower.level++;
   growFor(tower, cost, g);
   g.events.push({ type: 'upgraded', cell });
+  note(g, 'upgrade', cell);
   return true;
 }
 
@@ -476,6 +533,7 @@ export function sell(g: Game, cell: number) {
   g.gold += gold;
   removeTower(g, tower);
   g.events.push({ type: 'sold', cell, gold });
+  note(g, 'sell', cell);
   return true;
 }
 
@@ -502,8 +560,15 @@ export function stars(g: Game) {
   return kept >= g.maxLives * STARS.three ? 3 : kept >= g.maxLives * STARS.two ? 2 : 1;
 }
 
-/** Starts the next wave; called while foes are still out, it pays a small bonus. */
+/** Starts the next wave by the player's hand; called while foes are still out, it pays a small bonus. */
 export function startWave(g: Game) {
+  if (!beginWave(g)) return false;
+  note(g, 'wave');
+  return true;
+}
+
+/** Starts the next wave, by hand or by the wave timer. */
+function beginWave(g: Game) {
   if (!canStartWave(g)) return false;
   const early = g.foes.length > 0;
   if (early) g.gold += EARLY_BONUS;
@@ -543,7 +608,7 @@ function spawn(g: Game, sp: Spawn) {
   const sized = sp.big ? BIG[sp.big] : plain;
   const king = sp.king ? KING : plain;
   const empress = kind === 'queen' && wave === WAVES.length;
-  const hp = Math.round(def.hp * (1 + HP_PER_WAVE * (wave - 1)) * hpScale() * (empress ? FINAL_QUEEN : 1) * sized.hp * king.hp);
+  const hp = Math.round(def.hp * (1 + HP_PER_WAVE * (wave - 1)) * g.toughness * (empress ? FINAL_QUEEN : 1) * sized.hp * king.hp);
   const cell = g.gates[sp.gate];
   const { x, y } = centre(cell);
   const f = makeFoe(g, kind, hp, sp.gate, x, y, cell);
@@ -660,7 +725,7 @@ function hurt(g: Game, f: Foe, damage: number, kind: DamageKind, pierce = false)
     g.events.push({ type: 'split', x: f.x, y: f.y });
   }
   if (f.king && f.kind === 'moth') {
-    const hp = Math.round(FOE.moth.hp * (1 + HP_PER_WAVE * (g.wave - 1)) * hpScale());
+    const hp = Math.round(FOE.moth.hp * (1 + HP_PER_WAVE * (g.wave - 1)) * g.toughness);
     for (let i = 0; i < KING_TRICKS.moths; i++) offspring(g, f, 'moth', hp, 0);
   }
 }
@@ -826,7 +891,7 @@ function empress(g: Game, f: Foe) {
   const e = f.empress!;
   if (g.clock >= e.eggAt && !FOE[f.kind].flies) {
     e.eggAt += EMPRESS.egg;
-    offspring(g, f, 'beetle', Math.round(FOE.beetle.hp * (1 + HP_PER_WAVE * (g.wave - 1)) * hpScale()), 0.5);
+    offspring(g, f, 'beetle', Math.round(FOE.beetle.hp * (1 + HP_PER_WAVE * (g.wave - 1)) * g.toughness), 0.5);
     g.events.push({ type: 'egg', x: f.x, y: f.y });
   }
   if (g.clock < e.turnAt) return;
@@ -872,7 +937,7 @@ function frost(g: Game) {
   g.frostAt += WEATHER.frostEvery;
   const cold = g.towers.filter((t) => attacks(t.kind) && t.kind !== 'bonfire' && t.grow <= 0 && !stopped(g, t) && !covered(g, t.cell, 'bonfire'));
   if (cold.length === 0) return;
-  const t = cold[Math.floor(Math.random() * cold.length)];
+  const t = cold[Math.floor(rand(g) * cold.length)];
   t.frozenUntil = g.clock + WEATHER.frostFor;
   g.events.push({ type: 'frozen', cell: t.cell });
 }
@@ -1121,7 +1186,8 @@ function springTraps(g: Game) {
 export function step(g: Game, dt: number) {
   if (over(g)) return;
   g.clock += dt;
-  if (g.nextAt !== null && g.clock >= g.nextAt) startWave(g);
+  g.steps++;
+  if (g.nextAt !== null && g.clock >= g.nextAt) beginWave(g);
   while (g.spawns.length && g.spawns[0].at <= g.clock) {
     const s = g.spawns.shift()!;
     spawn(g, s);
@@ -1172,3 +1238,27 @@ export function step(g: Game, dt: number) {
 export function routeLength(g: Game, gate: number) {
   return g.dist[g.gates[gate]];
 }
+
+/** A new game that plays `replay` back: call `replayStep` before each `step`. */
+export const replayGame = (r: Replay) => newGame(r.map, r.calm, r.mode, r.masters, r);
+
+/** Takes the replay's actions due before the next step, in order, from `from`; returns where it got to. */
+export function replayStep(g: Game, r: Replay, from: number) {
+  let i = from;
+  for (; i < r.log.length && r.log[i].s <= g.steps; i++) {
+    const { a, c = -1, k } = r.log[i];
+    if (a === 'build') build(g, c, k!);
+    else if (a === 'upgrade') upgrade(g, c);
+    else if (a === 'sell') sell(g, c);
+    else if (a === 'turn') turn(g, c);
+    else if (a === 'aim') setAim(g, c);
+    else startWave(g);
+  }
+  return i;
+}
+
+/** What to keep of a finished game to watch it again. */
+export const replayOf = (g: Game): Replay => ({
+  map: g.map.id, calm: g.calm, mode: g.mode, masters: g.masters ? [...g.masters] : null, seed: g.seed, toughness: g.toughness, lives: g.maxLives,
+  log: g.log, steps: g.steps, stars: stars(g), time: Math.round(g.clock),
+});

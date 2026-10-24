@@ -6,10 +6,10 @@ import { settings } from '../../../../shared/settings';
 import { SFX, SONG } from '../audio';
 import { distances, route } from '../game/grid';
 import { cellIndex, cellOf, MAPS, SEASON_STARS, SEASONS, type MapDef, type Season } from '../game/maps';
-import { loadCalm, loadMode, loadPouch, loadRecords, loadShed, noteRecord, picksOf, pouchOf, saveCalm, saveMode, savePouch, saveShed, usable, type Records, type Shed } from '../game/save';
+import { loadCalm, loadMode, loadPouch, loadRecords, loadReplays, loadShed, noteRecord, picksOf, pouchOf, saveCalm, saveMode, savePouch, saveReplay, saveShed, usable, type Records, type Replays, type Shed } from '../game/save';
 import {
-  beamCells, bestFace, build, LAWN, openGates, reachOf, cabbagesLeft, canStartWave, masterOpen, seedsFor, stars, totalWaves, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
-  type Game, type GameEvent, type Refusal, type Tower,
+  beamCells, bestFace, build, LAWN, openGates, reachOf, cabbagesLeft, canStartWave, masterOpen, seedsFor, stars, totalWaves, newGame, nextUpgrade, replayGame, replayOf, replayStep, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
+  type Game, type GameEvent, type Refusal, type Replay, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
 import { aims, ALWAYS, FREE, harms, MASTER, masterSeeds, SLOT_SEEDS, towerSeeds, COLS, FOE, MODES, ROWS, SANDBOX_GOLD, GATE_WAVES, TOWER, TOWERS, waveGroups, WAVES, type FoeKind, type Mode, type TowerKind, type TrapKind } from '../game/rules';
@@ -74,6 +74,9 @@ export class GameScene extends Phaser.Scene {
   /** The potting shed, and the seeds the last finished game paid into it. */
   shed!: Shed;
   earned = 0;
+  /** Each garden's latest win, and the one being watched (null while playing). */
+  replays!: Replays;
+  replay: Replay | null = null;
   /** Spots for the test: every button on screen by id, centred, in view pixels. */
   buttons: Record<string, Spot> = {};
   /** The grid's top-left corner and cell size in view pixels, for the test. */
@@ -111,6 +114,8 @@ export class GameScene extends Phaser.Scene {
   private grabbed = false;
   /** The season's weather has stopped a tower this game, so its banner is not shown again. */
   private weathered = false;
+  /** How far into the watched replay's actions the game has got. */
+  private ri = 0;
 
   constructor() {
     super('Game');
@@ -122,6 +127,7 @@ export class GameScene extends Phaser.Scene {
     this.mode = loadMode();
     this.shed = loadShed(this.records);
     this.pouch = loadPouch(this.shed);
+    this.replays = loadReplays();
     this.lawnG = this.add.graphics().setDepth(DEPTH.lawn);
     this.boardG = this.add.graphics().setDepth(DEPTH.board);
     this.fxG = this.add.graphics().setDepth(DEPTH.fx);
@@ -157,6 +163,7 @@ export class GameScene extends Phaser.Scene {
       this.acc += dt * this.speed;
       while (this.acc >= STEP) {
         this.acc -= STEP;
+        if (this.replay) this.ri = replayStep(g, this.replay, this.ri);
         step(g, STEP);
         this.drain(g);
       }
@@ -324,7 +331,10 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'won':
         playSting(SONG, 'win');
-        if (g.mode !== 'sandbox') noteRecord(this.records, g.map.id, { wave: g.wave, won: true, stars: stars(g), time: Math.round(g.clock) });
+        if (g.mode !== 'sandbox' && !this.replay) {
+          noteRecord(this.records, g.map.id, { wave: g.wave, won: true, stars: stars(g), time: Math.round(g.clock) });
+          saveReplay(this.replays, replayOf(g));
+        }
         this.earn(g);
         break;
       case 'lost':
@@ -337,12 +347,13 @@ export class GameScene extends Phaser.Scene {
 
   /** Notes `waves` held in the garden's records: as its best wave, or its Endless best. Sandbox keeps none. */
   private note(g: Game, waves: number) {
-    if (g.mode === 'sandbox') return;
+    if (g.mode === 'sandbox' || this.replay) return;
     noteRecord(this.records, g.map.id, g.mode === 'endless' ? { endless: waves } : { wave: waves });
   }
 
   /** Pays a finished game's seeds into the potting shed. */
   private earn(g: Game) {
+    if (this.replay) return;
     this.earned = seedsFor(g);
     if (!this.earned) return;
     this.shed.seeds += this.earned;
@@ -399,7 +410,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const g = this.state;
-    if (!g || this.screen !== 'play' || g.phase === 'won' || g.phase === 'lost') return;
+    // A replay plays itself: the board takes no taps.
+    if (!g || this.screen !== 'play' || g.phase === 'won' || g.phase === 'lost' || this.replay) return;
     const cell = this.cellAt(x, y);
     if (cell < 0) {
       this.selected = -1;
@@ -424,7 +436,7 @@ export class GameScene extends Phaser.Scene {
     const cell = this.cellAt(x, y);
     this.hover = cell;
     const g = this.state;
-    if (!this.painting || !down || !g || cell < 0 || cell === this.lastPainted) return;
+    if (!this.painting || !down || !g || this.replay || cell < 0 || cell === this.lastPainted) return;
     this.lastPainted = cell;
     if (!g.blocked[cell] || g.blocked[cell] === LAWN) this.place(cell);
   }
@@ -438,13 +450,20 @@ export class GameScene extends Phaser.Scene {
   private onKey(e: KeyboardEvent) {
     if (this.screen !== 'play' || !this.state) return;
     const n = Number(e.key);
-    if (n >= 1 && n <= this.pouch.length) this.pickTool(this.pouch[n - 1]);
+    if (e.key.toLowerCase() === 'f') this.faster();
+    else if (this.replay) return;
+    else if (n >= 1 && n <= this.pouch.length) this.pickTool(this.pouch[n - 1]);
     else if (e.key === ' ') this.sendWave();
-    else if (e.key.toLowerCase() === 'f') this.speed = this.speed === 1 ? 2 : 1;
     else if (e.key === 'Escape') this.selected = -1;
     else return;
     e.preventDefault();
     this.hudKey = '';
+  }
+
+  /** Speeds up: 1x and 2x in play, up to 4x while watching a replay. */
+  private faster() {
+    const most = this.replay ? 4 : 2;
+    this.speed = this.speed >= most ? 1 : this.speed * 2;
   }
 
   private pickTool(kind: TowerKind) {
@@ -473,13 +492,16 @@ export class GameScene extends Phaser.Scene {
     savePouch(this.pouch);
   }
 
-  private start(map: MapDef) {
-    this.state = newGame(map.id, this.calm, this.mode, this.shed.masters);
+  /** Starts a game in `map`, or watches `replay` (at 2x). */
+  private start(map: MapDef, replay: Replay | null = null) {
+    this.state = replay ? replayGame(replay) : newGame(map.id, this.calm, this.mode, this.shed.masters);
+    this.replay = replay;
+    this.ri = 0;
     this.earned = 0;
     this.screen = 'play';
     this.tool = 'hedge';
     this.selected = -1;
-    this.speed = 1;
+    this.speed = replay ? 2 : 1;
     this.acc = 0;
     this.clearFlashes();
     this.seen.clear();
@@ -494,6 +516,7 @@ export class GameScene extends Phaser.Scene {
   private toMenu() {
     this.screen = 'menu';
     this.state = null;
+    this.replay = null;
     this.clearFlashes();
     this.banner = null;
     this.changed();
@@ -779,7 +802,7 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const key = JSON.stringify([
-      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text, this.shed, this.earned, this.season, this.mode,
+      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text, this.shed, this.earned, this.season, this.mode, !!this.replay,
       s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.gates.map((gate) => s.dist[gate]), s.nextAt === null ? -1 : Math.ceil(s.nextAt - s.clock), this.version], this.calm,
     ]);
     if (key === this.hudKey) return;
@@ -826,6 +849,12 @@ export class GameScene extends Phaser.Scene {
     const by = vh - BAR_H + (BAR_H - TOOLS.h) / 2;
     const wx = vw - 16 - WAVE_BUTTON.w;
     // The tools share the room up to the speed button: narrower with a fifth or sixth pick.
+    const speed = () => this.button('speed', wx - 8 - SPEED_BUTTON.w, by, SPEED_BUTTON.w, SPEED_BUTTON.h, t('speed', { n: this.speed }), () => this.faster(), { on: this.speed > 1 });
+    if (this.replay) {
+      // Watching: no tools and no wave button, just what is shown and how fast.
+      this.text(TOOLS.x, vh - BAR_H / 2, t('replayLabel', { stars: starText(this.replay.stars), t: clockText(this.replay.time) }), 15, css(C.gold));
+      return speed();
+    }
     const room = wx - 8 - SPEED_BUTTON.w - 8 - TOOLS.x;
     const tw = Math.min(TOOLS.w, Math.floor(room / this.pouch.length) - TOOLS.gap);
     this.pouch.forEach((kind, i) => {
@@ -838,7 +867,7 @@ export class GameScene extends Phaser.Scene {
     const label = !ready ? t('incoming') : s.foes.length > 0 ? t('nextEarly', { n: 5 }) : t('startWave', { n: s.wave + 1 });
     const sub = s.nextAt !== null ? t('timer', { n: Math.max(0, Math.ceil(s.nextAt - s.clock)) }) : undefined;
     this.button('wave', wx, by, WAVE_BUTTON.w, WAVE_BUTTON.h, label, () => this.sendWave(), { enabled: ready, fill: C.gold, sub, size: sub ? 13 : undefined });
-    this.button('speed', wx - 8 - SPEED_BUTTON.w, by, SPEED_BUTTON.w, SPEED_BUTTON.h, t('speed', { n: this.speed }), () => (this.speed = this.speed === 1 ? 2 : 1), { on: this.speed === 2 });
+    speed();
   }
 
   private drawPanel(s: Game, tw: Tower) {
@@ -908,6 +937,14 @@ export class GameScene extends Phaser.Scene {
     const over = won ? t('wonText', { n: cabbagesLeft(s) }) : totalWaves(s) === Infinity ? t('endlessOver', { n: s.wave - 1 }) : t('lostText', { n: s.wave });
     this.text(this.vw / 2, y + 80, over, 15, css(C.cream), 0.5, false);
     const reward = this.earned ? t('seedsEarned', { n: this.earned }) : '';
+    const replay = this.replay;
+    if (replay) {
+      // The end of a replay: watch it again, or back to the gardens.
+      this.text(this.vw / 2, y + 104, [starText(stars(s)), t('time', { t: clockText(s.clock) })].join(' · '), 15, css(C.gold), 0.5);
+      this.button('again', x + 40, y + 128, 170, 40, t('watchAgain'), () => this.start(s.map, replay), { fill: C.gold });
+      this.button('gardens', x + w - 210, y + 128, 170, 40, t('gardens'), () => this.toMenu());
+      return;
+    }
     if (won) this.text(this.vw / 2, y + 104, [starText(stars(s)), t('time', { t: clockText(s.clock) }), reward].filter(Boolean).join(' · '), 15, css(C.gold), 0.5);
     else if (reward) this.text(this.vw / 2, y + 104, reward, 15, css(C.gold), 0.5);
     this.button('again', x + 40, y + 128, 170, 40, t('again'), () => this.start(s.map), { fill: C.gold });
@@ -975,6 +1012,9 @@ export class GameScene extends Phaser.Scene {
       } else this.text(cx, y + CARDS.h - 22, best, 13, css(C.gold), 0.5);
       this.hits.push({ x, y, w: CARDS.w, h: CARDS.h, onTap: () => (locked ? ui('refuse') : this.start(map)), enabled: true });
       this.buttons[`map-${map.id}`] = { x: cx, y: y + CARDS.h / 2, w: CARDS.w, h: CARDS.h };
+      // The garden's latest win, to watch again: on top of the card, so it takes its own tap.
+      const replay = this.replays[map.id];
+      if (replay && !locked) this.button(`watch-${map.id}`, x + CARDS.w - 74, y + CARDS.h - 36, 64, 26, t('watch'), () => this.start(map, replay), { size: 12 });
     });
     // The way of play, at the top left; Calm or the wave timer, at the top right.
     const mw = 200;

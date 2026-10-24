@@ -193,6 +193,9 @@ const de: Translation<typeof en> = {
   lost: 'Der Kohl ist weg',
   lostText: 'Du hast sie bis Welle {n} aufgehalten.',
   again: 'Nochmal spielen',
+  watchAgain: 'Nochmal ansehen',
+  watch: 'Ansehen',
+  replayLabel: 'Wiederholung · {stars} · {t}',
 };
 
 export const keepEnglish: (keyof typeof en)[] = ['title', 'frostName', 'season_winter'];
