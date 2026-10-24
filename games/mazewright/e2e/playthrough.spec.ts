@@ -10,11 +10,15 @@ interface State {
   phase: 'build' | 'wave' | 'won' | 'lost';
   wave: number;
   gold: number;
+  /** Cabbages in the patch, and loose on the lawn. */
   lives: number;
+  loose: number;
   kills: number;
   leaks: number;
   refusals: number;
   towers: { kind: string; cell: number }[];
+  /** Towers still growing. */
+  growing: number;
   foes: number;
   /** Steps from the first burrow to the cottage. */
   route: number;
@@ -53,10 +57,12 @@ function scene(page: Page) {
         wave: s.state?.wave,
         gold: s.state?.gold,
         lives: s.state?.lives,
+        loose: s.state?.loose.length,
         kills: s.state?.kills,
         leaks: s.state?.leaks,
         refusals: s.state?.refusals,
         towers: (s.state?.towers ?? []).map((t: any) => ({ kind: t.kind, cell: t.cell })),
+        growing: (s.state?.towers ?? []).filter((t: any) => t.grow > 0).length,
         foes: s.state?.foes.length,
         route: s.state?.dist[s.state.gates[0]],
       })),
@@ -160,7 +166,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   }
   const cell = (col: number, row: number) => row * COLS + col;
 
-  // The garden picker; the Meadow opens with an empty lawn, the gold and lives of Normal.
+  // The garden picker; the Meadow opens with an empty lawn, the gold and cabbages of Normal.
   await snap('playthrough-0-gardens');
   expect((await game.state()).screen).toBe('menu');
   await press('map-meadow');
@@ -209,6 +215,10 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.gold).toBe(goldBefore);
   expect(s.refusals).toBe(1);
 
+  // A new tower grows a second per 10 gold before it fires: let the bows grow before the wave.
+  expect(s.growing, 'the bows are still growing').toBeGreaterThan(0);
+  expect(await play(5_000, async () => (await game.state()).growing === 0), 'bows grown').toBe(true);
+
   // Wave 1: six beetles walk the maze past the bows, and every one of them is beaten.
   await press('wave');
   s = await game.state();
@@ -221,7 +231,8 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.wave).toBe(1);
   expect(s.kills).toBe(WAVE_1);
   expect(s.leaks).toBe(0);
-  expect(s.lives).toBe(LIVES_NORMAL);
+  expect(s.lives, 'every cabbage still in the patch').toBe(LIVES_NORMAL);
+  expect(s.loose).toBe(0);
   expect(s.foes).toBe(0);
   expect(s.gold).toBe(goldBefore + WAVE_1 * BEETLE_GOLD + WAVE_1_REWARD);
   await snap('playthrough-4-held');
