@@ -6,7 +6,7 @@ const en: HowToPlay = {
   controls: [
     { input: 'Click or tap a tool', action: 'Pick a tower from your pouch (keys 1 to 6)' },
     { input: 'Click, tap or drag on the lawn', action: 'Plant the tool there, or a whole line of them' },
-    { input: 'Click or tap a tower', action: 'Upgrade or sell it, or turn a bonfire or sunglass' },
+    { input: 'Click or tap a tower', action: 'Upgrade, sell (tap twice), set its aim, or turn a bonfire or sunglass' },
     { input: 'Start wave button, Space', action: 'Send the next wave, early for a bonus' },
     { input: 'Speed button, F', action: 'Play at double speed' },
   ],
@@ -23,7 +23,8 @@ const en: HowToPlay = {
     'Moths fly straight over the maze, so keep bows and frost near the cottage too.',
     'Moles chew through a hedge that blocks a much shorter way: put a tower there instead.',
     'From wave 6 the second burrow opens, so plan a maze that serves both routes.',
-    'Weevils wear armour: crossbows, cannons, bonfires and puffballs get through it best.',
+    'Shells: stag beetles are waxy (heat does half, blast more), moles hairy (blast half, sharp more), weevils hard (sharp half, spark more). Poison goes through every shell.',
+    'A sunglass or bonfire heats foes up; a glowing foe takes double heat damage.',
     'A bonfire or sunglass likes a long straight corridor; a storm rod likes foes bunched in tight bends.',
   ],
 };
@@ -33,7 +34,7 @@ const de: HowToPlay = {
   controls: [
     { input: 'Ein Werkzeug klicken oder tippen', action: 'Einen Turm aus deinem Beutel wählen (Tasten 1 bis 6)' },
     { input: 'Auf den Rasen klicken, tippen oder ziehen', action: 'Das Werkzeug dort pflanzen, oder eine ganze Reihe' },
-    { input: 'Einen Turm klicken oder tippen', action: 'Ihn ausbauen oder verkaufen, oder Feuerkorb und Brennglas drehen' },
+    { input: 'Einen Turm klicken oder tippen', action: 'Ausbauen, verkaufen (zweimal tippen), sein Ziel wählen oder Feuerkorb und Brennglas drehen' },
     { input: 'Knopf Welle starten, Leertaste', action: 'Die nächste Welle schicken, früh mit Bonus' },
     { input: 'Tempo-Knopf, F', action: 'Mit doppeltem Tempo spielen' },
   ],
@@ -50,14 +51,10 @@ const de: HowToPlay = {
     'Motten fliegen geradewegs über das Labyrinth, also stell Bögen und Frost auch nahe ans Häuschen.',
     'Maulwürfe fressen sich durch eine Hecke, die einen viel kürzeren Weg versperrt: Stell dort lieber einen Turm hin.',
     'Ab Welle 6 öffnet sich der zweite Bau, also plane ein Labyrinth für beide Wege.',
-    'Rüsselkäfer tragen Panzer: Armbrust, Kanone, Feuerkorb und Bovist kommen am besten durch.',
+    'Schalen: Hirschkäfer sind wachsig (Hitze halb, Wucht mehr), Maulwürfe haarig (Wucht halb, Spitzes mehr), Rüsselkäfer hart (Spitzes halb, Funken mehr). Gift geht durch jede Schale.',
+    'Brennglas und Feuerkorb heizen Gegner auf; ein glühender Gegner nimmt doppelten Hitzeschaden.',
     'Feuerkorb und Brennglas mögen einen langen geraden Gang, der Sturmstab Gegner dicht gedrängt in engen Kurven.',
   ],
 };
 
-const enUS: HowToPlay = {
-  ...en,
-  tips: en.tips.map((tip) => tip.replace('armour', 'armor')),
-};
-
-export const howToPlay = byLanguage({ en, 'en-US': enUS, de });
+export const howToPlay = byLanguage({ en, 'en-US': en, de });

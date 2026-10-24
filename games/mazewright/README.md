@@ -18,7 +18,7 @@ beetle already on the lawn) is refused with an orange no-entry ring.
 | Tap or click a tool, or keys 1 to 6 | Pick a tower from your pouch |
 | Tap, click or drag on the lawn | Plant the tool there, or a whole line of them |
 | Hover the lawn | See the new route before you plant |
-| Tap or click a tower | Open its panel: Upgrade, Sell, and Turn for a bonfire or sunglass |
+| Tap or click a tower | Open its panel: Upgrade, Sell (tap it twice), Aim for a tower that picks a target, and Turn for a bonfire or sunglass |
 | Start wave, or Space | Send the next wave; once the last one is all out, send the next early for 5 gold |
 | Speed button, or F | Play at double speed |
 | Gardens | Back to the garden picker |
@@ -59,16 +59,29 @@ selling gives back 70% of what a tower cost.
 
 ![A storm rod's bolt, bonfires, crossbows and beehives along a serpentine maze](docs/screenshots/towers.webp)
 
+**Damage kinds and shells.** Every tower's hits are Sharp (bow, crossbow, whirligig), Blast
+(cannon), Heat (bonfire, sunglass, and burning), Spark (storm rod), Cold (frost) or Poison
+(puffball). Some foes wear a shell: the stag beetle's is waxy (half Heat, 1.5 times Blast), the
+mole's coat is hairy (half Blast, 1.5 times Sharp) and the weevil's is hard (half Sharp, 1.5 times
+Spark). Poison goes through every shell. Sunglass and bonfire hits also heat a foe up; once it
+glows, it takes double Heat damage.
+
+**Aim.** A tower that picks one target can aim at the First foe (closest to the cottage), the
+Last, the Strongest, the Weakest or Fliers first. The crossbow starts on Strongest, the others on
+First.
+
+![A crossbow's panel, aimed at fliers first](docs/screenshots/aim.webp)
+
 ### Foes
 
 | Foe | | Lives it costs |
 | --- | --- | --- |
 | Beetle | the usual walker | 1 |
 | Ladybird | quick and frail | 1 |
-| Stag beetle | slow and tough | 2 |
+| Stag beetle | slow and tough, with a waxy shell | 2 |
 | Moth | flies straight from its burrow to the cottage, over the maze | 1 |
-| Mole | walks the maze, but chews through a hedge (not a tower) that stands in the way of a much shorter route | 1 |
-| Weevil | from wave 8; armoured, so each hit does 5 less (at least 1), though burning and poison go through | 1 |
+| Mole | a hairy coat; walks the maze, but chews through a hedge (not a tower) that stands in the way of a much shorter route | 1 |
+| Weevil | from wave 8; a hard shell | 1 |
 | Beetle queen | waves 10 and 20, very tough | 5 |
 
 ![A mole chewing through the first hedge](docs/screenshots/mole.webp)
