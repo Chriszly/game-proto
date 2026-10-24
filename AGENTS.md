@@ -195,6 +195,19 @@ and tries to link it to the repo (the run summary says if the link has to be mad
 - **Play counts come for free.** `setupGame` also bumps the game's public play counter
   (`shared/playCount.ts`, keyed by the game's folder name) and the hub shows the count on its card,
   so a new game needs nothing for it. Tests never count: browser automation skips it.
+- **Trophies.** `shared/trophies.ts` gives every game the same trophies: a game lists 6 to 10 of
+  them (id, `bronze`, `silver` or `gold` tier, an emoji icon, `hidden` until earned) with
+  `trophySet` in `games/<name>/src/trophies/index.ts`, exported as `trophies`, with their texts in
+  `trophies/i18n/` (`en.ts`, `de.ts` and, where the spelling differs, `en-US.ts`; the name keyed by
+  the id, what earns it by `<id>Text`). That file imports nothing else from the game, since the hub
+  loads every game's (`import.meta.glob`) for each card's count and the Trophies shelf in its
+  header. The game hands `trophies` to `setupGame(game, { howToPlay, trophies })`, which adds a
+  Trophies list to the start and pause screens, and calls `award(trophies, id)` when one is earned:
+  it saves it under `<game>-trophies`, shows a toast at the top of the page and plays the shared
+  `ui('trophy')` fanfare, once. Pass `{ quiet: true }` while replaying time or restoring a save. Pick
+  milestones of a first hour and a few for long play, list them in the game's `AGENTS.md`, and
+  bring games over one per PR (`ls games/*/src/trophies/index.ts` lists the games that have them).
+  A playthrough may assert a trophy its first round earns.
 - **Fit every screen.** A game stays sharp and fills the screen from an upright phone to a 4K
   monitor by calling `setupScaling(game)` from `shared/scaling.ts` right after `setupGame(game)`
   (`grep -l setupScaling games/*/src/main.ts` lists the games that do; bring the others over one game per PR). The canvas then has
