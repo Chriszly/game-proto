@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  GROW_RATE, SEEDS, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, SEEDS, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, GATE_WAVES, BANK_REACH, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -39,8 +39,8 @@ export interface Foe {
   kind: FoeKind;
   hp: number;
   maxHp: number;
-  /** The burrow it came out of. */
-  gate: 0 | 1;
+  /** The burrow it came out of (an index into `Game.gates`). */
+  gate: number;
   /** Its position, in cells. */
   x: number;
   y: number;
@@ -179,7 +179,7 @@ export type Phase = 'build' | 'wave' | 'won' | 'lost';
 /** A foe still to come out of a burrow. */
 export interface Spawn {
   kind: FoeKind;
-  gate: 0 | 1;
+  gate: number;
   at: number;
   wave: number;
   big?: 2 | 3;
@@ -203,13 +203,19 @@ export interface Game {
   loose: Loose[];
   /** Garden traps waiting on the lawn, or sprung. */
   traps: Trap[];
-  /** Per cell: 0 free, 1 a rock, 2 a tower. */
+  /**
+   * Per cell: 0 free (in a path garden, the path), 1 a rock, 2 a tower, 3 water, 4 a path garden's
+   * lawn (walkers keep off it, towers go on it). `ground` is the same without the towers.
+   */
   blocked: Uint8Array;
+  ground: Uint8Array;
+  /** Per cell: 1 on a raised bank. */
+  banks: Uint8Array;
   towers: Tower[];
   /** The steps from every cell to the cottage, and to each burrow for foes carrying cabbages home. */
   dist: Int16Array;
-  homeDist: [Int16Array, Int16Array];
-  gates: [number, number];
+  homeDist: Int16Array[];
+  gates: number[];
   goal: number;
   foes: Foe[];
   shots: Shot[];
@@ -232,13 +238,24 @@ export interface Game {
   nextId: number;
 }
 
+/** `blocked` values: water, and a path garden's lawn. */
+const WATER = 3;
+export const LAWN = 4;
+
 export function newGame(mapId: string, calm = false, mode: Mode = 'classic', masters: readonly TowerKind[] | null = null): Game {
   const map = MAPS.find((m) => m.id === mapId) ?? MAPS[0];
   const blocked = new Uint8Array(COLS * ROWS);
-  for (const rock of map.rocks) blocked[cellIndex(rock)] = 1;
   const goal = cellIndex(map.goal);
-  const lives = startLives();
-  const gates: [number, number] = [cellIndex(map.gates[0]), cellIndex(map.gates[1])];
+  const gates = map.gates.map(cellIndex);
+  if (map.path) {
+    blocked.fill(LAWN);
+    for (const c of [...map.path, map.goal, ...map.gates]) blocked[cellIndex(c)] = 0;
+  }
+  for (const rock of map.rocks) blocked[cellIndex(rock)] = 1;
+  for (const pond of map.ponds ?? []) blocked[cellIndex(pond)] = WATER;
+  const banks = new Uint8Array(COLS * ROWS);
+  for (const bank of map.banks ?? []) banks[cellIndex(bank)] = 1;
+  const lives = map.lives ?? startLives();
   return {
     map,
     phase: 'build',
@@ -250,9 +267,11 @@ export function newGame(mapId: string, calm = false, mode: Mode = 'classic', mas
     loose: [],
     traps: [],
     blocked,
+    ground: blocked.slice(),
+    banks,
     towers: [],
     dist: distances(blocked, goal),
-    homeDist: [distances(blocked, gates[0]), distances(blocked, gates[1])],
+    homeDist: gates.map((gate) => distances(blocked, gate)),
     gates,
     goal,
     foes: [],
@@ -281,25 +300,29 @@ const over = (g: Game) => g.phase === 'won' || g.phase === 'lost';
 /** Makes the walking fields again after a cell was blocked or freed. */
 function refield(g: Game) {
   g.dist = distances(g.blocked, g.goal);
-  g.homeDist = [distances(g.blocked, g.gates[0]), distances(g.blocked, g.gates[1])];
+  g.homeDist = g.gates.map((gate) => distances(g.blocked, gate));
   for (const trap of g.traps) if (trap.field) trap.field = distances(g.blocked, trap.cell);
 }
 
 /** All the cabbages still in the game: in the patch, carried and loose. */
 export const cabbagesLeft = (g: Game) => g.lives + g.foes.reduce((n, f) => n + (f.dead ? 0 : f.carry), 0) + g.loose.reduce((n, c) => n + c.n, 0);
 
-/** Whether a field leaves both burrows, and every foe on the ground, a way to the cottage. */
+/** Whether a field leaves every burrow, and every foe on the ground, a way to the cottage. */
 function open(g: Game, dist: Int16Array) {
-  if (dist[g.gates[0]] === UNREACHABLE || dist[g.gates[1]] === UNREACHABLE) return false;
+  if (g.gates.some((gate) => dist[gate] === UNREACHABLE)) return false;
   return g.foes.every((f) => f.dead || FOE[f.kind].flies || dist[f.to] !== UNREACHABLE);
 }
 
 /** Whether a `kind` tower can go on `cell` right now, and if not why. */
 export function canBuild(g: Game, cell: number, kind: TowerKind): Refusal | null {
   if (cell === g.goal || g.gates.includes(cell)) return 'reserved';
-  if (g.blocked[cell] || g.traps.some((t) => t.cell === cell)) return 'taken';
-  // A trap never blocks, so it may go under foes and needs no way kept open.
-  if (TOWER[kind].trap) return g.gold < TOWER[kind].cost ? 'gold' : null;
+  if (g.traps.some((t) => t.cell === cell)) return 'taken';
+  // A trap never blocks, so it may go under foes and needs no way kept open, but only where foes walk.
+  if (TOWER[kind].trap) return g.blocked[cell] ? 'taken' : g.gold < TOWER[kind].cost ? 'gold' : null;
+  // A path garden's lawn is off the way already, and its path is kept for the foes.
+  if (g.blocked[cell] === LAWN) return g.gold < TOWER[kind].cost ? 'gold' : null;
+  if (g.blocked[cell]) return 'taken';
+  if (g.map.path) return 'reserved';
   if (g.foes.some((f) => !f.dead && !FOE[f.kind].flies && (f.from === cell || f.to === cell))) return 'foe';
   if (g.loose.some((c) => c.from === cell || c.to === cell)) return 'foe';
   if (wouldBlock(g, cell)) return 'blocks';
@@ -343,25 +366,29 @@ function growFor(tower: Tower, cost: number, g: Game) {
   tower.grow = tower.growFull = g.mode === 'sandbox' ? 0 : cost / GROW_RATE;
 }
 
-/** The route cells foes walk now, from both burrows. */
+/** The route cells foes walk now, from every burrow. */
 function routeCells(g: Game) {
   return new Set(g.gates.flatMap((gate) => route(g.dist, gate)));
 }
 
-/** The cells a sunglass on `cell` facing `face` shines over: up to the first rock or tower. */
+/** The cells a sunglass on `cell` facing `face` shines over: up to the first rock or tower (it crosses water). */
 export function beamCells(g: Game, cell: number, face: number) {
   const cells: number[] = [];
   let [x, y] = cellOf(cell);
   const [dx, dy] = DIRS[face];
-  for (x += dx, y += dy; inGrid(x, y) && !g.blocked[y * COLS + x]; x += dx, y += dy) cells.push(y * COLS + x);
+  const stops = (v: number) => v === 1 || v === 2;
+  for (x += dx, y += dy; inGrid(x, y) && !stops(g.blocked[y * COLS + x]); x += dx, y += dy) cells.push(y * COLS + x);
   return cells;
 }
 
-/** Whether a point (in cells) is in a bonfire's cone from `cell` facing `face`, within `extra` of its reach. */
-export function inCone(cell: number, face: number, px: number, py: number, extra = 0) {
+/** How far a `kind` tower on `cell` reaches: further on a raised bank. */
+export const reachOf = (g: Game, cell: number, kind: TowerKind) => TOWER[kind].range * (g.banks[cell] ? BANK_REACH : 1);
+
+/** Whether a point (in cells) is in a bonfire's cone from `cell` facing `face`, `range` long, within `extra` of its reach. */
+export function inCone(cell: number, face: number, px: number, py: number, extra = 0, range = TOWER.bonfire.range) {
   const { x, y } = centre(cell);
   const d = Math.hypot(px - x, py - y);
-  if (d > TOWER.bonfire.range + extra || d < 0.01) return false;
+  if (d > range + extra || d < 0.01) return false;
   const off = Math.atan2(py - y, px - x) - Math.atan2(DIRS[face][1], DIRS[face][0]);
   return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= TOWER.bonfire.cone!;
 }
@@ -444,7 +471,7 @@ export function sell(g: Game, cell: number) {
 
 function removeTower(g: Game, tower: Tower) {
   g.towers.splice(g.towers.indexOf(tower), 1);
-  g.blocked[tower.cell] = 0;
+  g.blocked[tower.cell] = g.ground[tower.cell];
   refield(g);
 }
 
@@ -475,7 +502,8 @@ export function startWave(g: Game) {
   g.phase = 'wave';
   let at = g.clock + 0.5;
   let turn = 0;
-  const gateFor = () => (g.wave >= SECOND_GATE ? ((turn++ % 2) as 0 | 1) : 0);
+  const open = openGates(g);
+  const gateFor = () => turn++ % open;
   for (const [kind, count, opts] of waveGroups(g.wave)) {
     for (let i = 0; i < count; i++) {
       g.spawns.push({ kind, gate: gateFor(), at, wave: g.wave, big: opts?.size, king: opts?.king });
@@ -494,6 +522,9 @@ export function startWave(g: Game) {
   g.events.push({ type: 'wave', wave: g.wave, early });
   return true;
 }
+
+/** How many of the garden's burrows are open in the wave in play (they open in order). */
+export const openGates = (g: Game) => Math.max(1, GATE_WAVES.slice(0, g.gates.length).filter((w) => g.wave >= w).length);
 
 function spawn(g: Game, sp: Spawn) {
   const { kind, wave } = sp;
@@ -521,7 +552,7 @@ function spawn(g: Game, sp: Spawn) {
 }
 
 /** A new foe of `kind` with `hp` at a point, standing on `cell`. */
-function makeFoe(g: Game, kind: FoeKind, hp: number, gate: 0 | 1, x: number, y: number, cell: number): Foe {
+function makeFoe(g: Game, kind: FoeKind, hp: number, gate: number, x: number, y: number, cell: number): Foe {
   const def = FOE[kind];
   const f: Foe = {
     id: g.nextId++, kind, hp, maxHp: hp, gate, x, y, from: cell, to: cell, t: 1, heading: 0, angle: 0,
@@ -847,6 +878,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
   if (tower.cooldown > 0) return;
   const { x, y } = centre(tower.cell);
   const lvl = tier(tower.level);
+  const range = reachOf(g, tower.cell, tower.kind);
   const reaches = (f: Foe) => !f.dead && (def.air || !FOE[f.kind].flies) && (!def.airOnly || !!FOE[f.kind].flies);
   if (tower.kind === 'sunglass') {
     const cells = beamCells(g, tower.cell, tower.face);
@@ -865,7 +897,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     return;
   }
   if (tower.kind === 'bonfire') {
-    const hit = g.foes.filter((f) => reaches(f) && inCone(tower.cell, tower.face, f.x, f.y, f.body));
+    const hit = g.foes.filter((f) => reaches(f) && inCone(tower.cell, tower.face, f.x, f.y, f.body, range));
     if (hit.length === 0) return;
     tower.cooldown = def.reload[lvl];
     for (const f of hit) {
@@ -874,10 +906,10 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
       f.burnDps = def.dot![lvl];
       f.blueFlame = master;
     }
-    g.events.push({ type: 'flame', x, y, angle: tower.aim, r: def.range, cone: def.cone! }, { type: 'shot', kind: 'bonfire' });
+    g.events.push({ type: 'flame', x, y, angle: tower.aim, r: range, cone: def.cone! }, { type: 'shot', kind: 'bonfire' });
     return;
   }
-  const inRange = g.foes.filter((f) => reaches(f) && Math.hypot(f.x - x, f.y - y) <= def.range);
+  const inRange = g.foes.filter((f) => reaches(f) && Math.hypot(f.x - x, f.y - y) <= range);
   if (inRange.length === 0) return;
   tower.cooldown = def.reload[lvl];
   if (tower.kind === 'frost') {
@@ -888,7 +920,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
       f.slowFactor = def.slow![lvl];
       hurt(g, f, def.damage[lvl], 'cold');
     }
-    g.events.push({ type: 'pulse', x, y, r: def.range });
+    g.events.push({ type: 'pulse', x, y, r: range });
     return;
   }
   if (tower.kind === 'nettle') {
@@ -897,7 +929,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
       f.stunUntil = Math.max(f.stunUntil, g.clock + def.stun![lvl] * (master ? 2 : 1));
       hurt(g, f, def.damage[lvl], 'sharp');
     }
-    g.events.push({ type: 'sting', x, y, r: def.range }, { type: 'shot', kind: 'nettle' });
+    g.events.push({ type: 'sting', x, y, r: range }, { type: 'shot', kind: 'nettle' });
     return;
   }
   if (tower.kind === 'toadstool') {
@@ -1084,6 +1116,6 @@ export function step(g: Game, dt: number) {
 }
 
 /** The cells of the route from a burrow to the cottage, as foes would walk it now. */
-export function routeLength(g: Game, gate: 0 | 1) {
+export function routeLength(g: Game, gate: number) {
   return g.dist[g.gates[gate]];
 }
