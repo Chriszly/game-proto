@@ -7,7 +7,7 @@ const en: HowToPlay = {
     { input: 'Click or tap a tool', action: 'Pick a tower from your pouch (keys 1 to 6)' },
     { input: 'Click, tap or drag on the lawn', action: 'Plant the tool there, or a whole line of them' },
     { input: 'Click or tap a tower', action: 'Upgrade, sell (tap twice), set its aim, or turn a bonfire or sunglass' },
-    { input: 'Start wave button, Space', action: 'Send the next wave, early for a bonus' },
+    { input: 'Start wave button, Space', action: 'Send the next wave, early for a bonus; after wave 1 the wave timer sends it after 20 seconds (Calm on the garden picker turns it off)' },
     { input: 'Speed button, F', action: 'Play at double speed' },
   ],
   loop: [
@@ -20,6 +20,7 @@ const en: HowToPlay = {
   ],
   tips: [
     'Hold the pointer over the lawn to see the new route before you plant.',
+    'A new tower grows a second per 10 gold before it fires, and an upgrade grows again: plant and upgrade before the foes come.',
     'Moths fly straight over the maze, so keep bows and frost near the cottage too.',
     'Moles chew through a hedge that blocks a much shorter way: put a tower there instead.',
     'From wave 6 the second burrow opens, so plan a maze that serves both routes.',
@@ -38,7 +39,7 @@ const de: HowToPlay = {
     { input: 'Ein Werkzeug klicken oder tippen', action: 'Einen Turm aus deinem Beutel wählen (Tasten 1 bis 6)' },
     { input: 'Auf den Rasen klicken, tippen oder ziehen', action: 'Das Werkzeug dort pflanzen, oder eine ganze Reihe' },
     { input: 'Einen Turm klicken oder tippen', action: 'Ausbauen, verkaufen (zweimal tippen), sein Ziel wählen oder Feuerkorb und Brennglas drehen' },
-    { input: 'Knopf Welle starten, Leertaste', action: 'Die nächste Welle schicken, früh mit Bonus' },
+    { input: 'Knopf Welle starten, Leertaste', action: 'Die nächste Welle schicken, früh mit Bonus; nach Welle 1 schickt die Wellen-Uhr sie nach 20 Sekunden (Ruhig in der Gartenauswahl schaltet sie ab)' },
     { input: 'Tempo-Knopf, F', action: 'Mit doppeltem Tempo spielen' },
   ],
   loop: [
@@ -51,6 +52,7 @@ const de: HowToPlay = {
   ],
   tips: [
     'Halte den Zeiger über den Rasen, um den neuen Weg zu sehen, bevor du pflanzt.',
+    'Ein neuer Turm wächst eine Sekunde je 10 Gold, bevor er schießt, und ein Ausbau wächst wieder: Pflanze und baue aus, bevor die Gegner kommen.',
     'Motten fliegen geradewegs über das Labyrinth, also stell Bögen und Frost auch nahe ans Häuschen.',
     'Maulwürfe fressen sich durch eine Hecke, die einen viel kürzeren Weg versperrt: Stell dort lieber einen Turm hin.',
     'Ab Welle 6 öffnet sich der zweite Bau, also plane ein Labyrinth für beide Wege.',

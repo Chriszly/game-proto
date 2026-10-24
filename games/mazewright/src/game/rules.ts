@@ -213,3 +213,7 @@ export const hpScale = () => byDifficulty(0.8, 1, 1.25);
 /** Gold for clearing a wave, and for calling the next one before the field is clear. */
 export const waveReward = (wave: number) => 6 + wave;
 export const EARLY_BONUS = 5;
+/** A tower grows one second for every `GROW_RATE` gold it (or its upgrade) cost, and doesn't fire meanwhile. */
+export const GROW_RATE = 10;
+/** After wave 1, the next wave comes this many seconds after the last one is all out, unless the game is calm. */
+export const WAVE_TIMER = 20;

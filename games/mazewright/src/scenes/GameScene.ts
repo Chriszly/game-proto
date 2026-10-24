@@ -5,7 +5,7 @@ import { settings } from '../../../../shared/settings';
 import { SFX, SONG } from '../audio';
 import { distances, route } from '../game/grid';
 import { cellOf, MAPS, type MapDef } from '../game/maps';
-import { loadPouch, loadRecords, noteRecord, pouchOf, savePouch, type Records } from '../game/save';
+import { loadCalm, loadPouch, loadRecords, noteRecord, pouchOf, saveCalm, savePouch, type Records } from '../game/save';
 import {
   beamCells, bestFace, build, cabbagesLeft, canStartWave, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Tower,
@@ -64,6 +64,8 @@ export class GameScene extends Phaser.Scene {
   /** The tower whose panel is open, by its cell. */
   selected = -1;
   speed = 1;
+  /** Waves wait to be started (no wave timer). */
+  calm = false;
   /** Spots for the test: every button on screen by id, centred, in view pixels. */
   buttons: Record<string, Spot> = {};
   /** The grid's top-left corner and cell size in view pixels, for the test. */
@@ -106,6 +108,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.records = loadRecords();
+    this.calm = loadCalm();
     this.pouch = loadPouch();
     this.lawnG = this.add.graphics().setDepth(DEPTH.lawn);
     this.boardG = this.add.graphics().setDepth(DEPTH.board);
@@ -409,7 +412,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private start(map: MapDef) {
-    this.state = newGame(map.id);
+    this.state = newGame(map.id, this.calm);
     this.screen = 'play';
     this.tool = 'hedge';
     this.selected = -1;
@@ -488,7 +491,14 @@ export class GameScene extends Phaser.Scene {
     for (const tw of s.towers) {
       const m = this.mid(tw.cell);
       if (chewing.has(tw.cell)) art.chewedHedge(g, m.x, m.y, chewing.get(tw.cell)!);
-      else art.tower(g, tw.kind, m.x, m.y, tw.level, tw.aim);
+      else if (tw.grow > 0) {
+        // Still growing: faint, with a ring that fills as it grows.
+        art.tower(g, tw.kind, m.x, m.y, tw.level, tw.aim, 0.5);
+        g.lineStyle(3, C.gold, 1);
+        g.beginPath();
+        g.arc(m.x, m.y, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - tw.grow / tw.growFull));
+        g.strokePath();
+      } else art.tower(g, tw.kind, m.x, m.y, tw.level, tw.aim);
     }
     // The hovered tile: a ghost of the tool, its reach, or the no-entry ring.
     if (pv) {
@@ -669,7 +679,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const key = JSON.stringify([
       this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text,
-      s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.dist[s.gates[0]], s.dist[s.gates[1]], this.version],
+      s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.dist[s.gates[0]], s.dist[s.gates[1]], s.nextAt === null ? -1 : Math.ceil(s.nextAt - s.clock), this.version], this.calm,
     ]);
     if (key === this.hudKey) return;
     this.hudKey = key;
@@ -719,7 +729,8 @@ export class GameScene extends Phaser.Scene {
     const wx = vw - 16 - WAVE_BUTTON.w;
     const ready = canStartWave(s);
     const label = !ready ? t('incoming') : s.foes.length > 0 ? t('nextEarly', { n: 5 }) : t('startWave', { n: s.wave + 1 });
-    this.button('wave', wx, by, WAVE_BUTTON.w, WAVE_BUTTON.h, label, () => this.sendWave(), { enabled: ready, fill: C.gold });
+    const sub = s.nextAt !== null ? t('timer', { n: Math.max(0, Math.ceil(s.nextAt - s.clock)) }) : undefined;
+    this.button('wave', wx, by, WAVE_BUTTON.w, WAVE_BUTTON.h, label, () => this.sendWave(), { enabled: ready, fill: C.gold, sub, size: sub ? 13 : undefined });
     this.button('speed', wx - 8 - SPEED_BUTTON.w, by, SPEED_BUTTON.w, SPEED_BUTTON.h, t('speed', { n: this.speed }), () => (this.speed = this.speed === 1 ? 2 : 1), { on: this.speed === 2 });
   }
 
@@ -818,6 +829,14 @@ export class GameScene extends Phaser.Scene {
       this.hits.push({ x, y, w: CARDS.w, h: CARDS.h, onTap: () => this.start(map), enabled: true });
       this.buttons[`map-${map.id}`] = { x: cx, y: y + CARDS.h / 2, w: CARDS.w, h: CARDS.h };
     });
+    // Calm or the wave timer, at the top right.
+    const cw = 168;
+    g.fillStyle(C.bar, 1);
+    g.fillRoundedRect(fx + VIEW.w - 16 - cw, fy + 16, cw, 32, 7);
+    this.button('calm', fx + VIEW.w - 16 - cw, fy + 16, cw, 32, this.calm ? t('calmOn') : t('calmOff'), () => {
+      this.calm = !this.calm;
+      saveCalm(this.calm);
+    }, { on: this.calm, size: 13 });
     // The pouch: hedge and bow always come, and up to four of these.
     const kinds = TOWERS.filter((k) => !ALWAYS.includes(k));
     const picks = this.pouch.length - ALWAYS.length;

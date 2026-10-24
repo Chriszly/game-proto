@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  SECOND_GATE, SELL_BACK, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -29,6 +29,9 @@ export interface Tower {
   idle: number;
   /** How it picks a target (`AIMS`). */
   target: Aim;
+  /** Seconds it still grows (built or upgraded), out of `growFull`; it doesn't fire while it grows. */
+  grow: number;
+  growFull: number;
 }
 
 export interface Foe {
@@ -185,6 +188,9 @@ export interface Game {
   shots: Shot[];
   /** Foes still to come out, by the time they do. */
   spawns: Spawn[];
+  /** Calm: waves come only when started. Otherwise, after wave 1, the next comes by itself at `nextAt`. */
+  calm: boolean;
+  nextAt: number | null;
   /** Seconds of play so far. */
   clock: number;
   kills: number;
@@ -195,7 +201,7 @@ export interface Game {
   nextId: number;
 }
 
-export function newGame(mapId: string): Game {
+export function newGame(mapId: string, calm = false): Game {
   const map = MAPS.find((m) => m.id === mapId) ?? MAPS[0];
   const blocked = new Uint8Array(COLS * ROWS);
   for (const rock of map.rocks) blocked[cellIndex(rock)] = 1;
@@ -220,6 +226,8 @@ export function newGame(mapId: string): Game {
     foes: [],
     shots: [],
     spawns: [],
+    calm,
+    nextAt: null,
     clock: 0,
     kills: 0,
     leaks: 0,
@@ -280,11 +288,17 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
   }
   g.gold -= TOWER[kind].cost;
   const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
-  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first' });
+  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first', grow: 0, growFull: 0 });
+  growFor(g.towers[g.towers.length - 1], TOWER[kind].cost);
   g.blocked[cell] = 2;
   refield(g);
   g.events.push({ type: 'built', kind, cell });
   return null;
+}
+
+/** A tower starts growing for what it cost. */
+function growFor(tower: Tower, cost: number) {
+  tower.grow = tower.growFull = cost / GROW_RATE;
 }
 
 /** The route cells foes walk now, from both burrows. */
@@ -356,6 +370,7 @@ export function upgrade(g: Game, cell: number) {
   g.gold -= cost;
   tower.spent += cost;
   tower.level++;
+  growFor(tower, cost);
   g.events.push({ type: 'upgraded', cell });
   return true;
 }
@@ -387,6 +402,7 @@ export function startWave(g: Game) {
   if (!canStartWave(g)) return false;
   const early = g.foes.length > 0;
   if (early) g.gold += EARLY_BONUS;
+  g.nextAt = null;
   g.wave++;
   g.phase = 'wave';
   let at = g.clock + 0.5;
@@ -718,7 +734,7 @@ function empress(g: Game, f: Foe) {
 function boosts(g: Game) {
   const out = new Map<number, number>();
   for (const hive of g.towers) {
-    if (hive.kind !== 'beehive') continue;
+    if (hive.kind !== 'beehive' || hive.grow > 0) continue;
     const [hx, hy] = cellOf(hive.cell);
     const boost = TOWER.beehive.boost![hive.level - 1];
     for (const t of g.towers) {
@@ -750,6 +766,10 @@ function scorch(g: Game, f: Foe, damage: number) {
 
 function fire(g: Game, tower: Tower, dt: number, boost: number) {
   const def = TOWER[tower.kind];
+  if (tower.grow > 0) {
+    tower.grow = Math.max(0, tower.grow - dt);
+    return;
+  }
   tower.cooldown = Math.max(0, tower.cooldown - dt * (1 + boost));
   if (!attacks(tower.kind)) return;
   if (tower.kind === 'whirligig' && (tower.idle += dt) > 1) tower.spin = Math.max(0, tower.spin - dt / def.spinUp!);
@@ -863,6 +883,7 @@ function moveShot(g: Game, s: Shot, dt: number) {
 export function step(g: Game, dt: number) {
   if (over(g)) return;
   g.clock += dt;
+  if (g.nextAt !== null && g.clock >= g.nextAt) startWave(g);
   while (g.spawns.length && g.spawns[0].at <= g.clock) {
     const s = g.spawns.shift()!;
     spawn(g, s);
@@ -896,6 +917,8 @@ export function step(g: Game, dt: number) {
       g.events.push({ type: 'won' });
     } else g.phase = 'build';
   }
+  // The wave timer starts once the last wave is all out.
+  if (!g.calm && g.nextAt === null && g.wave >= 1 && canStartWave(g)) g.nextAt = g.clock + WAVE_TIMER;
 }
 
 /** The cells of the route from a burrow to the cottage, as foes would walk it now. */

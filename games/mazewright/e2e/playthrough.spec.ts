@@ -17,6 +17,8 @@ interface State {
   leaks: number;
   refusals: number;
   towers: { kind: string; cell: number }[];
+  /** Towers still growing. */
+  growing: number;
   foes: number;
   /** Steps from the first burrow to the cottage. */
   route: number;
@@ -60,6 +62,7 @@ function scene(page: Page) {
         leaks: s.state?.leaks,
         refusals: s.state?.refusals,
         towers: (s.state?.towers ?? []).map((t: any) => ({ kind: t.kind, cell: t.cell })),
+        growing: (s.state?.towers ?? []).filter((t: any) => t.grow > 0).length,
         foes: s.state?.foes.length,
         route: s.state?.dist[s.state.gates[0]],
       })),
@@ -211,6 +214,10 @@ test('plays the first round', async ({ page }, testInfo) => {
   const goldBefore = START_GOLD - 10 * COST.hedge - 3 * COST.bow;
   expect(s.gold).toBe(goldBefore);
   expect(s.refusals).toBe(1);
+
+  // A new tower grows a second per 10 gold before it fires: let the bows grow before the wave.
+  expect(s.growing, 'the bows are still growing').toBeGreaterThan(0);
+  expect(await play(5_000, async () => (await game.state()).growing === 0), 'bows grown').toBe(true);
 
   // Wave 1: six beetles walk the maze past the bows, and every one of them is beaten.
   await press('wave');
