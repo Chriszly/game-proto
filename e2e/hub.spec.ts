@@ -158,7 +158,8 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await dialog.getByRole('button', { name: 'Delete all progress' }).click();
-  expect((await page.evaluate(() => Object.keys(localStorage))).sort()).toEqual(['hub-settings', 'other-site-data']);
+  // The games each card last saw opened (shared/gameDates.ts) aren't progress, so they stay with the settings.
+  expect((await page.evaluate(() => Object.keys(localStorage))).sort()).toEqual(['hub-seen', 'hub-settings', 'other-site-data']);
   await expect(recent).toBeHidden();
 
   await dialog.getByRole('button', { name: 'Restore defaults' }).click();
@@ -193,7 +194,7 @@ test('hub game settings, continue playing and genre filter', async ({ page }, te
   await dialog.getByRole('button', { name: "Delete this game's progress" }).click();
   await expect(dialog).toContainText('Nothing is saved for this game yet.');
   await expect(dialog.getByRole('button', { name: "Delete this game's progress" })).toBeDisabled();
-  expect((await page.evaluate(() => Object.keys(localStorage))).sort()).toEqual(['deadline-best', 'hub-recent']);
+  expect((await page.evaluate(() => Object.keys(localStorage))).sort()).toEqual(['deadline-best', 'hub-recent', 'hub-seen']);
   await expect(recent).toBeHidden();
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(dialog).toBeHidden();
@@ -925,4 +926,34 @@ test('hub offers Wi-Fi only updates where the connection type is known', async (
   const updates = page.getByRole('dialog', { name: 'Settings' }).getByRole('group', { name: 'Updates' });
   await expect(updates.getByRole('button', { name: 'Wi-Fi only' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Wi-Fi only waits while you are on mobile data.', { exact: false })).toBeVisible();
+});
+
+// Each game's settings say when it was last updated, and its card shows Updated (or New) until the
+// game is opened on this device (shared/gameDates.ts).
+test('hub marks updated games until they are opened', async ({ page }, testInfo) => {
+  await page.goto('/');
+  // A first visit counts every game that isn't new as seen, so nothing shows Updated.
+  const seen = await page.evaluate(() => JSON.parse(localStorage.getItem('hub-seen') ?? '{}'));
+  await expect(page.locator('.game .badge.updated')).toHaveCount(0);
+  // Apothecary was last opened long ago, before its latest update.
+  await page.evaluate((list) => localStorage.setItem('hub-seen', JSON.stringify({ ...list, apothecary: '2000-01-01' })), seen);
+  await page.reload();
+  const card = page.locator('.game').filter({ has: page.getByRole('heading', { name: 'Apothecary' }) });
+  await expect(card.locator('.badge')).toHaveText('Updated');
+  await expect(card.locator('.badge')).toHaveAttribute('title', /^Updated \d{1,2} \w+ \d{4}$/);
+  testInfo.attach('badge', { body: await card.screenshot({ path: testInfo.outputPath('badge.png') }), contentType: 'image/png' });
+
+  await card.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Apothecary' });
+  await expect(dialog.getByText(/^Last updated \d{1,2} \w+ \d{4}$/)).toBeVisible();
+  testInfo.attach('last-updated', { body: await dialog.screenshot({ path: testInfo.outputPath('last-updated.png') }), contentType: 'image/png' });
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Opening the game clears its badge.
+  await card.getByRole('link').click();
+  await expect(page).toHaveURL(/\/games\/apothecary\/$/);
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.goto('/');
+  await expect(card).toBeVisible();
+  await expect(card.locator('.badge')).toHaveCount(0);
 });
