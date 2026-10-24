@@ -123,6 +123,7 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     genreFilter: false,
     // Desktop Chromium can't tell WiFi from mobile data, so Wi-Fi only isn't offered.
     updates: 'auto',
+    turn: 'turn',
   });
   await expect(dialog.getByRole('slider', { name: 'Music' })).toHaveValue('35');
 
