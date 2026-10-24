@@ -97,6 +97,10 @@ export const SFX = sounds({
   nettle: { wave: 'noise', freq: 5200, to: 3800, length: 0.07, volume: 0.07, gap: 200 },
   /** A toadstool ring shrinks a foe. */
   toadstool: { wave: 'sine', freq: 990, to: 330, length: 0.3, volume: 0.12, gap: 250 },
+  /** A honey pot starts drawing foes in. */
+  honey: { wave: 'sine', freq: 520, to: 780, length: 0.3, volume: 0.12, gap: 300 },
+  /** A bramble snare catches a foe. */
+  snare: { wave: 'noise', freq: 2600, to: 900, length: 0.14, volume: 0.14, gap: 150 },
   /** Apples dropped by an apple tree when a wave is held. */
   apples: { wave: 'triangle', freq: 784, arp: [0, 4], arpStep: 0.05, length: 0.12, volume: 0.14, gap: 120 },
   /** A frost pulse. */

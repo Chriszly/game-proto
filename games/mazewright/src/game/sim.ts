@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  GROW_RATE, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -60,6 +60,8 @@ export interface Foe {
   burnDps: number;
   poisonUntil: number;
   poisonDps: number;
+  /** The honey pot drawing it in, by id, or 0. */
+  lure: number;
   /** Stung still by a nettle (or a master frost) until this time; shrunk by a toadstool ring. */
   stunUntil: number;
   shrunk: boolean;
@@ -92,6 +94,16 @@ export interface Foe {
   /** The Empress: when she next lays a beetle and turns her shell, and the damage she took since. */
   empress: { eggAt: number; turnAt: number; taken: Partial<Record<DamageKind, number>> } | null;
   dead: boolean;
+}
+
+/** A garden trap on the lawn. A honey pot, once sprung, lures foes along `field` until `until`. */
+export interface Trap {
+  id: number;
+  kind: TrapKind;
+  cell: number;
+  sprung: boolean;
+  until: number;
+  field: Int16Array | null;
 }
 
 /** Cabbages dropped by a beaten foe, rolling back to the patch until a foe picks them up. */
@@ -136,6 +148,9 @@ export type GameEvent =
   | { type: 'pulse'; x: number; y: number; r: number }
   | { type: 'sting'; x: number; y: number; r: number }
   | { type: 'shrink'; x: number; y: number }
+  | { type: 'lured'; x: number; y: number }
+  | { type: 'burst'; x: number; y: number; r: number }
+  | { type: 'snared'; x: number; y: number }
   | { type: 'boom'; x: number; y: number; r: number }
   | { type: 'hit'; x: number; y: number }
   | { type: 'kill'; kind: FoeKind; x: number; y: number; gold: number }
@@ -186,6 +201,8 @@ export interface Game {
   maxLives: number;
   /** Cabbages lying loose on the lawn. */
   loose: Loose[];
+  /** Garden traps waiting on the lawn, or sprung. */
+  traps: Trap[];
   /** Per cell: 0 free, 1 a rock, 2 a tower. */
   blocked: Uint8Array;
   towers: Tower[];
@@ -227,6 +244,7 @@ export function newGame(mapId: string, calm = false): Game {
     lives,
     maxLives: lives,
     loose: [],
+    traps: [],
     blocked,
     towers: [],
     dist: distances(blocked, goal),
@@ -258,6 +276,7 @@ const over = (g: Game) => g.phase === 'won' || g.phase === 'lost';
 function refield(g: Game) {
   g.dist = distances(g.blocked, g.goal);
   g.homeDist = [distances(g.blocked, g.gates[0]), distances(g.blocked, g.gates[1])];
+  for (const trap of g.traps) if (trap.field) trap.field = distances(g.blocked, trap.cell);
 }
 
 /** All the cabbages still in the game: in the patch, carried and loose. */
@@ -272,7 +291,9 @@ function open(g: Game, dist: Int16Array) {
 /** Whether a `kind` tower can go on `cell` right now, and if not why. */
 export function canBuild(g: Game, cell: number, kind: TowerKind): Refusal | null {
   if (cell === g.goal || g.gates.includes(cell)) return 'reserved';
-  if (g.blocked[cell]) return 'taken';
+  if (g.blocked[cell] || g.traps.some((t) => t.cell === cell)) return 'taken';
+  // A trap never blocks, so it may go under foes and needs no way kept open.
+  if (TOWER[kind].trap) return g.gold < TOWER[kind].cost ? 'gold' : null;
   if (g.foes.some((f) => !f.dead && !FOE[f.kind].flies && (f.from === cell || f.to === cell))) return 'foe';
   if (g.loose.some((c) => c.from === cell || c.to === cell)) return 'foe';
   if (wouldBlock(g, cell)) return 'blocks';
@@ -297,6 +318,11 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
     return refusal;
   }
   g.gold -= TOWER[kind].cost;
+  if (TOWER[kind].trap) {
+    g.traps.push({ id: g.nextId++, kind: kind as TrapKind, cell, sprung: false, until: 0, field: null });
+    g.events.push({ type: 'built', kind, cell });
+    return null;
+  }
   const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
   g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first', grow: 0, growFull: 0 });
   growFor(g.towers[g.towers.length - 1], TOWER[kind].cost);
@@ -467,7 +493,7 @@ function makeFoe(g: Game, kind: FoeKind, hp: number, gate: 0 | 1, x: number, y: 
   const def = FOE[kind];
   const f: Foe = {
     id: g.nextId++, kind, hp, maxHp: hp, gate, x, y, from: cell, to: cell, t: 1, heading: 0, angle: 0,
-    slowUntil: 0, slowFactor: 1, stunUntil: 0, shrunk: false, blueFlame: false, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0, heat: 0,
+    slowUntil: 0, slowFactor: 1, lure: 0, stunUntil: 0, shrunk: false, blueFlame: false, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0, heat: 0,
     chew: null, chews: def.digs ? 1 : 0, king: false, big: 1, body: def.size, gold: def.gold, lives: def.lives,
     splits: def.splits ?? 0, shell: def.shell, carry: 0, home: false, empress: null, dead: false,
   };
@@ -601,7 +627,7 @@ function moveFoe(g: Game, f: Foe, dt: number) {
       grab(g, f);
       if (f.dead) return;
     }
-    if (f.chews > 0 && !f.home) {
+    if (f.chews > 0 && !f.home && !f.lure) {
       const hedge = hedgeToChew(g, f.from);
       if (hedge >= 0) {
         f.chew = { cell: hedge, left: CHEW_TIME };
@@ -613,7 +639,8 @@ function moveFoe(g: Game, f: Foe, dt: number) {
         break;
       }
     }
-    const step = nextStep(f.home ? g.homeDist[f.gate] : g.dist, f.from, f.heading);
+    const lure = f.lure ? g.traps.find((t) => t.id === f.lure)?.field : null;
+    const step = nextStep(lure ?? (f.home ? g.homeDist[f.gate] : g.dist), f.from, f.heading);
     if (!step) {
       f.t = 0;
       break;
@@ -941,6 +968,45 @@ function moveShot(g: Game, s: Shot, dt: number) {
   return true;
 }
 
+/** Honey pots lure and burst, and bramble snares catch the first foe to step on them. */
+function springTraps(g: Game) {
+  const ground = g.foes.filter((f) => !f.dead && !FOE[f.kind].flies);
+  for (const trap of g.traps) {
+    const at = centre(trap.cell);
+    if (trap.kind === 'snare') {
+      const caught = ground.find((f) => f.from === trap.cell);
+      if (!caught) continue;
+      caught.stunUntil = Math.max(caught.stunUntil, g.clock + TRAP.snare.hold);
+      hurt(g, caught, TRAP.snare.damage, 'sharp');
+      trap.until = -1;
+      g.events.push({ type: 'snared', x: at.x, y: at.y });
+      continue;
+    }
+    const near = ground.filter((f) => Math.hypot(f.x - at.x, f.y - at.y) <= TRAP.honey.lure);
+    if (!trap.sprung) {
+      if (near.length === 0) continue;
+      trap.sprung = true;
+      trap.until = g.clock + TRAP.honey.for;
+      trap.field = distances(g.blocked, trap.cell);
+      g.events.push({ type: 'lured', x: at.x, y: at.y });
+    }
+    if (g.clock < trap.until) {
+      for (const f of near) if (!f.lure) (f.lure = trap.id), (f.chew = null);
+      continue;
+    }
+    // It bursts: a blast round the pot, and the foes in it held still a moment.
+    for (const f of ground) {
+      if (f.lure === trap.id) f.lure = 0;
+      if (f.dead || Math.hypot(f.x - at.x, f.y - at.y) > TRAP.honey.burst + f.body) continue;
+      hurt(g, f, TRAP.honey.damage, 'blast');
+      f.stunUntil = Math.max(f.stunUntil, g.clock + TRAP.honey.stun);
+    }
+    trap.until = -1;
+    g.events.push({ type: 'burst', x: at.x, y: at.y, r: TRAP.honey.burst });
+  }
+  g.traps = g.traps.filter((t) => t.until !== -1);
+}
+
 /** Plays `dt` seconds. */
 export function step(g: Game, dt: number) {
   if (over(g)) return;
@@ -952,6 +1018,7 @@ export function step(g: Game, dt: number) {
   }
   for (const f of g.foes) if (!f.dead) moveFoe(g, f, dt);
   for (const f of g.foes) if (!f.dead) afflict(g, f, dt);
+  springTraps(g);
   g.loose = g.loose.filter((c) => !roll(g, c, dt));
   const boost = boosts(g);
   for (const t of g.towers) fire(g, t, dt, boost.get(t.id) ?? 0);

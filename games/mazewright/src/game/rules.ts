@@ -7,7 +7,7 @@ import { byDifficulty } from '../../../../shared/settings';
 export const COLS = 22;
 export const ROWS = 11;
 
-export const TOWERS = ['hedge', 'bow', 'frost', 'cannon', 'storm', 'crossbow', 'bonfire', 'puffball', 'sunglass', 'beehive', 'apple', 'whirligig', 'swallow', 'nettle', 'toadstool'] as const;
+export const TOWERS = ['hedge', 'bow', 'frost', 'cannon', 'storm', 'crossbow', 'bonfire', 'puffball', 'sunglass', 'beehive', 'apple', 'whirligig', 'swallow', 'nettle', 'toadstool', 'honey', 'snare'] as const;
 export type TowerKind = (typeof TOWERS)[number];
 
 /** The pouch: the towers a run can plant. Hedge and bow are always in it, with up to four more. */
@@ -80,6 +80,8 @@ export interface TowerDef {
   stun?: [number, number, number];
   /** Toadstool ring: the share of health a shrunk foe keeps. */
   shrink?: number;
+  /** A one-use garden trap (honey pot, bramble snare): it lies on the lawn and never blocks. */
+  trap?: boolean;
 }
 
 export const TOWER: Record<TowerKind, TowerDef> = {
@@ -98,10 +100,19 @@ export const TOWER: Record<TowerKind, TowerDef> = {
   swallow: { cost: 15, hits: 'sharp', range: 3.5, damage: [16, 26, 40], reload: [0.7, 0.65, 0.6], air: true, airOnly: true },
   nettle: { cost: 20, hits: 'sharp', range: 1.6, damage: [3, 5, 8], reload: [2.5, 2.3, 2.1], air: false, stun: [0.4, 0.5, 0.6] },
   toadstool: { cost: 30, hits: 'poison', range: 2.5, damage: [0, 0, 0], reload: [4, 3.5, 3], air: false, shrink: 0.75, aim: 'strongest' },
+  honey: { cost: 20, hits: 'blast', range: 2.5, damage: [0, 0, 0], reload: [1, 1, 1], air: false, trap: true },
+  snare: { cost: 15, hits: 'sharp', range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, trap: true },
 };
+export type TrapKind = 'honey' | 'snare';
+/**
+ * Garden traps. A honey pot draws the ground foes within `lure` cells (its reach) to it for `for`
+ * seconds once one comes close, then bursts: `damage` to the foes within `burst`, held still for
+ * `stun`. A bramble snare holds the first ground foe to step on it for `hold` seconds and pricks it.
+ */
+export const TRAP = { honey: { lure: 2.5, for: 3, burst: 1.3, damage: 45, stun: 1.5 }, snare: { hold: 3, damage: 12 } };
 
 /** Whether a tower kind shoots or pulses at foes (a hedge, beehive or apple tree doesn't). */
-export const attacks = (kind: TowerKind) => TOWER[kind].range > 0;
+export const attacks = (kind: TowerKind) => TOWER[kind].range > 0 && !TOWER[kind].trap;
 /** Whether a tower kind picks one target, so its aim can be set. */
 export const aims = (kind: TowerKind) => attacks(kind) && !TOWER[kind].faces && kind !== 'frost' && kind !== 'nettle';
 /** Whether a tower kind deals damage of its kind, so the tip names it. */

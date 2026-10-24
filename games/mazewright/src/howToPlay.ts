@@ -11,7 +11,7 @@ const en: HowToPlay = {
     { input: 'Speed button, F', action: 'Play at double speed' },
   ],
   loop: [
-    'Under the garden cards, pick up to four towers to take along with the hedge and the bow.',
+    'Under the garden cards, pick up to four towers or traps to take along with the hedge and the bow.',
     'Beetles come out of the burrows and walk the shortest free way to the cottage.',
     'Plant hedges and towers to make that way long, past as many towers as you can.',
     'A placement that would close the last way through is refused: one route must stay open from each burrow.',
@@ -23,6 +23,7 @@ const en: HowToPlay = {
     'A new tower grows a second per 10 gold before it fires, and an upgrade grows again: plant and upgrade before the foes come.',
     'Moths fly straight over the maze, so keep bows, frost or a swallow nest near the cottage too.',
     'A tower at level 3 can become a master, with a trick of its own: its panel tells which.',
+    'Traps never block: a honey pot draws foes into a crowd for a cannon, a snare holds one under a crossbow.',
     'Moles chew through a hedge that blocks a much shorter way: put a tower there instead.',
     'From wave 6 the second burrow opens, so plan a maze that serves both routes.',
     'Shells: stag beetles are waxy (heat does half, blast more), moles hairy (blast half, sharp more), weevils hard (sharp half, spark more). Poison goes through every shell.',
@@ -44,7 +45,7 @@ const de: HowToPlay = {
     { input: 'Tempo-Knopf, F', action: 'Mit doppeltem Tempo spielen' },
   ],
   loop: [
-    'Wähle unter den Gartenkarten bis zu vier Türme, die du neben Hecke und Bogen mitnimmst.',
+    'Wähle unter den Gartenkarten bis zu vier Türme oder Fallen, die du neben Hecke und Bogen mitnimmst.',
     'Käfer kommen aus den Bauen und laufen den kürzesten freien Weg zum Häuschen.',
     'Pflanze Hecken und Türme, damit dieser Weg lang wird und an möglichst vielen Türmen vorbeiführt.',
     'Was den letzten Weg schließen würde, wird abgelehnt: Von jedem Bau muss ein Weg offen bleiben.',
@@ -56,6 +57,7 @@ const de: HowToPlay = {
     'Ein neuer Turm wächst eine Sekunde je 10 Gold, bevor er schießt, und ein Ausbau wächst wieder: Pflanze und baue aus, bevor die Gegner kommen.',
     'Motten fliegen geradewegs über das Labyrinth, also stell Bögen, Frost oder ein Schwalbennest auch nahe ans Häuschen.',
     'Ein Turm auf Stufe 3 kann Meister werden, mit einem eigenen Kniff: Sein Feld verrät welchen.',
+    'Fallen versperren nie den Weg: Ein Honigtopf lockt Gegner für eine Kanone zusammen, eine Schlinge hält einen unter einer Armbrust fest.',
     'Maulwürfe fressen sich durch eine Hecke, die einen viel kürzeren Weg versperrt: Stell dort lieber einen Turm hin.',
     'Ab Welle 6 öffnet sich der zweite Bau, also plane ein Labyrinth für beide Wege.',
     'Schalen: Hirschkäfer sind wachsig (Hitze halb, Wucht mehr), Maulwürfe haarig (Wucht halb, Spitzes mehr), Rüsselkäfer hart (Spitzes halb, Funken mehr). Gift geht durch jede Schale.',

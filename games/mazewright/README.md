@@ -43,7 +43,7 @@ and the cottage in the corner. Rocks never move and nothing is planted on them. 
 the best wave reached in each garden.
 
 Under the cards is your **pouch**: the hedge and the bow always come along, and you pick up to four
-more of the other thirteen towers. The pick is kept for the next game.
+more of the other thirteen towers and the two garden traps. The pick is kept for the next game.
 
 ### Towers
 
@@ -88,6 +88,14 @@ tower cost.
 ![A master crossbow's panel, with nettle patches, toadstools and swallow nests in the maze](docs/screenshots/master.webp)
 
 ![A storm rod's bolt, bonfires, crossbows and beehives along a serpentine maze](docs/screenshots/towers.webp)
+
+**Garden traps.** Two pouch picks are one-use traps that lie on the lawn and never block, so they
+can go anywhere free, even under foes. A **honey pot** (20 gold) waits until a ground foe comes
+within 2.5 tiles, draws every ground foe in that reach off its way for 3 seconds, then bursts: 45
+Blast round it, and the foes there stand still for 1.5 seconds. A **snare** (15 gold) holds the
+first ground foe to step on it for 3 seconds and pricks it. Moths fly over both.
+
+![A honey pot drawing beetles off their way, and a snare on the route](docs/screenshots/traps.webp)
 
 **Damage kinds and shells.** Every tower's hits are Sharp (bow, crossbow, whirligig), Blast
 (cannon), Heat (bonfire, sunglass, and burning), Spark (storm rod), Cold (frost) or Poison

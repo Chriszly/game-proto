@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import type { FoeKind, TowerKind } from '../game/rules';
+import type { FoeKind, TowerKind, TrapKind } from '../game/rules';
 
 // The Hedge Garden in flat vector shapes: clean fills, soft drop shadows, no outlines. Every piece
 // is drawn with a Phaser Graphics at a cell's middle, in pixels, and sized for 40-pixel cells.
@@ -274,6 +274,32 @@ export function cottage(g: G, x: number, y: number) {
   g.fillStyle(0xffe6a0, 1);
   g.fillRect(x + 6, y, 5, 5);
   g.fillRect(x - 11, y, 5, 5);
+}
+
+/** A garden trap on the lawn: a honey pot (glowing once sprung) or a bramble snare. */
+export function trap(g: G, kind: TrapKind, x: number, y: number, alpha: number, sprung: boolean) {
+  if (kind === 'honey') {
+    g.fillStyle(C.shadow, 0.22 * alpha);
+    g.fillEllipse(x + 2, y + 9, 22, 8);
+    if (sprung) {
+      g.fillStyle(0xffd24a, 0.35);
+      g.fillCircle(x, y, 16);
+    }
+    g.fillStyle(0xc98a3a, alpha);
+    g.fillEllipse(x, y + 2, 20, 18);
+    g.fillStyle(0xe0a84e, alpha);
+    g.fillRect(x - 7, y - 9, 14, 4);
+    g.fillStyle(0xffc23a, alpha);
+    g.fillEllipse(x, y - 6, 12, 5);
+    g.fillTriangle(x + 3, y - 5, x + 7, y - 5, x + 5, y + 2);
+    return;
+  }
+  // Two crossed thorny bramble loops.
+  g.lineStyle(2.4, 0x6b3f2a, alpha);
+  g.strokeEllipse(x, y, 26, 14);
+  g.strokeEllipse(x, y, 14, 26);
+  g.fillStyle(0x3f8a35, alpha);
+  for (const [a, b] of [[-11, -2], [10, 3], [2, -11], [-3, 11]]) g.fillTriangle(x + a - 2, y + b, x + a + 2, y + b, x + a, y + b - 4);
 }
 
 /** A cabbage from the patch, `r` pixels round. */

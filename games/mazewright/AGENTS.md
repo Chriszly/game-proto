@@ -16,7 +16,7 @@ Implemented today:
 
 - Three gardens (`MAPS`): Meadow, Orchard and Millpond, each with two burrows, a cottage and fixed
   rocks. The picker shows each garden's best wave.
-- The pouch: under the garden cards, chips in two rows (`CHIPS.perRow`) for the thirteen towers besides `hedge` and `bow` (`ALWAYS`);
+- The pouch: under the garden cards, chips in two rows (`CHIPS.perRow`) for the thirteen towers and two traps besides `hedge` and `bow` (`ALWAYS`);
   up to `POUCH_PICKS` (4) are picked, saved, and make the run's tool bar (six buttons at most).
   `DEFAULT_POUCH` is today's four (hedge, bow, frost, cannon), which the playthrough uses.
 - Towers (`TOWERS`), levels 1 to 3 and the master level `MASTER` (4; hedges stay at 1), sold for 70% of what they cost: `hedge`
@@ -49,6 +49,13 @@ Implemented today:
   in the patch it adds to `lives` (event `saved`). `remaining` for a foe going home is its way to
   the burrow. The game is lost when `cabbagesLeft` is 0; building on a loose cabbage is refused
   like a foe.
+- Garden traps: `honey` and `snare` are pouch picks with `TowerDef.trap`. `build` puts them in
+  `g.traps` (`Trap`), not `towers`: they never block, need no open way and may lie under foes
+  (`canBuild`), and can't be upgraded or sold. `springTraps` (each `step`): a honey pot springs
+  when a ground foe is within `TRAP.honey.lure`, makes `field` (a walking field to its cell, made
+  again in `refield`) and sets `Foe.lure` on the ground foes in reach, which `moveFoe` follows
+  instead of `dist`; after `TRAP.honey.for` seconds it bursts (blast and `stunUntil`). A snare
+  catches the first ground foe whose `from` is its cell. Events `lured`, `burst`, `snared`.
 - Kings and big foes: a `Group` may carry `{ king: true }` (`KING`: hp, gold, lives, body, speed;
   `KING_TRICKS`: a king mole chews 3 hedges, a king woodlouse splits into 4, a king moth lets 3
   moths go) or `{ size: 2 | 3 }` (`BIG`). `makeFoe` and `offspring` build foes; a `Foe` keeps its
@@ -88,7 +95,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `traps.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -134,7 +141,7 @@ File map (`src/`):
   spread, and cooling), then fires every tower with its beehive `boosts`; `hurt` takes a damage kind
   through the foe's shell, `scorch` is a heat hit that also heats. Apple trees pay out with the wave reward.
 - `game/save.ts`: `loadRecords`, `noteRecord`, `loadPouch`, `savePouch`, `pouchOf` (hedge and bow,
-  then up to four more in tower order).
+  then up to four more in tower order, traps included).
 - `scenes/layout.ts`: `VIEW`, `CELL` (40), `GRID` (the grid's corner in the 960x540 frame), the bar
   height, the tool, wave, speed and Gardens buttons, `TIP_X` (the tool's use in the top bar), the
   tower panel (taller with Turn), the garden cards, the pouch's `CHIPS` (two rows, above the corner buttons)
@@ -170,6 +177,7 @@ motion holds the frost pulse and cannon boom rings at full size and the gold num
 | --- | --- |
 | `plant`, `build` | a hedge or another tower built (`built` event) |
 | `upgrade`, `sell` | `upgraded`, `sold` |
+| `honey`, `snare` | a honey pot springs, a snare catches a foe (a burst plays `cannon`) |
 | `bow`, `cannon`, `storm`, `crossbow`, `bonfire`, `puffball`, `sunglass`, `whirligig`, `swallow`, `nettle`, `toadstool` | a tower fires (`shot`), one per shot, rate-limited |
 | `apples` | an apple tree drops its gold (`apples`) |
 | `frost` | a frost pulse |
