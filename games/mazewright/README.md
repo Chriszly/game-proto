@@ -20,10 +20,18 @@ beetle already on the lawn) is refused with an orange no-entry ring.
 | Hover the lawn | See the new route before you plant |
 | Tap or click a tower | Open its panel: Upgrade, Sell (tap it twice), Aim for a tower that picks a target, and Turn for a bonfire or sunglass |
 | Start wave, or Space | Send the next wave; once the last one is all out, send the next early for 5 gold |
+| Wave timer / Calm (garden picker) | After wave 1 the next wave comes by itself 20 seconds after the last is all out; Calm waits for Start wave |
 | Speed button, or F | Play at double speed |
 | Gardens | Back to the garden picker |
 
 ![A planting that would close the last way through is refused](docs/screenshots/refused.webp)
+
+**Growing time.** A tower grows for a second per 10 gold it cost (a bow 1 second, a crossbow 3.5),
+and an upgrade grows again for what it cost; a growing tower is faint, with a gold ring that fills,
+and doesn't fire. Hedges grow in under half a second and block at once. So plant before the foes
+come, and upgrade between waves rather than in the thick of one.
+
+![Two cannons still growing, and the wave timer on the Start wave button](docs/screenshots/grow.webp)
 
 ### Gardens
 

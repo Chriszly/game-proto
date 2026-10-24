@@ -56,8 +56,12 @@ Implemented today:
   panel for the towers where `aims(kind)` holds; a `TowerDef.aim` sets the start (crossbow:
   strongest). Sell asks for a second tap within 2 seconds.
 - 20 waves (`WAVES`); the second burrow is used from wave `SECOND_GATE` (6), but both routes must
-  stay open all game. Waves start by hand (Start wave), and the next can be sent early for
-  `EARLY_BONUS` gold once the current one is all out.
+  stay open all game. Wave 1 starts by hand (Start wave). After it, unless `calm` (the picker's
+  toggle, saved), `nextAt` is set `WAVE_TIMER` (20) seconds after a wave is all out and `step`
+  starts the next then; Start wave still sends it early, for `EARLY_BONUS` gold while foes are out.
+- Growing (`GROW_RATE`): `build` and `upgrade` set a tower's `grow` (and `growFull`) to its cost
+  over 10 seconds; `fire` only counts it down while it grows, and a growing beehive boosts nothing.
+  The scene draws it faint with a filling ring.
 - Building during a wave is allowed; a tile with a foe on it (or walking onto it) is refused.
 - Hover preview: the routes as they would be with the hovered tile planted, or the no-entry ring.
 - Drag to plant a line; keys 1 to 6 (the pouch, in order), Space and F; a 2x speed button. The
@@ -78,7 +82,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -140,8 +144,8 @@ File map (`src/`):
   fills the whole view; the bars are pinned to its top and bottom and the grid sits in the middle of
   `viewFrame`. Tools start 176 pixels in, clear of the corner buttons.
 
-Save keys: `mazewright-best` (per garden: best wave and whether it was won) and `mazewright-pouch`
-(the towers picked).
+Save keys: `mazewright-best` (per garden: best wave and whether it was won), `mazewright-pouch`
+(the towers picked) and `mazewright-calm` (`'1'` when waves wait for Start wave).
 
 Test hooks (read by `e2e/playthrough.spec.ts` through `window.game.scene.getScene('Game')`):
 `screen`, `state` (the `Game`), `pouch`, `buttons` (every button by id, centred, in view pixels:

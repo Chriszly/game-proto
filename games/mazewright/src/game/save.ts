@@ -1,10 +1,28 @@
 import { MAPS } from './maps';
 import { ALWAYS, DEFAULT_POUCH, POUCH_PICKS, TOWERS, type TowerKind } from './rules';
 
-// Mazewright keeps two keys: the best wave reached and whether it was won, per garden, and the
-// towers picked for the pouch. A game in play is not saved; a reload starts at the garden picker.
+// Mazewright keeps three keys: the best wave reached and whether it was won, per garden, the
+// towers picked for the pouch, and whether waves wait to be started (calm). A game in play is not saved; a reload starts at the garden picker.
 const KEY = 'mazewright-best';
 const POUCH_KEY = 'mazewright-pouch';
+const CALM_KEY = 'mazewright-calm';
+
+/** Calm: waves come only when started, with no wave timer. */
+export function loadCalm() {
+  try {
+    return localStorage.getItem(CALM_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function saveCalm(calm: boolean) {
+  try {
+    localStorage.setItem(CALM_KEY, calm ? '1' : '0');
+  } catch {
+    // Storage can be full or blocked; the choice holds until the page is closed.
+  }
+}
 
 export type Records = Record<string, { wave: number; won: boolean }>;
 
