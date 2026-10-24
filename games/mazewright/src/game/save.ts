@@ -1,13 +1,14 @@
 import { MAPS } from './maps';
-import { ALWAYS, DEFAULT_POUCH, MODES, POUCH_PICKS, TOWERS, type Mode, type TowerKind } from './rules';
+import { ALWAYS, DEFAULT_POUCH, FREE, MODES, POUCH_PICKS, SEEDS, SLOT_SEEDS, TOWERS, type Mode, type TowerKind } from './rules';
 
-// Mazewright keeps four keys: each garden's records (best wave, win, stars, best time, Endless
-// best), the towers picked for the pouch, whether waves wait to be started (calm), and the way of
-// play picked (mode). A game in play is not saved; a reload starts at the garden picker.
+// Mazewright keeps five keys: each garden's records (best wave, win, stars, best time, Endless
+// best), the towers picked for the pouch, whether waves wait to be started (calm), the way of play
+// picked (mode), and the potting shed (seeds, the towers and master levels bought, extra slots). A game in play is not saved; a reload starts at the garden picker.
 const KEY = 'mazewright-best';
 const POUCH_KEY = 'mazewright-pouch';
 const CALM_KEY = 'mazewright-calm';
 const MODE_KEY = 'mazewright-mode';
+const SHED_KEY = 'mazewright-shed';
 
 /** Calm: waves come only when started, with no wave timer. */
 export function loadCalm() {
@@ -98,11 +99,55 @@ export function saveMode(mode: Mode) {
   }
 }
 
-/** The towers picked for the pouch: hedge and bow, then up to `POUCH_PICKS` more, in tower order. */
-export function loadPouch(): TowerKind[] {
+/** The potting shed: seeds to spend, the towers and master levels bought, and pouch slots bought (0 to 2). */
+export interface Shed {
+  seeds: number;
+  owned: TowerKind[];
+  masters: TowerKind[];
+  slots: number;
+}
+
+const kindsIn = (v: unknown) => (Array.isArray(v) ? TOWERS.filter((k) => v.includes(k)) : []);
+
+/**
+ * The shed as saved. A first load (no key yet) credits the gardens already played: what each would
+ * have paid, so a player from before the shed starts with seeds for what they have done.
+ */
+export function loadShed(records: Records): Shed {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SHED_KEY) ?? 'null');
+    if (saved && typeof saved === 'object') {
+      return { seeds: count(saved.seeds), owned: kindsIn(saved.owned), masters: kindsIn(saved.masters), slots: Math.min(SLOT_SEEDS.length, count(saved.slots)) };
+    }
+  } catch {
+    // A broken or blocked save starts with an empty shed.
+  }
+  let seeds = 0;
+  for (const r of Object.values(records)) {
+    if (r.won) seeds += SEEDS.win + SEEDS.star * r.stars;
+    else if (r.wave > 0) seeds += SEEDS.loss + Math.floor(r.wave / SEEDS.waves);
+  }
+  return { seeds, owned: [], masters: [], slots: 0 };
+}
+
+export function saveShed(shed: Shed) {
+  try {
+    localStorage.setItem(SHED_KEY, JSON.stringify(shed));
+  } catch {
+    // Storage can be full or blocked; the shed holds until the page is closed.
+  }
+}
+
+/** Whether a tower may go in the pouch: free, or bought. */
+export const usable = (shed: Shed, kind: TowerKind) => FREE.includes(kind) || shed.owned.includes(kind);
+/** How many towers may be picked besides hedge and bow. */
+export const picksOf = (shed: Shed) => POUCH_PICKS + shed.slots;
+
+/** The towers picked for the pouch: hedge and bow, then up to `picksOf(shed)` more, in tower order. */
+export function loadPouch(shed: Shed): TowerKind[] {
   try {
     const saved = JSON.parse(localStorage.getItem(POUCH_KEY) ?? 'null');
-    if (Array.isArray(saved)) return pouchOf(saved.filter((k): k is TowerKind => TOWERS.includes(k)));
+    if (Array.isArray(saved)) return pouchOf(saved.filter((k): k is TowerKind => TOWERS.includes(k)), shed);
   } catch {
     // A broken or blocked save keeps today's four.
   }
@@ -117,8 +162,8 @@ export function savePouch(pouch: TowerKind[]) {
   }
 }
 
-/** A pouch made from a list of kinds: hedge and bow first, the rest in tower order, at most four. */
-export function pouchOf(kinds: TowerKind[]): TowerKind[] {
-  const picks = TOWERS.filter((k) => !ALWAYS.includes(k) && kinds.includes(k)).slice(0, POUCH_PICKS);
+/** A pouch made from a list of kinds: hedge and bow first, then the usable rest in tower order, as many as the shed allows. */
+export function pouchOf(kinds: TowerKind[], shed: Shed): TowerKind[] {
+  const picks = TOWERS.filter((k) => !ALWAYS.includes(k) && kinds.includes(k) && usable(shed, k)).slice(0, picksOf(shed));
   return [...ALWAYS, ...picks];
 }

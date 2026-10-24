@@ -8,6 +8,8 @@ type G = Phaser.GameObjects.Graphics;
 
 export const C = {
   lawn: 0x8cc265,
+  /** A pouch chip for a tower still in the potting shed. */
+  locked: 0x6b5a44,
   lawn2: 0x7db457,
   lawnEdge: 0x6fa24c,
   hedge: 0x3f8a3a,

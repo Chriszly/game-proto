@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  GROW_RATE, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, SEEDS, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, SECOND_GATE, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -217,6 +217,8 @@ export interface Game {
   spawns: Spawn[];
   /** The way the garden is played (`MODES`). */
   mode: Mode;
+  /** The towers whose master level has been bought in the potting shed; null for all of them. */
+  masters: readonly TowerKind[] | null;
   /** Calm: waves come only when started. Otherwise, after wave 1, the next comes by itself at `nextAt`. */
   calm: boolean;
   nextAt: number | null;
@@ -230,7 +232,7 @@ export interface Game {
   nextId: number;
 }
 
-export function newGame(mapId: string, calm = false, mode: Mode = 'classic'): Game {
+export function newGame(mapId: string, calm = false, mode: Mode = 'classic', masters: readonly TowerKind[] | null = null): Game {
   const map = MAPS.find((m) => m.id === mapId) ?? MAPS[0];
   const blocked = new Uint8Array(COLS * ROWS);
   for (const rock of map.rocks) blocked[cellIndex(rock)] = 1;
@@ -257,6 +259,7 @@ export function newGame(mapId: string, calm = false, mode: Mode = 'classic'): Ga
     shots: [],
     spawns: [],
     mode,
+    masters,
     calm,
     nextAt: null,
     clock: 0,
@@ -397,14 +400,26 @@ export function turn(g: Game, cell: number) {
   return true;
 }
 
-/** The gold an upgrade of `tower` costs, or null when it can't go higher. */
-export function nextUpgrade(tower: Tower) {
-  return tower.kind === 'hedge' || tower.level >= MAX_LEVEL ? null : upgradeCost(tower.kind, tower.level);
+/** The gold an upgrade of `tower` costs, or null when it can't go higher (the master level waits for the potting shed). */
+export function nextUpgrade(tower: Tower, g?: Game) {
+  if (tower.kind === 'hedge' || tower.level >= MAX_LEVEL || TOWER[tower.kind].trap) return null;
+  if (tower.level === MASTER - 1 && !masterOpen(g, tower.kind)) return null;
+  return upgradeCost(tower.kind, tower.level);
+}
+
+/** Whether a kind's master level has been bought. */
+export const masterOpen = (g: Game | undefined, kind: TowerKind) => !g?.masters || g.masters.includes(kind);
+
+/** Seeds a finished game pays, by its result; none in Sandbox. */
+export function seedsFor(g: Game) {
+  if (g.mode === 'sandbox') return 0;
+  if (g.phase === 'won') return SEEDS.win + SEEDS.star * stars(g);
+  return SEEDS.loss + Math.floor(Math.max(0, g.wave - 1) / SEEDS.waves);
 }
 
 export function upgrade(g: Game, cell: number) {
   const tower = towerAt(g, cell);
-  const cost = tower && nextUpgrade(tower);
+  const cost = tower && nextUpgrade(tower, g);
   if (!tower || cost === null || cost === undefined || g.gold < cost || over(g)) return false;
   g.gold -= cost;
   tower.spent += cost;
