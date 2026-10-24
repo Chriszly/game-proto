@@ -109,6 +109,8 @@ export class GameScene extends Phaser.Scene {
   private rushing = false;
   /** A foe has taken a cabbage this game, so the banner telling what to do is not shown again. */
   private grabbed = false;
+  /** The season's weather has stopped a tower this game, so its banner is not shown again. */
+  private weathered = false;
 
   constructor() {
     super('Game');
@@ -296,6 +298,13 @@ export class GameScene extends Phaser.Scene {
       case 'shell':
         this.say(t('empressShell', { shell: t(`shell_${e.shell}` as TextKey) }));
         break;
+      case 'wilt':
+      case 'frozen':
+        SFX(e.type === 'wilt' ? 'wilt' : 'freeze');
+        // Told once a game: what the weather did, and what keeps it off.
+        if (!this.weathered) this.say(t(e.type === 'wilt' ? 'wiltFirst' : 'frostFirst'));
+        this.weathered = true;
+        break;
       case 'wave': {
         SFX('horn');
         const kinds = waveGroups(e.wave).map(([k]) => k);
@@ -476,6 +485,7 @@ export class GameScene extends Phaser.Scene {
     this.seen.clear();
     this.rushing = false;
     this.grabbed = false;
+    this.weathered = false;
     this.banner = null;
     this.changed();
     this.drawLawn();
@@ -573,6 +583,8 @@ export class GameScene extends Phaser.Scene {
         g.arc(m.x, m.y, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - tw.grow / tw.growFull));
         g.strokePath();
       } else art.tower(g, tw.kind, m.x, m.y, tw.level, tw.aim);
+      if (s.clock < tw.wiltUntil) art.wilted(g, m.x, m.y);
+      else if (s.clock < tw.frozenUntil) art.frozen(g, m.x, m.y);
     }
     // The hovered tile: a ghost of the tool, its reach, or the no-entry ring.
     if (pv) {

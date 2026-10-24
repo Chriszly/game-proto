@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  GROW_RATE, SEEDS, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, GATE_WAVES, BANK_REACH, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, SEEDS, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, GATE_WAVES, BANK_REACH, WEATHER, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -32,6 +32,11 @@ export interface Tower {
   /** Seconds it still grows (built or upgraded), out of `growFull`; it doesn't fire while it grows. */
   grow: number;
   growFull: number;
+  /** Season weather: when it last fired, the seconds it has fired nonstop, and wilted or frozen (not firing) until these times. */
+  lastShot: number;
+  busy: number;
+  wiltUntil: number;
+  frozenUntil: number;
 }
 
 export interface Foe {
@@ -166,6 +171,8 @@ export type GameEvent =
   | { type: 'split'; x: number; y: number }
   | { type: 'egg'; x: number; y: number }
   | { type: 'shell'; shell: ShellKind }
+  | { type: 'wilt'; cell: number }
+  | { type: 'frozen'; cell: number }
   | { type: 'wave'; wave: number; early: boolean }
   | { type: 'cleared'; wave: number; gold: number }
   | { type: 'won' }
@@ -228,6 +235,8 @@ export interface Game {
   /** Calm: waves come only when started. Otherwise, after wave 1, the next comes by itself at `nextAt`. */
   calm: boolean;
   nextAt: number | null;
+  /** Winter: when frost next freezes a tower, while a wave is in play. */
+  frostAt: number | null;
   /** Seconds of play so far. */
   clock: number;
   kills: number;
@@ -281,6 +290,7 @@ export function newGame(mapId: string, calm = false, mode: Mode = 'classic', mas
     masters,
     calm,
     nextAt: null,
+    frostAt: null,
     clock: 0,
     kills: 0,
     leaks: 0,
@@ -353,7 +363,7 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
     return null;
   }
   const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
-  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first', grow: 0, growFull: 0 });
+  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first', grow: 0, growFull: 0, lastShot: -Infinity, busy: 0, wiltUntil: 0, frozenUntil: 0 });
   growFor(g.towers[g.towers.length - 1], TOWER[kind].cost, g);
   g.blocked[cell] = 2;
   refield(g);
@@ -831,6 +841,42 @@ function empress(g: Game, f: Foe) {
   }
 }
 
+/** Whether a tower is wilted or frozen, so it neither reloads nor fires. */
+export const stopped = (g: Game, t: Tower) => g.clock < t.wiltUntil || g.clock < t.frozenUntil;
+
+/** Whether a grown `kind` tower's reach covers `cell`: a frost tower cools, a bonfire warms. */
+function covered(g: Game, cell: number, kind: TowerKind) {
+  const at = centre(cell);
+  return g.towers.some((o) => o.kind === kind && o.grow <= 0 && o.cell !== cell && Math.hypot(centre(o.cell).x - at.x, centre(o.cell).y - at.y) <= reachOf(g, o.cell, kind));
+}
+
+/** Summer: a tower firing nonstop for too long wilts for a while, unless a frost tower cools it. */
+function wilt(g: Game, t: Tower, dt: number) {
+  if (!attacks(t.kind) || t.kind === 'frost') return;
+  t.busy = g.clock - t.lastShot <= WEATHER.rest ? t.busy + dt : 0;
+  if (t.busy < WEATHER.wiltAfter) return;
+  t.busy = 0;
+  if (covered(g, t.cell, 'frost')) return;
+  t.wiltUntil = g.clock + WEATHER.wiltFor;
+  g.events.push({ type: 'wilt', cell: t.cell });
+}
+
+/** Winter: now and then during a wave, frost freezes a tower that no bonfire warms. */
+function frost(g: Game) {
+  if (g.phase !== 'wave') {
+    g.frostAt = null;
+    return;
+  }
+  g.frostAt ??= g.clock + WEATHER.frostEvery;
+  if (g.clock < g.frostAt) return;
+  g.frostAt += WEATHER.frostEvery;
+  const cold = g.towers.filter((t) => attacks(t.kind) && t.kind !== 'bonfire' && t.grow <= 0 && !stopped(g, t) && !covered(g, t.cell, 'bonfire'));
+  if (cold.length === 0) return;
+  const t = cold[Math.floor(Math.random() * cold.length)];
+  t.frozenUntil = g.clock + WEATHER.frostFor;
+  g.events.push({ type: 'frozen', cell: t.cell });
+}
+
 /** How much faster each tower reloads, from the beehives round it (the best one counts). */
 function boosts(g: Game) {
   const out = new Map<number, number>();
@@ -1085,7 +1131,14 @@ export function step(g: Game, dt: number) {
   springTraps(g);
   g.loose = g.loose.filter((c) => !roll(g, c, dt));
   const boost = boosts(g);
-  for (const t of g.towers) fire(g, t, dt, boost.get(t.id) ?? 0);
+  for (const t of g.towers) {
+    if (stopped(g, t)) continue;
+    const before = t.cooldown;
+    fire(g, t, dt, boost.get(t.id) ?? 0);
+    if (t.cooldown > before) t.lastShot = g.clock;
+    if (g.map.season === 'summer') wilt(g, t, dt);
+  }
+  if (g.map.season === 'winter') frost(g);
   g.shots = g.shots.filter((s) => !moveShot(g, s, dt));
   g.foes = g.foes.filter((f) => !f.dead);
   if (cabbagesLeft(g) <= 0) {

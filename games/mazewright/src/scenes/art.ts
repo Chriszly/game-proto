@@ -295,6 +295,27 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
   }
 }
 
+/** Over a tower wilted in the summer heat: a brown wash and a drooping leaf. */
+export function wilted(g: G, x: number, y: number) {
+  g.fillStyle(0x8a5a2b, 0.45);
+  g.fillCircle(x, y, 17);
+  g.fillStyle(0xc9a45c, 1);
+  g.fillEllipse(x + 9, y - 12, 10, 6);
+  g.fillStyle(0x7a4a22, 1);
+  g.fillRect(x + 4, y - 13, 5, 2);
+}
+
+/** Over a tower frozen by winter frost: a cold wash and a white spark. */
+export function frozen(g: G, x: number, y: number) {
+  g.fillStyle(0xbfe6ff, 0.75);
+  g.fillRoundedRect(x - 17, y - 17, 34, 34, 8);
+  g.lineStyle(2, 0xffffff, 0.95);
+  g.strokeRoundedRect(x - 17, y - 17, 34, 34, 8);
+  g.fillStyle(0xffffff, 0.95);
+  g.fillRect(x + 7, y - 15, 2, 10);
+  g.fillRect(x + 3, y - 11, 10, 2);
+}
+
 export function burrow(g: G, x: number, y: number, open: boolean) {
   shadow(g, () => g.fillEllipse(x + 2, y + 5, 36, 26));
   g.fillStyle(C.soil, 1);

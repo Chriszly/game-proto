@@ -152,6 +152,8 @@ const de: Translation<typeof en> = {
   waveBanner: 'Welle {n}',
   cleared: 'Welle {n} gehalten! +{gold} Gold',
   secondBurrow: 'Der zweite Bau öffnet sich: Jetzt werden beide Wege genutzt',
+  wiltFirst: 'Ein Turm ist in der Sommerhitze verwelkt: Ein Frostturm in der Nähe hält Türme kühl',
+  frostFirst: 'Frost hat einen Turm eingefroren: Ein Feuerkorb in der Nähe hält Türme warm',
   burrowOpens: 'Ein weiterer Bau öffnet sich',
   chewing: 'Ein Maulwurf frisst sich durch eine Hecke!',
   new_beetle: 'Käfer laufen den kürzesten Weg zum Häuschen',

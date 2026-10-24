@@ -240,6 +240,13 @@ export const GATE_WAVES = [1, 6, 10, 13, 15, 17];
 export const SECOND_GATE = GATE_WAVES[1];
 /** A tower on a raised bank reaches this much further. */
 export const BANK_REACH = 1.25;
+/**
+ * Season weather. Summer: a tower that fires nonstop for `wiltAfter` seconds (with no break over
+ * `rest`) wilts and stops for `wiltFor`, unless a frost tower's reach covers it. Winter: every
+ * `frostEvery` seconds of a wave, frost freezes a random tower for `frostFor`, unless a bonfire's
+ * reach covers it.
+ */
+export const WEATHER = { wiltAfter: 8, rest: 1.5, wiltFor: 3, frostEvery: 14, frostFor: 4 };
 /** Seconds between two groups of a wave. */
 export const GROUP_GAP = 2;
 
