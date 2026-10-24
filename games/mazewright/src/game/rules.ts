@@ -16,8 +16,31 @@ export const POUCH_PICKS = 4;
 /** Today's four, the pouch of a first game. */
 export const DEFAULT_POUCH: TowerKind[] = ['hedge', 'bow', 'frost', 'cannon'];
 
+/** What a tower's hits are made of: shells resist some kinds and crack under others. */
+export const DAMAGE_KINDS = ['sharp', 'blast', 'heat', 'spark', 'cold', 'poison'] as const;
+export type DamageKind = (typeof DAMAGE_KINDS)[number];
+
+/** Foe shells and how much of each damage kind gets through (1 when not listed). */
+export const SHELLS = {
+  hard: { sharp: 0.5, spark: 1.5 },
+  waxy: { heat: 0.5, blast: 1.5 },
+  hairy: { blast: 0.5, sharp: 1.5 },
+} as const satisfies Record<string, Partial<Record<DamageKind, number>>>;
+export type ShellKind = keyof typeof SHELLS;
+export const shellFactor = (shell: ShellKind | undefined, kind: DamageKind) =>
+  (shell && (SHELLS[shell] as Partial<Record<DamageKind, number>>)[kind]) ?? 1;
+
+/** Heat: each sunglass or bonfire hit adds `HEAT.hit`, it cools by `HEAT.cool` a second, and a fully heated foe takes `HEAT.boost` times heat damage. */
+export const HEAT = { hit: 0.25, cool: 0.15, boost: 2 };
+
+/** How a tower picks its target among the foes in reach. */
+export const AIMS = ['first', 'last', 'strongest', 'weakest', 'fliers'] as const;
+export type Aim = (typeof AIMS)[number];
+
 export interface TowerDef {
   cost: number;
+  /** What its hits are made of. */
+  hits: DamageKind;
   /** Reach in cells; 0 for a tower that never shoots (hedge, beehive, apple tree). */
   range: number;
   /** Damage per shot (frost: per pulse), by level 1 to 3. */
@@ -47,27 +70,29 @@ export interface TowerDef {
   /** Whirligig: the reload it spins up to, by level, and the seconds of firing it takes. */
   spinTo?: [number, number, number];
   spinUp?: number;
-  /** Crossbow: aims at the toughest foe in reach rather than the one closest to the cottage. */
-  strongest?: boolean;
+  /** The aim a new tower starts with (First unless set). */
+  aim?: Aim;
 }
 
 export const TOWER: Record<TowerKind, TowerDef> = {
-  hedge: { cost: 4, range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false },
-  bow: { cost: 10, range: 3, damage: [6, 10, 16], reload: [0.6, 0.55, 0.5], air: true },
-  frost: { cost: 15, range: 2.5, damage: [2, 3, 5], reload: [1, 1, 1], air: true, slow: [0.55, 0.5, 0.42], slowFor: 1.5 },
-  cannon: { cost: 25, range: 3.5, damage: [16, 26, 40], reload: [1.6, 1.5, 1.4], air: false, splash: 1 },
-  storm: { cost: 30, range: 3, damage: [14, 22, 34], reload: [1.4, 1.3, 1.2], air: true, chain: [4, 5, 6], jump: 1.5 },
-  crossbow: { cost: 35, range: 7, damage: [50, 80, 125], reload: [2.5, 2.3, 2.1], air: true, strongest: true },
-  bonfire: { cost: 25, range: 2.2, damage: [4, 7, 11], reload: [0.5, 0.5, 0.5], air: false, dot: [6, 9, 14], dotFor: 2, faces: true, cone: 0.7 },
-  puffball: { cost: 20, range: 2.5, damage: [0, 0, 0], reload: [1.2, 1.1, 1], air: true, dot: [4, 6, 9], dotFor: 4 },
-  sunglass: { cost: 40, range: 22, damage: [22, 34, 50], reload: [1.4, 1.3, 1.2], air: true, faces: true },
-  beehive: { cost: 30, range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, boost: [0.2, 0.3, 0.4] },
-  apple: { cost: 30, range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, apples: [5, 8, 12] },
-  whirligig: { cost: 20, range: 2.5, damage: [3, 4, 6], reload: [0.6, 0.6, 0.6], air: true, spinTo: [0.15, 0.13, 0.11], spinUp: 3 },
+  hedge: { cost: 4, hits: 'sharp', range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false },
+  bow: { cost: 10, hits: 'sharp', range: 3, damage: [6, 10, 16], reload: [0.6, 0.55, 0.5], air: true },
+  frost: { cost: 15, hits: 'cold', range: 2.5, damage: [2, 3, 5], reload: [1, 1, 1], air: true, slow: [0.55, 0.5, 0.42], slowFor: 1.5 },
+  cannon: { cost: 25, hits: 'blast', range: 3.5, damage: [16, 26, 40], reload: [1.6, 1.5, 1.4], air: false, splash: 1 },
+  storm: { cost: 30, hits: 'spark', range: 3, damage: [14, 22, 34], reload: [1.4, 1.3, 1.2], air: true, chain: [4, 5, 6], jump: 1.5 },
+  crossbow: { cost: 35, hits: 'sharp', range: 7, damage: [50, 80, 125], reload: [2.5, 2.3, 2.1], air: true, aim: 'strongest' },
+  bonfire: { cost: 25, hits: 'heat', range: 2.2, damage: [4, 7, 11], reload: [0.5, 0.5, 0.5], air: false, dot: [6, 9, 14], dotFor: 2, faces: true, cone: 0.7 },
+  puffball: { cost: 20, hits: 'poison', range: 2.5, damage: [0, 0, 0], reload: [1.2, 1.1, 1], air: true, dot: [4, 6, 9], dotFor: 4 },
+  sunglass: { cost: 40, hits: 'heat', range: 22, damage: [22, 34, 50], reload: [1.4, 1.3, 1.2], air: true, faces: true },
+  beehive: { cost: 30, hits: 'sharp', range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, boost: [0.2, 0.3, 0.4] },
+  apple: { cost: 30, hits: 'sharp', range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, apples: [5, 8, 12] },
+  whirligig: { cost: 20, hits: 'sharp', range: 2.5, damage: [3, 4, 6], reload: [0.6, 0.6, 0.6], air: true, spinTo: [0.15, 0.13, 0.11], spinUp: 3 },
 };
 
 /** Whether a tower kind shoots or pulses at foes (a hedge, beehive or apple tree doesn't). */
 export const attacks = (kind: TowerKind) => TOWER[kind].range > 0;
+/** Whether a tower kind picks one target, so its aim can be set. */
+export const aims = (kind: TowerKind) => attacks(kind) && !TOWER[kind].faces && kind !== 'frost';
 
 /** The highest level a tower reaches; hedges stay at 1. */
 export const MAX_LEVEL = 3;
@@ -97,8 +122,8 @@ export interface FoeDef {
   flies?: boolean;
   /** Moles chew through a hedge that stands in the way of a much shorter route. */
   digs?: boolean;
-  /** Weevils: each hit does this much less damage (at least 1). Burn and poison go through it. */
-  armour?: number;
+  /** Its shell, which resists some damage kinds (`SHELLS`). */
+  shell?: ShellKind;
   /** Its body's radius in cells, for drawing and for cannon splash. */
   size: number;
 }
@@ -106,10 +131,10 @@ export interface FoeDef {
 export const FOE: Record<FoeKind, FoeDef> = {
   beetle: { hp: 30, speed: 1.6, gold: 2, lives: 1, gap: 1.1, size: 0.22 },
   ladybird: { hp: 18, speed: 2.6, gold: 2, lives: 1, gap: 0.6, size: 0.17 },
-  stag: { hp: 90, speed: 1, gold: 5, lives: 2, gap: 1.6, size: 0.3 },
+  stag: { hp: 90, speed: 1, gold: 5, lives: 2, gap: 1.6, shell: 'waxy', size: 0.3 },
   moth: { hp: 22, speed: 1.4, gold: 3, lives: 1, gap: 1, flies: true, size: 0.22 },
-  mole: { hp: 50, speed: 1.3, gold: 4, lives: 1, gap: 1.4, digs: true, size: 0.26 },
-  weevil: { hp: 55, speed: 1.2, gold: 4, lives: 1, gap: 1.2, armour: 5, size: 0.24 },
+  mole: { hp: 50, speed: 1.3, gold: 4, lives: 1, gap: 1.4, digs: true, shell: 'hairy', size: 0.26 },
+  weevil: { hp: 55, speed: 1.2, gold: 4, lives: 1, gap: 1.2, shell: 'hard', size: 0.24 },
   queen: { hp: 600, speed: 0.8, gold: 40, lives: 5, gap: 2, size: 0.42 },
 };
 

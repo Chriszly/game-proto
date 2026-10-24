@@ -1,9 +1,9 @@
 import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
-  attacks, CHEW_GAIN, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
+  AIMS, attacks, CHEW_GAIN, HEAT, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
   SECOND_GATE, SELL_BACK, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
-  type FoeKind, type ShotKind, type TowerKind,
+  type Aim, type DamageKind, type FoeKind, type ShotKind, type TowerKind,
 } from './rules';
 
 // A game of Mazewright, with no Phaser: the grid, the towers, the foes, the shots and the waves.
@@ -27,6 +27,8 @@ export interface Tower {
   /** Whirligig: how far it has spun up (0 to 1), and the seconds since its last shot. */
   spin: number;
   idle: number;
+  /** How it picks a target (`AIMS`). */
+  target: Aim;
 }
 
 export interface Foe {
@@ -58,6 +60,8 @@ export interface Foe {
   /** Puffball poison spreads to foes walking close; spores caught that way spread no further. */
   spreads: boolean;
   spreadAt: number;
+  /** Sunglass and bonfire heat, 0 to 1; a fully heated foe takes double heat damage. */
+  heat: number;
   /** A mole chewing a hedge: the hedge's cell and the seconds left. */
   chew: { cell: number; left: number } | null;
   /** A mole chews one hedge in its life. */
@@ -75,6 +79,7 @@ export interface Shot {
   ty: number;
   damage: number;
   splash: number;
+  hits: DamageKind;
 }
 
 export type GameEvent =
@@ -208,7 +213,7 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
   }
   g.gold -= TOWER[kind].cost;
   const face = TOWER[kind].faces ? bestFace(g, cell, kind) : 0;
-  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0 });
+  g.towers.push({ id: g.nextId++, kind, cell, level: 1, spent: TOWER[kind].cost, cooldown: 0, aim: Math.atan2(DIRS[face][1], DIRS[face][0]), face, spin: 0, idle: 0, target: TOWER[kind].aim ?? 'first' });
   g.blocked[cell] = 2;
   g.dist = distances(g.blocked, g.goal);
   g.events.push({ type: 'built', kind, cell });
@@ -253,6 +258,14 @@ export function bestFace(g: Game, cell: number, kind: TowerKind) {
     if (n > most) (most = n), (best = face);
   });
   return best;
+}
+
+/** Moves a tower's aim on to the next way of picking a target. */
+export function setAim(g: Game, cell: number) {
+  const tower = towerAt(g, cell);
+  if (!tower || over(g)) return false;
+  tower.target = AIMS[(AIMS.indexOf(tower.target) + 1) % AIMS.length];
+  return true;
 }
 
 /** Turns a bonfire or sunglass a quarter round, clockwise. */
@@ -330,7 +343,7 @@ function spawn(g: Game, kind: FoeKind, gate: 0 | 1, wave: number) {
   const { x, y } = centre(cell);
   g.foes.push({
     id: g.nextId++, kind, hp, maxHp: hp, gate, x, y, from: cell, to: cell, t: 1, heading: 0, angle: 0,
-    slowUntil: 0, slowFactor: 1, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0,
+    slowUntil: 0, slowFactor: 1, burnUntil: 0, burnDps: 0, poisonUntil: 0, poisonDps: 0, spreads: false, spreadAt: 0, heat: 0,
     chew: null, chewed: false, dead: false,
   });
 }
@@ -371,11 +384,12 @@ function hedgeToChew(g: Game, from: number) {
   return best;
 }
 
-/** Takes `damage` off a foe; armour blunts each hit, but not burning or poison (`through`). */
-function hurt(g: Game, f: Foe, damage: number, through = false) {
+/** Takes `damage` of a kind off a foe: its shell lets some of it through, and heat doubles on a glowing foe. */
+function hurt(g: Game, f: Foe, damage: number, kind: DamageKind) {
   if (f.dead) return;
-  const armour = FOE[f.kind].armour;
-  f.hp -= armour && !through ? Math.max(1, damage - armour) : damage;
+  let dealt = damage * shellFactor(FOE[f.kind].shell, kind);
+  if (kind === 'heat' && f.heat >= 1) dealt *= HEAT.boost;
+  f.hp -= dealt;
   if (f.hp > 0) return;
   f.dead = true;
   const gold = FOE[f.kind].gold;
@@ -451,9 +465,10 @@ function leak(g: Game, f: Foe) {
 
 /** Burning and poison, and poison spreading to the foes walking close. */
 function afflict(g: Game, f: Foe, dt: number) {
-  if (g.clock < f.burnUntil) hurt(g, f, f.burnDps * dt, true);
+  f.heat = Math.max(0, f.heat - HEAT.cool * dt);
+  if (g.clock < f.burnUntil) hurt(g, f, f.burnDps * dt, 'heat');
   if (g.clock >= f.poisonUntil) return;
-  hurt(g, f, f.poisonDps * dt, true);
+  hurt(g, f, f.poisonDps * dt, 'poison');
   if (!f.spreads || g.clock < f.spreadAt) return;
   f.spreadAt = g.clock + SPREAD.every;
   for (const o of g.foes) {
@@ -479,11 +494,23 @@ function boosts(g: Game) {
   return out;
 }
 
-/** The foe a tower aims at: the closest to the cottage, or for a crossbow the toughest. */
-function pick(g: Game, foes: Foe[], strongest = false) {
+/** The foe a tower aims at among `foes`, by its aim. */
+function pick(g: Game, foes: Foe[], aim: Aim = 'first') {
+  if (aim === 'fliers') {
+    const fliers = foes.filter((f) => FOE[f.kind].flies);
+    if (fliers.length) foes = fliers;
+    aim = 'first';
+  }
+  const score = (f: Foe) => (aim === 'first' ? -remaining(g, f) : aim === 'last' ? remaining(g, f) : aim === 'strongest' ? f.hp : -f.hp);
   let target = foes[0];
-  for (const f of foes) if (strongest ? f.hp > target.hp : remaining(g, f) < remaining(g, target)) target = f;
+  for (const f of foes) if (score(f) > score(target)) target = f;
   return target;
+}
+
+/** A sunglass or bonfire hit: heat damage, and heat that builds up on the foe. */
+function scorch(g: Game, f: Foe, damage: number) {
+  hurt(g, f, damage, 'heat');
+  f.heat = Math.min(1, f.heat + HEAT.hit);
 }
 
 function fire(g: Game, tower: Tower, dt: number, boost: number) {
@@ -501,7 +528,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     const hit = g.foes.filter((f) => reaches(f) && lit.has(Math.floor(f.y) * COLS + Math.floor(f.x)));
     if (hit.length === 0) return;
     tower.cooldown = def.reload[lvl];
-    for (const f of hit) hurt(g, f, def.damage[lvl]);
+    for (const f of hit) scorch(g, f, def.damage[lvl]);
     const end = cells.length ? centre(cells[cells.length - 1]) : { x, y };
     const [dx, dy] = DIRS[tower.face];
     g.events.push({ type: 'beam', x, y, x2: end.x + dx * 0.5, y2: end.y + dy * 0.5 }, { type: 'shot', kind: 'sunglass' });
@@ -512,7 +539,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     if (hit.length === 0) return;
     tower.cooldown = def.reload[lvl];
     for (const f of hit) {
-      hurt(g, f, def.damage[lvl]);
+      scorch(g, f, def.damage[lvl]);
       f.burnUntil = g.clock + def.dotFor!;
       f.burnDps = def.dot![lvl];
     }
@@ -526,14 +553,14 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     for (const f of inRange) {
       f.slowUntil = g.clock + def.slowFor!;
       f.slowFactor = def.slow![lvl];
-      hurt(g, f, def.damage[lvl]);
+      hurt(g, f, def.damage[lvl], 'cold');
     }
     g.events.push({ type: 'pulse', x, y, r: def.range });
     return;
   }
   if (tower.kind === 'storm') {
     // The bolt strikes the foe closest to the cottage, then jumps on to the nearest foe not yet struck.
-    const struck = [pick(g, inRange)];
+    const struck = [pick(g, inRange, tower.target)];
     while (struck.length < def.chain![lvl]) {
       const last = struck[struck.length - 1];
       let next: Foe | undefined;
@@ -546,7 +573,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
       struck.push(next);
     }
     const points = [{ x, y }, ...struck.map((f) => ({ x: f.x, y: f.y }))];
-    for (const f of struck) hurt(g, f, def.damage[lvl]);
+    for (const f of struck) hurt(g, f, def.damage[lvl], 'spark');
     tower.aim = Math.atan2(points[1].y - y, points[1].x - x);
     g.events.push({ type: 'bolt', points }, { type: 'shot', kind: 'storm' });
     return;
@@ -554,14 +581,14 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
   if (tower.kind === 'puffball') {
     // Spores for a foe not yet poisoned, if there is one.
     const clean = inRange.filter((f) => f.poisonUntil <= g.clock);
-    const target = pick(g, clean.length ? clean : inRange);
+    const target = pick(g, clean.length ? clean : inRange, tower.target);
     target.poisonUntil = g.clock + def.dotFor!;
     target.poisonDps = def.dot![lvl];
     target.spreads = true;
     g.events.push({ type: 'puff', x: target.x, y: target.y }, { type: 'shot', kind: 'puffball' });
     return;
   }
-  const target = pick(g, inRange, def.strongest);
+  const target = pick(g, inRange, tower.target);
   tower.aim = Math.atan2(target.y - y, target.x - x);
   if (tower.kind === 'whirligig') {
     tower.cooldown = def.reload[lvl] + (def.spinTo![lvl] - def.reload[lvl]) * tower.spin;
@@ -569,7 +596,7 @@ function fire(g: Game, tower: Tower, dt: number, boost: number) {
     tower.idle = 0;
   }
   const kind = tower.kind as ShotKind;
-  g.shots.push({ kind, x, y, target: target.id, tx: target.x, ty: target.y, damage: def.damage[lvl], splash: def.splash ?? 0 });
+  g.shots.push({ kind, x, y, target: target.id, tx: target.x, ty: target.y, damage: def.damage[lvl], splash: def.splash ?? 0, hits: def.hits });
   g.events.push({ type: 'shot', kind: tower.kind });
 }
 
@@ -587,11 +614,11 @@ function moveShot(g: Game, s: Shot, dt: number) {
   }
   if (s.kind !== 'cannon') {
     if (target) {
-      hurt(g, target, s.damage);
+      hurt(g, target, s.damage, s.hits);
       g.events.push({ type: 'hit', x: s.tx, y: s.ty });
     }
   } else {
-    for (const f of g.foes) if (!f.dead && !FOE[f.kind].flies && Math.hypot(f.x - s.tx, f.y - s.ty) <= s.splash + FOE[f.kind].size) hurt(g, f, s.damage);
+    for (const f of g.foes) if (!f.dead && !FOE[f.kind].flies && Math.hypot(f.x - s.tx, f.y - s.ty) <= s.splash + FOE[f.kind].size) hurt(g, f, s.damage, s.hits);
     g.events.push({ type: 'boom', x: s.tx, y: s.ty, r: s.splash });
   }
   return true;

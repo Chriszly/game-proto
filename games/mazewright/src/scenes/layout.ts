@@ -20,8 +20,8 @@ export const WAVE_BUTTON = { w: 172, h: 34 };
 export const SPEED_BUTTON = { w: 52, h: 34 };
 /** The Gardens button, at the right of the top bar. */
 export const BACK_BUTTON = { w: 104, h: 30 };
-/** The panel that opens over a picked tower; a tower that points one way gets a Turn button too. */
-export const PANEL = { w: 172, h: 98, turnH: 130 };
+/** The panel that opens over a picked tower; one more row for the Aim or Turn button. */
+export const PANEL = { w: 172, h: 98, row: 32 };
 /** The garden cards on the picker, by their centres in the frame. */
 export const CARDS = { xs: [190, 480, 770], y: 262, w: 260, h: 232 };
 /** The pouch's tower chips under the cards, centred in the frame and clear of the corner buttons. */

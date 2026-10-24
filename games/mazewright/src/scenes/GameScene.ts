@@ -7,11 +7,11 @@ import { distances, route } from '../game/grid';
 import { cellOf, MAPS, type MapDef } from '../game/maps';
 import { loadPouch, loadRecords, noteRecord, pouchOf, savePouch, type Records } from '../game/save';
 import {
-  beamCells, bestFace, build, canStartWave, newGame, nextUpgrade, sell, sellValue, startWave, step, towerAt, turn, upgrade, wouldBlock,
+  beamCells, bestFace, build, canStartWave, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
-import { ALWAYS, COLS, FOE, POUCH_PICKS, ROWS, SECOND_GATE, TOWER, TOWERS, WAVES, type FoeKind, type TowerKind } from '../game/rules';
+import { aims, ALWAYS, attacks, COLS, FOE, POUCH_PICKS, ROWS, SECOND_GATE, TOWER, TOWERS, WAVES, type FoeKind, type TowerKind } from '../game/rules';
 import { t, type TextKey } from '../i18n';
 import * as art from './art';
 import { C } from './art';
@@ -23,6 +23,8 @@ type Hit = { x: number; y: number; w: number; h: number; onTap: () => void; enab
 
 /** The game runs in fixed steps of this many seconds, so it plays the same on every frame rate. */
 const STEP = 1 / 60;
+/** How long the Sell button waits for its second tap. */
+const SELL_CONFIRM_MS = 2000;
 /** The longest frame the game catches up on, so a stalled tab doesn't jump. */
 const MAX_FRAME = 0.1;
 const FONT = '"Trebuchet MS", "Segoe UI", sans-serif';
@@ -88,6 +90,8 @@ export class GameScene extends Phaser.Scene {
   private preview: { cell: number; version: number; tool: TowerKind; blocks: boolean; face: number; routes: number[][] } | null = null;
   private version = 0;
   private flashes: Flash[] = [];
+  /** A Sell tapped once, waiting for the second tap until this time. */
+  private sellArmed: { cell: number; until: number } | null = null;
   private banner: { text: string; left: number } | null = null;
   /** Foe kinds already met in this game, to name each new one once. */
   private seen = new Set<FoeKind>();
@@ -143,6 +147,10 @@ export class GameScene extends Phaser.Scene {
     for (const f of this.flashes) if (f.age >= f.life) f.label?.destroy();
     this.flashes = this.flashes.filter((f) => f.age < f.life);
     if (this.banner && (this.banner.left -= dt) <= 0) this.banner = null;
+    if (this.sellArmed && (time > this.sellArmed.until || this.selected !== this.sellArmed.cell)) {
+      this.sellArmed = null;
+      this.hudKey = '';
+    }
     playMusic(SONG, this.musicPart());
     if (this.boardDirty) this.drawBoard();
     this.drawFx();
@@ -473,7 +481,7 @@ export class GameScene extends Phaser.Scene {
         const x = this.grid.x + f.x * CELL;
         const y = this.grid.y + f.y * CELL;
         const r = def.size * CELL;
-        art.foe(g, f.kind, x, y, f.angle, r, { chilled: s.clock < f.slowUntil, burning: s.clock < f.burnUntil, poisoned: s.clock < f.poisonUntil });
+        art.foe(g, f.kind, x, y, f.angle, r, { chilled: s.clock < f.slowUntil, burning: s.clock < f.burnUntil, poisoned: s.clock < f.poisonUntil, heat: f.heat });
         if (f.hp < f.maxHp) art.healthBar(g, x, y - r - 9, f.hp / f.maxHp);
       }
     }
@@ -625,7 +633,7 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const key = JSON.stringify([
-      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.speed, this.banner?.text,
+      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text,
       s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.dist[s.gates[0]], s.dist[s.gates[1]], this.version],
     ]);
     if (key === this.hudKey) return;
@@ -663,7 +671,7 @@ export class GameScene extends Phaser.Scene {
     this.button('gardens', backX, (BAR_H - BACK_BUTTON.h) / 2, BACK_BUTTON.w, BACK_BUTTON.h, t('gardens'), () => this.toMenu(), { size: 13 });
     // The picked tool's use, in the top bar.
     const tipX = this.fx + TIP_X;
-    if (backX - 12 - tipX > 120) this.text(tipX, cy, t(`${this.tool}Text` as TextKey), 12, css(C.cream), 0, false).setWordWrapWidth(backX - 12 - tipX).setLineSpacing(-2);
+    if (backX - 12 - tipX > 120) this.text(tipX, cy, this.tool === 'hedge' || !attacks(this.tool) ? t(`${this.tool}Text` as TextKey) : `${t(`kind_${TOWER[this.tool].hits}` as TextKey)} · ${t(`${this.tool}Text` as TextKey)}`, 12, css(C.cream), 0, false).setWordWrapWidth(backX - 12 - tipX).setLineSpacing(-2);
 
     const by = vh - BAR_H + (BAR_H - TOOLS.h) / 2;
     this.pouch.forEach((kind, i) => {
@@ -683,7 +691,8 @@ export class GameScene extends Phaser.Scene {
     const g = this.hudG;
     const m = this.mid(tw.cell);
     const faces = TOWER[tw.kind].faces;
-    const h = faces ? PANEL.turnH : PANEL.h;
+    const aimed = aims(tw.kind);
+    const h = PANEL.h + (faces || aimed ? PANEL.row : 0);
     const x = Phaser.Math.Clamp(m.x - PANEL.w / 2, 8, this.vw - PANEL.w - 8);
     const above = m.y - 24 - h > BAR_H + 4;
     const y = above ? m.y - 24 - h : m.y + 24;
@@ -701,13 +710,24 @@ export class GameScene extends Phaser.Scene {
         this.drain(s);
       }, { enabled: cost !== null && s.gold >= cost, fill: C.gold, size: 13 });
     } else this.text(x + 12, y + 46, t('hedgeText'), 12, css(C.cream), 0, false);
-    this.button('sell', x + 12, y + 64, bw, 28, t('sell', { n: `◆ ${sellValue(tw)}` }), () => {
+    // Selling takes a second tap within a couple of seconds.
+    const armed = this.sellArmed?.cell === tw.cell;
+    this.button('sell', x + 12, y + 64, bw, 28, t(armed ? 'sellSure' : 'sell', { n: `◆ ${sellValue(tw)}` }), () => {
+      if (!armed) {
+        this.sellArmed = { cell: tw.cell, until: this.lastTime + SELL_CONFIRM_MS };
+        return;
+      }
+      this.sellArmed = null;
       sell(s, tw.cell);
       this.drain(s);
       this.selected = -1;
-    }, { size: 13 });
+    }, { size: 13, on: armed });
     if (faces) this.button('turn', x + 12, y + 96, bw, 28, t('turn'), () => {
       turn(s, tw.cell);
+      this.changed();
+    }, { size: 13 });
+    if (aimed) this.button('aim', x + 12, y + 96, bw, 28, t('aim', { how: t(`aim_${tw.target}` as TextKey) }), () => {
+      setAim(s, tw.cell);
       this.changed();
     }, { size: 13 });
   }

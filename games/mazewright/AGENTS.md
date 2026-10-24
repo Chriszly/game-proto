@@ -30,8 +30,14 @@ Implemented today:
   quarter round from their panel (`turn`).
 - Foes (`FOES`): `beetle`, `ladybird`, `stag`, `moth` (flies straight over the maze), `mole` (chews
   through one hedge in its life when that saves it at least `CHEW_GAIN` steps; towers and rocks are
-  never chewed), the `weevil` (from wave 8, `armour` 5 off each hit, at least 1; burning and poison
-  ignore it) and the `queen` (waves 10 and 20).
+  never chewed), the `weevil` (from wave 8) and the `queen` (waves 10 and 20).
+- Damage kinds (`DAMAGE_KINDS`, a tower's `hits`) and shells (`SHELLS`, a foe's `shell`):
+  `shellFactor` gives the share that gets through (stag waxy, mole hairy, weevil hard). Burning is
+  Heat, poison goes through every shell. Sunglass and bonfire hits add `HEAT.hit` to a foe's `heat`
+  (cooling by `HEAT.cool` a second); at 1 it takes `HEAT.boost` times Heat damage.
+- Aim (`AIMS`, a tower's `target`): first, last, strongest, weakest or fliers first, set from the
+  panel for the towers where `aims(kind)` holds; a `TowerDef.aim` sets the start (crossbow:
+  strongest). Sell asks for a second tap within 2 seconds.
 - 20 waves (`WAVES`); the second burrow is used from wave `SECOND_GATE` (6), but both routes must
   stay open all game. Waves start by hand (Start wave), and the next can be sent early for
   `EARLY_BONUS` gold once the current one is all out.
@@ -51,7 +57,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -75,14 +81,15 @@ File map (`src/`):
   `GROUP_GAP`, `HP_PER_WAVE`, `FINAL_QUEEN`, `startLives`, `START_GOLD`, `hpScale`, `waveReward`,
   `EARLY_BONUS`, `ALWAYS`, `POUCH_PICKS`, `DEFAULT_POUCH`, `attacks`, `ShotKind`, `SPREAD`. A
   `TowerDef` carries the extra numbers of the towers that need them (`chain`/`jump`, `dot`/`dotFor`,
-  `faces`/`cone`, `boost`, `apples`, `spinTo`/`spinUp`, `strongest`). No Phaser.
+  `faces`/`cone`, `boost`, `apples`, `spinTo`/`spinUp`, `aim`), `DAMAGE_KINDS`, `SHELLS`,
+  `shellFactor`, `HEAT`, `AIMS`, `aims`. No Phaser.
 - `game/maps.ts`: `MAPS` (`MapDef`: `id`, `gates`, `goal`, `rocks`), `cellIndex`, `cellOf`,
   `inGrid`. A cell index is `row * COLS + col`.
 - `game/grid.ts`: `distances` (breadth-first search out from the cottage over free cells, 4
   neighbours), `nextStep` (a neighbour one step closer, keeping the heading on ties, then right,
   down, up, left), `route`, `UNREACHABLE`, `DIRS`.
 - `game/sim.ts`: `Game`, `Tower`, `Foe`, `Shot`, `GameEvent`, `Refusal` and the actions:
-  `newGame`, `canBuild`, `wouldBlock`, `build`, `nextUpgrade`, `upgrade`, `sellValue`, `sell`, `turn`,
+  `newGame`, `canBuild`, `wouldBlock`, `build`, `nextUpgrade`, `upgrade`, `sellValue`, `sell`, `turn`, `setAim`,
   `canStartWave`, `startWave`, `step`, `remaining`, `routeLength`, `towerAt`, and `beamCells`,
   `inCone` and `bestFace` for the towers that point one way. Only this file
   changes a `Game`. `g.blocked` is 0 free, 1 rock, 2 tower; `g.dist` is made again whenever a cell
@@ -91,10 +98,10 @@ File map (`src/`):
   its next step. `canBuild` refuses a tile in this order: `reserved` (a burrow or the cottage),
   `taken` (a rock or tower; the scene opens the tower's panel instead), `foe`, `blocks` (the
   never-close rule: `open` checks both burrows and every ground foe's `to` cell against the new
-  field) and `gold`. Towers aim at the foe with the least `remaining` distance in reach (`pick`;
-  the crossbow at the most health). `step` moves foes, then `afflict` (burning, poison and its
-  spread), then fires every tower with its beehive `boosts`; `hurt` takes armour off unless the
-  damage goes `through`. Apple trees pay out with the wave reward.
+  field) and `gold`. Towers pick a foe in reach by their aim (`pick`;
+  First is the least `remaining` distance). `step` moves foes, then `afflict` (burning, poison and its
+  spread, and cooling), then fires every tower with its beehive `boosts`; `hurt` takes a damage kind
+  through the foe's shell, `scorch` is a heat hit that also heats. Apple trees pay out with the wave reward.
 - `game/save.ts`: `loadRecords`, `noteRecord`, `loadPouch`, `savePouch`, `pouchOf` (hedge and bow,
   then up to four more in tower order).
 - `scenes/layout.ts`: `VIEW`, `CELL` (40), `GRID` (the grid's corner in the 960x540 frame), the bar
@@ -118,7 +125,7 @@ Save keys: `mazewright-best` (per garden: best wave and whether it was won) and 
 Test hooks (read by `e2e/playthrough.spec.ts` through `window.game.scene.getScene('Game')`):
 `screen`, `state` (the `Game`), `pouch`, `buttons` (every button by id, centred, in view pixels:
 `map-<garden>`, `pouch-<tower>`, `tool-<tower>`, `wave`, `speed`, `gardens`, `upgrade`, `sell`,
-`turn`, `again`) and `grid` (the grid's corner and cell size in view pixels).
+`turn`, `aim`, `again`) and `grid` (the grid's corner and cell size in view pixels).
 
 Difficulty: `startLives` (30, 20, 12) and `hpScale` (0.8, 1, 1.25) use `byDifficulty`. Reduced
 motion holds the frost pulse and cannon boom rings at full size and the gold numbers still.

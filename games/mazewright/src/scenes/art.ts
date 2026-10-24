@@ -239,6 +239,8 @@ export interface Ailments {
   chilled: boolean;
   burning: boolean;
   poisoned: boolean;
+  /** Sunglass and bonfire heat, 0 to 1. */
+  heat: number;
 }
 
 /** A foe at its middle, facing `angle`. `size` is its radius in pixels. */
@@ -246,6 +248,11 @@ export function foe(g: G, kind: FoeKind, x: number, y: number, angle: number, si
   if (kind === 'moth') moth(g, x, y, size);
   else if (kind === 'mole') mole(g, x, y, angle, size);
   else beetle(g, kind, x, y, angle, size, ails.chilled);
+  if (ails.heat > 0.05) {
+    // A warm glow that turns bright once the foe is fully heated.
+    g.lineStyle(ails.heat >= 1 ? 2.5 : 1.5, ails.heat >= 1 ? 0xffd24a : 0xff8a2a, 0.35 + 0.5 * ails.heat);
+    g.strokeCircle(x, y, size * 1.25);
+  }
   if (ails.poisoned) {
     g.fillStyle(0x8fd14f, 0.4);
     g.fillCircle(x, y, size * 1.15);
@@ -271,6 +278,11 @@ function beetle(g: G, kind: FoeKind, x: number, y: number, angle: number, size: 
   g.fillEllipse(0, 0, r * 2, r * 1.7);
   g.lineStyle(1, 0x000000, 0.4);
   g.lineBetween(-r, 0, r * 0.6, 0);
+  if (kind === 'stag') {
+    // A waxy shine across its back.
+    g.fillStyle(0xffffff, 0.35);
+    g.fillEllipse(-r * 0.2, -r * 0.35, r * 0.9, r * 0.35);
+  }
   if (kind === 'ladybird') {
     g.fillStyle(0x1d1d22, 1);
     for (const [a, b] of [[-3, -3], [-2, 3], [3, -2], [2, 4]]) g.fillCircle(a, b, 1.5);
@@ -324,6 +336,9 @@ function mole(g: G, x: number, y: number, angle: number, size: number) {
   g.fillEllipse(2, 3, size * 2.2, size * 1.8);
   g.fillStyle(0x4a3a33, 1);
   g.fillEllipse(0, 0, size * 2.2, size * 1.8);
+  // Its hairy coat.
+  g.fillStyle(0x6b574c, 1);
+  for (const [a, b] of [[-0.6, -0.4], [-0.2, 0.5], [0.1, -0.6], [-0.7, 0.3], [0.3, 0.2]]) g.fillCircle(size * a, size * b, 1.4);
   g.fillStyle(0xf2a7b5, 1);
   g.fillEllipse(size * 1.05, 0, size * 0.6, size * 0.5);
   g.fillEllipse(size * 0.4, -size * 0.85, size * 0.6, size * 0.4);
