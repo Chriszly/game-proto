@@ -5,16 +5,17 @@ import { settings } from '../../../../shared/settings';
 import { SFX, SONG } from '../audio';
 import { distances, route } from '../game/grid';
 import { cellOf, MAPS, type MapDef } from '../game/maps';
-import { loadRecords, noteRecord, type Records } from '../game/save';
+import { loadPouch, loadRecords, noteRecord, pouchOf, savePouch, type Records } from '../game/save';
 import {
-  build, canStartWave, newGame, nextUpgrade, sell, sellValue, startWave, step, towerAt, upgrade, wouldBlock,
+  beamCells, bestFace, build, canStartWave, newGame, nextUpgrade, sell, sellValue, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Tower,
 } from '../game/sim';
-import { COLS, FOE, ROWS, SECOND_GATE, TOWER, TOWERS, WAVES, type FoeKind, type TowerKind } from '../game/rules';
+import { DIRS } from '../game/grid';
+import { ALWAYS, COLS, FOE, POUCH_PICKS, ROWS, SECOND_GATE, TOWER, TOWERS, WAVES, type FoeKind, type TowerKind } from '../game/rules';
 import { t, type TextKey } from '../i18n';
 import * as art from './art';
 import { C } from './art';
-import { BACK_BUTTON, BAR_H, CARDS, CELL, DEPTH, GRID, PANEL, SPEED_BUTTON, TOOLS, VIEW, WAVE_BUTTON } from './layout';
+import { BACK_BUTTON, BAR_H, CARDS, CELL, CHIPS, DEPTH, GRID, PANEL, SPEED_BUTTON, TIP_X, TOOLS, VIEW, WAVE_BUTTON } from './layout';
 
 /** A spot the test can tap, by its centre in view pixels. */
 type Spot = { x: number; y: number; w: number; h: number };
@@ -27,12 +28,18 @@ const MAX_FRAME = 0.1;
 const FONT = '"Trebuchet MS", "Segoe UI", sans-serif';
 const css = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
-/** Something drawn for a moment: a pulse, a boom, a hit, a coin or a note. */
+/** Something drawn for a moment: a pulse, a boom, a hit, a bolt, a flame, a beam, spores, a coin or a note. */
 interface Flash {
-  kind: 'pulse' | 'boom' | 'hit' | 'coin' | 'note';
+  kind: 'pulse' | 'boom' | 'hit' | 'bolt' | 'flame' | 'beam' | 'puff' | 'coin' | 'note';
   x: number;
   y: number;
   r: number;
+  /** A bolt's points; a flame's heading and half-width; a beam's far end. */
+  points?: { x: number; y: number }[];
+  angle?: number;
+  cone?: number;
+  x2?: number;
+  y2?: number;
   age: number;
   life: number;
   text?: string;
@@ -50,6 +57,8 @@ export class GameScene extends Phaser.Scene {
   state: Game | null = null;
   records!: Records;
   tool: TowerKind = 'hedge';
+  /** The towers this run can plant, picked under the garden cards: hedge, bow and up to four more. */
+  pouch: TowerKind[] = [];
   /** The tower whose panel is open, by its cell. */
   selected = -1;
   speed = 1;
@@ -76,7 +85,7 @@ export class GameScene extends Phaser.Scene {
   private painting = false;
   private lastPainted = -1;
   /** The route preview for the hovered cell, made once per cell and board. */
-  private preview: { cell: number; version: number; blocks: boolean; routes: number[][] } | null = null;
+  private preview: { cell: number; version: number; tool: TowerKind; blocks: boolean; face: number; routes: number[][] } | null = null;
   private version = 0;
   private flashes: Flash[] = [];
   private banner: { text: string; left: number } | null = null;
@@ -89,6 +98,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.records = loadRecords();
+    this.pouch = loadPouch();
     this.lawnG = this.add.graphics().setDepth(DEPTH.lawn);
     this.boardG = this.add.graphics().setDepth(DEPTH.board);
     this.fxG = this.add.graphics().setDepth(DEPTH.fx);
@@ -171,8 +181,26 @@ export class GameScene extends Phaser.Scene {
         this.changed();
         break;
       case 'shot':
-        SFX(e.kind);
+        if (e.kind !== 'frost') SFX(e.kind as Exclude<TowerKind, 'hedge' | 'frost' | 'beehive' | 'apple'>);
         break;
+      case 'bolt':
+        this.flash({ kind: 'bolt', x: 0, y: 0, r: 0, life: 0.25, points: e.points.map((p) => ({ x: px(p.x), y: py(p.y) })) });
+        break;
+      case 'flame':
+        this.flash({ kind: 'flame', x: px(e.x), y: py(e.y), r: e.r * CELL, angle: e.angle, cone: e.cone, life: 0.35 });
+        break;
+      case 'beam':
+        this.flash({ kind: 'beam', x: px(e.x), y: py(e.y), x2: px(e.x2), y2: py(e.y2), r: 0, life: 0.3 });
+        break;
+      case 'puff':
+        this.flash({ kind: 'puff', x: px(e.x), y: py(e.y), r: 9, life: 0.5 });
+        break;
+      case 'apples': {
+        SFX('apples');
+        const m = this.mid(e.cell);
+        this.flash({ kind: 'coin', x: m.x, y: m.y, r: 0, life: 1.2, text: `+${e.gold}` });
+        break;
+      }
       case 'pulse':
         SFX('frost');
         this.flash({ kind: 'pulse', x: px(e.x), y: py(e.y), r: e.r * CELL, life: 0.4 });
@@ -306,7 +334,7 @@ export class GameScene extends Phaser.Scene {
   private onKey(e: KeyboardEvent) {
     if (this.screen !== 'play' || !this.state) return;
     const n = Number(e.key);
-    if (n >= 1 && n <= TOWERS.length) this.pickTool(TOWERS[n - 1]);
+    if (n >= 1 && n <= this.pouch.length) this.pickTool(this.pouch[n - 1]);
     else if (e.key === ' ') this.sendWave();
     else if (e.key.toLowerCase() === 'f') this.speed = this.speed === 1 ? 2 : 1;
     else if (e.key === 'Escape') this.selected = -1;
@@ -332,6 +360,13 @@ export class GameScene extends Phaser.Scene {
     const cx = Math.floor((x - this.grid.x) / CELL);
     const cy = Math.floor((y - this.grid.y) / CELL);
     return cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS ? -1 : cy * COLS + cx;
+  }
+
+  /** Puts a tower into the pouch or takes it out; hedge and bow always stay. */
+  private togglePouch(kind: TowerKind) {
+    const picked = this.pouch.includes(kind);
+    this.pouch = pouchOf(picked ? this.pouch.filter((k) => k !== kind) : [...this.pouch, kind]);
+    savePouch(this.pouch);
   }
 
   private start(map: MapDef) {
@@ -419,8 +454,8 @@ export class GameScene extends Phaser.Scene {
       const m = this.mid(pv.cell);
       if (pv.blocks) art.noEntry(g, m.x, m.y);
       else {
-        art.tower(g, this.tool, m.x, m.y, 1, 0, 0.45);
-        if (TOWER[this.tool].range) art.dashedCircle(g, m.x, m.y, TOWER[this.tool].range * CELL, 0xfff3c4, 0.7);
+        art.tower(g, this.tool, m.x, m.y, 1, Math.atan2(DIRS[pv.face][1], DIRS[pv.face][0]), 0.45);
+        this.drawReach(g, s, this.tool, pv.cell, pv.face, 0.7, false);
       }
     }
     const picked = this.selected >= 0 ? towerAt(s, this.selected) : undefined;
@@ -428,11 +463,7 @@ export class GameScene extends Phaser.Scene {
       const m = this.mid(picked.cell);
       g.lineStyle(3, C.gold, 1);
       g.strokeRoundedRect(m.x - 20, m.y - 20, 40, 40, 8);
-      if (TOWER[picked.kind].range) {
-        g.fillStyle(0xfff3c4, 0.1);
-        g.fillCircle(m.x, m.y, TOWER[picked.kind].range * CELL);
-        art.dashedCircle(g, m.x, m.y, TOWER[picked.kind].range * CELL, 0xfff3c4, 0.85);
-      }
+      this.drawReach(g, s, picked.kind, picked.cell, picked.face, 0.85, true);
     }
     // Ground foes, then moths above them.
     for (const flying of [false, true]) {
@@ -442,23 +473,55 @@ export class GameScene extends Phaser.Scene {
         const x = this.grid.x + f.x * CELL;
         const y = this.grid.y + f.y * CELL;
         const r = def.size * CELL;
-        art.foe(g, f.kind, x, y, f.angle, r, s.clock < f.slowUntil);
+        art.foe(g, f.kind, x, y, f.angle, r, { chilled: s.clock < f.slowUntil, burning: s.clock < f.burnUntil, poisoned: s.clock < f.poisonUntil });
         if (f.hp < f.maxHp) art.healthBar(g, x, y - r - 9, f.hp / f.maxHp);
       }
     }
     for (const shot of s.shots) {
       const x = this.grid.x + shot.x * CELL;
       const y = this.grid.y + shot.y * CELL;
-      if (shot.kind === 'bow') {
+      if (shot.kind !== 'cannon') {
         const a = Math.atan2(shot.ty - shot.y, shot.tx - shot.x);
-        g.lineStyle(2, 0xefe3c8, 1);
-        g.lineBetween(x - Math.cos(a) * 7, y - Math.sin(a) * 7, x, y);
+        const len = { bow: 7, crossbow: 10, whirligig: 4 }[shot.kind];
+        g.lineStyle(shot.kind === 'crossbow' ? 3 : 2, shot.kind === 'crossbow' ? 0x5a3417 : shot.kind === 'whirligig' ? 0xffe066 : 0xefe3c8, 1);
+        g.lineBetween(x - Math.cos(a) * len, y - Math.sin(a) * len, x, y);
       } else {
         g.fillStyle(0x2b2b2b, 1);
         g.fillCircle(x, y, 4.5);
       }
     }
     this.drawFlashes(g);
+  }
+
+  /** A tower's reach: a circle, a bonfire's cone, a sunglass's line or a beehive's ring of tiles. */
+  private drawReach(g: Phaser.GameObjects.Graphics, s: Game, kind: TowerKind, cell: number, face: number, alpha: number, fill: boolean) {
+    const def = TOWER[kind];
+    const m = this.mid(cell);
+    const light = 0xfff3c4;
+    if (kind === 'sunglass') {
+      g.fillStyle(light, fill ? 0.22 : 0.16);
+      for (const c of beamCells(s, cell, face)) {
+        const b = this.mid(c);
+        g.fillRect(b.x - CELL / 2 + 4, b.y - CELL / 2 + 4, CELL - 8, CELL - 8);
+      }
+    } else if (kind === 'bonfire') {
+      const a = Math.atan2(DIRS[face][1], DIRS[face][0]);
+      g.fillStyle(0xffb36b, fill ? 0.25 : 0.16);
+      g.slice(m.x, m.y, def.range * CELL, a - def.cone!, a + def.cone!, false);
+      g.fillPath();
+      g.lineStyle(2, light, alpha);
+      g.slice(m.x, m.y, def.range * CELL, a - def.cone!, a + def.cone!, false);
+      g.strokePath();
+    } else if (kind === 'beehive') {
+      g.lineStyle(2, C.gold, alpha);
+      g.strokeRoundedRect(m.x - CELL * 1.5, m.y - CELL * 1.5, CELL * 3, CELL * 3, 8);
+    } else if (def.range) {
+      if (fill) {
+        g.fillStyle(light, 0.1);
+        g.fillCircle(m.x, m.y, def.range * CELL);
+      }
+      art.dashedCircle(g, m.x, m.y, def.range * CELL, light, alpha);
+    }
   }
 
   private drawFlashes(g: Phaser.GameObjects.Graphics) {
@@ -471,6 +534,29 @@ export class GameScene extends Phaser.Scene {
       } else if (f.kind === 'boom') {
         g.fillStyle(0xffd27a, 0.5 * (1 - k));
         g.fillCircle(f.x, f.y, still ? f.r : f.r * (0.5 + 0.5 * k));
+      } else if (f.kind === 'bolt') {
+        const pts = f.points!;
+        for (const [width, colour] of [[4, 0x6fd3ff], [1.6, 0xfffbe0]] as const) {
+          g.lineStyle(width, colour, 0.9 * (1 - k));
+          for (let i = 1; i < pts.length; i++) g.lineBetween(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
+        }
+      } else if (f.kind === 'flame') {
+        const r = still ? f.r : f.r * (0.5 + 0.5 * k);
+        g.fillStyle(0xff8a2a, 0.45 * (1 - k));
+        g.slice(f.x, f.y, r, f.angle! - f.cone!, f.angle! + f.cone!, false);
+        g.fillPath();
+        g.fillStyle(0xffd24a, 0.5 * (1 - k));
+        g.slice(f.x, f.y, r * 0.6, f.angle! - f.cone! * 0.6, f.angle! + f.cone! * 0.6, false);
+        g.fillPath();
+      } else if (f.kind === 'beam') {
+        g.lineStyle(6, 0xfff6b0, 0.45 * (1 - k));
+        g.lineBetween(f.x, f.y, f.x2!, f.y2!);
+        g.lineStyle(2, 0xffffff, 0.9 * (1 - k));
+        g.lineBetween(f.x, f.y, f.x2!, f.y2!);
+      } else if (f.kind === 'puff') {
+        g.fillStyle(0xa6d96a, 0.55 * (1 - k));
+        const r = still ? f.r : f.r * (0.6 + 0.6 * k);
+        for (const [a, b] of [[-0.5, 0], [0.5, -0.3], [0, 0.5]]) g.fillCircle(f.x + a * r, f.y + b * r, r * 0.6);
       } else if (f.kind === 'hit') {
         g.fillStyle(0xffffff, 0.7 * (1 - k));
         g.fillCircle(f.x, f.y, f.r);
@@ -492,7 +578,7 @@ export class GameScene extends Phaser.Scene {
   private previewFor(s: Game) {
     const cell = this.hover;
     if (cell < 0 || this.selected >= 0 || s.blocked[cell] || cell === s.goal || s.gates.includes(cell) || s.phase === 'won' || s.phase === 'lost') return null;
-    if (this.preview?.cell === cell && this.preview.version === this.version) return this.preview;
+    if (this.preview?.cell === cell && this.preview.version === this.version && this.preview.tool === this.tool) return this.preview;
     const blocks = wouldBlock(s, cell);
     let routes: number[][] = [];
     if (!blocks) {
@@ -501,7 +587,8 @@ export class GameScene extends Phaser.Scene {
       const dist = distances(blocked, s.goal);
       routes = s.gates.map((gate) => route(dist, gate));
     }
-    this.preview = { cell, version: this.version, blocks, routes };
+    const face = TOWER[this.tool].faces ? bestFace(s, cell, this.tool) : 0;
+    this.preview = { cell, version: this.version, tool: this.tool, blocks, face, routes };
     return this.preview;
   }
 
@@ -538,7 +625,7 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const key = JSON.stringify([
-      this.screen, this.vw, this.vh, this.tool, this.selected, this.speed, this.banner?.text,
+      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.speed, this.banner?.text,
       s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.dist[s.gates[0]], s.dist[s.gates[1]], this.version],
     ]);
     if (key === this.hudKey) return;
@@ -572,13 +659,17 @@ export class GameScene extends Phaser.Scene {
     const a = s.dist[s.gates[0]];
     const b = s.dist[s.gates[1]];
     this.text(342, cy, s.wave >= SECOND_GATE - 1 ? t('routeTwo', { a, b }) : t('routeOne', { n: a }), 13, css(C.cream), 0, false);
-    this.button('gardens', vw - 16 - BACK_BUTTON.w, (BAR_H - BACK_BUTTON.h) / 2, BACK_BUTTON.w, BACK_BUTTON.h, t('gardens'), () => this.toMenu(), { size: 13 });
+    const backX = vw - 16 - BACK_BUTTON.w;
+    this.button('gardens', backX, (BAR_H - BACK_BUTTON.h) / 2, BACK_BUTTON.w, BACK_BUTTON.h, t('gardens'), () => this.toMenu(), { size: 13 });
+    // The picked tool's use, in the top bar.
+    const tipX = this.fx + TIP_X;
+    if (backX - 12 - tipX > 120) this.text(tipX, cy, t(`${this.tool}Text` as TextKey), 12, css(C.cream), 0, false).setWordWrapWidth(backX - 12 - tipX).setLineSpacing(-2);
 
     const by = vh - BAR_H + (BAR_H - TOOLS.h) / 2;
-    TOWERS.forEach((kind, i) => {
+    this.pouch.forEach((kind, i) => {
       const x = TOOLS.x + i * (TOOLS.w + TOOLS.gap);
       this.button(`tool-${kind}`, x, by, TOOLS.w, TOOLS.h, t(`${kind}Name` as TextKey), () => this.pickTool(kind), {
-        on: this.tool === kind, sub: `◆ ${TOWER[kind].cost}`, enabled: s.gold >= TOWER[kind].cost || this.tool === kind,
+        on: this.tool === kind, sub: `◆ ${TOWER[kind].cost}`, enabled: s.gold >= TOWER[kind].cost || this.tool === kind, size: 12,
       });
     });
     const wx = vw - 16 - WAVE_BUTTON.w;
@@ -586,22 +677,20 @@ export class GameScene extends Phaser.Scene {
     const label = !ready ? t('incoming') : s.foes.length > 0 ? t('nextEarly', { n: 5 }) : t('startWave', { n: s.wave + 1 });
     this.button('wave', wx, by, WAVE_BUTTON.w, WAVE_BUTTON.h, label, () => this.sendWave(), { enabled: ready, fill: C.gold });
     this.button('speed', wx - 8 - SPEED_BUTTON.w, by, SPEED_BUTTON.w, SPEED_BUTTON.h, t('speed', { n: this.speed }), () => (this.speed = this.speed === 1 ? 2 : 1), { on: this.speed === 2 });
-    // The tool's use, between the tools and the speed button when there is room.
-    const tipX = TOOLS.x + TOWERS.length * (TOOLS.w + TOOLS.gap) + 4;
-    const tipW = wx - 8 - SPEED_BUTTON.w - 12 - tipX;
-    if (tipW > 90) this.text(tipX, vh - BAR_H / 2, t(`${this.tool}Text` as TextKey), 12, css(C.cream), 0, false).setWordWrapWidth(tipW).setLineSpacing(-2);
   }
 
   private drawPanel(s: Game, tw: Tower) {
     const g = this.hudG;
     const m = this.mid(tw.cell);
+    const faces = TOWER[tw.kind].faces;
+    const h = faces ? PANEL.turnH : PANEL.h;
     const x = Phaser.Math.Clamp(m.x - PANEL.w / 2, 8, this.vw - PANEL.w - 8);
-    const above = m.y - 24 - PANEL.h > BAR_H + 4;
-    const y = above ? m.y - 24 - PANEL.h : m.y + 24;
+    const above = m.y - 24 - h > BAR_H + 4;
+    const y = above ? m.y - 24 - h : m.y + 24;
     g.fillStyle(0x000000, 0.25);
-    g.fillRoundedRect(x + 2, y + 3, PANEL.w, PANEL.h, 9);
+    g.fillRoundedRect(x + 2, y + 3, PANEL.w, h, 9);
     g.fillStyle(C.bar, 0.96);
-    g.fillRoundedRect(x, y, PANEL.w, PANEL.h, 9);
+    g.fillRoundedRect(x, y, PANEL.w, h, 9);
     const name = t(`${tw.kind}Name` as TextKey);
     this.text(x + 12, y + 16, tw.kind === 'hedge' ? name : `${name} · ${t('level', { n: tw.level })}`, 14, css(C.cream));
     const cost = nextUpgrade(tw);
@@ -616,6 +705,10 @@ export class GameScene extends Phaser.Scene {
       sell(s, tw.cell);
       this.drain(s);
       this.selected = -1;
+    }, { size: 13 });
+    if (faces) this.button('turn', x + 12, y + 96, bw, 28, t('turn'), () => {
+      turn(s, tw.cell);
+      this.changed();
     }, { size: 13 });
   }
 
@@ -668,6 +761,20 @@ export class GameScene extends Phaser.Scene {
       this.text(cx, y + CARDS.h - 22, r.won ? t('bestWon') : r.wave > 0 ? t('best', { n: r.wave }) : t('notPlayed'), 13, css(C.gold), 0.5);
       this.hits.push({ x, y, w: CARDS.w, h: CARDS.h, onTap: () => this.start(map), enabled: true });
       this.buttons[`map-${map.id}`] = { x: cx, y: y + CARDS.h / 2, w: CARDS.w, h: CARDS.h };
+    });
+    // The pouch: hedge and bow always come, and up to four of these.
+    const kinds = TOWERS.filter((k) => !ALWAYS.includes(k));
+    const picks = this.pouch.length - ALWAYS.length;
+    this.text(this.vw / 2, fy + CHIPS.labelY, t('pouch', { n: POUCH_PICKS, left: POUCH_PICKS - picks }), 13, '#2d3b1f', 0.5);
+    const rowW = kinds.length * (CHIPS.w + CHIPS.gap) - CHIPS.gap;
+    kinds.forEach((kind, i) => {
+      const on = this.pouch.includes(kind);
+      const x = (this.vw - rowW) / 2 + i * (CHIPS.w + CHIPS.gap);
+      g.fillStyle(C.bar, 1);
+      g.fillRoundedRect(x, fy + CHIPS.y, CHIPS.w, CHIPS.h, 7);
+      this.button(`pouch-${kind}`, x, fy + CHIPS.y, CHIPS.w, CHIPS.h, t(`${kind}Name` as TextKey), () => this.togglePouch(kind), {
+        on, enabled: on || picks < POUCH_PICKS, sub: `◆ ${TOWER[kind].cost}`, size: 12,
+      });
     });
   }
 }

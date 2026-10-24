@@ -79,6 +79,20 @@ export const SFX = sounds({
   bow: { wave: 'noise', freq: 4200, to: 2600, length: 0.05, volume: 0.08, gap: 70, vary: 0.08 },
   /** A cannon fires. */
   cannon: { wave: 'noise', freq: 500, to: 120, length: 0.18, volume: 0.22, gap: 120 },
+  /** A storm rod's bolt. */
+  storm: { wave: 'square', freq: 1500, to: 300, length: 0.12, volume: 0.12, gap: 140, vary: 0.1 },
+  /** A crossbow bolt loosed. */
+  crossbow: { wave: 'noise', freq: 1600, to: 500, length: 0.12, volume: 0.16, gap: 150 },
+  /** A bonfire breathes out. */
+  bonfire: { wave: 'noise', freq: 700, to: 300, length: 0.2, volume: 0.1, gap: 300 },
+  /** A puffball puffs its spores. */
+  puffball: { wave: 'noise', freq: 2200, to: 1200, length: 0.08, volume: 0.07, gap: 200 },
+  /** A sunglass beam. */
+  sunglass: { wave: 'sine', freq: 880, to: 1320, length: 0.18, volume: 0.1, gap: 180 },
+  /** A whirligig's dart. */
+  whirligig: { wave: 'triangle', freq: 1100, to: 900, length: 0.03, volume: 0.06, gap: 90, vary: 0.1 },
+  /** Apples dropped by an apple tree when a wave is held. */
+  apples: { wave: 'triangle', freq: 784, arp: [0, 4], arpStep: 0.05, length: 0.12, volume: 0.14, gap: 120 },
   /** A frost pulse. */
   frost: { wave: 'sine', freq: 1400, to: 2100, length: 0.16, volume: 0.1, gap: 150 },
   /** A foe beaten. */
