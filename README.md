@@ -94,6 +94,14 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   when the browser has no app installed to update.
 
   ![The Updates setting](docs/screenshots/hub-updates.webp)
+- **Phone held the wrong way**: what a game does on a phone held upright when it plays sideways (or
+  the other way round). **Turn the game** (the default) turns the game a quarter round so it fills
+  the screen and the player just turns the phone, even with the phone's rotation locked; in full
+  screen on Android the screen is also locked the game's way round. **Ask me to turn it** covers the
+  paused game with a hint to turn the phone instead. Games that play both ways round (Augury and
+  Ninefold) just turn their view.
+
+  ![The game turned on an upright phone](docs/screenshots/turned-game.webp)
 - **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
   and **Import all** loads one back, on this or another device. **QR code** and **Paste code** move
   the same as a progress code (see Progress codes). **Delete all progress** erases every
