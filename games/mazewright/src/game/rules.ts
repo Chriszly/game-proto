@@ -7,7 +7,7 @@ import { byDifficulty } from '../../../../shared/settings';
 export const COLS = 22;
 export const ROWS = 11;
 
-export const TOWERS = ['hedge', 'bow', 'frost', 'cannon', 'storm', 'crossbow', 'bonfire', 'puffball', 'sunglass', 'beehive', 'apple', 'whirligig'] as const;
+export const TOWERS = ['hedge', 'bow', 'frost', 'cannon', 'storm', 'crossbow', 'bonfire', 'puffball', 'sunglass', 'beehive', 'apple', 'whirligig', 'swallow', 'nettle', 'toadstool'] as const;
 export type TowerKind = (typeof TOWERS)[number];
 
 /** The pouch: the towers a run can plant. Hedge and bow are always in it, with up to four more. */
@@ -74,6 +74,12 @@ export interface TowerDef {
   spinUp?: number;
   /** The aim a new tower starts with (First unless set). */
   aim?: Aim;
+  /** Swallow nest: it only attacks fliers. */
+  airOnly?: boolean;
+  /** Nettle patch: how long a sting holds a ground foe still, by level. */
+  stun?: [number, number, number];
+  /** Toadstool ring: the share of health a shrunk foe keeps. */
+  shrink?: number;
 }
 
 export const TOWER: Record<TowerKind, TowerDef> = {
@@ -89,21 +95,31 @@ export const TOWER: Record<TowerKind, TowerDef> = {
   beehive: { cost: 30, hits: 'sharp', range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, boost: [0.2, 0.3, 0.4] },
   apple: { cost: 30, hits: 'sharp', range: 0, damage: [0, 0, 0], reload: [1, 1, 1], air: false, apples: [5, 8, 12] },
   whirligig: { cost: 20, hits: 'sharp', range: 2.5, damage: [3, 4, 6], reload: [0.6, 0.6, 0.6], air: true, spinTo: [0.15, 0.13, 0.11], spinUp: 3 },
+  swallow: { cost: 15, hits: 'sharp', range: 3.5, damage: [16, 26, 40], reload: [0.7, 0.65, 0.6], air: true, airOnly: true },
+  nettle: { cost: 20, hits: 'sharp', range: 1.6, damage: [3, 5, 8], reload: [2.5, 2.3, 2.1], air: false, stun: [0.4, 0.5, 0.6] },
+  toadstool: { cost: 30, hits: 'poison', range: 2.5, damage: [0, 0, 0], reload: [4, 3.5, 3], air: false, shrink: 0.75, aim: 'strongest' },
 };
 
 /** Whether a tower kind shoots or pulses at foes (a hedge, beehive or apple tree doesn't). */
 export const attacks = (kind: TowerKind) => TOWER[kind].range > 0;
 /** Whether a tower kind picks one target, so its aim can be set. */
-export const aims = (kind: TowerKind) => attacks(kind) && !TOWER[kind].faces && kind !== 'frost';
+export const aims = (kind: TowerKind) => attacks(kind) && !TOWER[kind].faces && kind !== 'frost' && kind !== 'nettle';
+/** Whether a tower kind deals damage of its kind, so the tip names it. */
+export const harms = (kind: TowerKind) => kind !== 'hedge' && (TOWER[kind].damage[0] > 0 || !!TOWER[kind].dot);
 
-/** The highest level a tower reaches; hedges stay at 1. */
-export const MAX_LEVEL = 3;
+/** The highest level a tower reaches; hedges stay at 1. Level 4 is the master level, with the numbers of level 3 and a trick of its own. */
+export const MAX_LEVEL = 4;
+export const MASTER = 4;
+/** Which of a tower's by-level numbers a level uses: the master level keeps level 3's. */
+export const tier = (level: number) => Math.min(level, 3) - 1;
+/** Master tricks: bow and swallow shoot two foes, frost stops newly chilled foes, cannon knocks foes back, storm chains to `stormChain`, crossbow and bonfire go through shells, puffball poisons every foe in reach, sunglass heats twice as fast, beehive boosts `hiveBoost`, apple drops `apples`, whirligig never spins down, nettle stings twice as long, toadstool shrinks two foes. */
+export const MASTER_TRICKS = { freeze: 1, knock: 0.6, splash: 1.5, stormChain: 10, hiveBoost: 0.55, apples: 20 };
 /** The share of what a tower cost (with its upgrades) that selling it gives back. */
 export const SELL_BACK = 0.7;
 /** The cost of raising a tower from `level` to the next. */
-export const upgradeCost = (kind: TowerKind, level: number) => TOWER[kind].cost * level;
+export const upgradeCost = (kind: TowerKind, level: number) => TOWER[kind].cost * (level < 3 ? level : 4);
 /** Arrow and cannon ball speeds, in cells per second. */
-export const SHOT_SPEED = { bow: 12, cannon: 7, crossbow: 20, whirligig: 14 } as const;
+export const SHOT_SPEED = { bow: 12, cannon: 7, crossbow: 20, whirligig: 14, swallow: 16 } as const;
 export type ShotKind = keyof typeof SHOT_SPEED;
 /** Puffball spores jump from a poisoned foe to ground foes this close, once a second. */
 export const SPREAD = { reach: 0.9, every: 1 };

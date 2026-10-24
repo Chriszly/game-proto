@@ -16,16 +16,22 @@ Implemented today:
 
 - Three gardens (`MAPS`): Meadow, Orchard and Millpond, each with two burrows, a cottage and fixed
   rocks. The picker shows each garden's best wave.
-- The pouch: under the garden cards, chips for the ten towers besides `hedge` and `bow` (`ALWAYS`);
+- The pouch: under the garden cards, chips in two rows (`CHIPS.perRow`) for the thirteen towers besides `hedge` and `bow` (`ALWAYS`);
   up to `POUCH_PICKS` (4) are picked, saved, and make the run's tool bar (six buttons at most).
   `DEFAULT_POUCH` is today's four (hedge, bow, frost, cannon), which the playthrough uses.
-- Towers (`TOWERS`), levels 1 to 3 (hedges stay at 1), sold for 70% of what they cost: `hedge`
+- Towers (`TOWERS`), levels 1 to 3 and the master level `MASTER` (4; hedges stay at 1), sold for 70% of what they cost: `hedge`
   (blocks only), `bow`, `frost` (pulse, slows), `cannon` (splash, ground only), `storm` (a bolt that
   chains to foes within `jump` of each other), `crossbow` (long reach, aims at the toughest),
   `bonfire` (a cone the way it faces, sets ground foes burning), `puffball` (poison that spreads once
   to ground foes close by), `sunglass` (a beam along its row or column to the first blocked tile),
   `beehive` (towers on the 8 tiles round it reload faster; the best hive counts), `apple` (gold
-  each held wave) and `whirligig` (reload spins down from 0.6 s while it keeps firing). Bonfire and
+  each held wave), `whirligig` (reload spins down from 0.6 s while it keeps firing), `swallow`
+  (`airOnly`), `nettle` (pulses `stun` into ground foes in reach: `Foe.stunUntil` stops `moveFoe`)
+  and `toadstool` (shrinks the foe it picks once: `shrink` of its health, `body` 0.8, a life less,
+  `Foe.shrunk`). The master level costs `upgradeCost(kind, 3)` (4 times the cost), uses level 3's
+  numbers (`tier`) and adds a trick from `MASTER_TRICKS`, each coded in `fire`, `boosts`,
+  `moveShot` and the wave payout (`hurt`'s `pierce` skips shells; `Shot.pierce`, `Shot.knock`,
+  `Foe.blueFlame`); the panel shows `${kind}Master` from level 3. Bonfire and
   sunglass `faces`: they first point where they cover most of the route (`bestFace`) and turn a
   quarter round from their panel (`turn`).
 - Foes (`FOES`): `beetle`, `ladybird`, `stag`, `moth` (flies straight over the maze), `mole` (chews
@@ -82,7 +88,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -101,7 +107,7 @@ File map (`src/`):
   must exist for every id.
 - `audio.ts`: `SONG` and the `SFX` table (see Sound).
 - `game/rules.ts`: `COLS`, `ROWS`, `TOWERS`/`TOWER` (cost, range, damage and reload by level, air,
-  splash, slow), `MAX_LEVEL`, `SELL_BACK`, `upgradeCost`, `SHOT_SPEED`, `FOES`/`FOE` (hp, speed,
+  splash, slow, stun, shrink, airOnly), `MAX_LEVEL`, `MASTER`, `tier`, `MASTER_TRICKS`, `harms`, `SELL_BACK`, `upgradeCost`, `SHOT_SPEED`, `FOES`/`FOE` (hp, speed,
   gold, lives, gap, flies, digs, size), `CHEW_TIME`, `CHEW_GAIN`, `WAVES`, `SECOND_GATE`,
   `GROUP_GAP`, `HP_PER_WAVE`, `FINAL_QUEEN`, `startLives`, `START_GOLD`, `hpScale`, `waveReward`,
   `EARLY_BONUS`, `ALWAYS`, `POUCH_PICKS`, `DEFAULT_POUCH`, `attacks`, `ShotKind`, `SPREAD`. A
@@ -131,7 +137,7 @@ File map (`src/`):
   then up to four more in tower order).
 - `scenes/layout.ts`: `VIEW`, `CELL` (40), `GRID` (the grid's corner in the 960x540 frame), the bar
   height, the tool, wave, speed and Gardens buttons, `TIP_X` (the tool's use in the top bar), the
-  tower panel (taller with Turn), the garden cards, the pouch's `CHIPS` (above the corner buttons)
+  tower panel (taller with Turn), the garden cards, the pouch's `CHIPS` (two rows, above the corner buttons)
   and `DEPTH`.
 - `scenes/art.ts`: `C` (colours), `FOE_COLOUR` and the drawing functions (`lawn`, `flowers`,
   `hedge`, `chewedHedge`, `rock`, `tower`, `burrow`, `cottage`, `foe`, `healthBar`, `dotted`,
@@ -164,7 +170,7 @@ motion holds the frost pulse and cannon boom rings at full size and the gold num
 | --- | --- |
 | `plant`, `build` | a hedge or another tower built (`built` event) |
 | `upgrade`, `sell` | `upgraded`, `sold` |
-| `bow`, `cannon`, `storm`, `crossbow`, `bonfire`, `puffball`, `sunglass`, `whirligig` | a tower fires (`shot`), one per shot, rate-limited |
+| `bow`, `cannon`, `storm`, `crossbow`, `bonfire`, `puffball`, `sunglass`, `whirligig`, `swallow`, `nettle`, `toadstool` | a tower fires (`shot`), one per shot, rate-limited |
 | `apples` | an apple tree drops its gold (`apples`) |
 | `frost` | a frost pulse |
 | `pop` | a foe beaten |

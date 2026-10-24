@@ -21,7 +21,8 @@ const en: HowToPlay = {
   tips: [
     'Hold the pointer over the lawn to see the new route before you plant.',
     'A new tower grows a second per 10 gold before it fires, and an upgrade grows again: plant and upgrade before the foes come.',
-    'Moths fly straight over the maze, so keep bows and frost near the cottage too.',
+    'Moths fly straight over the maze, so keep bows, frost or a swallow nest near the cottage too.',
+    'A tower at level 3 can become a master, with a trick of its own: its panel tells which.',
     'Moles chew through a hedge that blocks a much shorter way: put a tower there instead.',
     'From wave 6 the second burrow opens, so plan a maze that serves both routes.',
     'Shells: stag beetles are waxy (heat does half, blast more), moles hairy (blast half, sharp more), weevils hard (sharp half, spark more). Poison goes through every shell.',
@@ -53,7 +54,8 @@ const de: HowToPlay = {
   tips: [
     'Halte den Zeiger über den Rasen, um den neuen Weg zu sehen, bevor du pflanzt.',
     'Ein neuer Turm wächst eine Sekunde je 10 Gold, bevor er schießt, und ein Ausbau wächst wieder: Pflanze und baue aus, bevor die Gegner kommen.',
-    'Motten fliegen geradewegs über das Labyrinth, also stell Bögen und Frost auch nahe ans Häuschen.',
+    'Motten fliegen geradewegs über das Labyrinth, also stell Bögen, Frost oder ein Schwalbennest auch nahe ans Häuschen.',
+    'Ein Turm auf Stufe 3 kann Meister werden, mit einem eigenen Kniff: Sein Feld verrät welchen.',
     'Maulwürfe fressen sich durch eine Hecke, die einen viel kürzeren Weg versperrt: Stell dort lieber einen Turm hin.',
     'Ab Welle 6 öffnet sich der zweite Bau, also plane ein Labyrinth für beide Wege.',
     'Schalen: Hirschkäfer sind wachsig (Hitze halb, Wucht mehr), Maulwürfe haarig (Wucht halb, Spitzes mehr), Rüsselkäfer hart (Spitzes halb, Funken mehr). Gift geht durch jede Schale.',

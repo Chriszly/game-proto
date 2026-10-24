@@ -115,7 +115,7 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
   g.fillCircle(x - 2, y - 3, 9);
   g.save();
   g.translateCanvas(x, y);
-  if (kind !== 'frost' && kind !== 'beehive' && kind !== 'apple' && kind !== 'puffball') g.rotateCanvas(aim);
+  if (kind !== 'frost' && kind !== 'beehive' && kind !== 'apple' && kind !== 'puffball' && kind !== 'nettle' && kind !== 'toadstool') g.rotateCanvas(aim);
   if (kind === 'storm') {
     // A copper rod with a charged ball on top.
     g.fillStyle(0xb06a35, alpha);
@@ -189,6 +189,39 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
     }
     g.fillStyle(C.wood, alpha);
     g.fillCircle(0, 0, 2.4);
+  } else if (kind === 'swallow') {
+    // A mud nest with a swallow peeking out the way it looks.
+    g.fillStyle(0xa47a4e, alpha);
+    g.fillCircle(-2, 0, 9);
+    g.fillStyle(0x3b2410, alpha);
+    g.fillCircle(2, 0, 5);
+    g.fillStyle(0x3a4a7a, alpha);
+    g.fillTriangle(1, -4, 12, 0, 1, 4);
+    g.fillStyle(0xf3e6d0, alpha);
+    g.fillCircle(4, 1.5, 1.8);
+  } else if (kind === 'nettle') {
+    // A clump of jagged nettle leaves.
+    for (const [i, colour] of [0x3f8a35, 0x56a645, 0x3f8a35, 0x56a645, 0x6fbf55].entries()) {
+      const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+      g.fillStyle(colour, alpha);
+      g.fillTriangle(Math.cos(a - 0.45) * 3, Math.sin(a - 0.45) * 3, Math.cos(a) * 12, Math.sin(a) * 12, Math.cos(a + 0.45) * 3, Math.sin(a + 0.45) * 3);
+    }
+    g.fillStyle(0xd7f0a8, alpha);
+    g.fillCircle(0, 0, 2.2);
+  } else if (kind === 'toadstool') {
+    // A ring of little toadstools round a big one.
+    for (let i = 0; i < 5; i++) {
+      const a = (i * Math.PI * 2) / 5;
+      g.fillStyle(0xd98ad9, alpha);
+      g.fillCircle(Math.cos(a) * 9, Math.sin(a) * 9, 2.6);
+    }
+    g.fillStyle(0xf3e6d0, alpha);
+    g.fillRect(-1.5, 0, 3, 5);
+    g.fillStyle(0x9b4fb0, alpha);
+    g.fillEllipse(0, 0, 13, 9);
+    g.fillStyle(0xf3e6d0, alpha);
+    g.fillCircle(-2.5, -1.5, 1.3);
+    g.fillCircle(2.5, -0.5, 1.1);
   } else if (kind === 'bow') {
     g.lineStyle(2.6, C.wood, alpha);
     g.beginPath();
@@ -214,7 +247,12 @@ export function tower(g: G, kind: TowerKind, x: number, y: number, level: number
   g.restore();
   // Level pips along the bottom of the plinth.
   g.fillStyle(C.gold, alpha);
-  for (let i = 1; i < level; i++) g.fillCircle(x - 4 + (i - 1) * 8, y + 13, 2.6);
+  for (let i = 1; i < level; i++) g.fillCircle(x - (level - 2) * 4 + (i - 1) * 8, y + 13, 2.6);
+  // The master level: a gold ring round the plinth.
+  if (level >= 4) {
+    g.lineStyle(2, C.gold, alpha);
+    g.strokeCircle(x, y, 15.5);
+  }
 }
 
 export function burrow(g: G, x: number, y: number, open: boolean) {
