@@ -72,6 +72,16 @@ already played, so seeds are waiting for players from before the shed.
 
 ![Ice Pond in winter: crossbows and a storm rod on the banks round the frozen pond](docs/screenshots/ponds.webp)
 
+**Weather.** Summer and winter gardens have weather of their own. In summer a tower that fires
+nonstop for 8 seconds wilts in the heat and rests for 3, unless a frost tower's reach covers it. In
+winter, every 14 seconds of a wave, frost freezes one tower for 4 seconds, unless a bonfire's reach
+covers it. So a summer maze wants frost towers among its hardest workers, and a winter one a
+bonfire or two to keep the rest warm.
+
+![Brook in summer: a cannon wilted in the heat](docs/screenshots/wilt.webp)
+
+![Ice Pond in winter: frost has frozen a tower](docs/screenshots/frost.webp)
+
 ### Towers
 
 Every tower stands on a hedge and blocks its tile. Every tower but the hedge rises to level 3, and

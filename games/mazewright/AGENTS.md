@@ -26,7 +26,14 @@ Implemented today:
   and refuse a tap. Each season has its own lawn colours (`art.SEASON_LAWN`), and winter's water is
   ice. A greedy bot (each hedge where it lengthens the routes most, towers where they cover most
   route; for a path garden, towers on the lawn that covers most path) wins all twelve on Normal
-  with a bow, frost and cannon pouch; later seasons are not yet harder than spring.
+  with a bow, frost and cannon pouch, weather included.
+- Season weather (`WEATHER`, in `step`): in summer gardens `wilt` stops a tower that has fired
+  nonstop (`busy`, no gap over `rest` since `lastShot`) for `wiltAfter` (8) seconds for
+  `wiltFor` (3), unless a grown frost tower's reach covers it; in winter gardens `frost` freezes a
+  random firing tower no bonfire's reach covers every `frostEvery` (14) seconds of a wave, for
+  `frostFor` (4). A `stopped` tower neither reloads, grows nor fires; events `wilt` and `frozen`,
+  drawn with `art.wilted` and `art.frozen`, and the first of them each game gets a banner
+  (`wiltFirst`, `frostFirst`). Spring and autumn have no weather.
 - The pouch: under the garden cards, chips in two rows (`CHIPS.perRow`) for the thirteen towers and two traps besides `hedge` and `bow` (`ALWAYS`);
   up to `POUCH_PICKS` (4) are picked, saved, and make the run's tool bar (six buttons at most).
   `DEFAULT_POUCH` is today's four (hedge, bow, frost, cannon), which the playthrough uses.
@@ -120,7 +127,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker on its autumn tab, with the pouch), `path.webp` (Gravel Walk), `ponds.webp` (Ice Pond, towers on its banks), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `traps.webp`, `shed.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker on its autumn tab, with the pouch), `path.webp` (Gravel Walk), `ponds.webp` (Ice Pond, towers on its banks), `wilt.webp` (Brook, a wilted cannon), `frost.webp` (Ice Pond, a frozen frost tower), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `traps.webp`, `shed.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -218,6 +225,7 @@ motion holds the frost pulse and cannon boom rings at full size and the gold num
 | `saved` | loose cabbages roll back into the patch |
 | `horn`, `cleared` | a wave starts, a wave is held |
 | `chew` | a mole starts chewing, and the hedge is gone |
+| `wilt`, `freeze` | summer wilts a tower, winter frost freezes one (`wilt`, `frozen`) |
 | shared `refuse` | a refused placement, a disabled button, Start wave while a wave is still coming out |
 | shared `click` | every button |
 

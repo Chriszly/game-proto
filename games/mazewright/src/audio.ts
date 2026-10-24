@@ -117,6 +117,10 @@ export const SFX = sounds({
   horn: { wave: 'pulse25', freq: 330, arp: [0, 5, 7], arpStep: 0.09, length: 0.36, volume: 0.22 },
   /** A wave held. */
   cleared: { wave: 'triangle', freq: 523, arp: [0, 4, 7, 12, 16], arpStep: 0.06, length: 0.44, volume: 0.28 },
+  /** Summer: a tower wilts in the heat. */
+  wilt: { wave: 'triangle', freq: 440, to: 220, length: 0.3, volume: 0.12, gap: 300 },
+  /** Winter: frost freezes a tower. */
+  freeze: { wave: 'sine', freq: 2600, to: 1800, length: 0.25, volume: 0.1, gap: 300 },
   /** A mole starts chewing, and a hedge gone. */
   chew: { wave: 'noise', freq: 900, to: 300, length: 0.22, volume: 0.18, gap: 200 },
 });

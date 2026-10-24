@@ -149,6 +149,8 @@ const en = {
   waveBanner: 'Wave {n}',
   cleared: 'Wave {n} held! +{gold} gold',
   secondBurrow: 'The second burrow opens: both routes are in use now',
+  wiltFirst: 'A tower wilted in the summer heat: a frost tower close by keeps towers cool',
+  frostFirst: 'Frost froze a tower: a bonfire close by keeps towers warm',
   burrowOpens: 'Another burrow opens',
   chewing: 'A mole is chewing through a hedge!',
   new_beetle: 'Beetles walk the shortest way to the cottage',
