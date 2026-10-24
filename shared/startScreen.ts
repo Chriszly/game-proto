@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { settings } from './settings';
 import { t } from './i18n';
 import type { HowToPlay } from './howToPlay';
-import { cornerBar, volumeSliders } from './corner';
+import { cornerBar, openSoundMenu, toggleSoundMenu, volumeSliders } from './corner';
+import { isDirection, moveFocus, onPadPress, pressFocused } from './gamepad';
 import { resumeAudio, suspendAudio, ui, unlockAudio } from './audio';
 import { mountInstallButton } from './install';
 import { trophyCountText, trophyListHtml, type TrophySet } from './trophies';
@@ -31,6 +32,9 @@ const HELP_KEY = 'h';
  *   button (`install.ts`).
  * - Trophies: when the game hands over its `trophies` (`trophies.ts`), the start and pause screens get
  *   a Trophies button with the count earned, which lists them in place of the card; Back or Esc go back.
+ * - Controller (`gamepad.ts`): Start pauses and resumes, the D-pad or left stick moves between the
+ *   screen's buttons and sliders, A presses, B resumes from the pause screen and leaves How to play
+ *   and Trophies, and Select opens the sound menu (on any screen, and while playing).
  * While a screen is up, keys go to it and not to the game.
  */
 export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay, trophies?: TrophySet): () => boolean {
@@ -210,6 +214,30 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay, trophie
     },
     { capture: true },
   );
+  onPadPress((button) => {
+    if (button === 'select') return toggleSoundMenu();
+    const menu = openSoundMenu();
+    if (menu) {
+      if (button === 'b') toggleSoundMenu();
+      else if (isDirection(button)) moveFocus(menu, button);
+      else if (button === 'a') pressFocused(menu);
+      return;
+    }
+    if (mode === 'loading') return;
+    if (mode === 'playing') {
+      if (button === 'start') pause();
+      return;
+    }
+    if (mode === 'help' || mode === 'trophies') {
+      const body = mode === 'help' ? help : trophyBody;
+      if (button === 'up' || button === 'down') body?.scrollBy({ top: button === 'up' ? -80 : 80 });
+      else if (button === 'a' || button === 'b') closeHelp();
+      return;
+    }
+    if (button === 'start' || (button === 'b' && mode === 'paused')) play();
+    else if (isDirection(button)) moveFocus(overlay, button);
+    else if (button === 'a') pressFocused(overlay);
+  });
   // The music plays on behind the pause screen, so its volume can be heard as it is set, but stops
   // with the tab out of sight.
   document.addEventListener('visibilitychange', () => {
@@ -258,6 +286,12 @@ function helpHtml(howToPlay: HowToPlay) {
     { input: t('soundInput'), action: t('soundAction') },
     { input: t('soundMenuInput'), action: t('soundMenuAction') },
     ...(document.fullscreenEnabled ? [{ input: t('fullScreenInput'), action: t('fullScreenAction') }] : []),
+    ...(settings.controller
+      ? [
+          { input: t('padCursorInput'), action: t('padCursorAction') },
+          { input: t('padInput'), action: t('padAction') },
+        ]
+      : []),
   ];
   const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
   return (

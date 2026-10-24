@@ -102,6 +102,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   Ninefold) just turn their view.
 
   ![The game turned on an upright phone](docs/screenshots/turned-game.webp)
+- **Controller** (on by default) and **Cursor speed** (1 to 10, 5 by default): see Controllers below.
 - **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
   and **Import all** loads one back, on this or another device. **QR code** and **Paste code** move
   the same as a progress code (see Progress codes). The row also shows the time played on this
@@ -172,17 +173,38 @@ npm run build     # typecheck (games, tests and configs) + production build of t
 npm run preview   # serve the production build
 ```
 
+## Controllers
+
+A game controller plays the hub and every game, read through the browser's Gamepad API in the
+standard layout (`shared/gamepad.ts`). Browsers make a controller known once one of its buttons is
+pressed on the page.
+
+- **Hub:** the D-pad or the left stick moves the focus between the cards and buttons (and inside an
+  open dialog), **A** presses, **B** closes the dialog, **X** opens the focused card's ⚙ and
+  **Start** opens Settings, where left and right move a slider.
+- **Start and pause screens:** **Start** pauses and resumes, the D-pad and **A** pick the buttons and
+  volumes, **B** resumes from the pause screen and leaves How to play and Trophies (where up and down scroll), and
+  **Select** opens the sound menu on any screen.
+- **In a game:** the left stick brings up a cursor over the game (`shared/padCursor.ts`), **A** taps
+  and holds like the left mouse button, **B** is the right button and the right stick scrolls like a
+  mouse wheel. It sends the same events a mouse would, so every game plays with it without code of
+  its own, and it hides on the first real mouse move or tap. **Cursor speed** sets how fast it goes.
+
+![The focus on a card, moved by a controller](docs/screenshots/hub-controller.webp)
+
+![The controller's cursor over Apothecary](docs/screenshots/controller-cursor.webp)
+
 ## Layout
 
 - `index.html`: the hub page, the share card and one card per game.
 - `games/<name>/`: one game, with its own `index.html`, `src/`, `e2e/` playthrough test, `docs/`
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
-  (`settingsPanel.ts`), `audio.ts`, the sound effects and music made in code, `corner.ts`, the corner buttons, `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion, full screen and the sound button
+  (`settingsPanel.ts`), `audio.ts`, the sound effects and music made in code, `corner.ts`, the corner buttons, `gamepad.ts` and `padCursor.ts`, the controller and its cursor (see Controllers), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion, full screen and the sound button
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
   `trophies.ts`, the trophies, their toast and the hub's trophy shelf, `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `playTime.ts` and `favourites.ts`, the time played and the starred games (see above), `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `progressCode.ts`, the progress codes (see Progress codes), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files and codes, that the hub and every game have an app manifest, the genre filter and Continue playing row, favourites, time played and Sort, that a game starts and pauses and counts its time played, that trophies show on the cards, the shelf and the pause screen, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files and codes, that the hub and every game have an app manifest, the genre filter and Continue playing row, favourites, time played and Sort, that a game starts and pauses and counts its time played, that trophies show on the cards, the shelf and the pause screen, that a stand-in controller walks the hub, the start and pause screens and taps a game with its cursor, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks

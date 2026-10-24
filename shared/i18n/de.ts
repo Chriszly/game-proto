@@ -113,6 +113,10 @@ const de: Translation<typeof en> = {
   updatesCurrent: 'Du hast die neueste Version.',
   updatesFailed: 'Die Aktualisierung konnte nicht geladen werden. Versuch es mit einer Verbindung noch einmal.',
   updatesNone: 'In diesem Browser ist keine App installiert, die aktualisiert werden könnte. Öffne die Seite einmal online, um Aktualisierungen und Offline-Spielen einzurichten.',
+  settingController: 'Controller',
+  settingControllerHint: 'Ein Gamecontroller bewegt sich durch die Spielesammlung und die Start- und Pausebildschirme und steuert einen Zeiger über die Spiele: linker Stick zum Bewegen, A zum Tippen, B für einen Rechtsklick. In der Spielesammlung öffnet X das ⚙ eines Spiels.',
+  settingCursorSpeed: 'Zeigertempo',
+  settingCursorSpeedHint: 'Wie schnell der Controller seinen Zeiger über ein Spiel bewegt.',
   settingReduceMotion: 'Bewegung reduzieren',
   settingReduceMotionHint: 'Schaltet Bildschirmwackeln, Blitze und blinkende Treffereffekte ab.',
   settingMusic: 'Musik',
@@ -161,6 +165,10 @@ const de: Translation<typeof en> = {
   soundAction: 'Ton an oder aus',
   soundMenuInput: 'Der Lautsprecherknopf',
   soundMenuAction: 'Lautstärke von Musik und Effekten',
+  padInput: 'Controller: Start, Select',
+  padAction: 'Pause, und das Tonmenü öffnen',
+  padCursorInput: 'Controller: linker Stick, A, B',
+  padCursorAction: 'Einen Zeiger über das Spiel bewegen, mit A tippen, mit B rechtsklicken',
   musicVolume: 'Musik',
   effectsVolume: 'Effekte',
   turnSideways: 'Dreh dein Handy quer, um zu spielen',
@@ -220,4 +228,4 @@ const de: Translation<typeof en> = {
 export default de;
 
 /** Texts that are the same in German, so the translation check doesn't flag them. */
-export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'trophyBronze', 'trophyGold', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction', 'soundInput', 'sortName'];
+export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'trophyBronze', 'trophyGold', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction', 'soundInput', 'sortName', 'settingController', 'padInput'];

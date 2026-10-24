@@ -377,6 +377,7 @@
 
       // Each game with trophies lists them in games/<name>/src/trophies/index.ts.
       const trophySets = Object.values(import.meta.glob('./games/*/src/trophies/index.ts', { eager: true, import: 'trophies' }));
+      import { isDirection, moveFocus, onPadPress, pressFocused } from './shared/gamepad.ts';
 
       const games = document.querySelector('.games');
       const shareCard = games.querySelector('.share-card');
@@ -634,6 +635,19 @@
         d.addEventListener('click', (e) => e.target === d && d.close());
       }
       mountProgressCode();
+      // A controller moves the focus between the cards and buttons, in the open dialog when there is
+      // one: A presses, B closes the dialog, X opens the focused card's ⚙ and Start opens Settings
+      // or closes them.
+      onPadPress((button) => {
+        const open = [...document.querySelectorAll('dialog[open]')].pop();
+        if (button === 'x' && !open) document.activeElement?.closest('.game')?.querySelector('.game-gear')?.click();
+        else if (button === 'start') {
+          if (open === dialog) dialog.close();
+          else if (!open) dialog.showModal();
+        } else if (button === 'b') open?.close();
+        else if (isDirection(button)) moveFocus(open ?? document.body, button);
+        else if (button === 'a') pressFocused(open ?? document.body);
+      });
       // A progress code scanned with a phone's camera opens the hub with the code in its address.
       const opened = openedCode();
       if (opened) askToImportCode(opened, cards.map(folder), titleOf, codeImported);
