@@ -2,7 +2,7 @@ import { DIRS, distances, nextStep, route, UNREACHABLE } from './grid';
 import { cellIndex, cellOf, inGrid, MAPS, type MapDef } from './maps';
 import {
   AIMS, attacks, BIG, CABBAGE, RUSH, CHEW_GAIN, EMPRESS, HEAT, KING, KING_TRICKS, RUSH_KINDS, shellFactor, CHEW_TIME, COLS, EARLY_BONUS, FINAL_QUEEN, FOE, GROUP_GAP, HP_PER_WAVE, hpScale, MAX_LEVEL, ROWS,
-  GROW_RATE, SEEDS, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, GATE_WAVES, BANK_REACH, WEATHER, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
+  GROW_RATE, SEEDS, SANDBOX_GOLD, STARS, SWARM_GOLD, waveGroups, type Mode, TRAP, type TrapKind, MASTER, MASTER_TRICKS, tier, GATE_WAVES, BANK_REACH, WEATHER, DUO_TOUGHNESS, SELL_BACK, WAVE_TIMER, SHOT_SPEED, SPREAD, START_GOLD, startLives, TOWER, upgradeCost, WAVES, waveReward,
   type Aim, type DamageKind, type FoeKind, type ShellKind, type ShotKind, type TowerKind,
 } from './rules';
 
@@ -202,7 +202,11 @@ export interface Game {
   wave: number;
   /** The last wave whose reward has been paid. */
   paid: number;
+  /** The gold of the (left-hand) gardener, and with two gardeners the right-hand one's (`gold2`). */
   gold: number;
+  gold2: number;
+  /** Two gardeners, each building on their half of the lawn (`sideOf`) with their own gold. */
+  duo: boolean;
   /** Cabbages in the patch by the cottage (the lives), and how many it started with. */
   lives: number;
   maxLives: number;
@@ -278,6 +282,7 @@ export interface Fixed {
 export interface Replay extends Fixed {
   map: string;
   calm: boolean;
+  duo?: boolean;
   mode: Mode;
   masters: TowerKind[] | null;
   log: Action[];
@@ -297,7 +302,7 @@ function rand(g: Game) {
 
 const note = (g: Game, a: Action['a'], c?: number, k?: TowerKind) => g.log.push(k ? { s: g.steps, a, c, k } : c === undefined ? { s: g.steps, a } : { s: g.steps, a, c });
 
-export function newGame(mapId: string, calm = false, mode: Mode = 'classic', masters: readonly TowerKind[] | null = null, fixed?: Fixed): Game {
+export function newGame(mapId: string, calm = false, mode: Mode = 'classic', masters: readonly TowerKind[] | null = null, fixed?: Fixed, duo = false): Game {
   const map = MAPS.find((m) => m.id === mapId) ?? MAPS[0];
   const blocked = new Uint8Array(COLS * ROWS);
   const goal = cellIndex(map.goal);
@@ -318,6 +323,8 @@ export function newGame(mapId: string, calm = false, mode: Mode = 'classic', mas
     wave: 0,
     paid: 0,
     gold: mode === 'sandbox' ? SANDBOX_GOLD : START_GOLD,
+    gold2: !duo ? 0 : mode === 'sandbox' ? SANDBOX_GOLD : START_GOLD,
+    duo,
     lives,
     maxLives: lives,
     loose: [],
@@ -340,7 +347,7 @@ export function newGame(mapId: string, calm = false, mode: Mode = 'classic', mas
     frostAt: null,
     seed,
     rng: seed,
-    toughness: fixed?.toughness ?? hpScale(),
+    toughness: fixed?.toughness ?? hpScale() * (duo ? DUO_TOUGHNESS : 1),
     steps: 0,
     log: [],
     clock: 0,
@@ -358,6 +365,24 @@ const centre = (cell: number) => {
   return { x: x + 0.5, y: y + 0.5 };
 };
 const over = (g: Game) => g.phase === 'won' || g.phase === 'lost';
+
+/** Whose half of the lawn a cell is on: 0 the left (or the only gardener), 1 the right. */
+export const sideOf = (g: Game, cell: number) => (g.duo && cell % COLS >= COLS / 2 ? 1 : 0);
+/** The gold of the gardener whose half `cell` is on. */
+export const goldAt = (g: Game, cell: number) => (sideOf(g, cell) ? g.gold2 : g.gold);
+function addGold(g: Game, side: number, gold: number) {
+  if (side) g.gold2 += gold;
+  else g.gold += gold;
+}
+/** Pays both gardeners: half each, the odd coin to the poorer one. */
+function share(g: Game, gold: number) {
+  if (!g.duo) return void (g.gold += gold);
+  const half = Math.floor(gold / 2);
+  const odd = gold - 2 * half;
+  const left = g.gold <= g.gold2;
+  g.gold += half + (left ? odd : 0);
+  g.gold2 += half + (left ? 0 : odd);
+}
 
 /** Makes the walking fields again after a cell was blocked or freed. */
 function refield(g: Game) {
@@ -380,15 +405,15 @@ export function canBuild(g: Game, cell: number, kind: TowerKind): Refusal | null
   if (cell === g.goal || g.gates.includes(cell)) return 'reserved';
   if (g.traps.some((t) => t.cell === cell)) return 'taken';
   // A trap never blocks, so it may go under foes and needs no way kept open, but only where foes walk.
-  if (TOWER[kind].trap) return g.blocked[cell] ? 'taken' : g.gold < TOWER[kind].cost ? 'gold' : null;
+  if (TOWER[kind].trap) return g.blocked[cell] ? 'taken' : goldAt(g, cell) < TOWER[kind].cost ? 'gold' : null;
   // A path garden's lawn is off the way already, and its path is kept for the foes.
-  if (g.blocked[cell] === LAWN) return g.gold < TOWER[kind].cost ? 'gold' : null;
+  if (g.blocked[cell] === LAWN) return goldAt(g, cell) < TOWER[kind].cost ? 'gold' : null;
   if (g.blocked[cell]) return 'taken';
   if (g.map.path) return 'reserved';
   if (g.foes.some((f) => !f.dead && !FOE[f.kind].flies && (f.from === cell || f.to === cell))) return 'foe';
   if (g.loose.some((c) => c.from === cell || c.to === cell)) return 'foe';
   if (wouldBlock(g, cell)) return 'blocks';
-  if (g.gold < TOWER[kind].cost) return 'gold';
+  if (goldAt(g, cell) < TOWER[kind].cost) return 'gold';
   return null;
 }
 
@@ -408,7 +433,7 @@ export function build(g: Game, cell: number, kind: TowerKind): Refusal | null {
     g.events.push({ type: 'refused', cell, reason: refusal });
     return refusal;
   }
-  g.gold -= TOWER[kind].cost;
+  addGold(g, sideOf(g, cell), -TOWER[kind].cost);
   if (TOWER[kind].trap) {
     g.traps.push({ id: g.nextId++, kind: kind as TrapKind, cell, sprung: false, until: 0, field: null });
     g.events.push({ type: 'built', kind, cell });
@@ -513,8 +538,8 @@ export function seedsFor(g: Game) {
 export function upgrade(g: Game, cell: number) {
   const tower = towerAt(g, cell);
   const cost = tower && nextUpgrade(tower, g);
-  if (!tower || cost === null || cost === undefined || g.gold < cost || over(g)) return false;
-  g.gold -= cost;
+  if (!tower || cost === null || cost === undefined || goldAt(g, cell) < cost || over(g)) return false;
+  addGold(g, sideOf(g, cell), -cost);
   tower.spent += cost;
   tower.level++;
   growFor(tower, cost, g);
@@ -530,7 +555,7 @@ export function sell(g: Game, cell: number) {
   const tower = towerAt(g, cell);
   if (!tower || over(g)) return false;
   const gold = sellValue(tower);
-  g.gold += gold;
+  addGold(g, sideOf(g, cell), gold);
   removeTower(g, tower);
   g.events.push({ type: 'sold', cell, gold });
   note(g, 'sell', cell);
@@ -571,7 +596,7 @@ export function startWave(g: Game) {
 function beginWave(g: Game) {
   if (!canStartWave(g)) return false;
   const early = g.foes.length > 0;
-  if (early) g.gold += EARLY_BONUS;
+  if (early) share(g, EARLY_BONUS);
   g.nextAt = null;
   g.wave++;
   g.phase = 'wave';
@@ -709,8 +734,9 @@ function hurt(g: Game, f: Foe, damage: number, kind: DamageKind, pierce = false)
   if (f.empress) f.empress.taken[kind] = (f.empress.taken[kind] ?? 0) + dealt;
   if (f.hp > 0) return;
   f.dead = true;
+  // With two gardeners, a foe pays the one on whose half it was beaten.
   const gold = pay(g, f.gold);
-  g.gold += gold;
+  addGold(g, g.duo && f.x >= COLS / 2 ? 1 : 0, gold);
   g.kills++;
   g.events.push({ type: 'kill', kind: f.kind, x: f.x, y: f.y, gold });
   if (f.carry > 0) drop(g, f);
@@ -1215,11 +1241,11 @@ export function step(g: Game, dt: number) {
   if (g.phase === 'wave' && g.spawns.length === 0 && g.foes.length === 0) {
     let gold = 0;
     for (; g.paid < g.wave; g.paid++) gold += pay(g, waveReward(g.paid + 1));
-    g.gold += gold;
+    share(g, gold);
     for (const t of g.towers) {
       if (t.kind !== 'apple') continue;
       const apples = t.level === MASTER ? MASTER_TRICKS.apples : TOWER.apple.apples![tier(t.level)];
-      g.gold += apples;
+      addGold(g, sideOf(g, t.cell), apples);
       g.events.push({ type: 'apples', cell: t.cell, gold: apples });
     }
     g.shots = [];
@@ -1240,7 +1266,7 @@ export function routeLength(g: Game, gate: number) {
 }
 
 /** A new game that plays `replay` back: call `replayStep` before each `step`. */
-export const replayGame = (r: Replay) => newGame(r.map, r.calm, r.mode, r.masters, r);
+export const replayGame = (r: Replay) => newGame(r.map, r.calm, r.mode, r.masters, r, r.duo);
 
 /** Takes the replay's actions due before the next step, in order, from `from`; returns where it got to. */
 export function replayStep(g: Game, r: Replay, from: number) {
@@ -1259,6 +1285,6 @@ export function replayStep(g: Game, r: Replay, from: number) {
 
 /** What to keep of a finished game to watch it again. */
 export const replayOf = (g: Game): Replay => ({
-  map: g.map.id, calm: g.calm, mode: g.mode, masters: g.masters ? [...g.masters] : null, seed: g.seed, toughness: g.toughness, lives: g.maxLives,
+  map: g.map.id, calm: g.calm, duo: g.duo, mode: g.mode, masters: g.masters ? [...g.masters] : null, seed: g.seed, toughness: g.toughness, lives: g.maxLives,
   log: g.log, steps: g.steps, stars: stars(g), time: Math.round(g.clock),
 });

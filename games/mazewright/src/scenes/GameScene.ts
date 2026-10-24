@@ -6,9 +6,9 @@ import { settings } from '../../../../shared/settings';
 import { SFX, SONG } from '../audio';
 import { distances, route } from '../game/grid';
 import { cellIndex, cellOf, MAPS, SEASON_STARS, SEASONS, type MapDef, type Season } from '../game/maps';
-import { loadCalm, loadMode, loadPouch, loadRecords, loadReplays, loadShed, noteRecord, picksOf, pouchOf, saveCalm, saveMode, savePouch, saveReplay, saveShed, usable, type Records, type Replays, type Shed } from '../game/save';
+import { loadCalm, loadDuo, loadMode, loadPouch, loadRecords, loadReplays, loadShed, noteRecord, picksOf, pouchOf, saveCalm, saveDuo, saveMode, savePouch, saveReplay, saveShed, usable, type Records, type Replays, type Shed } from '../game/save';
 import {
-  beamCells, bestFace, build, LAWN, openGates, reachOf, cabbagesLeft, canStartWave, masterOpen, seedsFor, stars, totalWaves, newGame, nextUpgrade, replayGame, replayOf, replayStep, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
+  beamCells, bestFace, build, LAWN, openGates, reachOf, cabbagesLeft, canStartWave, masterOpen, seedsFor, stars, totalWaves, newGame, nextUpgrade, goldAt, sideOf, replayGame, replayOf, replayStep, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Replay, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
@@ -60,6 +60,8 @@ export class GameScene extends Phaser.Scene {
   state: Game | null = null;
   records!: Records;
   tool: TowerKind = 'hedge';
+  /** The right-hand gardener's tool, with two gardeners. */
+  tool2: TowerKind = 'hedge';
   /** The towers this run can plant, picked under the garden cards: hedge, bow and up to four more. */
   pouch: TowerKind[] = [];
   /** The tower whose panel is open, by its cell. */
@@ -67,6 +69,8 @@ export class GameScene extends Phaser.Scene {
   speed = 1;
   /** Waves wait to be started (no wave timer). */
   calm = false;
+  /** Two gardeners share the screen, each with half the lawn. */
+  duo = false;
   /** The way of play picked on the garden picker. */
   mode: Mode = 'classic';
   /** The season whose gardens the picker shows. */
@@ -91,6 +95,8 @@ export class GameScene extends Phaser.Scene {
   private fxG!: Phaser.GameObjects.Graphics;
   private hudG!: Phaser.GameObjects.Graphics;
   private texts: Phaser.GameObjects.Text[] = [];
+  /** The tower pictures on narrow tool buttons, made with the bars. */
+  private icons: Phaser.GameObjects.Graphics[] = [];
   private hits: Hit[] = [];
   private boardDirty = true;
   private hudKey = '';
@@ -124,6 +130,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.records = loadRecords();
     this.calm = loadCalm();
+    this.duo = loadDuo();
     this.mode = loadMode();
     this.shed = loadShed(this.records);
     this.pouch = loadPouch(this.shed);
@@ -443,7 +450,7 @@ export class GameScene extends Phaser.Scene {
 
   private place(cell: number) {
     const g = this.state!;
-    build(g, cell, this.tool);
+    build(g, cell, this.toolAt(cell));
     this.drain(g);
   }
 
@@ -466,9 +473,15 @@ export class GameScene extends Phaser.Scene {
     this.speed = this.speed >= most ? 1 : this.speed * 2;
   }
 
-  private pickTool(kind: TowerKind) {
-    this.tool = kind;
+  private pickTool(kind: TowerKind, side = 0) {
+    if (side) this.tool2 = kind;
+    else this.tool = kind;
     this.selected = -1;
+  }
+
+  /** The tool of the gardener whose half `cell` is on. */
+  private toolAt(cell: number) {
+    return this.state && sideOf(this.state, cell) ? this.tool2 : this.tool;
   }
 
   private sendWave() {
@@ -494,12 +507,13 @@ export class GameScene extends Phaser.Scene {
 
   /** Starts a game in `map`, or watches `replay` (at 2x). */
   private start(map: MapDef, replay: Replay | null = null) {
-    this.state = replay ? replayGame(replay) : newGame(map.id, this.calm, this.mode, this.shed.masters);
+    this.state = replay ? replayGame(replay) : newGame(map.id, this.calm, this.mode, this.shed.masters, undefined, this.duo);
     this.replay = replay;
     this.ri = 0;
     this.earned = 0;
     this.screen = 'play';
     this.tool = 'hedge';
+    this.tool2 = 'hedge';
     this.selected = -1;
     this.speed = replay ? 2 : 1;
     this.acc = 0;
@@ -509,6 +523,7 @@ export class GameScene extends Phaser.Scene {
     this.grabbed = false;
     this.weathered = false;
     this.banner = null;
+    if (this.state.duo && !replay) this.say(t('duoStart'));
     this.changed();
     this.drawLawn();
   }
@@ -552,6 +567,11 @@ export class GameScene extends Phaser.Scene {
       for (const c of map.banks ?? []) {
         const p = corner(c);
         art.bank(g, p.x, p.y, CELL);
+      }
+      // Two gardeners: a dashed line down the middle between their halves.
+      if (this.state?.duo) {
+        g.fillStyle(0xffffff, 0.45);
+        for (let y = 4; y < GRID.h; y += 14) g.fillRect(this.grid.x + (COLS / 2) * CELL - 1.5, this.grid.y + y, 3, 7);
       }
     } else art.flowers(g, 8, 8, this.vw - 16, this.vh - 16);
   }
@@ -614,9 +634,9 @@ export class GameScene extends Phaser.Scene {
       const m = this.mid(pv.cell);
       if (pv.blocks) art.noEntry(g, m.x, m.y);
       else {
-        if (TOWER[this.tool].trap) art.trap(g, this.tool as TrapKind, m.x, m.y, 0.5, false);
-        else art.tower(g, this.tool, m.x, m.y, 1, Math.atan2(DIRS[pv.face][1], DIRS[pv.face][0]), 0.45);
-        this.drawReach(g, s, this.tool, pv.cell, pv.face, 0.7, false);
+        if (TOWER[pv.tool].trap) art.trap(g, pv.tool as TrapKind, m.x, m.y, 0.5, false);
+        else art.tower(g, pv.tool, m.x, m.y, 1, Math.atan2(DIRS[pv.face][1], DIRS[pv.face][0]), 0.45);
+        this.drawReach(g, s, pv.tool, pv.cell, pv.face, 0.7, false);
       }
     }
     const picked = this.selected >= 0 ? towerAt(s, this.selected) : undefined;
@@ -747,13 +767,14 @@ export class GameScene extends Phaser.Scene {
     if (cell < 0 || this.selected >= 0 || cell === s.goal || s.gates.includes(cell) || s.phase === 'won' || s.phase === 'lost') return null;
     if (s.traps.some((t) => t.cell === cell)) return null;
     // Traps go where foes walk; in a path garden towers go only on the lawn beside the path.
-    const trap = !!TOWER[this.tool].trap;
+    const tool = this.toolAt(cell);
+    const trap = !!TOWER[tool].trap;
     if (s.blocked[cell] && !(s.blocked[cell] === LAWN && !trap)) return null;
     if (s.map.path && !s.blocked[cell] && !trap) return null;
-    if (this.preview?.cell === cell && this.preview.version === this.version && this.preview.tool === this.tool) return this.preview;
+    if (this.preview?.cell === cell && this.preview.version === this.version && this.preview.tool === tool) return this.preview;
     // A trap, or a tower beside a path, never blocks: the routes stay as they are.
     if (trap || s.blocked[cell] === LAWN) {
-      this.preview = { cell, version: this.version, tool: this.tool, blocks: false, face: 0, routes: s.gates.map((gate) => route(s.dist, gate)) };
+      this.preview = { cell, version: this.version, tool, blocks: false, face: 0, routes: s.gates.map((gate) => route(s.dist, gate)) };
       return this.preview;
     }
     const blocks = wouldBlock(s, cell);
@@ -764,8 +785,8 @@ export class GameScene extends Phaser.Scene {
       const dist = distances(blocked, s.goal);
       routes = s.gates.map((gate) => route(dist, gate));
     }
-    const face = TOWER[this.tool].faces ? bestFace(s, cell, this.tool) : 0;
-    this.preview = { cell, version: this.version, tool: this.tool, blocks, face, routes };
+    const face = TOWER[tool].faces ? bestFace(s, cell, tool) : 0;
+    this.preview = { cell, version: this.version, tool, blocks, face, routes };
     return this.preview;
   }
 
@@ -802,13 +823,15 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const key = JSON.stringify([
-      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text, this.shed, this.earned, this.season, this.mode, !!this.replay,
-      s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.gates.map((gate) => s.dist[gate]), s.nextAt === null ? -1 : Math.ceil(s.nextAt - s.clock), this.version], this.calm,
+      this.screen, this.vw, this.vh, this.tool, this.tool2, this.duo, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text, this.shed, this.earned, this.season, this.mode, !!this.replay,
+      s && [s.wave, s.phase, s.gold, s.gold2, s.lives, s.spawns.length > 0, s.foes.length > 0, s.gates.map((gate) => s.dist[gate]), s.nextAt === null ? -1 : Math.ceil(s.nextAt - s.clock), this.version], this.calm,
     ]);
     if (key === this.hudKey) return;
     this.hudKey = key;
     for (const t of this.texts) t.destroy();
     this.texts = [];
+    for (const i of this.icons) i.destroy();
+    this.icons = [];
     this.hits = [];
     this.buttons = {};
     this.hudG.clear();
@@ -842,32 +865,59 @@ export class GameScene extends Phaser.Scene {
     this.text(342, cy, routes, 13, css(C.cream), 0, false);
     const backX = vw - 16 - BACK_BUTTON.w;
     this.button('gardens', backX, (BAR_H - BACK_BUTTON.h) / 2, BACK_BUTTON.w, BACK_BUTTON.h, t('gardens'), () => this.toMenu(), { size: 13 });
-    // The picked tool's use, in the top bar.
-    const tipX = this.fx + TIP_X;
-    if (backX - 12 - tipX > 120) this.text(tipX, cy, !harms(this.tool) ? t(`${this.tool}Text` as TextKey) : `${t(`kind_${TOWER[this.tool].hits}` as TextKey)} · ${t(`${this.tool}Text` as TextKey)}`, 12, css(C.cream), 0, false).setWordWrapWidth(backX - 12 - tipX).setLineSpacing(-2);
-
     const by = vh - BAR_H + (BAR_H - TOOLS.h) / 2;
     const wx = vw - 16 - WAVE_BUTTON.w;
-    // The tools share the room up to the speed button: narrower with a fifth or sixth pick.
-    const speed = () => this.button('speed', wx - 8 - SPEED_BUTTON.w, by, SPEED_BUTTON.w, SPEED_BUTTON.h, t('speed', { n: this.speed }), () => this.faster(), { on: this.speed > 1 });
+    // With two gardeners the wave and speed buttons go up into the top bar, by the second gardener's gold.
+    const top = this.duo && !this.replay;
+    const wave = { x: top ? backX - 12 - WAVE_BUTTON.w : wx, y: top ? (BAR_H - WAVE_BUTTON.h) / 2 : by };
+    const speed = () => this.button('speed', wave.x - 8 - SPEED_BUTTON.w, wave.y, SPEED_BUTTON.w, SPEED_BUTTON.h, t('speed', { n: this.speed }), () => this.faster(), { on: this.speed > 1 });
     if (this.replay) {
       // Watching: no tools and no wave button, just what is shown and how fast.
       this.text(TOOLS.x, vh - BAR_H / 2, t('replayLabel', { stars: starText(this.replay.stars), t: clockText(this.replay.time) }), 15, css(C.gold));
       return speed();
     }
-    const room = wx - 8 - SPEED_BUTTON.w - 8 - TOOLS.x;
-    const tw = Math.min(TOOLS.w, Math.floor(room / this.pouch.length) - TOOLS.gap);
-    this.pouch.forEach((kind, i) => {
-      const x = TOOLS.x + i * (tw + TOOLS.gap);
-      this.button(`tool-${kind}`, x, by, tw, TOOLS.h, t(`${kind}Name` as TextKey), () => this.pickTool(kind), {
-        on: this.tool === kind, sub: `◆ ${TOWER[kind].cost}`, enabled: s.gold >= TOWER[kind].cost || this.tool === kind, size: tw < 76 ? 10 : 12,
-      });
-    });
+    if (top) this.text(wave.x - 8 - SPEED_BUTTON.w - 12, cy, `◆ ${s.gold2}`, 16, css(C.gold), 1);
+    else {
+      // The picked tool's use, in the top bar.
+      const tipX = this.fx + TIP_X;
+      if (backX - 12 - tipX > 120) this.text(tipX, cy, !harms(this.tool) ? t(`${this.tool}Text` as TextKey) : `${t(`kind_${TOWER[this.tool].hits}` as TextKey)} · ${t(`${this.tool}Text` as TextKey)}`, 12, css(C.cream), 0, false).setWordWrapWidth(backX - 12 - tipX).setLineSpacing(-2);
+    }
+    if (this.duo) {
+      // Each gardener's tools under their half of the lawn, as pictures when they are narrow.
+      const room = Math.min(vw / 2 - 8 - TOOLS.x, vw / 2 - 8 - 16);
+      const tw = Math.min(TOOLS.w, Math.floor(room / this.pouch.length) - TOOLS.gap);
+      g.fillStyle(C.cream, 0.3);
+      g.fillRect(vw / 2 - 1, vh - BAR_H + 6, 2, BAR_H - 12);
+      this.drawTools(s, 0, TOOLS.x, by, tw);
+      this.drawTools(s, 1, vw / 2 + 8, by, tw);
+    } else {
+      // The tools share the room up to the speed button: narrower with a fifth or sixth pick.
+      const room = wx - 8 - SPEED_BUTTON.w - 8 - TOOLS.x;
+      this.drawTools(s, 0, TOOLS.x, by, Math.min(TOOLS.w, Math.floor(room / this.pouch.length) - TOOLS.gap));
+    }
     const ready = canStartWave(s);
     const label = !ready ? t('incoming') : s.foes.length > 0 ? t('nextEarly', { n: 5 }) : t('startWave', { n: s.wave + 1 });
     const sub = s.nextAt !== null ? t('timer', { n: Math.max(0, Math.ceil(s.nextAt - s.clock)) }) : undefined;
-    this.button('wave', wx, by, WAVE_BUTTON.w, WAVE_BUTTON.h, label, () => this.sendWave(), { enabled: ready, fill: C.gold, sub, size: sub ? 13 : undefined });
+    this.button('wave', wave.x, wave.y, WAVE_BUTTON.w, WAVE_BUTTON.h, label, () => this.sendWave(), { enabled: ready, fill: C.gold, sub, size: sub ? 13 : undefined });
     speed();
+  }
+
+  /** A gardener's tool buttons (`tool-<kind>`, or `tool2-<kind>` for the second), `tw` wide from `x`. */
+  private drawTools(s: Game, side: number, x0: number, by: number, tw: number) {
+    const tool = side ? this.tool2 : this.tool;
+    const gold = side ? s.gold2 : s.gold;
+    const pictures = tw < 64;
+    this.pouch.forEach((kind, i) => {
+      const x = x0 + i * (tw + TOOLS.gap);
+      this.button(`tool${side ? 2 : ''}-${kind}`, x, by, tw, TOOLS.h, pictures ? '' : t(`${kind}Name` as TextKey), () => this.pickTool(kind, side), {
+        on: tool === kind, sub: `◆ ${TOWER[kind].cost}`, enabled: gold >= TOWER[kind].cost || tool === kind, size: tw < 76 ? 10 : 12,
+      });
+      if (!pictures) return;
+      const icon = this.add.graphics().setDepth(DEPTH.panel).setPosition(x + tw / 2, by + TOOLS.h / 2 - 6).setScale(0.48);
+      if (TOWER[kind].trap) art.trap(icon, kind as TrapKind, 0, 0, 1, false);
+      else art.tower(icon, kind, 0, 0, 1, -Math.PI / 2);
+      this.icons.push(icon);
+    });
   }
 
   private drawPanel(s: Game, tw: Tower) {
@@ -894,7 +944,7 @@ export class GameScene extends Phaser.Scene {
       this.button('upgrade', x + 12, y + 32, bw, 28, shut ? t('masterInShed') : cost === null ? t('topLevel') : t(tw.level === MASTER - 1 ? 'toMaster' : 'upgrade', { n: `◆ ${cost}` }), () => {
         upgrade(s, tw.cell);
         this.drain(s);
-      }, { enabled: cost !== null && s.gold >= cost, fill: C.gold, size: 13 });
+      }, { enabled: cost !== null && goldAt(s, tw.cell) >= cost, fill: C.gold, size: 13 });
     } else this.text(x + 12, y + 46, t('hedgeText'), 12, css(C.cream), 0, false);
     // Selling takes a second tap within a couple of seconds.
     const armed = this.sellArmed?.cell === tw.cell;
@@ -1051,6 +1101,13 @@ export class GameScene extends Phaser.Scene {
         on, enabled: open ? on || picks < most : true, sub: open ? `◆ ${TOWER[kind].cost}` : t('seedPrice', { n: towerSeeds(kind) }), size: 12,
       });
     });
+    // One gardener or two, under the way of play.
+    g.fillStyle(C.bar, 1);
+    g.fillRoundedRect(fx + 16, fy + 56, mw, 32, 7);
+    this.button('duo', fx + 16, fy + 56, mw, 32, this.duo ? t('duoOn') : t('duoOff'), () => {
+      this.duo = !this.duo;
+      saveDuo(this.duo);
+    }, { on: this.duo, size: 13 });
     // The potting shed, under the wave timer.
     const sw = 168;
     g.fillStyle(C.bar, 1);

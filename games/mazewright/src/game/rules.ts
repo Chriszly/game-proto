@@ -271,6 +271,11 @@ export const MODES = ['classic', 'swarm', 'endless', 'sandbox'] as const;
 export type Mode = (typeof MODES)[number];
 export const SWARM_GOLD = 1.25;
 export const SANDBOX_GOLD = 10000;
+/**
+ * Two gardeners on one screen: each has the half of the lawn on their side, their own gold (each
+ * starts with the usual amount) and their own tool, against shared waves of foes this much tougher.
+ */
+export const DUO_TOUGHNESS = 1.3;
 /** Stars for a win: three with at least `three` of the cabbages kept, two with `two`, else one. */
 export const STARS = { three: 0.9, two: 0.5 };
 

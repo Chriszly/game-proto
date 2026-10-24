@@ -23,6 +23,7 @@ beetle already on the lawn) is refused with an orange no-entry ring.
 | Way of play (garden picker, top left) | Classic, Swarm, Endless or Sandbox, for every garden |
 | Wave timer / Calm (garden picker) | After wave 1 the next wave comes by itself 20 seconds after the last is all out; Calm waits for Start wave |
 | Speed button, or F | Play at double speed |
+| One gardener / Two gardeners (garden picker) | Play alone, or two on one screen, each on their own half of the lawn |
 | Watch (on a garden card) | Watch your latest win in that garden again |
 | Gardens | Back to the garden picker |
 
@@ -82,6 +83,15 @@ bonfire or two to keep the rest warm.
 ![Brook in summer: a cannon wilted in the heat](docs/screenshots/wilt.webp)
 
 ![Ice Pond in winter: frost has frozen a tower](docs/screenshots/frost.webp)
+
+**Two gardeners.** Two can play on one screen: pick Two gardeners on the garden picker. Each
+gardener plants on their half of the lawn (a dashed line marks the middle) with their own gold and
+their own row of tools under their half, as pictures with their prices; keys 1 to 8 pick the left
+gardener's tools. Both start with the usual gold, a foe pays whoever's half it is beaten on, and a
+held wave's pay and the early bonus are shared out. The waves are the same for both, and foes are
+30% tougher, so the maze has to work across both halves.
+
+![Two gardeners on the Meadow, each with their own tools and gold](docs/screenshots/duo.webp)
 
 **Replays.** Each garden keeps your latest Classic or Swarm win, and its card gets a Watch button
 that plays it back: every hedge, tower, upgrade and wave as you played it, at 2x, or 1x or 4x with
