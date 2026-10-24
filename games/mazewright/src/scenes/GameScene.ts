@@ -1,17 +1,18 @@
 import Phaser from 'phaser';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { viewFrame, viewSize } from '../../../../shared/scaling';
+import { formatNumber } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
 import { SFX, SONG } from '../audio';
 import { distances, route } from '../game/grid';
 import { cellOf, MAPS, type MapDef } from '../game/maps';
-import { loadCalm, loadPouch, loadRecords, noteRecord, pouchOf, saveCalm, savePouch, type Records } from '../game/save';
+import { loadCalm, loadMode, loadPouch, loadRecords, noteRecord, pouchOf, saveCalm, saveMode, savePouch, type Records } from '../game/save';
 import {
-  beamCells, bestFace, build, cabbagesLeft, canStartWave, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
+  beamCells, bestFace, build, cabbagesLeft, canStartWave, stars, totalWaves, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
-import { aims, ALWAYS, harms, MASTER, COLS, FOE, POUCH_PICKS, ROWS, SECOND_GATE, TOWER, TOWERS, WAVES, type FoeKind, type TowerKind, type TrapKind } from '../game/rules';
+import { aims, ALWAYS, harms, MASTER, COLS, FOE, MODES, POUCH_PICKS, ROWS, SANDBOX_GOLD, SECOND_GATE, TOWER, TOWERS, waveGroups, WAVES, type FoeKind, type Mode, type TowerKind, type TrapKind } from '../game/rules';
 import { t, type TextKey } from '../i18n';
 import * as art from './art';
 import { C } from './art';
@@ -66,6 +67,8 @@ export class GameScene extends Phaser.Scene {
   speed = 1;
   /** Waves wait to be started (no wave timer). */
   calm = false;
+  /** The way of play picked on the garden picker. */
+  mode: Mode = 'classic';
   /** Spots for the test: every button on screen by id, centred, in view pixels. */
   buttons: Record<string, Spot> = {};
   /** The grid's top-left corner and cell size in view pixels, for the test. */
@@ -109,6 +112,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.records = loadRecords();
     this.calm = loadCalm();
+    this.mode = loadMode();
     this.pouch = loadPouch();
     this.lawnG = this.add.graphics().setDepth(DEPTH.lawn);
     this.boardG = this.add.graphics().setDepth(DEPTH.board);
@@ -288,7 +292,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'wave': {
         SFX('horn');
-        const kinds = WAVES[e.wave - 1].map(([k]) => k);
+        const kinds = waveGroups(e.wave).map(([k]) => k);
         const fresh = kinds.find((k) => !this.seen.has(k));
         for (const k of kinds) this.seen.add(k);
         if (fresh) this.say(t(`new_${fresh}` as TextKey));
@@ -300,17 +304,23 @@ export class GameScene extends Phaser.Scene {
       case 'cleared':
         SFX('cleared');
         if (g.phase !== 'won') this.say(t('cleared', { n: e.wave, gold: e.gold }));
-        noteRecord(this.records, g.map.id, e.wave, false);
+        this.note(g, e.wave);
         break;
       case 'won':
         playSting(SONG, 'win');
-        noteRecord(this.records, g.map.id, g.wave, true);
+        if (g.mode !== 'sandbox') noteRecord(this.records, g.map.id, { wave: g.wave, won: true, stars: stars(g), time: Math.round(g.clock) });
         break;
       case 'lost':
         playSting(SONG, 'lose');
-        noteRecord(this.records, g.map.id, g.wave - 1, false);
+        this.note(g, g.wave - 1);
         break;
     }
+  }
+
+  /** Notes `waves` held in the garden's records: as its best wave, or its Endless best. Sandbox keeps none. */
+  private note(g: Game, waves: number) {
+    if (g.mode === 'sandbox') return;
+    noteRecord(this.records, g.map.id, g.mode === 'endless' ? { endless: waves } : { wave: waves });
   }
 
   private changed() {
@@ -429,7 +439,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private start(map: MapDef) {
-    this.state = newGame(map.id, this.calm);
+    this.state = newGame(map.id, this.calm, this.mode);
     this.screen = 'play';
     this.tool = 'hedge';
     this.selected = -1;
@@ -738,7 +748,7 @@ export class GameScene extends Phaser.Scene {
     g.fillRect(0, 0, vw, BAR_H);
     g.fillRect(0, vh - BAR_H, vw, BAR_H);
     const cy = BAR_H / 2;
-    this.text(16, cy, t('wave', { n: s.wave, total: WAVES.length }), 16, css(C.cream));
+    this.text(16, cy, totalWaves(s) === Infinity ? t('waveEndless', { n: s.wave }) : t('wave', { n: s.wave, total: WAVES.length }), 16, css(C.cream));
     this.text(172, cy, `◆ ${s.gold}`, 16, css(C.gold));
     art.cabbage(g, 268, cy, 7);
     this.text(280, cy, `${s.lives}`, 16, css(C.life));
@@ -829,7 +839,9 @@ export class GameScene extends Phaser.Scene {
     g.fillRoundedRect(x, y, w, h, 14);
     const won = s.phase === 'won';
     this.text(this.vw / 2, y + 44, t(won ? 'won' : 'lost'), 26, css(won ? C.gold : C.cream), 0.5);
-    this.text(this.vw / 2, y + 88, won ? t('wonText', { n: cabbagesLeft(s) }) : t('lostText', { n: s.wave }), 15, css(C.cream), 0.5, false);
+    const over = won ? t('wonText', { n: cabbagesLeft(s) }) : totalWaves(s) === Infinity ? t('endlessOver', { n: s.wave - 1 }) : t('lostText', { n: s.wave });
+    this.text(this.vw / 2, y + 80, over, 15, css(C.cream), 0.5, false);
+    if (won) this.text(this.vw / 2, y + 104, `${starText(stars(s))} · ${t('time', { t: clockText(s.clock) })}`, 15, css(C.gold), 0.5);
     this.button('again', x + 40, y + 128, 170, 40, t('again'), () => this.start(s.map), { fill: C.gold });
     this.button('gardens', x + w - 210, y + 128, 170, 40, t('gardens'), () => this.toMenu());
   }
@@ -863,11 +875,23 @@ export class GameScene extends Phaser.Scene {
       this.text(cx, my + ROWS * cell + 26, t(`${map.id}Name` as TextKey), 20, css(C.cream), 0.5);
       this.text(cx, my + ROWS * cell + 56, t(`${map.id}Text` as TextKey), 13, css(C.cream), 0.5, false).setWordWrapWidth(CARDS.w - 28).setAlign('center');
       const r = this.records[map.id];
-      this.text(cx, y + CARDS.h - 22, r.won ? t('bestWon') : r.wave > 0 ? t('best', { n: r.wave }) : t('notPlayed'), 13, css(C.gold), 0.5);
+      const best =
+        this.mode === 'sandbox' ? t('sandboxCard')
+        : this.mode === 'endless' ? (r.endless > 0 ? t('bestEndless', { n: r.endless }) : t('notPlayed'))
+        : r.won ? `${starText(r.stars)}${r.time ? ` · ${clockText(r.time)}` : ''}`
+        : r.wave > 0 ? t('best', { n: r.wave }) : t('notPlayed');
+      this.text(cx, y + CARDS.h - 22, best, 13, css(C.gold), 0.5);
       this.hits.push({ x, y, w: CARDS.w, h: CARDS.h, onTap: () => this.start(map), enabled: true });
       this.buttons[`map-${map.id}`] = { x: cx, y: y + CARDS.h / 2, w: CARDS.w, h: CARDS.h };
     });
-    // Calm or the wave timer, at the top right.
+    // The way of play, at the top left; Calm or the wave timer, at the top right.
+    const mw = 200;
+    g.fillStyle(C.bar, 1);
+    g.fillRoundedRect(fx + 16, fy + 16, mw, 32, 7);
+    this.button('mode', fx + 16, fy + 16, mw, 32, t(`mode_${this.mode}` as TextKey, { n: formatNumber(SANDBOX_GOLD) }), () => {
+      this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length];
+      saveMode(this.mode);
+    }, { on: this.mode !== 'classic', size: 13 });
     const cw = 168;
     g.fillStyle(C.bar, 1);
     g.fillRoundedRect(fx + VIEW.w - 16 - cw, fy + 16, cw, 32, 7);
@@ -894,3 +918,9 @@ export class GameScene extends Phaser.Scene {
     });
   }
 }
+
+/** Stars as a row of ★, with ☆ for the ones still to win (three, or four once a fourth is won). */
+const starText = (n: number) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 3 - n));
+
+/** Seconds as m:ss. */
+const clockText = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;

@@ -20,6 +20,7 @@ beetle already on the lawn) is refused with an orange no-entry ring.
 | Hover the lawn | See the new route before you plant |
 | Tap or click a tower | Open its panel: Upgrade, Sell (tap it twice), Aim for a tower that picks a target, and Turn for a bonfire or sunglass |
 | Start wave, or Space | Send the next wave; once the last one is all out, send the next early for 5 gold |
+| Way of play (garden picker, top left) | Classic, Swarm, Endless or Sandbox, for every garden |
 | Wave timer / Calm (garden picker) | After wave 1 the next wave comes by itself 20 seconds after the last is all out; Calm waits for Start wave |
 | Speed button, or F | Play at double speed |
 | Gardens | Back to the garden picker |
@@ -149,6 +150,16 @@ patch, unless another foe picks them up. Cabbages carried into a burrow are lost
 falls once none are left in the patch, carried or rolling.
 
 ![Ladybirds carrying cabbages home, and dropped cabbages rolling back to the patch](docs/screenshots/cabbages.webp)
+
+**Ways of play.** The button at the top left of the garden picker picks how every garden is
+played, and is kept for the next game:
+
+| Way | |
+| --- | --- |
+| Classic | The 20 waves. A win earns one to three stars by cabbages kept (three with 90%, two with half), and the garden keeps its most stars and fastest win |
+| Swarm | The 20 waves, each sent the moment the last is all out, for a quarter more gold; won without losing a cabbage, it earns a fourth star |
+| Endless | Waves never stop: after wave 20, waves 11 to 20 come round again, bigger each time. The garden keeps the most waves held |
+| Sandbox | 10,000 gold, towers grow at once and waves never stop, with no records: a place to try mazes |
 
 **Difficulty** (hub setting): Easy gives 30 cabbages and foes 20% less health, Hard 12 cabbages and
 25% more health; Normal is 20 cabbages.

@@ -1,11 +1,13 @@
 import { MAPS } from './maps';
-import { ALWAYS, DEFAULT_POUCH, POUCH_PICKS, TOWERS, type TowerKind } from './rules';
+import { ALWAYS, DEFAULT_POUCH, MODES, POUCH_PICKS, TOWERS, type Mode, type TowerKind } from './rules';
 
-// Mazewright keeps three keys: the best wave reached and whether it was won, per garden, the
-// towers picked for the pouch, and whether waves wait to be started (calm). A game in play is not saved; a reload starts at the garden picker.
+// Mazewright keeps four keys: each garden's records (best wave, win, stars, best time, Endless
+// best), the towers picked for the pouch, whether waves wait to be started (calm), and the way of
+// play picked (mode). A game in play is not saved; a reload starts at the garden picker.
 const KEY = 'mazewright-best';
 const POUCH_KEY = 'mazewright-pouch';
 const CALM_KEY = 'mazewright-calm';
+const MODE_KEY = 'mazewright-mode';
 
 /** Calm: waves come only when started, with no wave timer. */
 export function loadCalm() {
@@ -24,18 +26,35 @@ export function saveCalm(calm: boolean) {
   }
 }
 
-export type Records = Record<string, { wave: number; won: boolean }>;
+/**
+ * Per garden: the best wave reached and whether it was won (Classic or Swarm), the most stars, the
+ * fastest win in seconds of game time (0 for none) and the most waves held in Endless.
+ */
+export interface GardenRecord {
+  wave: number;
+  won: boolean;
+  stars: number;
+  time: number;
+  endless: number;
+}
+export type Records = Record<string, GardenRecord>;
+
+const count = (v: unknown) => (Number.isFinite(v) && (v as number) > 0 ? Math.floor(v as number) : 0);
 
 export function loadRecords(): Records {
   const records: Records = {};
-  for (const m of MAPS) records[m.id] = { wave: 0, won: false };
+  for (const m of MAPS) records[m.id] = { wave: 0, won: false, stars: 0, time: 0, endless: 0 };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null');
     for (const m of MAPS) {
       const r = saved?.[m.id];
       if (!r) continue;
-      if (Number.isFinite(r.wave) && r.wave > 0) records[m.id].wave = Math.floor(r.wave);
-      records[m.id].won = r.won === true;
+      const into = records[m.id];
+      into.wave = count(r.wave);
+      into.won = r.won === true;
+      into.stars = Math.min(4, count(r.stars) || (into.won ? 1 : 0));
+      into.time = count(r.time);
+      into.endless = count(r.endless);
     }
   } catch {
     // A broken or blocked save starts fresh.
@@ -43,16 +62,39 @@ export function loadRecords(): Records {
   return records;
 }
 
-/** Raises a garden's record to `wave` (and marks it won); saves only when something changed. */
-export function noteRecord(records: Records, mapId: string, wave: number, won: boolean) {
+/** Merges a game's result into a garden's record, keeping the best of each; saves only when something changed. */
+export function noteRecord(records: Records, mapId: string, result: Partial<GardenRecord>) {
   const r = records[mapId];
-  if (!r || (wave <= r.wave && (!won || r.won))) return;
-  r.wave = Math.max(r.wave, wave);
-  r.won ||= won;
+  if (!r) return;
+  const before = JSON.stringify(r);
+  r.wave = Math.max(r.wave, result.wave ?? 0);
+  r.won ||= !!result.won;
+  r.stars = Math.max(r.stars, result.stars ?? 0);
+  if (result.time) r.time = r.time ? Math.min(r.time, result.time) : result.time;
+  r.endless = Math.max(r.endless, result.endless ?? 0);
+  if (JSON.stringify(r) === before) return;
   try {
     localStorage.setItem(KEY, JSON.stringify(records));
   } catch {
     // Storage can be full or blocked (private mode); the game keeps running unsaved.
+  }
+}
+
+/** The way of play picked on the garden picker. */
+export function loadMode(): Mode {
+  try {
+    const saved = localStorage.getItem(MODE_KEY);
+    return MODES.includes(saved as Mode) ? (saved as Mode) : 'classic';
+  } catch {
+    return 'classic';
+  }
+}
+
+export function saveMode(mode: Mode) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // Storage can be full or blocked; the choice holds until the page is closed.
   }
 }
 
