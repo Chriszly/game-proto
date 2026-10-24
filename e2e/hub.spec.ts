@@ -388,6 +388,97 @@ test('hub and games show trophies', async ({ page }, testInfo) => {
   await expect(page.locator('.game-start-button')).toBeVisible();
 });
 
+// A game adds up its time played on this device (shared/playTime.ts) only while it runs: not on its
+// start or pause screen. The test owns the clock, so the time counted is exact; `countPlayTime` lets
+// it count under automation, which never counts otherwise.
+test('games count time played', async ({ page }) => {
+  await page.addInitScript(() => Object.assign(window, { showStartScreen: true, countPlayTime: true }));
+  await page.clock.install();
+  await page.goto('/games/apothecary/');
+  const start = page.locator('.game-start-button');
+  await expect.poll(async () => (await page.clock.runFor(100), start.isVisible()), { message: 'start screen' }).toBe(true);
+  await page.clock.runFor(5000);
+  await start.click();
+  await page.clock.runFor(3000);
+  await page.locator('.pause-button').click();
+  await page.clock.runFor(5000);
+  // Leaving the page saves what was played.
+  await page.goto('/');
+  const seconds = await page.evaluate(() => JSON.parse(localStorage.getItem('hub-playtime') ?? '{}').apothecary);
+  expect(seconds, 'seconds counted between Start and pause').toBeGreaterThanOrEqual(2);
+  expect(seconds, 'seconds counted between Start and pause').toBeLessThanOrEqual(3);
+});
+
+// Each card shows the time played on this device and the Settings panel the total; Sort lists the
+// cards by name, last played or most played, and starred games come first, with a Favourites chip in
+// the genre filter. Deleting a game's progress forgets its time played but keeps its star.
+test('hub favourites, time played and sort', async ({ page }, testInfo) => {
+  await page.goto('/');
+  // No game played yet: no Sort row.
+  await expect(page.getByRole('group', { name: 'Sort' })).toBeHidden();
+  await page.evaluate(() => {
+    localStorage.setItem('hub-playtime', JSON.stringify({ apothecary: 12_000, deadline: 150, palisade: 30 }));
+    localStorage.setItem('hub-recent', JSON.stringify(['palisade', 'deadline', 'apothecary']));
+  });
+  await page.reload();
+  const card = (path: string) => page.locator('.game').filter({ has: page.locator(`a[href="${path}"]`) });
+  await expect(card('games/apothecary/').locator('.playtime')).toHaveText('3 h 20 min played');
+  await expect(card('games/deadline/').locator('.playtime')).toHaveText('2 min played');
+  // Under a minute shows nothing.
+  await expect(card('games/palisade/').locator('.playtime')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await expect(settings.locator('.total-play-time')).toHaveText('Time played on this device: 3 h 23 min');
+  await settings.getByRole('button', { name: 'Close' }).click();
+
+  const names = () => page.locator('.game h2').allTextContents();
+  const sort = page.getByRole('group', { name: 'Sort' });
+  await expect(sort.getByRole('button', { name: 'Name' })).toHaveAttribute('aria-pressed', 'true');
+  await sort.getByRole('button', { name: 'Most played' }).click();
+  expect((await names()).slice(0, 3)).toEqual(['Apothecary', 'Deadline', 'Palisade']);
+  await sort.getByRole('button', { name: 'Last played' }).click();
+  expect((await names()).slice(0, 3)).toEqual(['Palisade', 'Deadline', 'Apothecary']);
+  // The order is kept across visits.
+  await page.reload();
+  await expect(sort.getByRole('button', { name: 'Last played' })).toHaveAttribute('aria-pressed', 'true');
+  expect((await names())[0]).toBe('Palisade');
+  await sort.getByRole('button', { name: 'Name' }).click();
+  expect((await names())[0]).toBe('Anvilheart');
+
+  // A starred game moves to the front and stays there.
+  const star = page.getByRole('button', { name: 'Favourite Wyrmrail' });
+  await expect(star).toHaveAttribute('aria-pressed', 'false');
+  await star.click();
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+  expect((await names()).slice(0, 2)).toEqual(['Wyrmrail', 'Anvilheart']);
+  testInfo.attach('favourites', { body: await page.screenshot({ path: testInfo.outputPath('favourites.png') }), contentType: 'image/png' });
+  await page.reload();
+  expect((await names())[0]).toBe('Wyrmrail');
+  expect(await page.evaluate(() => localStorage.getItem('hub-favourites'))).toBe('["wyrmrail"]');
+
+  // The genre filter gets a Favourites chip.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('group', { name: 'Genre filter' }).getByRole('button', { name: 'On' }).click();
+  await settings.getByRole('button', { name: 'Close' }).click();
+  const genres = page.getByRole('group', { name: 'Genres' });
+  await genres.getByRole('button', { name: 'Favourites' }).click();
+  await expect(page.locator('.game:visible h2')).toHaveText(['Wyrmrail']);
+  await genres.getByRole('button', { name: 'All' }).click();
+
+  // Deleting Apothecary's progress forgets its time played, and none of it goes into its export.
+  await page.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Apothecary' });
+  await page.evaluate(() => localStorage.setItem('apothecary-save', '{}'));
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  page.once('dialog', (d) => d.accept());
+  await dialog.getByRole('button', { name: "Delete this game's progress" }).click();
+  await expect(card('games/apothecary/').locator('.playtime')).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-playtime')!))).toEqual({ deadline: 150, palisade: 30 });
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(star).toHaveAttribute('aria-pressed', 'true');
+});
+
 // The hub shows each game's play count from its counter (shared/playCount.ts), here answered by a
 // stand-in so the test never reaches the real service. A game never played, or a counter that fails,
 // shows no line.

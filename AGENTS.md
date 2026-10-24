@@ -208,6 +208,12 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   milestones of a first hour and a few for long play, list them in the game's `AGENTS.md`, and
   bring games over one per PR (`ls games/*/src/trophies/index.ts` lists the games that have them).
   A playthrough may assert a trophy its first round earns.
+- **Time played comes for free too.** `setupGame` adds up the time the game runs on this device
+  (`shared/playTime.ts`, under `hub-playtime`), not on its start or pause screen, nor with the tab
+  hidden or the turn-phone hint up, and the hub shows it on the card, beside the starred games
+  (`shared/favourites.ts`, `hub-favourites`). Both stay on the device: `hub-` keys never go into a
+  progress file or code. Browser automation doesn't count it unless a test sets
+  `window.countPlayTime`, so a game needs nothing for it.
 - **Fit every screen.** A game stays sharp and fills the screen from an upright phone to a 4K
   monitor by calling `setupScaling(game)` from `shared/scaling.ts` right after `setupGame(game)`
   (`grep -l setupScaling games/*/src/main.ts` lists the games that do; bring the others over one game per PR). The canvas then has

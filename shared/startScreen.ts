@@ -33,7 +33,7 @@ const HELP_KEY = 'h';
  *   a Trophies button with the count earned, which lists them in place of the card; Back or Esc go back.
  * While a screen is up, keys go to it and not to the game.
  */
-export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay, trophies?: TrophySet) {
+export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay, trophies?: TrophySet): () => boolean {
   injectStyles();
   const overlay = document.createElement('div');
   overlay.className = 'game-overlay loading';
@@ -218,6 +218,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay, trophie
       suspendAudio();
     } else resumeAudio();
   });
+  return () => mode === 'playing';
 }
 
 /**

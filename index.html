@@ -25,12 +25,15 @@
       .game h2, .share-card h2 { display: flex; align-items: center; gap: 10px; margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
       .game .icon, .share-card .icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
       .game p, .share-card p { margin: 0 14px 16px; color: #d8c7a6; }
-      .game .plays, .game .trophy-count { margin-top: -10px; font-size: 13px; color: #a8957a; }
+      .game .plays, .game .trophy-count, .game .playtime { margin-top: -10px; font-size: 13px; color: #a8957a; }
       /* Each card's ⚙ opens that game's own settings. */
       .game .game-gear { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; padding: 0; font-size: 20px;
         line-height: 1; background: rgba(44, 32, 24, 0.85); }
-      .filters, .recent { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 20px; }
-      .recent-title { margin: 0 4px 0 0; font-size: 16px; color: #f3c64e; }
+      /* The ☆ beside it stars the game, which then sorts to the top (shared/favourites.ts). */
+      .game .game-star { position: absolute; top: 8px; right: 52px; width: 36px; height: 36px; padding: 0; font-size: 20px;
+        line-height: 1; color: #f3c64e; background: rgba(44, 32, 24, 0.85); }
+      .filters, .recent, .sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 20px; }
+      .recent-title, .sort-title { margin: 0 4px 0 0; font-size: 16px; color: #f3c64e; }
       .recent a { display: flex; align-items: center; gap: 8px; padding: 6px 12px; color: inherit; text-decoration: none;
         background: #2c2018; border: 2px solid #5a3f2a; box-shadow: 0 3px 0 #0e0a08; }
       .recent a:hover, .recent a:focus-visible { border-color: #f3c64e; outline: none; }
@@ -164,6 +167,10 @@
       <nav class="recent" aria-labelledby="recent-title" hidden>
         <h2 class="recent-title" id="recent-title" data-i18n="continuePlaying">Continue playing</h2>
       </nav>
+      <!-- The card order, shown once a game has been played on this device. -->
+      <div class="sort" role="group" aria-labelledby="sort-title" hidden>
+        <span class="sort-title" id="sort-title" data-i18n="sortBy">Sort</span>
+      </div>
       <!-- Shown when the Genre filter setting is on; the genres come from each card's data-genres. -->
       <div class="filters" role="group" data-i18n-label="genres" aria-label="Genres" hidden></div>
       <!-- One entry per game in games/<name>; see AGENTS.md for adding a game. -->
@@ -358,6 +365,8 @@
       import { mountSettingsPanel } from './shared/settingsPanel.ts';
       import { gameOf, showPlayCounts } from './shared/playCount.ts';
       import { clearProgress, hasProgress, recentlyPlayed } from './shared/progress.ts';
+      import { favourites, toggleFavourite, savedSort, saveSort, SORTS } from './shared/favourites.ts';
+      import { formatPlayTime, playTimes } from './shared/playTime.ts';
       import { loadSettings } from './shared/settings.ts';
       import { language, setLanguage, t, translatePage } from './shared/i18n.ts';
       import { installed, mountInstallButton, onOpenFile, registerServiceWorker } from './shared/install.ts';
@@ -375,9 +384,60 @@
       const folder = (li) => gameOf(li.querySelector('a').getAttribute('href'));
       const title = (li) => li.querySelector('h2').textContent.trim();
 
-      // Keep the cards in alphabetical order, so a new game lands in place wherever its card is added.
-      // The share card stays in front of them.
-      games.append(shareCard, ...cards.sort((a, b) => title(a).localeCompare(title(b), 'en')));
+      // The cards are listed by name, so a new game lands in place wherever its card is added, or by
+      // the order picked under Sort: last played first, or most played first. Starred games come
+      // before the rest, and the share card stays in front of them all.
+      const byName = (a, b) => title(a).localeCompare(title(b), 'en');
+      cards.sort(byName);
+      let sort = savedSort();
+      const arrange = () => {
+        const starred = favourites();
+        const played = recentlyPlayed();
+        const times = playTimes();
+        const lastPlayed = (c) => (played.includes(folder(c)) ? played.indexOf(folder(c)) : played.length);
+        const order = {
+          name: byName,
+          recent: (a, b) => lastPlayed(a) - lastPlayed(b) || byName(a, b),
+          most: (a, b) => (times[folder(b)] ?? 0) - (times[folder(a)] ?? 0) || byName(a, b),
+        }[sort];
+        const star = (c) => Number(starred.includes(folder(c)));
+        games.append(shareCard, ...[...cards].sort((a, b) => star(b) - star(a) || order(a, b)));
+      };
+      const sortRow = document.querySelector('.sort');
+      const showSort = () => {
+        sortRow.hidden = sort === 'name' && recentlyPlayed().length === 0;
+        sortRow.replaceChildren(
+          sortRow.querySelector('.sort-title'),
+          ...SORTS.map((s) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = t(`sort${s[0].toUpperCase()}${s.slice(1)}`);
+            button.setAttribute('aria-pressed', String(s === sort));
+            button.addEventListener('click', () => {
+              sort = s;
+              saveSort(s);
+              showSort();
+              arrange();
+            });
+            return button;
+          }),
+        );
+      };
+
+      // Time played on this device (shared/playTime.ts), under each card's text once it reaches a minute.
+      const showPlayTimes = () => {
+        const times = playTimes();
+        for (const card of cards) {
+          const link = card.querySelector('a');
+          link.querySelector('.playtime')?.remove();
+          const time = formatPlayTime(times[folder(card)] ?? 0);
+          if (!time) continue;
+          const line = document.createElement('p');
+          line.className = 'playtime';
+          line.textContent = t('playTime', { time });
+          link.querySelector('h2 + p').after(line);
+        }
+      };
 
       // Each card gets a ⚙ that opens its game's own settings: delete just that game's progress, or play.
       const gameDialog = document.getElementById('game-settings');
@@ -402,6 +462,20 @@
           gameDialog.showModal();
         });
         card.append(gear);
+        const star = document.createElement('button');
+        star.type = 'button';
+        star.className = 'game-star';
+        const starred = favourites().includes(folder(card));
+        star.textContent = starred ? '★' : '☆';
+        star.setAttribute('aria-pressed', String(starred));
+        star.addEventListener('click', () => {
+          const on = toggleFavourite(folder(card));
+          star.textContent = on ? '★' : '☆';
+          star.setAttribute('aria-pressed', String(on));
+          arrange();
+          showGenres();
+        });
+        card.append(star);
       }
       // Each card of a game with trophies counts the ones earned, and the header's Trophies opens the shelf.
       const showTrophies = () => {
@@ -471,10 +545,14 @@
           recent.append(link);
         }
         recent.hidden = played.length === 0;
+        // Deleting or importing progress changes the time played and the last played games too.
+        showPlayTimes();
+        showSort();
+        arrange();
       };
-      showRecent();
 
-      // The genre filter, when the setting is on: one button per genre on the cards, and All.
+      // The genre filter, when the setting is on: one button per genre on the cards, All, and
+      // Favourites once a game is starred.
       const filters = document.querySelector('.filters');
       const GENRES = ['action', 'strategy', 'management', 'puzzle', 'adventure'];
       let genre = 'all';
@@ -482,8 +560,10 @@
         const on = loadSettings().genreFilter;
         filters.hidden = !on;
         if (!on) genre = 'all';
+        const starred = favourites();
+        if (genre === 'favourites' && !starred.length) genre = 'all';
         filters.replaceChildren(
-          ...['all', ...GENRES].map((g) => {
+          ...['all', ...(starred.length ? ['favourites'] : []), ...GENRES].map((g) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.textContent = t(`genre${g[0].toUpperCase()}${g.slice(1)}`);
@@ -495,7 +575,9 @@
             return button;
           }),
         );
-        for (const card of cards) card.hidden = genre !== 'all' && !card.dataset.genres.split(' ').includes(genre);
+        const shows = (card) =>
+          genre === 'all' || (genre === 'favourites' ? starred.includes(folder(card)) : card.dataset.genres.split(' ').includes(genre));
+        for (const card of cards) card.hidden = !shows(card);
       };
 
       // The page's text comes from shared/i18n (English in the markup is only the first paint), and
@@ -504,10 +586,14 @@
         translatePage();
         document.title = t('hubTitle');
         for (const line of document.querySelectorAll('.plays')) line.textContent = t('plays', { n: Number(line.dataset.plays) });
-        for (const card of cards) card.querySelector('.game-gear').setAttribute('aria-label', t('gameSettings', { game: title(card) }));
+        for (const card of cards) {
+          card.querySelector('.game-gear').setAttribute('aria-label', t('gameSettings', { game: title(card) }));
+          card.querySelector('.game-star').setAttribute('aria-label', t('favouriteGame', { game: title(card) }));
+        }
         if (shown) showGame();
         showGenres();
         showTrophies();
+        showRecent();
       };
       setLanguage(language());
       translate();

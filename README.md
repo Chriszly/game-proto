@@ -104,9 +104,10 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   ![The game turned on an upright phone](docs/screenshots/turned-game.webp)
 - **Saved progress**: **Export all** saves every game's progress and the settings to a `.gh` file,
   and **Import all** loads one back, on this or another device. **QR code** and **Paste code** move
-  the same as a progress code (see Progress codes). **Delete all progress** erases every
-  game's saves and the Continue playing row, and keeps the settings and any other site's storage on
-  the same origin.
+  the same as a progress code (see Progress codes). The row also shows the time played on this
+  device over every game. **Delete all progress** erases every game's saves, time played and the
+  Continue playing row, and keeps the settings, the favourites and any other site's storage on the
+  same origin.
 
 ![Export all, Import all and Delete all progress](docs/screenshots/hub-progress-files.webp)
 - **Restore defaults** puts the settings back, and **Done** closes the panel.
@@ -128,6 +129,16 @@ when it loads (`shared/qr.ts`, no outside service), so it points wherever the hu
 
 Above the cards, **Continue playing** links the last three games played on this device, and a link
 at the bottom of the hub opens the bug and feedback forms. The covers load as they scroll into view.
+
+The **☆** beside a card's ⚙ stars the game: starred games come first, and the genre filter gets a
+**Favourites** button. Each card also shows how long the game has been played on this device, such
+as "3 h 20 min played", counted only while the game runs (not on its start or pause screen, nor with
+the tab hidden). Once a game has been played, **Sort** lists the cards by **Name**, **Last played**
+or **Most played**. Favourites, time played and the order stay on this device: they are kept under
+`hub-` keys (`shared/favourites.ts`, `shared/playTime.ts`), which no progress file or code carries,
+and nothing is sent anywhere. Deleting a game's progress also forgets its time played.
+
+![A starred game first, with its time played](docs/screenshots/hub-favourites.webp)
 
 Every game also has a full screen button in its bottom left corner, and the **F** key toggles full screen. Browsers that cannot take a page full screen, such as iPhones, don't show the button. Beside it, the speaker button opens the sound menu, with one volume for the music, one for the sound effects and a Mute button; the **M** key mutes every sound and turns it back on, and the pause screen sets the same volumes. The corner buttons keep 12px clear of the edges, plus a phone's safe area, so rounded corners never cut them.
 
@@ -169,9 +180,9 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `audio.ts`, the sound effects and music made in code, `corner.ts`, the corner buttons, `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion, full screen and the sound button
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  `trophies.ts`, the trophies, their toast and the hub's trophy shelf, `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `progressCode.ts`, the progress codes (see Progress codes), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `trophies.ts`, the trophies, their toast and the hub's trophy shelf, `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `playTime.ts` and `favourites.ts`, the time played and the starred games (see above), `saveFile.ts` and `saveCodes.ts`, the progress files (see Progress files), `progressCode.ts`, the progress codes (see Progress codes), `install.ts`, the installable apps (see Install as an app), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files and codes, that the hub and every game have an app manifest, the genre filter and Continue playing row, that a game starts and pauses, that trophies show on the cards, the shelf and the pause screen, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the progress files and codes, that the hub and every game have an app manifest, the genre filter and Continue playing row, favourites, time played and Sort, that a game starts and pauses and counts its time played, that trophies show on the cards, the shelf and the pause screen, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks

@@ -35,6 +35,16 @@ const de: Translation<typeof en> = {
   trophyShelfLede: 'Alle auf diesem Gerät gewonnenen Trophäen, nach Spiel.',
   trophyShelfEmpty: 'Noch keine Trophäen. Spiel ein Spiel mit Trophäen, um das Regal zu füllen.',
   trophyCountLabel: '{earned} von {total} Trophäen',
+  playTime: '{time} gespielt',
+  durationHours: '{h} Std. {m} Min.',
+  durationMinutes: '{m} Min.',
+  totalPlayTime: 'Auf diesem Gerät gespielt: {time}',
+  favouriteGame: '{game} als Favorit',
+  genreFavourites: 'Favoriten',
+  sortBy: 'Sortieren',
+  sortName: 'Name',
+  sortRecent: 'Zuletzt gespielt',
+  sortMost: 'Meistgespielt',
   continuePlaying: 'Weiterspielen',
   feedback: 'Fehler melden oder Idee teilen',
   gameSettings: 'Einstellungen für {game}',
@@ -210,4 +220,4 @@ const de: Translation<typeof en> = {
 export default de;
 
 /** Texts that are the same in German, so the translation check doesn't flag them. */
-export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'trophyBronze', 'trophyGold', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction', 'soundInput'];
+export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'trophyBronze', 'trophyGold', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction', 'soundInput', 'sortName'];
