@@ -5,6 +5,7 @@ import { addStartScreen } from './startScreen';
 import type { HowToPlay } from './howToPlay';
 import { countPlay, gameOf } from './playCount';
 import { markPlayed } from './progress';
+import { markSeen } from './gameDates';
 import { addSoundButton, cornerBar } from './corner';
 import { registerServiceWorker } from './install';
 import type { TrophySet } from './trophies';
@@ -25,7 +26,7 @@ const SLACK_MS = 1;
  * screens and steers a cursor over the game (`gamepad.ts`, `padCursor.ts`). It also counts the play
  * on the game's public play counter (`playCount.ts`) and marks it played for the hub's Continue
  * playing row (`progress.ts`), adds up its time played on this device for the hub
- * (`playTime.ts`), and registers the service worker that lets the installed app play
+ * (`playTime.ts`), clears its New or Updated badge on the hub (`gameDates.ts`), and registers the service worker that lets the installed app play
  * offline (`install.ts`). The browser's right-click menu is turned off
  * on the whole page, so a right click or a long press never pops it up over the game.
  */
@@ -45,6 +46,7 @@ export function setupGame(game: Phaser.Game, options: { howToPlay?: HowToPlay; t
   if (name) {
     markPlayed(name);
     trackPlayTime(game, name, playing);
+    markSeen(name);
   }
 }
 

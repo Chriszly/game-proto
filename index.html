@@ -25,6 +25,10 @@
       .game h2, .share-card h2 { display: flex; align-items: center; gap: 10px; margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
       .game .icon, .share-card .icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
       .game p, .share-card p { margin: 0 14px 16px; color: #d8c7a6; }
+      /* New and Updated (shared/gameDates.ts), over the cover's top left corner. */
+      .game .badge { position: absolute; top: 8px; left: 8px; padding: 3px 8px; font-size: 13px; font-weight: bold;
+        color: #1b1410; background: #f3c64e; border: 2px solid #1b1410; box-shadow: 0 3px 0 #0e0a08; }
+      .game .badge.updated { background: #8fd0a8; }
       .game .plays, .game .trophy-count, .game .playtime { margin-top: -10px; font-size: 13px; color: #a8957a; }
       /* Each card's ⚙ opens that game's own settings. */
       .game .game-gear { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; padding: 0; font-size: 20px;
@@ -125,6 +129,7 @@
         <div class="panel">
           <h2 id="game-settings-title"></h2>
           <p class="lede" id="game-progress"></p>
+          <p class="lede" id="game-updated" hidden></p>
           <!-- Export and import just this game's progress, as a file ending in .gh and the game's code (shared/saveCodes.ts). -->
           <div class="setting">
             <div class="setting-choices">
@@ -368,7 +373,8 @@
       import { favourites, toggleFavourite, savedSort, saveSort, SORTS } from './shared/favourites.ts';
       import { formatPlayTime, playTimes } from './shared/playTime.ts';
       import { loadSettings } from './shared/settings.ts';
-      import { language, setLanguage, t, translatePage } from './shared/i18n.ts';
+      import { formatDate, language, setLanguage, t, translatePage } from './shared/i18n.ts';
+      import { GAME_DATES, badge, markKnown, parseDay } from './shared/gameDates.ts';
       import { installed, mountInstallButton, onOpenFile, registerServiceWorker } from './shared/install.ts';
       import { ALL, askToExport, askToImport, fileEnding, pickFile } from './shared/saveFile.ts';
       import { qrSvg } from './shared/qr.ts';
@@ -440,6 +446,26 @@
         }
       };
 
+      // New and Updated badges: a game that's new and never opened here, or changed since it was last
+      // opened here. Opening the game clears its badge (setupGame calls markSeen).
+      const day = (date) => formatDate(parseDay(date), { dateStyle: 'long' });
+      markKnown(cards.map(folder));
+      const showBadges = () => {
+        for (const card of cards) {
+          card.querySelector('.badge')?.remove();
+          const kind = badge(folder(card));
+          if (!kind) continue;
+          const dates = GAME_DATES[folder(card)];
+          const label = document.createElement('span');
+          label.className = `badge ${kind}`;
+          label.textContent = t(kind === 'new' ? 'badgeNew' : 'badgeUpdated');
+          label.title = t(kind === 'new' ? 'badgeNewTitle' : 'badgeUpdatedTitle', { date: day(kind === 'new' ? dates.added : dates.updated) });
+          card.querySelector('a').append(label);
+        }
+      };
+      // Coming back to the hub with the browser's back button shows it as it was, so look again.
+      window.addEventListener('pageshow', (e) => e.persisted && showBadges());
+
       // Each card gets a ⚙ that opens its game's own settings: delete just that game's progress, or play.
       const gameDialog = document.getElementById('game-settings');
       let shown;
@@ -447,6 +473,10 @@
         document.getElementById('game-settings-title').textContent = title(shown);
         const saved = hasProgress(folder(shown));
         document.getElementById('game-progress').textContent = t(saved ? 'gameProgressSaved' : 'gameProgressNone');
+        const dates = GAME_DATES[folder(shown)];
+        const updated = document.getElementById('game-updated');
+        updated.hidden = !dates;
+        if (dates) updated.textContent = t('lastUpdated', { date: day(dates.updated) });
         document.getElementById('reset-game').disabled = !saved;
         document.getElementById('export-game').disabled = !saved;
         document.getElementById('play-game').href = shown.querySelector('a').getAttribute('href');
@@ -595,6 +625,7 @@
         showGenres();
         showTrophies();
         showRecent();
+        showBadges();
       };
       setLanguage(language());
       translate();
