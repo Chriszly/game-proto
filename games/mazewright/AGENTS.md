@@ -30,7 +30,16 @@ Implemented today:
   quarter round from their panel (`turn`).
 - Foes (`FOES`): `beetle`, `ladybird`, `stag`, `moth` (flies straight over the maze), `mole` (chews
   through one hedge in its life when that saves it at least `CHEW_GAIN` steps; towers and rocks are
-  never chewed), the `weevil` (from wave 8) and the `queen` (waves 10 and 20).
+  never chewed), the `weevil` (from wave 8), `woodlouse` (`splits` into two small ones),
+  `earwig` (fastest), `snail` (rubbery shell, `heals` a share of its health a second unless chilled
+  or poisoned), `ember` (shell `ember`: no Heat) and the `queen` (wave 10). On wave 20 the queen is
+  the Empress (`EMPRESS`: lays a beetle every `egg` seconds, and every `turn` seconds takes the
+  shell in `RESISTS` against the damage kind that hurt her most; event `shell`).
+- Kings and big foes: a `Group` may carry `{ king: true }` (`KING`: hp, gold, lives, body, speed;
+  `KING_TRICKS`: a king mole chews 3 hedges, a king woodlouse splits into 4, a king moth lets 3
+  moths go) or `{ size: 2 | 3 }` (`BIG`). `makeFoe` and `offspring` build foes; a `Foe` keeps its
+  `body` (draw radius in tiles), `gold`, `lives`, `chews`, `splits` and `shell`. After the last
+  wave's groups, `RUSH_KINDS` each send one king, `RUSH.delay` seconds later and `RUSH.gap` apart (event `rush`); events `king`, `split`, `egg`.
 - Damage kinds (`DAMAGE_KINDS`, a tower's `hits`) and shells (`SHELLS`, a foe's `shell`):
   `shellFactor` gives the share that gets through (stag waxy, mole hairy, weevil hard). Burning is
   Heat, poison goes through every shell. Sunglass and bonfire hits add `HEAT.hit` to a foe's `heat`
@@ -45,7 +54,9 @@ Implemented today:
 - Hover preview: the routes as they would be with the hovered tile planted, or the no-entry ring.
 - Drag to plant a line; keys 1 to 6 (the pouch, in order), Space and F; a 2x speed button. The
   picked tool's use is told in the top bar.
-- Banners name each new foe kind the first time it comes, the second burrow and a chewing mole.
+- Banners name each new foe kind the first time it comes, the second burrow, a chewing mole, a king
+  (`kingComing`), the final rush (`rush`) and the Empress's shell turns (`empressShell`). Kings
+  wear a crown (`art.foe` with `king`).
 
 Missing or rough:
 
@@ -57,7 +68,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -133,7 +144,7 @@ motion holds the frost pulse and cannon boom rings at full size and the gold num
 ## Sound
 
 `SONG` (104 BPM, G major): `calm` (the picker and between waves), `battle` (a wave in play, E minor),
-`boss` (while a queen is out or to come) and the stings `win` and `lose`.
+`boss` (while a queen or a king is out or to come) and the stings `win` and `lose`.
 
 | Sound | Where |
 | --- | --- |

@@ -25,6 +25,8 @@ export const SHELLS = {
   hard: { sharp: 0.5, spark: 1.5 },
   waxy: { heat: 0.5, blast: 1.5 },
   hairy: { blast: 0.5, sharp: 1.5 },
+  rubbery: { spark: 0.5, cold: 1.5 },
+  ember: { heat: 0 },
 } as const satisfies Record<string, Partial<Record<DamageKind, number>>>;
 export type ShellKind = keyof typeof SHELLS;
 export const shellFactor = (shell: ShellKind | undefined, kind: DamageKind) =>
@@ -106,7 +108,7 @@ export type ShotKind = keyof typeof SHOT_SPEED;
 /** Puffball spores jump from a poisoned foe to ground foes this close, once a second. */
 export const SPREAD = { reach: 0.9, every: 1 };
 
-export const FOES = ['beetle', 'ladybird', 'stag', 'moth', 'mole', 'weevil', 'queen'] as const;
+export const FOES = ['beetle', 'ladybird', 'stag', 'moth', 'mole', 'weevil', 'woodlouse', 'snail', 'ember', 'earwig', 'queen'] as const;
 export type FoeKind = (typeof FOES)[number];
 
 export interface FoeDef {
@@ -124,6 +126,10 @@ export interface FoeDef {
   digs?: boolean;
   /** Its shell, which resists some damage kinds (`SHELLS`). */
   shell?: ShellKind;
+  /** Woodlice: how many small ones it splits into when beaten. */
+  splits?: number;
+  /** Snails: the share of its health it heals a second, unless chilled or poisoned. */
+  heals?: number;
   /** Its body's radius in cells, for drawing and for cannon splash. */
   size: number;
 }
@@ -135,6 +141,10 @@ export const FOE: Record<FoeKind, FoeDef> = {
   moth: { hp: 22, speed: 1.4, gold: 3, lives: 1, gap: 1, flies: true, size: 0.22 },
   mole: { hp: 50, speed: 1.3, gold: 4, lives: 1, gap: 1.4, digs: true, shell: 'hairy', size: 0.26 },
   weevil: { hp: 55, speed: 1.2, gold: 4, lives: 1, gap: 1.2, shell: 'hard', size: 0.24 },
+  woodlouse: { hp: 36, speed: 1.4, gold: 2, lives: 1, gap: 1, splits: 2, size: 0.22 },
+  snail: { hp: 80, speed: 0.7, gold: 4, lives: 1, gap: 1.6, heals: 0.04, shell: 'rubbery', size: 0.25 },
+  ember: { hp: 45, speed: 1.5, gold: 3, lives: 1, gap: 1, shell: 'ember', size: 0.22 },
+  earwig: { hp: 60, speed: 3, gold: 4, lives: 1, gap: 0.8, size: 0.2 },
   queen: { hp: 600, speed: 0.8, gold: 40, lives: 5, gap: 2, size: 0.42 },
 };
 
@@ -143,8 +153,17 @@ export const CHEW_TIME = 3;
 /** Steps a hedge must save before a mole bothers to chew it. */
 export const CHEW_GAIN = 6;
 
-/** A group of one kind of foe in a wave. */
-export type Group = [FoeKind, number];
+/** A group of one kind of foe in a wave, optionally bigger (`size` 2 or 3) or crowned kings. */
+export type Group = [FoeKind, number] | [FoeKind, number, { size?: 2 | 3; king?: boolean }];
+
+/** A bigger beetle: health, gold and lives times these, and its body this much larger, by size. */
+export const BIG = { 2: { hp: 3, gold: 2, lives: 2, body: 1.4 }, 3: { hp: 6, gold: 3, lives: 3, body: 1.8 } } as const;
+/** A king: health, gold and lives times these, its body this much larger and a bit slower. */
+export const KING = { hp: 6, gold: 8, lives: 3, body: 1.6, speed: 0.8 };
+/** A king mole chews this many hedges, a king woodlouse splits into this many, and a king moth lets out moths when beaten. */
+export const KING_TRICKS = { chews: 3, splits: 4, moths: 3 };
+/** The Empress (the last wave's queen) lays a beetle every `egg` seconds and turns her shell every `turn` seconds. */
+export const EMPRESS = { egg: 5, turn: 5 };
 
 /**
  * The waves, in order. From wave `SECOND_GATE` on, foes come out of both burrows in turn; before
@@ -155,23 +174,27 @@ export const WAVES: Group[][] = [
   [['beetle', 8], ['ladybird', 3]],
   [['ladybird', 10]],
   [['beetle', 10], ['stag', 2]],
-  [['beetle', 8], ['mole', 3]],
-  [['beetle', 12], ['ladybird', 6]],
-  [['stag', 5], ['beetle', 8]],
+  [['beetle', 8], ['mole', 3], ['beetle', 1, { king: true }]],
+  [['beetle', 10], ['woodlouse', 4], ['ladybird', 6]],
+  [['stag', 5], ['earwig', 4], ['beetle', 6]],
   [['moth', 8], ['beetle', 6], ['weevil', 4]],
-  [['mole', 5], ['ladybird', 10]],
-  [['beetle', 10], ['queen', 1]],
-  [['beetle', 10], ['weevil', 5], ['moth', 6]],
-  [['stag', 8], ['mole', 4]],
-  [['ladybird', 20]],
-  [['moth', 12], ['stag', 4]],
-  [['mole', 8], ['weevil', 8], ['beetle', 6]],
-  [['stag', 10], ['ladybird', 12]],
-  [['moth', 14], ['mole', 6]],
-  [['beetle', 14], ['weevil', 8], ['stag', 8]],
-  [['ladybird', 20], ['moth', 10], ['mole', 6]],
-  [['stag', 8], ['weevil', 6], ['moth', 8], ['queen', 1]],
+  [['mole', 5], ['snail', 3], ['ladybird', 10]],
+  [['beetle', 10], ['stag', 1, { king: true }], ['queen', 1]],
+  [['beetle', 10], ['ember', 4], ['weevil', 5], ['moth', 6]],
+  [['stag', 8], ['mole', 4], ['beetle', 4, { size: 2 }]],
+  [['ladybird', 14], ['earwig', 6]],
+  [['moth', 12], ['snail', 4], ['stag', 4]],
+  [['mole', 8], ['weevil', 8], ['beetle', 6], ['mole', 1, { king: true }]],
+  [['stag', 10], ['woodlouse', 6], ['ladybird', 12]],
+  [['moth', 14], ['ember', 6], ['mole', 6]],
+  [['beetle', 8, { size: 2 }], ['weevil', 8], ['stag', 8]],
+  [['ladybird', 20], ['earwig', 6], ['moth', 10], ['mole', 6]],
+  [['stag', 8], ['weevil', 6], ['moth', 8], ['beetle', 2, { size: 3 }], ['queen', 1]],
 ];
+/** After the last wave's queen, a rush of one king of every kind met in the game. */
+/** Seconds from the last wave's queen to the rush, and between two of its kings. */
+export const RUSH = { delay: 16, gap: 3 };
+export const RUSH_KINDS: FoeKind[] = ['beetle', 'ladybird', 'stag', 'moth', 'mole', 'weevil', 'woodlouse', 'snail', 'ember', 'earwig'];
 export const SECOND_GATE = 6;
 /** Seconds between two groups of a wave. */
 export const GROUP_GAP = 2;
