@@ -1,14 +1,17 @@
 import { MAPS } from './maps';
+import type { Replay } from './sim';
 import { ALWAYS, DEFAULT_POUCH, FREE, MODES, POUCH_PICKS, SEEDS, SLOT_SEEDS, TOWERS, type Mode, type TowerKind } from './rules';
 
-// Mazewright keeps five keys: each garden's records (best wave, win, stars, best time, Endless
+// Mazewright keeps six keys: each garden's records (best wave, win, stars, best time, Endless
 // best), the towers picked for the pouch, whether waves wait to be started (calm), the way of play
-// picked (mode), and the potting shed (seeds, the towers and master levels bought, extra slots). A game in play is not saved; a reload starts at the garden picker.
+// picked (mode), the potting shed (seeds, the towers and master levels bought, extra slots) and
+// each garden's latest win to watch again (replays). A game in play is not saved; a reload starts at the garden picker.
 const KEY = 'mazewright-best';
 const POUCH_KEY = 'mazewright-pouch';
 const CALM_KEY = 'mazewright-calm';
 const MODE_KEY = 'mazewright-mode';
 const SHED_KEY = 'mazewright-shed';
+const REPLAY_KEY = 'mazewright-replays';
 
 /** Calm: waves come only when started, with no wave timer. */
 export function loadCalm() {
@@ -166,4 +169,31 @@ export function savePouch(pouch: TowerKind[]) {
 export function pouchOf(kinds: TowerKind[], shed: Shed): TowerKind[] {
   const picks = TOWERS.filter((k) => !ALWAYS.includes(k) && kinds.includes(k) && usable(shed, k)).slice(0, picksOf(shed));
   return [...ALWAYS, ...picks];
+}
+
+/** Each garden's latest win (Classic or Swarm), to watch again, by garden. */
+export type Replays = Record<string, Replay>;
+
+export function loadReplays(): Replays {
+  const replays: Replays = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(REPLAY_KEY) ?? 'null');
+    for (const m of MAPS) {
+      const r = saved?.[m.id];
+      if (r && r.map === m.id && Array.isArray(r.log) && Number.isFinite(r.seed) && Number.isFinite(r.steps)) replays[m.id] = r;
+    }
+  } catch {
+    // A broken or blocked save has no replays.
+  }
+  return replays;
+}
+
+/** Keeps `replay` as its garden's latest win. */
+export function saveReplay(replays: Replays, replay: Replay) {
+  replays[replay.map] = replay;
+  try {
+    localStorage.setItem(REPLAY_KEY, JSON.stringify(replays));
+  } catch {
+    // Storage can be full or blocked; the replay holds until the page is closed.
+  }
 }

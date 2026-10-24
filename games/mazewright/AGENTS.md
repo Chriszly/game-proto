@@ -34,6 +34,17 @@ Implemented today:
   `frostFor` (4). A `stopped` tower neither reloads, grows nor fires; events `wilt` and `frozen`,
   drawn with `art.wilted` and `art.frozen`, and the first of them each game gets a banner
   (`wiltFirst`, `frostFirst`). Spring and autumn have no weather.
+- Replays: a game draws its random numbers from its own seed (`rand`, mulberry32 on `g.rng`; frost
+  and nothing else uses chance today) and fixes `toughness` and `lives` at the start, and
+  `note` logs every player action (`Action`: build, upgrade, sell, turn, aim, wave) at the step it
+  came (`g.steps`). The wave timer starts waves through `beginWave`, which isn't logged. A Classic
+  or Swarm win is kept with `replayOf` as the garden's `Replay` (`saveReplay`); the card's
+  `watch-<garden>` button starts `replayGame(r)`, and `GameScene.update` calls `replayStep` before
+  each `step`, so the game plays out exactly as it did. While `replay` is set, the board and keys
+  take nothing but F, the bottom bar shows `replayLabel` and the speed button (1x, 2x, 4x;
+  `faster`), and records, seeds and replays are left alone; the end panel has Watch again
+  (`again`) and Gardens. Any new chance in the sim must use `rand(g)`, never `Math.random`, and any
+  new player action must call `note`, or replays drift.
 - The pouch: under the garden cards, chips in two rows (`CHIPS.perRow`) for the thirteen towers and two traps besides `hedge` and `bow` (`ALWAYS`);
   up to `POUCH_PICKS` (4) are picked, saved, and make the run's tool bar (six buttons at most).
   `DEFAULT_POUCH` is today's four (hedge, bow, frost, cannon), which the playthrough uses.
@@ -160,7 +171,7 @@ File map (`src/`):
   neighbours), `nextStep` (a neighbour one step closer, keeping the heading on ties, then right,
   down, up, left), `route`, `UNREACHABLE`, `DIRS`.
 - `game/sim.ts`: `Game`, `Tower`, `Foe`, `Shot`, `GameEvent`, `Refusal` and the actions:
-  `newGame`, `canBuild`, `wouldBlock`, `build`, `nextUpgrade`, `upgrade`, `sellValue`, `sell`, `turn`, `setAim`,
+  `newGame`, `replayGame`, `replayStep`, `replayOf` (with `Action`, `Fixed` and `Replay`), `canBuild`, `wouldBlock`, `build`, `nextUpgrade`, `upgrade`, `sellValue`, `sell`, `turn`, `setAim`,
   `canStartWave`, `startWave`, `step`, `remaining`, `routeLength`, `towerAt`, and `beamCells`,
   `inCone` and `bestFace` for the towers that point one way, `reachOf` and `openGates`. Only this file
   changes a `Game`. `g.blocked` is 0 free (a path garden's path), 1 rock, 2 tower, 3 water, 4
@@ -177,7 +188,7 @@ File map (`src/`):
   spread, and cooling), then fires every tower with its beehive `boosts`; `hurt` takes a damage kind
   through the foe's shell, `scorch` is a heat hit that also heats. Apple trees pay out with the wave reward.
 - `game/save.ts`: `loadRecords`, `noteRecord`, `loadPouch`, `savePouch`, `pouchOf` (hedge and bow,
-  then up to four more in tower order, traps included).
+  then up to four more in tower order, traps included), `loadReplays`, `saveReplay`.
 - `scenes/layout.ts`: `VIEW`, `CELL` (40), `GRID` (the grid's corner in the 960x540 frame), the bar
   height, the tool, wave, speed and Gardens buttons, `TIP_X` (the tool's use in the top bar), the
   tower panel (taller with Turn), the garden cards, the pouch's `CHIPS` (two rows, above the corner buttons)
@@ -196,11 +207,12 @@ File map (`src/`):
 Save keys: `mazewright-best` (per garden, `GardenRecord`: best wave, whether it was won, most
 stars, fastest win in seconds and the Endless best), `mazewright-pouch` (the towers picked),
 `mazewright-calm` (`'1'` when waves wait for Start wave), `mazewright-mode` (the way of play) and
-`mazewright-shed` (seeds, `owned` towers, `masters` bought and extra `slots`).
+`mazewright-shed` (seeds, `owned` towers, `masters` bought and extra `slots`) and
+`mazewright-replays` (per garden, the latest Classic or Swarm win as a `Replay`).
 
 Test hooks (read by `e2e/playthrough.spec.ts` through `window.game.scene.getScene('Game')`):
-`screen`, `state` (the `Game`), `pouch`, `buttons` (every button by id, centred, in view pixels:
-`map-<garden>` (the cards of the season shown, `season-<season>`), `pouch-<tower>`, `tool-<tower>`, `wave`, `speed`, `gardens`, `upgrade`, `sell`,
+`screen`, `state` (the `Game`), `replay` (the `Replay` watched, or null), `pouch`, `buttons` (every button by id, centred, in view pixels:
+`map-<garden>` (the cards of the season shown, `season-<season>`), `watch-<garden>`, `pouch-<tower>`, `tool-<tower>`, `wave`, `speed`, `gardens`, `upgrade`, `sell`,
 `turn`, `aim`, `again`) and `grid` (the grid's corner and cell size in view pixels).
 
 Difficulty: `startLives` (30, 20, 12) and `hpScale` (0.8, 1, 1.25) use `byDifficulty`. Reduced

@@ -190,6 +190,9 @@ const en = {
   lost: 'The cabbages are gone',
   lostText: 'You held them off until wave {n}.',
   again: 'Play again',
+  watchAgain: 'Watch again',
+  watch: 'Watch',
+  replayLabel: 'Replay · {stars} · {t}',
 };
 
 export default en;

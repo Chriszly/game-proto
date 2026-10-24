@@ -23,6 +23,7 @@ beetle already on the lawn) is refused with an orange no-entry ring.
 | Way of play (garden picker, top left) | Classic, Swarm, Endless or Sandbox, for every garden |
 | Wave timer / Calm (garden picker) | After wave 1 the next wave comes by itself 20 seconds after the last is all out; Calm waits for Start wave |
 | Speed button, or F | Play at double speed |
+| Watch (on a garden card) | Watch your latest win in that garden again |
 | Gardens | Back to the garden picker |
 
 ![A planting that would close the last way through is refused](docs/screenshots/refused.webp)
@@ -81,6 +82,12 @@ bonfire or two to keep the rest warm.
 ![Brook in summer: a cannon wilted in the heat](docs/screenshots/wilt.webp)
 
 ![Ice Pond in winter: frost has frozen a tower](docs/screenshots/frost.webp)
+
+**Replays.** Each garden keeps your latest Classic or Swarm win, and its card gets a Watch button
+that plays it back: every hedge, tower, upgrade and wave as you played it, at 2x, or 1x or 4x with
+the speed button (F). Nothing can be planted while it plays, and it changes no records or seeds.
+
+![Watching a win on the Meadow again](docs/screenshots/replay.webp)
 
 ### Towers
 
