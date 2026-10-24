@@ -6,13 +6,13 @@ import { settings } from '../../../../shared/settings';
 import { SFX, SONG } from '../audio';
 import { distances, route } from '../game/grid';
 import { cellOf, MAPS, type MapDef } from '../game/maps';
-import { loadCalm, loadMode, loadPouch, loadRecords, noteRecord, pouchOf, saveCalm, saveMode, savePouch, type Records } from '../game/save';
+import { loadCalm, loadMode, loadPouch, loadRecords, loadShed, noteRecord, picksOf, pouchOf, saveCalm, saveMode, savePouch, saveShed, usable, type Records, type Shed } from '../game/save';
 import {
-  beamCells, bestFace, build, cabbagesLeft, canStartWave, stars, totalWaves, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
+  beamCells, bestFace, build, cabbagesLeft, canStartWave, masterOpen, seedsFor, stars, totalWaves, newGame, nextUpgrade, sell, sellValue, setAim, startWave, step, towerAt, turn, upgrade, wouldBlock,
   type Game, type GameEvent, type Refusal, type Tower,
 } from '../game/sim';
 import { DIRS } from '../game/grid';
-import { aims, ALWAYS, harms, MASTER, COLS, FOE, MODES, POUCH_PICKS, ROWS, SANDBOX_GOLD, SECOND_GATE, TOWER, TOWERS, waveGroups, WAVES, type FoeKind, type Mode, type TowerKind, type TrapKind } from '../game/rules';
+import { aims, ALWAYS, FREE, harms, MASTER, masterSeeds, SLOT_SEEDS, towerSeeds, COLS, FOE, MODES, ROWS, SANDBOX_GOLD, SECOND_GATE, TOWER, TOWERS, waveGroups, WAVES, type FoeKind, type Mode, type TowerKind, type TrapKind } from '../game/rules';
 import { t, type TextKey } from '../i18n';
 import * as art from './art';
 import { C } from './art';
@@ -56,7 +56,7 @@ interface Flash {
  * drains `game.events` for sound, effects and records.
  */
 export class GameScene extends Phaser.Scene {
-  screen: 'menu' | 'play' = 'menu';
+  screen: 'menu' | 'play' | 'shed' = 'menu';
   state: Game | null = null;
   records!: Records;
   tool: TowerKind = 'hedge';
@@ -69,6 +69,9 @@ export class GameScene extends Phaser.Scene {
   calm = false;
   /** The way of play picked on the garden picker. */
   mode: Mode = 'classic';
+  /** The potting shed, and the seeds the last finished game paid into it. */
+  shed!: Shed;
+  earned = 0;
   /** Spots for the test: every button on screen by id, centred, in view pixels. */
   buttons: Record<string, Spot> = {};
   /** The grid's top-left corner and cell size in view pixels, for the test. */
@@ -113,7 +116,8 @@ export class GameScene extends Phaser.Scene {
     this.records = loadRecords();
     this.calm = loadCalm();
     this.mode = loadMode();
-    this.pouch = loadPouch();
+    this.shed = loadShed(this.records);
+    this.pouch = loadPouch(this.shed);
     this.lawnG = this.add.graphics().setDepth(DEPTH.lawn);
     this.boardG = this.add.graphics().setDepth(DEPTH.board);
     this.fxG = this.add.graphics().setDepth(DEPTH.fx);
@@ -309,10 +313,12 @@ export class GameScene extends Phaser.Scene {
       case 'won':
         playSting(SONG, 'win');
         if (g.mode !== 'sandbox') noteRecord(this.records, g.map.id, { wave: g.wave, won: true, stars: stars(g), time: Math.round(g.clock) });
+        this.earn(g);
         break;
       case 'lost':
         playSting(SONG, 'lose');
         this.note(g, g.wave - 1);
+        this.earn(g);
         break;
     }
   }
@@ -321,6 +327,23 @@ export class GameScene extends Phaser.Scene {
   private note(g: Game, waves: number) {
     if (g.mode === 'sandbox') return;
     noteRecord(this.records, g.map.id, g.mode === 'endless' ? { endless: waves } : { wave: waves });
+  }
+
+  /** Pays a finished game's seeds into the potting shed. */
+  private earn(g: Game) {
+    this.earned = seedsFor(g);
+    if (!this.earned) return;
+    this.shed.seeds += this.earned;
+    saveShed(this.shed);
+  }
+
+  /** Buys from the potting shed, if the seeds are there. */
+  private buy(price: number, apply: () => void) {
+    if (this.shed.seeds < price) return ui('refuse');
+    this.shed.seeds -= price;
+    apply();
+    saveShed(this.shed);
+    ui('coin');
   }
 
   private changed() {
@@ -434,12 +457,13 @@ export class GameScene extends Phaser.Scene {
   /** Puts a tower into the pouch or takes it out; hedge and bow always stay. */
   private togglePouch(kind: TowerKind) {
     const picked = this.pouch.includes(kind);
-    this.pouch = pouchOf(picked ? this.pouch.filter((k) => k !== kind) : [...this.pouch, kind]);
+    this.pouch = pouchOf(picked ? this.pouch.filter((k) => k !== kind) : [...this.pouch, kind], this.shed);
     savePouch(this.pouch);
   }
 
   private start(map: MapDef) {
-    this.state = newGame(map.id, this.calm, this.mode);
+    this.state = newGame(map.id, this.calm, this.mode, this.shed.masters);
+    this.earned = 0;
     this.screen = 'play';
     this.tool = 'hedge';
     this.selected = -1;
@@ -720,7 +744,7 @@ export class GameScene extends Phaser.Scene {
   private drawHud() {
     const s = this.state;
     const key = JSON.stringify([
-      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text,
+      this.screen, this.vw, this.vh, this.tool, this.pouch, this.selected, this.sellArmed?.cell, this.speed, this.banner?.text, this.shed, this.earned,
       s && [s.wave, s.phase, s.gold, s.lives, s.spawns.length > 0, s.foes.length > 0, s.dist[s.gates[0]], s.dist[s.gates[1]], s.nextAt === null ? -1 : Math.ceil(s.nextAt - s.clock), this.version], this.calm,
     ]);
     if (key === this.hudKey) return;
@@ -730,6 +754,7 @@ export class GameScene extends Phaser.Scene {
     this.hits = [];
     this.buttons = {};
     this.hudG.clear();
+    if (this.screen === 'shed') return this.drawShed();
     if (this.screen === 'menu' || !s) return this.drawMenu();
     this.drawBars(s);
     const picked = this.selected >= 0 ? towerAt(s, this.selected) : undefined;
@@ -762,13 +787,16 @@ export class GameScene extends Phaser.Scene {
     if (backX - 12 - tipX > 120) this.text(tipX, cy, !harms(this.tool) ? t(`${this.tool}Text` as TextKey) : `${t(`kind_${TOWER[this.tool].hits}` as TextKey)} · ${t(`${this.tool}Text` as TextKey)}`, 12, css(C.cream), 0, false).setWordWrapWidth(backX - 12 - tipX).setLineSpacing(-2);
 
     const by = vh - BAR_H + (BAR_H - TOOLS.h) / 2;
+    const wx = vw - 16 - WAVE_BUTTON.w;
+    // The tools share the room up to the speed button: narrower with a fifth or sixth pick.
+    const room = wx - 8 - SPEED_BUTTON.w - 8 - TOOLS.x;
+    const tw = Math.min(TOOLS.w, Math.floor(room / this.pouch.length) - TOOLS.gap);
     this.pouch.forEach((kind, i) => {
-      const x = TOOLS.x + i * (TOOLS.w + TOOLS.gap);
-      this.button(`tool-${kind}`, x, by, TOOLS.w, TOOLS.h, t(`${kind}Name` as TextKey), () => this.pickTool(kind), {
-        on: this.tool === kind, sub: `◆ ${TOWER[kind].cost}`, enabled: s.gold >= TOWER[kind].cost || this.tool === kind, size: 12,
+      const x = TOOLS.x + i * (tw + TOOLS.gap);
+      this.button(`tool-${kind}`, x, by, tw, TOOLS.h, t(`${kind}Name` as TextKey), () => this.pickTool(kind), {
+        on: this.tool === kind, sub: `◆ ${TOWER[kind].cost}`, enabled: s.gold >= TOWER[kind].cost || this.tool === kind, size: tw < 76 ? 10 : 12,
       });
     });
-    const wx = vw - 16 - WAVE_BUTTON.w;
     const ready = canStartWave(s);
     const label = !ready ? t('incoming') : s.foes.length > 0 ? t('nextEarly', { n: 5 }) : t('startWave', { n: s.wave + 1 });
     const sub = s.nextAt !== null ? t('timer', { n: Math.max(0, Math.ceil(s.nextAt - s.clock)) }) : undefined;
@@ -793,10 +821,11 @@ export class GameScene extends Phaser.Scene {
     g.fillRoundedRect(x, y, PANEL.w, h, 9);
     const name = t(`${tw.kind}Name` as TextKey);
     this.text(x + 12, y + 16, tw.kind === 'hedge' ? name : `${name} · ${tw.level === MASTER ? t('master') : t('level', { n: tw.level })}`, 14, css(C.cream));
-    const cost = nextUpgrade(tw);
+    const cost = nextUpgrade(tw, s);
+    const shut = tw.level === MASTER - 1 && !masterOpen(s, tw.kind);
     const bw = PANEL.w - 24;
     if (tw.kind !== 'hedge') {
-      this.button('upgrade', x + 12, y + 32, bw, 28, cost === null ? t('topLevel') : t(tw.level === MASTER - 1 ? 'toMaster' : 'upgrade', { n: `◆ ${cost}` }), () => {
+      this.button('upgrade', x + 12, y + 32, bw, 28, shut ? t('masterInShed') : cost === null ? t('topLevel') : t(tw.level === MASTER - 1 ? 'toMaster' : 'upgrade', { n: `◆ ${cost}` }), () => {
         upgrade(s, tw.cell);
         this.drain(s);
       }, { enabled: cost !== null && s.gold >= cost, fill: C.gold, size: 13 });
@@ -841,7 +870,9 @@ export class GameScene extends Phaser.Scene {
     this.text(this.vw / 2, y + 44, t(won ? 'won' : 'lost'), 26, css(won ? C.gold : C.cream), 0.5);
     const over = won ? t('wonText', { n: cabbagesLeft(s) }) : totalWaves(s) === Infinity ? t('endlessOver', { n: s.wave - 1 }) : t('lostText', { n: s.wave });
     this.text(this.vw / 2, y + 80, over, 15, css(C.cream), 0.5, false);
-    if (won) this.text(this.vw / 2, y + 104, `${starText(stars(s))} · ${t('time', { t: clockText(s.clock) })}`, 15, css(C.gold), 0.5);
+    const reward = this.earned ? t('seedsEarned', { n: this.earned }) : '';
+    if (won) this.text(this.vw / 2, y + 104, [starText(stars(s)), t('time', { t: clockText(s.clock) }), reward].filter(Boolean).join(' · '), 15, css(C.gold), 0.5);
+    else if (reward) this.text(this.vw / 2, y + 104, reward, 15, css(C.gold), 0.5);
     this.button('again', x + 40, y + 128, 170, 40, t('again'), () => this.start(s.map), { fill: C.gold });
     this.button('gardens', x + w - 210, y + 128, 170, 40, t('gardens'), () => this.toMenu());
   }
@@ -902,7 +933,8 @@ export class GameScene extends Phaser.Scene {
     // The pouch: hedge and bow always come, and up to four of these.
     const kinds = TOWERS.filter((k) => !ALWAYS.includes(k));
     const picks = this.pouch.length - ALWAYS.length;
-    this.text(this.vw / 2, fy + CHIPS.labelY, t('pouch', { n: POUCH_PICKS, left: POUCH_PICKS - picks }), 13, '#2d3b1f', 0.5);
+    const most = picksOf(this.shed);
+    this.text(this.vw / 2, fy + CHIPS.labelY, t('pouch', { n: most, left: most - picks }), 13, '#2d3b1f', 0.5);
     kinds.forEach((kind, i) => {
       const on = this.pouch.includes(kind);
       const row = Math.floor(i / CHIPS.perRow);
@@ -910,10 +942,82 @@ export class GameScene extends Phaser.Scene {
       const rowW = inRow * (CHIPS.w + CHIPS.gap) - CHIPS.gap;
       const x = (this.vw - rowW) / 2 + (i % CHIPS.perRow) * (CHIPS.w + CHIPS.gap);
       const y = fy + CHIPS.y + row * (CHIPS.h + CHIPS.gap);
-      g.fillStyle(C.bar, 1);
+      // A tower not bought yet shows its price in seeds on a darker chip, and the shed sells it.
+      const open = usable(this.shed, kind);
+      g.fillStyle(open ? C.bar : C.locked, 1);
       g.fillRoundedRect(x, y, CHIPS.w, CHIPS.h, 7);
-      this.button(`pouch-${kind}`, x, y, CHIPS.w, CHIPS.h, t(`${kind}Name` as TextKey), () => this.togglePouch(kind), {
-        on, enabled: on || picks < POUCH_PICKS, sub: `◆ ${TOWER[kind].cost}`, size: 12,
+      this.button(`pouch-${kind}`, x, y, CHIPS.w, CHIPS.h, t(`${kind}Name` as TextKey), () => (open ? this.togglePouch(kind) : this.toShed()), {
+        on, enabled: open ? on || picks < most : true, sub: open ? `◆ ${TOWER[kind].cost}` : t('seedPrice', { n: towerSeeds(kind) }), size: 12,
+      });
+    });
+    // The potting shed, under the wave timer.
+    const sw = 168;
+    g.fillStyle(C.bar, 1);
+    g.fillRoundedRect(fx + VIEW.w - 16 - sw, fy + 56, sw, 32, 7);
+    this.button('shed', fx + VIEW.w - 16 - sw, fy + 56, sw, 32, t('shedButton', { n: this.shed.seeds }), () => this.toShed(), { size: 13 });
+  }
+
+  private toShed() {
+    this.screen = 'shed';
+    this.hudKey = '';
+  }
+
+  /** The potting shed: towers, master levels and pouch slots for seeds. */
+  private drawShed() {
+    const g = this.hudG;
+    const { fx, fy } = this;
+    g.fillStyle(0x1e140b, 0.35);
+    g.fillRect(0, 0, this.vw, this.vh);
+    this.text(this.vw / 2, fy + 40, t('shedTitle'), 30, css(C.cream), 0.5).setStroke('#2e6b2b', 6);
+    this.text(this.vw / 2, fy + 76, t('shedSeeds', { n: this.shed.seeds }), 15, css(C.gold), 0.5);
+    g.fillStyle(C.bar, 1);
+    g.fillRoundedRect(fx + 16, fy + 16, 120, 32, 7);
+    this.button('back', fx + 16, fy + 16, 120, 32, t('back'), () => {
+      this.screen = 'menu';
+      this.hudKey = '';
+    }, { size: 13 });
+    const kinds = TOWERS.filter((k) => k !== 'hedge');
+    const cols = 4;
+    const w = 214;
+    const h = 72;
+    const gap = 8;
+    const x0 = (this.vw - (cols * (w + gap) - gap)) / 2;
+    kinds.forEach((kind, i) => {
+      const x = x0 + (i % cols) * (w + gap);
+      const y = fy + 96 + Math.floor(i / cols) * (h + gap);
+      g.fillStyle(C.bar, 0.96);
+      g.fillRoundedRect(x, y, w, h, 9);
+      this.text(x + 12, y + 16, t(`${kind}Name` as TextKey), 14, css(C.cream));
+      const owned = usable(this.shed, kind);
+      const mastered = this.shed.masters.includes(kind);
+      const noMaster = !!TOWER[kind].trap;
+      let label: string;
+      let price = 0;
+      let apply: (() => void) | null = null;
+      if (!owned) {
+        price = towerSeeds(kind);
+        label = t('buyTower', { n: price });
+        apply = () => this.shed.owned.push(kind);
+      } else if (noMaster) label = FREE.includes(kind) ? t('free') : t('bought');
+      else if (!mastered) {
+        price = masterSeeds(kind);
+        label = t('buyMaster', { n: price });
+        apply = () => this.shed.masters.push(kind);
+      } else label = t('mastered');
+      this.button(`buy-${kind}`, x + 12, y + 32, w - 24, 30, label, () => apply && this.buy(price, apply), {
+        enabled: !!apply && this.shed.seeds >= price, fill: apply ? C.gold : undefined, size: 12,
+      });
+    });
+    // The fifth and sixth pouch slots.
+    const sy = fy + 96 + Math.ceil(kinds.length / cols) * (h + gap) + 4;
+    SLOT_SEEDS.forEach((price, i) => {
+      const x = this.vw / 2 - 220 + i * 228;
+      const got = this.shed.slots > i;
+      const next = this.shed.slots === i;
+      g.fillStyle(C.bar, 0.96);
+      g.fillRoundedRect(x - 4, sy - 4, 220, 38, 9);
+      this.button(`slot-${i + 5}`, x, sy, 212, 30, got ? t('slotBought', { n: i + 5 }) : t('buySlot', { n: i + 5, price }), () => this.buy(price, () => this.shed.slots++), {
+        enabled: next && this.shed.seeds >= price, fill: next ? C.gold : undefined, size: 12,
       });
     });
   }

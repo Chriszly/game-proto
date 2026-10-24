@@ -4,7 +4,7 @@ import { byLanguage } from '../../../shared/i18n';
 const en: HowToPlay = {
   goal: 'Keep the beetles out of the cottage for 20 waves. There is no road: every tower you plant is also a wall, so you build the maze they must walk.',
   controls: [
-    { input: 'Click or tap a tool', action: 'Pick a tower from your pouch (keys 1 to 6)' },
+    { input: 'Click or tap a tool', action: 'Pick a tower from your pouch (keys 1 to 8)' },
     { input: 'Click, tap or drag on the lawn', action: 'Plant the tool there, or a whole line of them' },
     { input: 'Click or tap a tower', action: 'Upgrade, sell (tap twice), set its aim, or turn a bonfire or sunglass' },
     { input: 'Start wave button, Space', action: 'Send the next wave, early for a bonus; after wave 1 the wave timer sends it after 20 seconds (Calm on the garden picker turns it off)' },
@@ -24,6 +24,7 @@ const en: HowToPlay = {
     'A new tower grows a second per 10 gold before it fires, and an upgrade grows again: plant and upgrade before the foes come.',
     'Moths fly straight over the maze, so keep bows, frost or a swallow nest near the cottage too.',
     'A win earns up to three stars by the cabbages you kept, and a fourth for a Swarm won without losing one.',
+    'Every game pays seeds; spend them in the potting shed on new towers, master levels and two more pouch slots.',
     'A tower at level 3 can become a master, with a trick of its own: its panel tells which.',
     'Traps never block: a honey pot draws foes into a crowd for a cannon, a snare holds one under a crossbow.',
     'Moles chew through a hedge that blocks a much shorter way: put a tower there instead.',
@@ -40,7 +41,7 @@ const en: HowToPlay = {
 const de: HowToPlay = {
   goal: 'Halte die Käfer 20 Wellen lang vom Häuschen fern. Es gibt keinen Weg: Jeder Turm, den du pflanzt, ist auch eine Mauer, also baust du das Labyrinth, durch das sie laufen müssen.',
   controls: [
-    { input: 'Ein Werkzeug klicken oder tippen', action: 'Einen Turm aus deinem Beutel wählen (Tasten 1 bis 6)' },
+    { input: 'Ein Werkzeug klicken oder tippen', action: 'Einen Turm aus deinem Beutel wählen (Tasten 1 bis 8)' },
     { input: 'Auf den Rasen klicken, tippen oder ziehen', action: 'Das Werkzeug dort pflanzen, oder eine ganze Reihe' },
     { input: 'Einen Turm klicken oder tippen', action: 'Ausbauen, verkaufen (zweimal tippen), sein Ziel wählen oder Feuerkorb und Brennglas drehen' },
     { input: 'Knopf Welle starten, Leertaste', action: 'Die nächste Welle schicken, früh mit Bonus; nach Welle 1 schickt die Wellen-Uhr sie nach 20 Sekunden (Ruhig in der Gartenauswahl schaltet sie ab)' },
@@ -60,6 +61,7 @@ const de: HowToPlay = {
     'Ein neuer Turm wächst eine Sekunde je 10 Gold, bevor er schießt, und ein Ausbau wächst wieder: Pflanze und baue aus, bevor die Gegner kommen.',
     'Motten fliegen geradewegs über das Labyrinth, also stell Bögen, Frost oder ein Schwalbennest auch nahe ans Häuschen.',
     'Ein Sieg bringt bis zu drei Sterne für die behaltenen Kohlköpfe, und einen vierten für einen Schwarm ohne Verlust.',
+    'Jedes Spiel bringt Samen; gib sie im Gartenschuppen für neue Türme, Meisterstufen und zwei weitere Beutelplätze aus.',
     'Ein Turm auf Stufe 3 kann Meister werden, mit einem eigenen Kniff: Sein Feld verrät welchen.',
     'Fallen versperren nie den Weg: Ein Honigtopf lockt Gegner für eine Kanone zusammen, eine Schlinge hält einen unter einer Armbrust fest.',
     'Maulwürfe fressen sich durch eine Hecke, die einen viel kürzeren Weg versperrt: Stell dort lieber einen Turm hin.',

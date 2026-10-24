@@ -49,6 +49,12 @@ Implemented today:
   in the patch it adds to `lives` (event `saved`). `remaining` for a foe going home is its way to
   the burrow. The game is lost when `cabbagesLeft` is 0; building on a loose cabbage is refused
   like a foe.
+- The potting shed (`Shed` in `save.ts`, the `shed` screen): `seedsFor` pays a finished game
+  (`SEEDS`), and `buy` spends them on towers (`towerSeeds`; `FREE` needs none), master levels
+  (`masterSeeds`; `newGame`'s `masters` list, which `nextUpgrade` and `masterOpen` check; null in
+  the sim means all, as the bot and tests use) and pouch slots (`SLOT_SEEDS`, `picksOf`). `pouchOf`
+  keeps only `usable` towers. `loadShed` credits past records once, when the key is missing. The
+  tool bar narrows its buttons when the pouch holds more than six.
 - Ways of play (`MODES`, `Game.mode`, picked by the `mode` button on the picker): `classic`,
   `swarm` (the wave timer at 0 whatever Calm says, `SWARM_GOLD` on kill and wave gold through
   `pay`), `endless` and `sandbox` (`totalWaves` is Infinity: `waveGroups` repeats waves 11 to 20
@@ -84,7 +90,7 @@ Implemented today:
   The scene draws it faint with a filling ring.
 - Building during a wave is allowed; a tile with a foe on it (or walking onto it) is refused.
 - Hover preview: the routes as they would be with the hovered tile planted, or the no-entry ring.
-- Drag to plant a line; keys 1 to 6 (the pouch, in order), Space and F; a 2x speed button. The
+- Drag to plant a line; keys 1 to 8 (the pouch, in order), Space and F; a 2x speed button. The
   picked tool's use is told in the top bar.
 - Banners name each new foe kind the first time it comes, the second burrow, the first stolen
   cabbage (`grabbed`), a chewing mole, a king
@@ -102,7 +108,7 @@ Missing or rough:
   crossbow, cannon, bow, whirligig and puffball do most, the storm rod, bonfire and beehive less
   but need bunched foes, a straight corridor or neighbours to shine, and the sunglass needs a
   corridor in line with it. A tower's balance is a first pass.
-- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `traps.webp`, `maze.webp`,
+- `docs/screenshots/gardens.webp` (the picker with the pouch), `towers.webp`, `aim.webp`, `kings.webp`, `cabbages.webp`, `grow.webp`, `master.webp`, `traps.webp`, `shed.webp`, `maze.webp`,
   `mole.webp` and `cover.png` were taken by hand (a
   Playwright script that plants a maze and sends waves 8 and 9); `refused.webp` is the
   playthrough's `playthrough-2-refused` shot. Refresh them when the look changes.
@@ -166,7 +172,8 @@ File map (`src/`):
 
 Save keys: `mazewright-best` (per garden, `GardenRecord`: best wave, whether it was won, most
 stars, fastest win in seconds and the Endless best), `mazewright-pouch` (the towers picked),
-`mazewright-calm` (`'1'` when waves wait for Start wave) and `mazewright-mode` (the way of play).
+`mazewright-calm` (`'1'` when waves wait for Start wave), `mazewright-mode` (the way of play) and
+`mazewright-shed` (seeds, `owned` towers, `masters` bought and extra `slots`).
 
 Test hooks (read by `e2e/playthrough.spec.ts` through `window.game.scene.getScene('Game')`):
 `screen`, `state` (the `Game`), `pouch`, `buttons` (every button by id, centred, in view pixels:

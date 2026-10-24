@@ -15,7 +15,7 @@ beetle already on the lawn) is refused with an orange no-entry ring.
 
 | Control | Action |
 | --- | --- |
-| Tap or click a tool, or keys 1 to 6 | Pick a tower from your pouch |
+| Tap or click a tool, or keys 1 to 8 | Pick a tower from your pouch |
 | Tap, click or drag on the lawn | Plant the tool there, or a whole line of them |
 | Hover the lawn | See the new route before you plant |
 | Tap or click a tower | Open its panel: Upgrade, Sell (tap it twice), Aim for a tower that picks a target, and Turn for a bonfire or sunglass |
@@ -46,11 +46,20 @@ the best wave reached in each garden.
 Under the cards is your **pouch**: the hedge and the bow always come along, and you pick up to four
 more of the other thirteen towers and the two garden traps. The pick is kept for the next game.
 
+**Seeds and the potting shed.** Every finished game pays seeds: a win 10 plus 5 a star, a loss 2
+plus one for every 4 waves held (Sandbox pays none). The potting shed (top right of the garden
+picker) sells them back: every tower but the hedge, bow, frost and cannon costs as many seeds as
+its gold price, each tower's master level twice that, and the pouch's fifth and sixth slots 60 and
+100. A tower still in the shed shows its price on its pouch chip. A first visit credits the gardens
+already played, so seeds are waiting for players from before the shed.
+
+![The potting shed](docs/screenshots/shed.webp)
+
 ### Towers
 
 Every tower stands on a hedge and blocks its tile. Every tower but the hedge rises to level 3, and
 then to a master level, which costs as much as the first three together, keeps level 3's numbers
-and adds a trick of its own (its panel tells it from level 3). Selling gives back 70% of what a
+and adds a trick of its own (its panel tells it from level 3), once the potting shed has sold it. Selling gives back 70% of what a
 tower cost.
 
 | Tower | Cost | Reach | What it does |

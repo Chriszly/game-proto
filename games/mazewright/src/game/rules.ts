@@ -16,6 +16,17 @@ export const POUCH_PICKS = 4;
 /** Today's four, the pouch of a first game. */
 export const DEFAULT_POUCH: TowerKind[] = ['hedge', 'bow', 'frost', 'cannon'];
 
+/**
+ * The potting shed: every tower but these free four is bought with seeds (as many as its gold
+ * cost), each tower's master level too (twice its cost), and the pouch's fifth and sixth slots.
+ */
+export const FREE: TowerKind[] = ['hedge', 'bow', 'frost', 'cannon'];
+export const towerSeeds = (kind: TowerKind) => TOWER[kind].cost;
+export const masterSeeds = (kind: TowerKind) => TOWER[kind].cost * 2;
+export const SLOT_SEEDS = [60, 100];
+/** Seeds a game pays: a win `win` plus `star` a star, a loss `loss` plus one per `waves` waves held. */
+export const SEEDS = { win: 10, star: 5, loss: 2, waves: 4 };
+
 /** What a tower's hits are made of: shells resist some kinds and crack under others. */
 export const DAMAGE_KINDS = ['sharp', 'blast', 'heat', 'spark', 'cold', 'poison'] as const;
 export type DamageKind = (typeof DAMAGE_KINDS)[number];
